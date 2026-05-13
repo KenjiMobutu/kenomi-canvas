@@ -4,7 +4,10 @@ import type { Metadata } from 'next'
 
 export const revalidate = 60
 
-interface Props { params: Promise<{ slug: string }> }
+interface Props {
+  params: Promise<{ slug: string }>
+  searchParams: Promise<{ waitlist?: string; payment?: string }>
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
@@ -16,15 +19,33 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function LandingPage({ params }: Props) {
+export default async function LandingPage({ params, searchParams }: Props) {
   const { slug } = await params
+  const { waitlist, payment } = await searchParams
   const data = await getLandingPage(slug)
   if (!data) notFound()
 
   const { hero, features, faq } = data.copywriting
 
+  const showWaitlistSuccess = waitlist === 'ok'
+  const showPaymentSuccess  = payment === 'success'
+  const showPaymentCancel   = payment === 'cancelled'
+
   return (
     <main className="min-h-screen">
+      {/* BANNIÈRE CONFIRMATION */}
+      {(showWaitlistSuccess || showPaymentSuccess || showPaymentCancel) && (
+        <div className={`px-4 py-3 text-center text-sm font-medium ${
+          showPaymentCancel
+            ? 'bg-yellow-900/50 border-b border-yellow-800 text-yellow-300'
+            : 'bg-green-900/50 border-b border-green-800 text-green-300'
+        }`}>
+          {showWaitlistSuccess && 'Inscription confirmée ! Vous serez notifié en priorité au lancement.'}
+          {showPaymentSuccess  && 'Paiement reçu ! Bienvenue — vous recevrez vos accès par email.'}
+          {showPaymentCancel   && 'Paiement annulé. Revenez quand vous voulez.'}
+        </div>
+      )}
+
       {/* NAV */}
       <nav className="px-6 py-4 flex items-center justify-between max-w-5xl mx-auto">
         <a href="/" className="text-gray-500 text-sm hover:text-white transition-colors">← Kenomi</a>
@@ -43,10 +64,10 @@ export default async function LandingPage({ params }: Props) {
           {hero.subtitle}
         </p>
         <a
-          href="#waitlist"
+          href={showWaitlistSuccess ? undefined : '#waitlist'}
           className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"
         >
-          {hero.cta} →
+          {showWaitlistSuccess ? 'Inscrit !' : `${hero.cta} →`}
         </a>
       </section>
 
@@ -68,29 +89,38 @@ export default async function LandingPage({ params }: Props) {
 
       {/* WAITLIST */}
       <section id="waitlist" className="max-w-xl mx-auto px-6 py-20 text-center">
-        <h2 className="text-3xl font-bold mb-4">Rejoignez la liste d'attente</h2>
-        <p className="text-gray-400 mb-8">Soyez parmi les premiers à accéder à {data.nom}.</p>
-        <form
-          action={`https://supabase.kenomi.eu/functions/v1/waitlist`}
-          method="POST"
-          className="flex gap-3 max-w-md mx-auto"
-          suppressHydrationWarning
-        >
-          <input type="hidden" name="slug" value={slug} />
-          <input
-            type="email"
-            name="email"
-            placeholder="votre@email.com"
-            required
-            className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-          />
-          <button
-            type="submit"
-            className="bg-violet-600 hover:bg-violet-500 text-white font-semibold px-6 py-3 rounded-xl transition-colors whitespace-nowrap"
-          >
-            S'inscrire
-          </button>
-        </form>
+        {showWaitlistSuccess ? (
+          <div className="bg-green-900/30 border border-green-800 rounded-2xl p-8">
+            <div className="text-4xl mb-4">✅</div>
+            <h2 className="text-2xl font-bold mb-2 text-green-300">Vous êtes sur la liste !</h2>
+            <p className="text-gray-400">On vous contacte dès que {data.nom} est disponible.</p>
+          </div>
+        ) : (
+          <>
+            <h2 className="text-3xl font-bold mb-4">Rejoignez la liste d&apos;attente</h2>
+            <p className="text-gray-400 mb-8">Soyez parmi les premiers à accéder à {data.nom}.</p>
+            <form
+              action="https://supabase.kenomi.eu/functions/v1/waitlist"
+              method="POST"
+              className="flex gap-3 max-w-md mx-auto"
+            >
+              <input type="hidden" name="slug" value={slug} />
+              <input
+                type="email"
+                name="email"
+                placeholder="votre@email.com"
+                required
+                className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+              />
+              <button
+                type="submit"
+                className="bg-violet-600 hover:bg-violet-500 text-white font-semibold px-6 py-3 rounded-xl transition-colors whitespace-nowrap"
+              >
+                S&apos;inscrire
+              </button>
+            </form>
+          </>
+        )}
       </section>
 
       {/* FAQ */}
