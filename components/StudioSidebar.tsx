@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   BarChart3, Bot, FileText, GitBranch, KeyRound,
   LayoutDashboard, LogOut, Megaphone, MessageSquare,
-  Network, Server, Settings, Workflow,
+  Network, Server, Settings, Trophy, Workflow,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
@@ -18,6 +18,7 @@ const nav = [
   { href: '/studio/analytics',      label: 'Analytics',      icon: BarChart3,       group: 'Studio' },
   { href: '/studio/automations',    label: 'Automations',    icon: Workflow,        group: 'Studio' },
   { href: '/studio/infrastructure', label: 'Infrastructure', icon: Server,          group: 'Studio' },
+  { href: '/studio/gamification',  label: 'Gamification',   icon: Trophy,           group: 'Studio' },
   { href: '/studio/chat',           label: 'Command Chat',   icon: MessageSquare,   group: 'System' },
   { href: '/studio/documents',      label: 'Documents',      icon: FileText,        group: 'System' },
   { href: '/studio/api-keys',       label: 'API Keys',       icon: KeyRound,        group: 'System' },
