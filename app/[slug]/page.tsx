@@ -1,4 +1,4 @@
-import { getLandingPage } from '@/lib/supabase'
+import { getLandingPage } from '@/lib/queries'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 
@@ -100,7 +100,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
             <h2 className="text-3xl font-bold mb-4">Rejoignez la liste d&apos;attente</h2>
             <p className="text-gray-400 mb-8">Soyez parmi les premiers à accéder à {data.nom}.</p>
             <form
-              action="https://supabase.kenomi.eu/functions/v1/waitlist"
+              action="/api/waitlist"
               method="POST"
               className="flex gap-3 max-w-md mx-auto"
             >

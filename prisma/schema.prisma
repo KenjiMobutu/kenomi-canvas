@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Idea {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titre            String   @db.VarChar(500)
+  source           String?  @db.VarChar(100)
+  score_validation Float?
+  statut           String?  @default("new") @db.VarChar(50)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  ventures Venture[]
+
+  @@map("ideas")
+}
+
+model Venture {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idea_id        String?   @db.Uuid
+  nom            String    @db.VarChar(200)
+  slug           String    @unique @db.VarChar(100)
+  domaine        String?   @db.VarChar(200)
+  type_produit   String?   @default("micro-saas") @db.VarChar(50)
+  statut         String    @default("actif") @db.VarChar(50)
+  budget_depense Float     @default(0)
+  revenus_total  Float     @default(0)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  decision_at    DateTime? @db.Timestamptz(6)
+
+  idea          Idea?          @relation(fields: [idea_id], references: [id])
+  landing_pages LandingPage[]
+  payments      Payment[]
+  budget_reqs   BudgetRequest[]
+  waitlist      Waitlist[]
+  metrics       Metric[]
+  campaigns     Campaign[]
+  decisions     Decision[]
+
+  @@map("ventures")
+}
+
+model LandingPage {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venture_id  String?  @db.Uuid
+  url         String?
+  headline    String?
+  copywriting Json?
+  statut      String   @default("deployed") @db.VarChar(50)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  venture Venture? @relation(fields: [venture_id], references: [id], onDelete: Cascade)
+
+  @@map("landing_pages")
+}
+
+model Payment {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venture_id               String?   @db.Uuid
+  stripe_session_id        String?   @unique
+  stripe_payment_intent_id String?
+  amount_eur               Decimal   @db.Decimal(10, 2)
+  currency                 String    @default("eur")
+  status                   String    @default("pending")
+  customer_email           String
+  created_at               DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime  @default(now()) @db.Timestamptz(6)
+
+  venture Venture? @relation(fields: [venture_id], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model BudgetRequest {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venture_id          String?   @db.Uuid
+  campaign_name       String
+  amount_eur          Decimal   @db.Decimal(10, 2)
+  reason              String?
+  status              String    @default("pending")
+  telegram_message_id BigInt?
+  approved_at         DateTime? @db.Timestamptz(6)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+
+  venture Venture? @relation(fields: [venture_id], references: [id], onDelete: Cascade)
+
+  @@map("budget_requests")
+}
+
+model Waitlist {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venture_id String?  @db.Uuid
+  slug       String
+  email      String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  venture Venture? @relation(fields: [venture_id], references: [id], onDelete: Cascade)
+
+  @@unique([slug, email])
+  @@map("waitlist")
+}
+
+model Metric {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venture_id String?  @db.Uuid
+  date       DateTime @default(now()) @db.Timestamptz(6)
+  views      Int      @default(0)
+  signups    Int      @default(0)
+  revenue    Float    @default(0)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  venture Venture? @relation(fields: [venture_id], references: [id], onDelete: Cascade)
+
+  @@map("metrics")
+}
+
+model Campaign {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venture_id     String?   @db.Uuid
+  platform       String?   @db.VarChar(50)
+  type           String?   @db.VarChar(50)
+  content        String?
+  status         String    @default("pending") @db.VarChar(50)
+  budget_depense Float     @default(0)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  published_at   DateTime? @db.Timestamptz(6)
+
+  venture Venture? @relation(fields: [venture_id], references: [id], onDelete: Cascade)
+
+  @@map("campaigns")
+}
+
+model Decision {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venture_id  String?  @db.Uuid
+  decision    String?  @db.VarChar(50)
+  reason      String?
+  metrics_snapshot Json?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  venture Venture? @relation(fields: [venture_id], references: [id], onDelete: Cascade)
+
+  @@map("decisions")
+}
