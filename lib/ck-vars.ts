@@ -14,6 +14,9 @@ export const CK_DARK: Record<string, string> = {
   '--ck-emerald':  '#34d399',
   '--ck-amber':    '#fbbf24',
   '--ck-rose':     '#fb7185',
+  '--ck-cyan':     '#22d3ee',
+  '--ck-violet':   '#a78bfa',
+  '--ck-fuchsia':  '#e879f9',
 }
 
 export const CK_LIGHT: Record<string, string> = {
@@ -41,3 +44,6 @@ export const accent2  = 'var(--ck-accent-2)'
 export const emerald  = 'var(--ck-emerald)'
 export const amber    = 'var(--ck-amber)'
 export const rose     = 'var(--ck-rose)'
+export const cyan     = 'var(--ck-cyan)'
+export const violet   = 'var(--ck-violet)'
+export const fuchsia  = 'var(--ck-fuchsia)'
