@@ -21,5 +21,5 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get({host:'127.0.0.1',port:3000,path:'/'}, r=>process.exit(r.statusCode>=200&&r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
+  CMD wget -qO- http://127.0.0.1:3000/ > /dev/null 2>&1 || exit 1
 CMD ["node", "server.js"]
