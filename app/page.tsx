@@ -1,7 +1,7 @@
 import { getAllActiveVentures, type VentureListItem } from '@/lib/queries'
 import Link from 'next/link'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   const ventures = await getAllActiveVentures()
