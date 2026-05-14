@@ -1,7 +1,7 @@
-import { getAllActiveVentures } from '@/lib/supabase'
+import { getAllActiveVentures, type VentureListItem } from '@/lib/queries'
 import Link from 'next/link'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   const ventures = await getAllActiveVentures()
@@ -16,7 +16,7 @@ export default async function Home() {
           <p className="text-gray-500">Aucun projet actif pour le moment.</p>
         ) : (
           <div className="grid gap-4">
-            {ventures.map((v) => (
+            {ventures.map((v: VentureListItem) => (
               <Link
                 key={v.id}
                 href={`/${v.slug}`}

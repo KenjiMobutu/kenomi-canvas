@@ -2,4 +2,7 @@ node_modules/
 .next/
 .env
 .env.local
+.env.kenomi
 .DS_Store
+
+/lib/generated/prisma
