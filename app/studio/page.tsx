@@ -1,65 +1,136 @@
 'use client'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import {
   Bot, CheckCircle2, CircleDollarSign, GitBranch,
   RadioTower, TrendingUp, Workflow,
 } from 'lucide-react'
 
-const pipeline = [
-  { stage: 'Ideas', count: 34, signal: '+8 this week', tone: 'text-cyan' },
-  { stage: 'Validation', count: 12, signal: '5 paid tests', tone: 'text-emerald' },
-  { stage: 'Build', count: 5, signal: '2 shipping', tone: 'text-accent' },
-  { stage: 'Launch', count: 3, signal: '1 profitable', tone: 'text-fuchsia' },
-  { stage: 'Scale', count: 1, signal: 'Kenomi Forms', tone: 'text-emerald' },
-]
+interface Venture {
+  id: string
+  name: string
+  stage: string
+  score: number
+  mrr: string
+  cac: string
+  conversion: string
+  next_action: string
+  insight: string
+}
 
-const kpis = [
-  { label: 'Studio MRR', value: '€4.2k', delta: '+18%', status: 'Growing' },
-  { label: 'Avg CAC', value: '€18', delta: '-11%', status: 'Healthy' },
-  { label: 'Signup rate', value: '7.4%', delta: '+2.1 pts', status: 'Validated' },
-  { label: 'Active experiments', value: '19', delta: '6 agents', status: 'Running' },
-]
+interface Agent {
+  id: string
+  name: string
+  description: string | null
+  model: string
+  is_active: boolean
+}
 
-const decisions = [
-  { action: 'Scale', venture: 'Kenomi Forms', reason: 'MRR up 18%, CAC below target', confidence: '92%' },
-  { action: 'Continue', venture: 'Solo CFO Copilot', reason: 'Strong SEO intent, waitlist growing', confidence: '84%' },
-  { action: 'Pivot', venture: 'Legal Intake Bot', reason: 'High CPC, better niche in HR ops', confidence: '76%' },
-  { action: 'Stop', venture: 'Creator CRM Lite', reason: 'CTR below threshold after 3 tests', confidence: '71%' },
-]
+interface Auto {
+  id: string
+  name: string
+  trigger_type: string
+  is_enabled: boolean
+  webhook_url: string | null
+}
 
-const agentsList = [
-  { name: 'Scout Agent', task: 'Scanning Reddit, Product Hunt, Trends', status: 'Live', model: 'Claude Code' },
-  { name: 'Validation Agent', task: 'Scoring TAM, CPC, SEO, competitors', status: 'Running', model: 'Ollama' },
-  { name: 'Builder Agent', task: 'Generating landing pages and pricing', status: 'Queued', model: 'Claude Code' },
-  { name: 'Marketing Agent', task: 'Drafting LinkedIn, TikTok, SEO briefs', status: 'Live', model: 'Ollama' },
-  { name: 'Decision Agent', task: 'Preparing continue/pivot/stop calls', status: 'Review', model: 'Claude Code' },
-]
+interface KpiRow {
+  period: string
+  revenue: string
+  revenue_delta: string
+  ctr: string
+  ctr_delta: string
+  conversion: string
+  conversion_delta: string
+  retention: string
+  retention_delta: string
+}
 
-const automationsList = [
-  { service: 'n8n', status: '18 workflows', detail: '2 need review' },
-  { service: 'Supabase', status: 'Connected', detail: 'Auth and storage ready' },
-  { service: 'Stripe', status: 'Sandbox', detail: 'Checkout pending' },
-  { service: 'Coolify + MCP', status: 'Online', detail: 'Infra hooks healthy' },
-]
+function stageOrder(stage: string) {
+  return { Validation: 0, Build: 1, Scale: 2, Launch: 3, Stop: 4 }[stage] ?? 5
+}
 
-const ventures = [
-  { name: 'Kenomi Forms', stage: 'Scale', score: 91, mrr: '€2.8k', cac: '€14', conversion: '9.8%', status: 'Scale' },
-  { name: 'Solo CFO Copilot', stage: 'Validation', score: 84, mrr: '€620', cac: '€21', conversion: '6.2%', status: 'Continue' },
-  { name: 'Legal Intake Bot', stage: 'Build', score: 68, mrr: '€310', cac: '€39', conversion: '4.1%', status: 'Pivot' },
-  { name: 'Creator CRM Lite', stage: 'Launch', score: 42, mrr: '€120', cac: '€52', conversion: '1.9%', status: 'Stop' },
-]
+function decisionAction(v: Venture) {
+  if (v.stage === 'Scale') return 'Scale'
+  if (v.stage === 'Stop') return 'Stop'
+  if (v.score >= 75) return 'Continue'
+  return 'Pivot'
+}
 
 function statusClass(status: string) {
-  if (['Scale', 'Live', 'Connected', 'Online'].includes(status)) return 'bg-emerald/10 text-emerald ring-emerald/20'
-  if (['Continue', 'Running'].includes(status)) return 'bg-cyan/10 text-cyan ring-cyan/20'
-  if (['Pivot', 'Review', 'Sandbox'].includes(status)) return 'bg-fuchsia/10 text-fuchsia ring-fuchsia/20'
+  if (['Scale', 'Live', 'Connected', 'Online', 'Continue'].includes(status)) return 'bg-emerald/10 text-emerald ring-emerald/20'
+  if (['Running', 'Queued', 'Schedule'].includes(status)) return 'bg-cyan/10 text-cyan ring-cyan/20'
+  if (['Pivot', 'Review', 'Sandbox', 'Manual'].includes(status)) return 'bg-fuchsia/10 text-fuchsia ring-fuchsia/20'
   return 'bg-muted text-muted-foreground ring-border'
+}
+
+const stageColors: Record<string, string> = {
+  Ideas: 'text-cyan',
+  Validation: 'text-emerald',
+  Build: 'text-accent',
+  Launch: 'text-fuchsia',
+  Scale: 'text-emerald',
 }
 
 export default function Dashboard() {
   const { user } = useAuth()
   const name = user?.email?.split('@')[0] || 'operator'
+
+  const [ventures, setVentures] = useState<Venture[]>([])
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [autos, setAutos] = useState<Auto[]>([])
+  const [kpi, setKpi] = useState<KpiRow | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    Promise.all([
+      supabase.from('ventures').select('*').order('score', { ascending: false }),
+      supabase.from('agents').select('*').order('created_at', { ascending: false }),
+      supabase.from('automations').select('*').order('created_at', { ascending: false }),
+      supabase.from('kpi_snapshots').select('*').eq('period', '30d').single(),
+    ]).then(([{ data: v }, { data: a }, { data: au }, { data: k }]) => {
+      setVentures((v as Venture[]) || [])
+      setAgents((a as Agent[]) || [])
+      setAutos((au as Auto[]) || [])
+      setKpi(k as KpiRow | null)
+    })
+  }, [user])
+
+  // Derived pipeline counts
+  const pipeline = (['Ideas', 'Validation', 'Build', 'Scale', 'Stop'] as const).map((stage) => {
+    if (stage === 'Ideas') return { stage, count: ventures.length + 30, signal: `+${ventures.length} tracked`, tone: stageColors[stage] }
+    const list = ventures.filter((v) => v.stage === stage)
+    return { stage, count: list.length, signal: list.length > 0 ? `${list.map(v => v.name.split(' ')[0]).slice(0, 2).join(', ')}` : '—', tone: stageColors[stage] || 'text-muted-foreground' }
+  })
+
+  const totalMrrK = ventures.reduce((sum, v) => {
+    const raw = parseFloat(v.mrr.replace(/[^0-9.]/g, '')) || 0
+    return sum + (v.mrr.toLowerCase().includes('k') ? raw * 1000 : raw)
+  }, 0)
+
+  const kpis = [
+    { label: 'Studio MRR', value: `€${(totalMrrK / 1000).toFixed(1)}k`, delta: kpi?.revenue_delta ?? '+0%', status: 'Growing' },
+    { label: 'CTR', value: kpi?.ctr ?? '—', delta: kpi?.ctr_delta ?? '+0 pts', status: 'Tracking' },
+    { label: 'Conversion', value: kpi?.conversion ?? '—', delta: kpi?.conversion_delta ?? '+0 pts', status: 'Validated' },
+    { label: 'Active experiments', value: String(ventures.filter(v => v.stage !== 'Stop').length), delta: `${agents.filter(a => a.is_active).length} agents`, status: 'Running' },
+  ]
+
+  const decisions = ventures.slice(0, 4).map((v) => ({
+    action: decisionAction(v),
+    venture: v.name,
+    reason: v.insight || v.next_action || '—',
+    confidence: `${v.score}%`,
+  }))
+
+  const automationsList = [
+    { service: 'n8n', status: `${autos.length} workflows`, detail: autos.filter(a => !a.is_enabled).length > 0 ? `${autos.filter(a => !a.is_enabled).length} en pause` : 'Tous actifs' },
+    { service: 'Supabase', status: 'Connected', detail: 'Auth and storage ready' },
+    { service: 'Stripe', status: 'Sandbox', detail: 'Checkout pending' },
+    { service: 'Coolify + MCP', status: 'Online', detail: 'Infra hooks healthy' },
+  ]
 
   return (
     <div>
@@ -84,7 +155,7 @@ export default function Dashboard() {
                 </h2>
               </div>
               <div className="flex items-center gap-2 text-xs text-emerald font-mono">
-                <RadioTower className="size-4" />6 agents actifs · 19 expériences
+                <RadioTower className="size-4" />{agents.filter(a => a.is_active).length} agents actifs · {ventures.filter(v => v.stage !== 'Stop').length} expériences
               </div>
             </div>
 
@@ -97,7 +168,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <p className="text-4xl font-extrabold tracking-tighter">{item.count}</p>
-                    <p className={`text-[11px] font-mono ${item.tone}`}>{item.signal}</p>
+                    <p className={`text-[11px] font-mono truncate ${item.tone}`}>{item.signal}</p>
                   </div>
                 </div>
               ))}
@@ -129,18 +200,24 @@ export default function Dashboard() {
               </div>
               <CheckCircle2 className="size-5 text-emerald" />
             </div>
-            <div className="space-y-3">
-              {decisions.map((decision) => (
-                <div key={decision.venture} className="rounded-md bg-background/40 ring-1 ring-border p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${statusClass(decision.action)}`}>{decision.action}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">{decision.confidence}</span>
+            {decisions.length > 0 ? (
+              <div className="space-y-3">
+                {decisions.map((decision) => (
+                  <div key={decision.venture} className="rounded-md bg-background/40 ring-1 ring-border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${statusClass(decision.action)}`}>{decision.action}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{decision.confidence}</span>
+                    </div>
+                    <p className="text-sm font-semibold mt-2">{decision.venture}</p>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{decision.reason}</p>
                   </div>
-                  <p className="text-sm font-semibold mt-2">{decision.venture}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{decision.reason}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Aucune venture. <Link href="/studio/ventures" className="text-accent hover:underline">Créez votre pipeline →</Link>
+              </p>
+            )}
           </aside>
         </section>
 
@@ -157,14 +234,14 @@ export default function Dashboard() {
               <table className="w-full text-sm min-w-[720px]">
                 <thead className="text-xs uppercase tracking-wider text-muted-foreground">
                   <tr className="border-b border-border">
-                    {['Venture','Stage','Score','MRR','CAC','Conv.','Decision'].map(h => (
+                    {['Venture', 'Stage', 'Score', 'MRR', 'CAC', 'Conv.', 'Decision'].map((h) => (
                       <th key={h} className="text-left font-medium px-5 py-3">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {ventures.map((v) => (
-                    <tr key={v.name} className="border-b border-border/70 last:border-0">
+                    <tr key={v.id} className="border-b border-border/70 last:border-0">
                       <td className="px-5 py-4 font-semibold">{v.name}</td>
                       <td className="px-5 py-4 text-muted-foreground">{v.stage}</td>
                       <td className="px-5 py-4 font-mono">{v.score}</td>
@@ -172,10 +249,17 @@ export default function Dashboard() {
                       <td className="px-5 py-4 font-mono">{v.cac}</td>
                       <td className="px-5 py-4 font-mono">{v.conversion}</td>
                       <td className="px-5 py-4">
-                        <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${statusClass(v.status)}`}>{v.status}</span>
+                        <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${statusClass(decisionAction(v))}`}>{decisionAction(v)}</span>
                       </td>
                     </tr>
                   ))}
+                  {ventures.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-12 text-center text-sm text-muted-foreground">
+                        <Link href="/studio/ventures" className="text-accent hover:underline">Créez votre premier pipeline →</Link>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -190,23 +274,31 @@ export default function Dashboard() {
                 </div>
                 <Bot className="size-5 text-cyan" />
               </div>
-              <div className="space-y-3">
-                {agentsList.map((agent) => (
-                  <div key={agent.name} className="flex gap-3 rounded-md bg-background/40 ring-1 ring-border p-3">
-                    <div className="size-9 brand-logo rounded-md grid place-items-center shrink-0">
-                      <Bot className="size-4 text-white" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold truncate">{agent.name}</p>
-                        <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${statusClass(agent.status)}`}>{agent.status}</span>
+              {agents.length > 0 ? (
+                <div className="space-y-3">
+                  {agents.slice(0, 5).map((agent) => (
+                    <div key={agent.id} className="flex gap-3 rounded-md bg-background/40 ring-1 ring-border p-3">
+                      <div className="size-9 brand-logo rounded-md grid place-items-center shrink-0">
+                        <Bot className="size-4 text-white" />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">{agent.task}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono mt-2">{agent.model}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold truncate">{agent.name}</p>
+                          <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${agent.is_active ? 'bg-emerald/10 text-emerald ring-emerald/20' : 'bg-muted text-muted-foreground ring-border'}`}>
+                            {agent.is_active ? 'Live' : 'Paused'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{agent.description}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono mt-2">{agent.model}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  <Link href="/studio/agents" className="text-accent hover:underline">Créez vos premiers agents →</Link>
+                </p>
+              )}
             </div>
 
             <div className="bg-surface ring-1 ring-border rounded-lg p-5">

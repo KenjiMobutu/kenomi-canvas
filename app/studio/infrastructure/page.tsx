@@ -2,32 +2,68 @@
 
 import Link from 'next/link'
 import { ChevronDown, Database, ExternalLink, HardDrive, Plus, Server, ShieldCheck } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createSupabaseBrowser } from '@/lib/supabase-browser'
+import { useAuth } from '@/lib/auth-context'
+import { toast } from 'sonner'
 
-const defaultServices = [
-  { name: 'Proxmox VE', status: 'Online', detail: 'Node cluster ready for local workloads', endpoint: 'https://proxmox.local', role: 'Compute layer for local AI jobs, containers and test environments.', next: 'Connect proxmox-ssh MCP and expose health metrics.' },
-  { name: 'Coolify', status: 'Online', detail: 'Docker deployments and env management', endpoint: 'https://coolify.local', role: 'Deployment surface for landing pages, APIs and venture experiments.', next: 'Add project templates for validation apps and waitlists.' },
-  { name: 'Nginx Proxy Manager', status: 'Healthy', detail: 'Domains, SSL and reverse proxy', endpoint: 'https://npm.local', role: 'Routes public domains to internal services with SSL automation.', next: 'Map venture subdomains and automate certificate checks.' },
-  { name: 'Uptime Kuma', status: 'Watching', detail: 'Availability checks for studio services', endpoint: 'https://uptime.local', role: 'Monitors availability for core infrastructure and launched ventures.', next: 'Create monitors for each paid validation landing page.' },
-  { name: 'Vaultwarden', status: 'Ready', detail: 'Secrets and credential vault', endpoint: 'https://vault.local', role: 'Stores API keys, Stripe secrets, OAuth credentials and admin access.', next: 'Separate production, staging and experiment credentials.' },
-  { name: 'Supabase', status: 'Connected', detail: 'Auth, PostgreSQL and storage backend', endpoint: 'https://supabase.kenomi.eu', role: 'Primary backend for auth, venture records, documents and analytics.', next: 'Create venture, KPI and automation event tables with RLS.' },
+interface Service {
+  id: string
+  name: string
+  status: string
+  detail: string
+  endpoint: string
+  role: string
+  next_action: string
+}
+
+const seedServices = [
+  { name: 'Proxmox VE', status: 'Online', detail: 'Node cluster ready for local workloads', endpoint: 'https://proxmox.local', role: 'Compute layer for local AI jobs, containers and test environments.', next_action: 'Connect proxmox-ssh MCP and expose health metrics.' },
+  { name: 'Coolify', status: 'Online', detail: 'Docker deployments and env management', endpoint: 'https://coolify.local', role: 'Deployment surface for landing pages, APIs and venture experiments.', next_action: 'Add project templates for validation apps and waitlists.' },
+  { name: 'Nginx Proxy Manager', status: 'Healthy', detail: 'Domains, SSL and reverse proxy', endpoint: 'https://npm.local', role: 'Routes public domains to internal services with SSL automation.', next_action: 'Map venture subdomains and automate certificate checks.' },
+  { name: 'Uptime Kuma', status: 'Watching', detail: 'Availability checks for studio services', endpoint: 'https://uptime.local', role: 'Monitors availability for core infrastructure and launched ventures.', next_action: 'Create monitors for each paid validation landing page.' },
+  { name: 'Vaultwarden', status: 'Ready', detail: 'Secrets and credential vault', endpoint: 'https://vault.local', role: 'Stores API keys, Stripe secrets, OAuth credentials and admin access.', next_action: 'Separate production, staging and experiment credentials.' },
+  { name: 'Supabase', status: 'Connected', detail: 'Auth, PostgreSQL and storage backend', endpoint: 'https://supabase.kenomi.eu', role: 'Primary backend for auth, venture records, documents and analytics.', next_action: 'Create venture, KPI and automation event tables with RLS.' },
 ]
 
 export default function InfrastructurePage() {
-  const [items, setItems] = useState(defaultServices)
-  const [openService, setOpenService] = useState(defaultServices[0].name)
+  const { user } = useAuth()
+  const [items, setItems] = useState<Service[]>([])
+  const [openId, setOpenId] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', endpoint: '', detail: '', role: '' })
 
-  function createService(e: React.FormEvent) {
+  async function load() {
+    const supabase = createSupabaseBrowser()
+    const { data } = await supabase.from('services').select('*').order('created_at', { ascending: true })
+    const list = (data as Service[]) || []
+    if (list.length === 0 && user) {
+      await supabase.from('services').insert(seedServices.map((s) => ({ ...s, user_id: user.id })))
+      return load()
+    }
+    setItems(list)
+    if (!openId && list.length > 0) setOpenId(list[0].id)
+  }
+  useEffect(() => { if (user) load() }, [user])
+
+  async function createService(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.name.trim()) return
-    const service = { name: form.name.trim(), status: 'Draft', detail: form.detail.trim() || 'New service awaiting configuration', endpoint: form.endpoint.trim() || 'https://service.local', role: form.role.trim() || 'Define how this service supports the Venture Studio.', next: 'Connect health checks, credentials and automation hooks.' }
-    setItems((curr) => [service, ...curr])
-    setOpenService(service.name)
+    if (!user || !form.name.trim()) return
+    const supabase = createSupabaseBrowser()
+    const { error } = await supabase.from('services').insert({
+      user_id: user.id,
+      name: form.name.trim(),
+      status: 'Draft',
+      detail: form.detail.trim() || 'New service awaiting configuration',
+      endpoint: form.endpoint.trim() || 'https://service.local',
+      role: form.role.trim() || 'Define how this service supports the Venture Studio.',
+      next_action: 'Connect health checks, credentials and automation hooks.',
+    })
+    if (error) return toast.error(error.message)
     setForm({ name: '', endpoint: '', detail: '', role: '' })
+    load()
   }
 
-  const open = items.find((s) => s.name === openService)
+  const open = items.find((s) => s.id === openId)
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -68,9 +104,9 @@ export default function InfrastructurePage() {
         <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-4">
           <div className="space-y-2">
             {items.map((service) => {
-              const active = openService === service.name
+              const active = openId === service.id
               return (
-                <button key={service.name} type="button" onClick={() => setOpenService(active ? '' : service.name)}
+                <button key={service.id} type="button" onClick={() => setOpenId(active ? null : service.id)}
                   className={`w-full text-left bg-surface ring-1 rounded-lg p-5 transition-colors ${active ? 'ring-accent/60' : 'ring-border hover:ring-accent/40 hover:bg-white/[0.03]'}`}>
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-semibold text-sm">{service.name}</p>
@@ -107,7 +143,7 @@ export default function InfrastructurePage() {
                 </div>
                 <div className="rounded-lg bg-background/40 ring-1 ring-border p-4">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Next action</p>
-                  <p className="text-sm text-muted-foreground mt-2">{open.next}</p>
+                  <p className="text-sm text-muted-foreground mt-2">{open.next_action}</p>
                 </div>
                 <a href={open.endpoint} target="_blank" rel="noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold rounded-md">
