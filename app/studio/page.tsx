@@ -7,11 +7,11 @@ import {
 } from 'lucide-react'
 
 const pipeline = [
-  { stage: 'Ideas', count: 34, signal: '+8 this week', tone: 'text-cyan-400' },
-  { stage: 'Validation', count: 12, signal: '5 paid tests', tone: 'text-emerald-400' },
-  { stage: 'Build', count: 5, signal: '2 shipping', tone: 'text-violet-400' },
-  { stage: 'Launch', count: 3, signal: '1 profitable', tone: 'text-fuchsia-400' },
-  { stage: 'Scale', count: 1, signal: 'Kenomi Forms', tone: 'text-emerald-400' },
+  { stage: 'Ideas', count: 34, signal: '+8 this week', tone: 'text-cyan' },
+  { stage: 'Validation', count: 12, signal: '5 paid tests', tone: 'text-emerald' },
+  { stage: 'Build', count: 5, signal: '2 shipping', tone: 'text-violet' },
+  { stage: 'Launch', count: 3, signal: '1 profitable', tone: 'text-fuchsia' },
+  { stage: 'Scale', count: 1, signal: 'Kenomi Forms', tone: 'text-emerald' },
 ]
 
 const kpis = [
@@ -51,9 +51,9 @@ const ventures = [
 ]
 
 function statusClass(status: string) {
-  if (['Scale', 'Live', 'Connected', 'Online'].includes(status)) return 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20'
-  if (['Continue', 'Running'].includes(status)) return 'bg-cyan-500/10 text-cyan-400 ring-cyan-500/20'
-  if (['Pivot', 'Review', 'Sandbox'].includes(status)) return 'bg-fuchsia-500/10 text-fuchsia-400 ring-fuchsia-500/20'
+  if (['Scale', 'Live', 'Connected', 'Online'].includes(status)) return 'bg-emerald/10 text-emerald ring-emerald/20'
+  if (['Continue', 'Running'].includes(status)) return 'bg-cyan/10 text-cyan ring-cyan/20'
+  if (['Pivot', 'Review', 'Sandbox'].includes(status)) return 'bg-fuchsia/10 text-fuchsia ring-fuchsia/20'
   return 'bg-muted text-muted-foreground ring-border'
 }
 
@@ -83,7 +83,7 @@ export default function Dashboard() {
                   Bonjour {name}. <span className="text-gradient">Venture Cockpit</span>
                 </h2>
               </div>
-              <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
+              <div className="flex items-center gap-2 text-xs text-emerald font-mono">
                 <RadioTower className="size-4" />6 agents actifs · 19 expériences
               </div>
             </div>
@@ -112,7 +112,7 @@ export default function Dashboard() {
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
                     <div className="flex items-end justify-between gap-3 mt-3">
                       <p className="text-3xl font-extrabold tracking-tighter">{kpi.value}</p>
-                      <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 font-mono">{kpi.delta}</span>
+                      <span className="text-[10px] px-2 py-1 rounded-full bg-emerald/10 text-emerald ring-1 ring-emerald/20 font-mono">{kpi.delta}</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground font-mono mt-2">{kpi.status}</p>
                   </div>
@@ -127,7 +127,7 @@ export default function Dashboard() {
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Decision Queue</p>
                 <h3 className="text-xl font-extrabold tracking-tighter">Next calls</h3>
               </div>
-              <CheckCircle2 className="size-5 text-emerald-400" />
+              <CheckCircle2 className="size-5 text-emerald" />
             </div>
             <div className="space-y-3">
               {decisions.map((decision) => (
@@ -151,7 +151,7 @@ export default function Dashboard() {
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Venture Pipeline</p>
                 <h3 className="text-xl font-extrabold tracking-tighter">Active ventures</h3>
               </div>
-              <TrendingUp className="size-5 text-violet-400" />
+              <TrendingUp className="size-5 text-violet" />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[720px]">
@@ -188,7 +188,7 @@ export default function Dashboard() {
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Agent Mesh</p>
                   <h3 className="text-xl font-extrabold tracking-tighter">Active agents</h3>
                 </div>
-                <Bot className="size-5 text-cyan-400" />
+                <Bot className="size-5 text-cyan" />
               </div>
               <div className="space-y-3">
                 {agentsList.map((agent) => (
@@ -215,7 +215,7 @@ export default function Dashboard() {
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Automation Health</p>
                   <h3 className="text-xl font-extrabold tracking-tighter">Infra signals</h3>
                 </div>
-                <Workflow className="size-5 text-fuchsia-400" />
+                <Workflow className="size-5 text-fuchsia" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {automationsList.map((a) => (
@@ -224,7 +224,7 @@ export default function Dashboard() {
                       <p className="text-sm font-semibold">{a.service}</p>
                       <CircleDollarSign className="size-4 text-muted-foreground" />
                     </div>
-                    <p className={`text-xs font-mono mt-2 ${a.status === 'Sandbox' ? 'text-fuchsia-400' : 'text-emerald-400'}`}>{a.status}</p>
+                    <p className={`text-xs font-mono mt-2 ${a.status === 'Sandbox' ? 'text-fuchsia' : 'text-emerald'}`}>{a.status}</p>
                     <p className="text-xs text-muted-foreground mt-1">{a.detail}</p>
                   </div>
                 ))}

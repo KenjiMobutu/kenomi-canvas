@@ -110,7 +110,7 @@ export default function Automations() {
                 <p className="font-semibold text-sm">{a.name}</p>
                 <p className="text-xs text-muted-foreground font-mono truncate">{a.trigger_type} · {a.run_count} runs</p>
               </div>
-              <span className={`text-[10px] px-2 py-1 rounded-full font-mono ${a.is_enabled ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20' : 'bg-muted text-muted-foreground'}`}>
+              <span className={`text-[10px] px-2 py-1 rounded-full font-mono ${a.is_enabled ? 'bg-emerald/10 text-emerald ring-1 ring-emerald/20' : 'bg-muted text-muted-foreground'}`}>
                 {a.is_enabled ? 'Active' : 'Pause'}
               </span>
               <button onClick={() => run(a)} className="text-xs px-3 py-1 ring-1 ring-border rounded hover:bg-white/5">Run</button>
