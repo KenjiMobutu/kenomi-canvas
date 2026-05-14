@@ -2,8 +2,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
-import { FileText, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
+import { CkShell } from '@/components/CkShell'
+import {
+  surface, surface2, line, line2, text, muted, muted2,
+  accent, emerald, rose,
+} from '@/lib/ck-vars'
 
 interface Doc {
   id: string
@@ -15,33 +19,47 @@ interface Doc {
 }
 
 function fmtSize(b: number | null) {
-  if (!b) return '-'
+  if (!b) return '—'
   if (b < 1024) return `${b} B`
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
   return `${(b / 1024 / 1024).toFixed(1)} MB`
 }
 
-export default function Documents() {
+function mimeIcon(mime: string | null) {
+  if (!mime) return '📄'
+  if (mime.includes('pdf')) return '📕'
+  if (mime.includes('image')) return '🖼'
+  if (mime.includes('video')) return '🎬'
+  if (mime.includes('audio')) return '🎵'
+  if (mime.includes('zip') || mime.includes('tar')) return '📦'
+  if (mime.includes('sheet') || mime.includes('excel') || mime.includes('csv')) return '📊'
+  if (mime.includes('presentation') || mime.includes('powerpoint')) return '📊'
+  if (mime.includes('word') || mime.includes('document')) return '📝'
+  if (mime.includes('text')) return '📄'
+  return '📁'
+}
+
+export default function DocumentsPage() {
   const { user } = useAuth()
   const [docs, setDocs] = useState<Doc[]>([])
   const [selected, setSelected] = useState<Doc | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
+  const supabase = createSupabaseBrowser()
+
   async function load() {
-    const supabase = createSupabaseBrowser()
     const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false })
     const list = (data as Doc[]) || []
     setDocs(list)
-    setSelected((prev) => (prev ? (list.find((d) => d.id === prev.id) ?? list[0] ?? null) : (list[0] ?? null)))
+    setSelected(prev => prev ? (list.find(d => d.id === prev.id) ?? list[0] ?? null) : (list[0] ?? null))
   }
-  useEffect(() => { if (user) load() }, [user])
+  useEffect(() => { if (user) load() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function upload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !user) return
     setUploading(true)
-    const supabase = createSupabaseBrowser()
     const path = `${user.id}/${Date.now()}_${file.name}`
     const { error } = await supabase.storage.from('documents').upload(path, file)
     if (error) { setUploading(false); return toast.error(error.message) }
@@ -56,75 +74,108 @@ export default function Documents() {
   }
 
   async function del(d: Doc) {
-    const supabase = createSupabaseBrowser()
     await supabase.storage.from('documents').remove([d.storage_path])
     await supabase.from('documents').delete().eq('id', d.id)
+    if (selected?.id === d.id) setSelected(null)
     load()
   }
 
+  const uploadAction = (
+    <label style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '6px 14px', borderRadius: 999,
+      background: accent, color: '#0b0d12',
+      fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12,
+      cursor: uploading ? 'wait' : 'pointer',
+      opacity: uploading ? 0.7 : 1,
+    }}>
+      ↑ {uploading ? 'Upload…' : 'Upload'}
+      <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={upload} disabled={uploading} />
+    </label>
+  )
+
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="h-16 border-b border-border flex items-center justify-between px-8 sticky top-0 bg-background/80 backdrop-blur-md z-10">
-        <h1 className="text-sm font-semibold text-muted-foreground">
-          System / <span className="text-foreground">Documents</span>
-        </h1>
-        <label className="px-4 py-1.5 bg-foreground text-background text-xs font-bold rounded-full flex items-center gap-2 cursor-pointer">
-          <Upload className="size-3" /> {uploading ? 'Upload...' : 'Upload'}
-          <input ref={fileRef} type="file" className="hidden" onChange={upload} disabled={uploading} />
-        </label>
-      </header>
+    <CkShell breadcrumb="System / Documents" title="Knowledge Base" subtitle={`${docs.length} fichier${docs.length !== 1 ? 's' : ''}`} actions={uploadAction}>
 
-      <section className="p-8 max-w-6xl mx-auto space-y-6">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Knowledge Base</p>
-            <h2 className="text-4xl font-extrabold tracking-tighter mt-2">Documents Studio</h2>
-          </div>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+        {/* File list */}
+        <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 12, overflow: 'hidden' }}>
+          {docs.map((d, i) => (
+            <button key={d.id} onClick={() => setSelected(d)} className="ck-row-hover" style={{
+              width: '100%', textAlign: 'left',
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 16px',
+              borderBottom: i < docs.length - 1 ? `1px solid ${line}` : 'none',
+              background: selected?.id === d.id ? surface2 : 'transparent',
+              cursor: 'pointer', transition: 'background .1s',
+            }}>
+              {/* Icon */}
+              <div style={{
+                width: 38, height: 38, borderRadius: 8, flexShrink: 0,
+                background: accent + '14',
+                display: 'grid', placeItems: 'center', fontSize: 18,
+              }}>{mimeIcon(d.mime_type)}</div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
-          <div className="divide-y divide-border ring-1 ring-border rounded-xl bg-surface overflow-hidden">
-            {docs.map((d) => (
-              <button key={d.id} onClick={() => setSelected(d)}
-                className={`w-full text-left flex items-center gap-4 p-4 hover:bg-white/[0.03] ${selected?.id === d.id ? 'bg-white/[0.04]' : ''}`}>
-                <div className="size-10 bg-accent/10 text-accent rounded grid place-items-center">
-                  <FileText className="size-5" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted2, marginTop: 2 }}>
+                  {d.mime_type || '—'} · {fmtSize(d.size_bytes)}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{d.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{d.mime_type || '—'} · {fmtSize(d.size_bytes)}</p>
-                </div>
-                <p className="text-xs text-muted-foreground">{new Date(d.created_at).toLocaleDateString()}</p>
-              </button>
-            ))}
-            {docs.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-12">
-                Aucun document. Uploadez votre premier fichier.
-              </p>
-            )}
-          </div>
-
-          <aside className="bg-surface ring-1 ring-border rounded-lg p-5 h-fit">
-            {selected ? (
-              <>
-                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Document details</p>
-                <h3 className="text-xl font-extrabold tracking-tighter mt-2 break-words">{selected.name}</h3>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {selected.mime_type || '—'} · {fmtSize(selected.size_bytes)} · {new Date(selected.created_at).toLocaleDateString()}
-                </p>
-                <button onClick={() => del(selected)}
-                  className="mt-5 w-full px-4 py-2 ring-1 ring-border text-xs font-bold rounded-md flex items-center justify-center gap-2 hover:text-destructive">
-                  <Trash2 className="size-4" /> Supprimer
-                </button>
-              </>
-            ) : (
-              <div className="min-h-[200px] grid place-items-center text-center">
-                <p className="text-sm text-muted-foreground">Sélectionnez un document pour voir ses détails.</p>
               </div>
-            )}
-          </aside>
+
+              <div style={{ fontSize: 11, color: muted2, flexShrink: 0 }}>
+                {new Date(d.created_at).toLocaleDateString('fr-FR')}
+              </div>
+            </button>
+          ))}
+          {docs.length === 0 && (
+            <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📁</div>
+              <p style={{ fontSize: 13, color: muted2 }}>Aucun document. Uploadez votre premier fichier.</p>
+            </div>
+          )}
         </div>
-      </section>
-    </main>
+
+        {/* Aside */}
+        <aside style={{ background: surface, border: `1px solid ${line}`, borderRadius: 12, padding: 20, height: 'fit-content' }}>
+          {selected ? (
+            <>
+              <div style={{ position: 'relative', paddingLeft: 12, marginBottom: 16 }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, borderRadius: 2, background: accent }} />
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: muted }}>Document details</div>
+                <h3 style={{ margin: '6px 0 0', fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 800, letterSpacing: '-.01em', color: text, wordBreak: 'break-word' }}>
+                  {selected.name}
+                </h3>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                {([
+                  ['Type',  selected.mime_type || '—'],
+                  ['Taille', fmtSize(selected.size_bytes)],
+                  ['Ajouté', new Date(selected.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })],
+                ] as [string, string][]).map(([label, value]) => (
+                  <div key={label} style={{ padding: '9px 12px', borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: muted }}>{label}</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: text, marginTop: 3, fontWeight: 600, wordBreak: 'break-all' }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={() => del(selected)} style={{
+                width: '100%', padding: '10px 16px', borderRadius: 8,
+                background: rose + '14', color: rose,
+                border: `1px solid ${rose}40`, cursor: 'pointer',
+                fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>🗑 Supprimer</button>
+            </>
+          ) : (
+            <div style={{ minHeight: 200, display: 'grid', placeItems: 'center' }}>
+              <p style={{ fontSize: 13, color: muted2, textAlign: 'center' }}>Sélectionnez un document.</p>
+            </div>
+          )}
+        </aside>
+      </div>
+    </CkShell>
   )
 }

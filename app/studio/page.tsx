@@ -1,13 +1,10 @@
 'use client'
-import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
-import {
-  Bot, CheckCircle2, CircleDollarSign, GitBranch,
-  RadioTower, TrendingUp, Workflow,
-} from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
+/* ─── Types ─────────────────────────────────────────────────── */
 interface Venture {
   id: string
   name: string
@@ -18,22 +15,6 @@ interface Venture {
   conversion: string
   next_action: string
   insight: string
-}
-
-interface Agent {
-  id: string
-  name: string
-  description: string | null
-  model: string
-  is_active: boolean
-}
-
-interface Auto {
-  id: string
-  name: string
-  trigger_type: string
-  is_enabled: boolean
-  webhook_url: string | null
 }
 
 interface KpiRow {
@@ -48,290 +29,1073 @@ interface KpiRow {
   retention_delta: string
 }
 
-function stageOrder(stage: string) {
-  return { Validation: 0, Build: 1, Scale: 2, Launch: 3, Stop: 4 }[stage] ?? 5
+/* ─── Static design data ─────────────────────────────────────── */
+const AGENTS_STATIC = [
+  { id: 'scout',      name: 'Scout',      code: 'SCT', role: 'Discovery',    model: 'Claude Code',  color: '#22d3ee', sigil: '◬' },
+  { id: 'validation', name: 'Validation', code: 'VAL', role: 'Scoring',      model: 'Ollama',        color: '#a78bfa', sigil: '◇' },
+  { id: 'builder',    name: 'Builder',    code: 'BLD', role: 'Production',   model: 'Claude Code',  color: '#34d399', sigil: '◮' },
+  { id: 'payment',    name: 'Payment',    code: 'PAY', role: 'Monetization', model: 'Stripe API',   color: '#fbbf24', sigil: '◈' },
+  { id: 'marketing',  name: 'Marketing',  code: 'MKT', role: 'Distribution', model: 'Ollama',        color: '#e879f9', sigil: '✺' },
+  { id: 'analytics',  name: 'Analytics',  code: 'ANA', role: 'Telemetry',    model: 'Supabase',     color: '#60a5fa', sigil: '◐' },
+  { id: 'decision',   name: 'Decision',   code: 'DEC', role: 'Command',      model: 'Claude Code',  color: '#ff6a3d', sigil: '✦' },
+]
+
+const RHYTHM = [
+  { hour: '06:00', label: 'Scout sweep',     agent: 'scout',      status: 'done' as const },
+  { hour: '09:00', label: 'Validation',      agent: 'validation', status: 'done' as const },
+  { hour: '12:00', label: 'Builder push',    agent: 'builder',    status: 'done' as const },
+  { hour: '15:00', label: 'Decision review', agent: 'decision',   status: 'now'  as const },
+  { hour: '17:00', label: 'Marketing batch', agent: 'marketing',  status: 'soon' as const },
+  { hour: '20:00', label: 'Analytics digest',agent: 'analytics',  status: 'soon' as const },
+]
+
+const CHATTER = [
+  { from: 'scout',      to: 'validation', type: 'signal',  text: "r/solopreneur spike +312% — 'AI inbox triage'" },
+  { from: 'validation', to: 'decision',   type: 'score',   text: 'HR Ops Inbox · score 78 / CPC 0.42€' },
+  { from: 'decision',   to: 'builder',    type: 'order',   text: 'Build landing — Solo CFO v2' },
+  { from: 'builder',    to: 'payment',    type: 'handoff', text: 'Pricing page ready — wire Stripe' },
+  { from: 'payment',    to: 'analytics',  type: 'event',   text: 'checkout.completed · €29 MRR' },
+  { from: 'marketing',  to: 'analytics',  type: 'ping',    text: 'LinkedIn carousel — 14k impressions' },
+  { from: 'analytics',  to: 'decision',   type: 'report',  text: 'Forms · CAC -11% · MRR +18%' },
+  { from: 'decision',   to: 'marketing',  type: 'brief',   text: 'Push waitlist — Solo CFO' },
+  { from: 'scout',      to: 'marketing',  type: 'trend',   text: "TikTok hook — 'AI bookkeeper'" },
+  { from: 'validation', to: 'builder',    type: 'spec',    text: 'Niche: bilingual freelancer invoicing' },
+]
+
+/* ─── Spark chart utilities ──────────────────────────────────── */
+function makeSpark(n = 24, base = 50, vol = 18, seed = 1) {
+  let s = seed
+  const out: number[] = []
+  for (let i = 0; i < n; i++) {
+    s = (s * 9301 + 49297) % 233280
+    const r = s / 233280
+    base += (r - 0.5) * vol
+    base = Math.max(8, Math.min(98, base))
+    out.push(base)
+  }
+  return out
 }
 
-function decisionAction(v: Venture) {
-  if (v.stage === 'Scale') return 'Scale'
-  if (v.stage === 'Stop') return 'Stop'
-  if (v.score >= 75) return 'Continue'
-  return 'Pivot'
+function sparkPath(values: number[], w: number, h: number, pad = 2) {
+  if (!values.length) return ''
+  const min = Math.min(...values), max = Math.max(...values)
+  const span = max - min || 1
+  const step = (w - pad * 2) / (values.length - 1)
+  return values.map((v, i) => {
+    const x = pad + i * step
+    const y = pad + (h - pad * 2) * (1 - (v - min) / span)
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
 }
 
-function statusClass(status: string) {
-  if (['Scale', 'Live', 'Connected', 'Online', 'Continue'].includes(status)) return 'bg-emerald/10 text-emerald ring-emerald/20'
-  if (['Running', 'Queued', 'Schedule'].includes(status)) return 'bg-cyan/10 text-cyan ring-cyan/20'
-  if (['Pivot', 'Review', 'Sandbox', 'Manual'].includes(status)) return 'bg-fuchsia/10 text-fuchsia ring-fuchsia/20'
-  return 'bg-muted text-muted-foreground ring-border'
+function areaPath(values: number[], w: number, h: number, pad = 2) {
+  const line = sparkPath(values, w, h, pad)
+  return `${line} L${w - pad},${h - pad} L${pad},${h - pad} Z`
 }
 
-const stageColors: Record<string, string> = {
-  Ideas: 'text-cyan',
-  Validation: 'text-emerald',
-  Build: 'text-accent',
-  Launch: 'text-fuchsia',
-  Scale: 'text-emerald',
+/* ─── CSS vars (scoped to cockpit wrapper) ───────────────────── */
+const CK_DARK: React.CSSProperties = {
+  '--ck-bg':       '#07090d',
+  '--ck-surface':  '#0e1118',
+  '--ck-surface-2':'#141823',
+  '--ck-line':     'rgba(255,255,255,.07)',
+  '--ck-line-2':   'rgba(255,255,255,.12)',
+  '--ck-text':     '#e7eaf0',
+  '--ck-muted':    '#8a93a6',
+  '--ck-muted-2':  '#5b6478',
+  '--ck-accent':   '#ff6a3d',
+  '--ck-accent-2': '#ffd166',
+  '--ck-emerald':  '#34d399',
+  '--ck-amber':    '#fbbf24',
+  '--ck-rose':     '#fb7185',
+  '--ck-cyan':     '#22d3ee',
+} as React.CSSProperties
+
+const CK_LIGHT: React.CSSProperties = {
+  ...CK_DARK,
+  '--ck-bg':       '#f4f1ec',
+  '--ck-surface':  '#ffffff',
+  '--ck-surface-2':'#f9f5ee',
+  '--ck-line':     'rgba(15,18,28,.08)',
+  '--ck-line-2':   'rgba(15,18,28,.14)',
+  '--ck-text':     '#14181f',
+  '--ck-muted':    '#5b6478',
+  '--ck-muted-2':  '#8a93a6',
+} as React.CSSProperties
+
+/* ─── CSS aliases mapping --ck-* → CSS var names ────────────── */
+// These let component inline styles reference the scoped vars
+const bg       = 'var(--ck-bg)'
+const surface  = 'var(--ck-surface)'
+const surface2 = 'var(--ck-surface-2)'
+const line     = 'var(--ck-line)'
+const line2    = 'var(--ck-line-2)'
+const text     = 'var(--ck-text)'
+const muted    = 'var(--ck-muted)'
+const muted2   = 'var(--ck-muted-2)'
+const accent   = 'var(--ck-accent)'
+const accent2  = 'var(--ck-accent-2)'
+const emerald  = 'var(--ck-emerald)'
+const amber    = 'var(--ck-amber)'
+const rose     = 'var(--ck-rose)'
+
+/* ─── Helpers ────────────────────────────────────────────────── */
+const agentById = (id: string) => AGENTS_STATIC.find(a => a.id === id)!
+
+function actionTokens(action: string) {
+  switch (action) {
+    case 'Scale':    return { color: accent,   glyph: '↑', label: 'SCALE',    desc: 'amplifier ce qui marche' }
+    case 'Continue': return { color: emerald,  glyph: '→', label: 'CONTINUE', desc: 'tenir le cap' }
+    case 'Pivot':    return { color: amber,    glyph: '↺', label: 'PIVOT',    desc: 'réorienter' }
+    case 'Stop':     return { color: rose,     glyph: '×', label: 'STOP',     desc: 'archiver, apprendre' }
+    default:         return { color: muted,    glyph: '·', label: action,     desc: '' }
+  }
 }
 
-export default function Dashboard() {
-  const { user } = useAuth()
-  const name = user?.email?.split('@')[0] || 'operator'
+function ventureToDecision(v: Venture) {
+  const action = v.stage === 'Scale' ? 'Scale'
+               : v.stage === 'Stop'  ? 'Stop'
+               : v.score >= 75       ? 'Continue'
+               : 'Pivot'
+  const mrrNum = parseFloat(v.mrr?.replace(/[^0-9.]/g, '') || '0')
+  return {
+    id:             v.id,
+    action,
+    venture:        v.name,
+    stage:          v.stage,
+    conf:           Math.min(99, Math.max(50, v.score)),
+    summary:        v.insight || `Score ${v.score}, stage ${v.stage}.`,
+    primary_metric: 'MRR',
+    primary_value:  v.mrr || '€0',
+    primary_delta:  v.conversion ? `conv ${v.conversion}` : '—',
+    receipts: [
+      { label: 'MRR · 28j',   value: v.mrr  || '—', delta: v.conversion || '—', tone: mrrNum > 500 ? 'good' : 'bad' },
+      { label: 'CAC',         value: v.cac  || '—', delta: '—',                  tone: 'muted' },
+      { label: 'Conv.',       value: v.conversion || '—', delta: '—',            tone: 'muted' },
+      { label: 'Score',       value: String(v.score), delta: v.stage,            tone: v.score >= 75 ? 'good' : v.score >= 50 ? 'muted' : 'bad' },
+    ],
+    squad: (action === 'Scale'    ? ['analytics', 'marketing', 'payment', 'decision']
+          : action === 'Continue' ? ['validation', 'marketing', 'analytics']
+          : action === 'Pivot'    ? ['validation', 'builder', 'payment', 'marketing']
+          : ['marketing', 'analytics']) as string[],
+    next:         v.next_action || 'Aucune action définie.',
+    side_effects: [v.next_action || '—'],
+  }
+}
 
-  const [ventures, setVentures] = useState<Venture[]>([])
-  const [agents, setAgents] = useState<Agent[]>([])
-  const [autos, setAutos] = useState<Auto[]>([])
-  const [kpi, setKpi] = useState<KpiRow | null>(null)
+/* ─── Sub-components ─────────────────────────────────────────── */
 
-  useEffect(() => {
-    if (!user) return
-    const supabase = createSupabaseBrowser()
-    Promise.all([
-      supabase.from('ventures').select('*').order('score', { ascending: false }),
-      supabase.from('agents').select('*').order('created_at', { ascending: false }),
-      supabase.from('automations').select('*').order('created_at', { ascending: false }),
-      supabase.from('kpi_snapshots').select('*').eq('period', '30d').single(),
-    ]).then(([{ data: v }, { data: a }, { data: au }, { data: k }]) => {
-      setVentures((v as Venture[]) || [])
-      setAgents((a as Agent[]) || [])
-      setAutos((au as Auto[]) || [])
-      setKpi(k as KpiRow | null)
-    })
-  }, [user])
-
-  // Derived pipeline counts
-  const pipeline = (['Ideas', 'Validation', 'Build', 'Scale', 'Stop'] as const).map((stage) => {
-    if (stage === 'Ideas') return { stage, count: ventures.length + 30, signal: `+${ventures.length} tracked`, tone: stageColors[stage] }
-    const list = ventures.filter((v) => v.stage === stage)
-    return { stage, count: list.length, signal: list.length > 0 ? `${list.map(v => v.name.split(' ')[0]).slice(0, 2).join(', ')}` : '—', tone: stageColors[stage] || 'text-muted-foreground' }
-  })
-
-  const totalMrrK = ventures.reduce((sum, v) => {
-    const raw = parseFloat(v.mrr.replace(/[^0-9.]/g, '')) || 0
-    return sum + (v.mrr.toLowerCase().includes('k') ? raw * 1000 : raw)
-  }, 0)
-
-  const kpis = [
-    { label: 'Studio MRR', value: `€${(totalMrrK / 1000).toFixed(1)}k`, delta: kpi?.revenue_delta ?? '+0%', status: 'Growing' },
-    { label: 'CTR', value: kpi?.ctr ?? '—', delta: kpi?.ctr_delta ?? '+0 pts', status: 'Tracking' },
-    { label: 'Conversion', value: kpi?.conversion ?? '—', delta: kpi?.conversion_delta ?? '+0 pts', status: 'Validated' },
-    { label: 'Active experiments', value: String(ventures.filter(v => v.stage !== 'Stop').length), delta: `${agents.filter(a => a.is_active).length} agents`, status: 'Running' },
-  ]
-
-  const decisions = ventures.slice(0, 4).map((v) => ({
-    action: decisionAction(v),
-    venture: v.name,
-    reason: v.insight || v.next_action || '—',
-    confidence: `${v.score}%`,
-  }))
-
-  const automationsList = [
-    { service: 'n8n', status: `${autos.length} workflows`, detail: autos.filter(a => !a.is_enabled).length > 0 ? `${autos.filter(a => !a.is_enabled).length} en pause` : 'Tous actifs' },
-    { service: 'Supabase', status: 'Connected', detail: 'Auth and storage ready' },
-    { service: 'Stripe', status: 'Sandbox', detail: 'Checkout pending' },
-    { service: 'Coolify + MCP', status: 'Online', detail: 'Infra hooks healthy' },
-  ]
-
+function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <div>
-      <header className="h-16 border-b border-border flex items-center justify-between px-4 md:px-8 sticky top-0 bg-background/80 backdrop-blur-md z-10">
-        <h1 className="text-sm font-semibold text-muted-foreground">
-          Studio / <span className="text-foreground">Venture Cockpit</span>
-        </h1>
-        <Link href="/studio/agents"
-          className="px-4 py-1.5 bg-foreground text-background text-xs font-bold rounded-full hover:opacity-90">
-          Configurer agents
-        </Link>
-      </header>
+    <kbd style={{
+      display: 'inline-block', minWidth: 18,
+      padding: '1px 5px', borderRadius: 3,
+      background: surface2, color: text,
+      border: `1px solid ${line2}`,
+      borderBottom: `2px solid ${line2}`,
+      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+      textAlign: 'center', verticalAlign: 'middle',
+    }}>{children}</kbd>
+  )
+}
 
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
-        <section className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
-          <div className="space-y-6">
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Kenomi AI Venture Studio</p>
-                <h2 className="text-3xl md:text-5xl font-extrabold tracking-tighter mt-2">
-                  Bonjour {name}. <span className="text-gradient">Venture Cockpit</span>
-                </h2>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-emerald font-mono">
-                <RadioTower className="size-4" />{agents.filter(a => a.is_active).length} agents actifs · {ventures.filter(v => v.stage !== 'Stop').length} expériences
-              </div>
-            </div>
+function MoonIcon() {
+  return (
+    <svg width={12} height={12} viewBox="0 0 16 16" fill="none">
+      <path d="M13.5 9.5A6 6 0 016.5 2.5a6 6 0 107 7z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              {pipeline.map((item) => (
-                <div key={item.stage} className="bg-surface ring-1 ring-border rounded-lg p-4 min-h-32 flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{item.stage}</p>
-                    <GitBranch className={`size-4 ${item.tone}`} />
-                  </div>
-                  <div>
-                    <p className="text-4xl font-extrabold tracking-tighter">{item.count}</p>
-                    <p className={`text-[11px] font-mono truncate ${item.tone}`}>{item.signal}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+function SunIcon() {
+  return (
+    <svg width={12} height={12} viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.4"/>
+      <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+        <line x1="8" y1="1.5" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="14.5"/>
+        <line x1="1.5" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="14.5" y2="8"/>
+        <line x1="3.2" y1="3.2" x2="4.2" y2="4.2"/><line x1="11.8" y1="11.8" x2="12.8" y2="12.8"/>
+        <line x1="3.2" y1="12.8" x2="4.2" y2="11.8"/><line x1="11.8" y1="4.2" x2="12.8" y2="3.2"/>
+      </g>
+    </svg>
+  )
+}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              {kpis.map((kpi, index) => (
-                <div key={kpi.label}
-                  className={`${index === 0 ? 'gradient-border' : 'bg-surface ring-1 ring-border'} rounded-lg p-5 relative overflow-hidden`}>
-                  {index === 0 && <div className="accent-glow absolute inset-0" />}
-                  <div className="relative">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
-                    <div className="flex items-end justify-between gap-3 mt-3">
-                      <p className="text-3xl font-extrabold tracking-tighter">{kpi.value}</p>
-                      <span className="text-[10px] px-2 py-1 rounded-full bg-emerald/10 text-emerald ring-1 ring-emerald/20 font-mono">{kpi.delta}</span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground font-mono mt-2">{kpi.status}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+/* Header */
+function CkHeader({ theme, onToggleTheme, onOpenCmdk }: {
+  theme: string
+  onToggleTheme: () => void
+  onOpenCmdk: () => void
+}) {
+  const router = useRouter()
+  const navItems = [
+    { label: 'Cockpit',    href: '/studio' },
+    { label: 'Ventures',   href: '/studio/ventures' },
+    { label: 'Agents',     href: '/studio/agents' },
+    { label: 'Marketing',  href: '/studio/marketing' },
+    { label: 'Analytics',  href: '/studio/analytics' },
+  ]
+  return (
+    <header style={{
+      position: 'sticky', top: 0, zIndex: 10,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '14px 24px',
+      background: bg,
+      borderBottom: `1px solid ${line}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {/* Logo mark */}
+        <div style={{
+          width: 36, height: 36, borderRadius: 8,
+          background: accent, display: 'grid', placeItems: 'center', flexShrink: 0,
+        }}>
+          <div style={{
+            width: 20, height: 20, borderRadius: 4,
+            background: theme === 'light' ? '#fff' : bg,
+            display: 'grid', placeItems: 'center',
+            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, color: text,
+          }}>K</div>
+        </div>
+        <div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', color: muted, textTransform: 'uppercase' }}>
+            Kenomi · cockpit
           </div>
-
-          <aside className="bg-surface ring-1 ring-border rounded-lg p-5 h-fit">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Decision Queue</p>
-                <h3 className="text-xl font-extrabold tracking-tighter">Next calls</h3>
-              </div>
-              <CheckCircle2 className="size-5 text-emerald" />
-            </div>
-            {decisions.length > 0 ? (
-              <div className="space-y-3">
-                {decisions.map((decision) => (
-                  <div key={decision.venture} className="rounded-md bg-background/40 ring-1 ring-border p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${statusClass(decision.action)}`}>{decision.action}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">{decision.confidence}</span>
-                    </div>
-                    <p className="text-sm font-semibold mt-2">{decision.venture}</p>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{decision.reason}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                Aucune venture. <Link href="/studio/ventures" className="text-accent hover:underline">Créez votre pipeline →</Link>
-              </p>
-            )}
-          </aside>
-        </section>
-
-        <section className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6">
-          <div className="bg-surface ring-1 ring-border rounded-lg overflow-hidden">
-            <div className="p-5 border-b border-border flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Venture Pipeline</p>
-                <h3 className="text-xl font-extrabold tracking-tighter">Active ventures</h3>
-              </div>
-              <TrendingUp className="size-5 text-violet" />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[720px]">
-                <thead className="text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr className="border-b border-border">
-                    {['Venture', 'Stage', 'Score', 'MRR', 'CAC', 'Conv.', 'Decision'].map((h) => (
-                      <th key={h} className="text-left font-medium px-5 py-3">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {ventures.map((v) => (
-                    <tr key={v.id} className="border-b border-border/70 last:border-0">
-                      <td className="px-5 py-4 font-semibold">{v.name}</td>
-                      <td className="px-5 py-4 text-muted-foreground">{v.stage}</td>
-                      <td className="px-5 py-4 font-mono">{v.score}</td>
-                      <td className="px-5 py-4 font-mono">{v.mrr}</td>
-                      <td className="px-5 py-4 font-mono">{v.cac}</td>
-                      <td className="px-5 py-4 font-mono">{v.conversion}</td>
-                      <td className="px-5 py-4">
-                        <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${statusClass(decisionAction(v))}`}>{decisionAction(v)}</span>
-                      </td>
-                    </tr>
-                  ))}
-                  {ventures.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-5 py-12 text-center text-sm text-muted-foreground">
-                        <Link href="/studio/ventures" className="text-accent hover:underline">Créez votre premier pipeline →</Link>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, letterSpacing: '-.02em', color: text, lineHeight: 1.1 }}>
+            Decisions today
           </div>
+        </div>
+        <nav style={{ marginLeft: 20, display: 'flex', gap: 4 }}>
+          {navItems.map((item, i) => (
+            <button key={item.label} onClick={() => router.push(item.href)} style={{
+              padding: '6px 12px', borderRadius: 6,
+              background: i === 0 ? surface : 'transparent',
+              color: i === 0 ? text : muted,
+              border: i === 0 ? `1px solid ${line2}` : '1px solid transparent',
+              fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', letterSpacing: '-.005em',
+              fontFamily: 'var(--font-sans)',
+            }}>{item.label}</button>
+          ))}
+        </nav>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button onClick={onOpenCmdk} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '7px 12px 7px 14px', borderRadius: 999,
+          background: surface, color: muted,
+          border: `1px solid ${line2}`, cursor: 'pointer',
+          fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '.06em',
+        }}>
+          <span>Search · jump · run</span>
+          <Kbd>⌘K</Kbd>
+        </button>
+        <button onClick={onToggleTheme} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '7px 12px', borderRadius: 999,
+          background: surface, color: text,
+          border: `1px solid ${line2}`, cursor: 'pointer',
+          fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
+        }}>
+          {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
+          <span>{theme === 'dark' ? 'Night' : 'Day'}</span>
+          <Kbd>T</Kbd>
+        </button>
+      </div>
+    </header>
+  )
+}
 
-          <div className="space-y-6">
-            <div className="bg-surface ring-1 ring-border rounded-lg p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Agent Mesh</p>
-                  <h3 className="text-xl font-extrabold tracking-tighter">Active agents</h3>
-                </div>
-                <Bot className="size-5 text-cyan" />
-              </div>
-              {agents.length > 0 ? (
-                <div className="space-y-3">
-                  {agents.slice(0, 5).map((agent) => (
-                    <div key={agent.id} className="flex gap-3 rounded-md bg-background/40 ring-1 ring-border p-3">
-                      <div className="size-9 brand-logo rounded-md grid place-items-center shrink-0">
-                        <Bot className="size-4 text-white" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold truncate">{agent.name}</p>
-                          <span className={`text-[10px] px-2 py-1 rounded-full ring-1 font-mono ${agent.is_active ? 'bg-emerald/10 text-emerald ring-emerald/20' : 'bg-muted text-muted-foreground ring-border'}`}>
-                            {agent.is_active ? 'Live' : 'Paused'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1 truncate">{agent.description}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono mt-2">{agent.model}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  <Link href="/studio/agents" className="text-accent hover:underline">Créez vos premiers agents →</Link>
-                </p>
-              )}
-            </div>
-
-            <div className="bg-surface ring-1 ring-border rounded-lg p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Automation Health</p>
-                  <h3 className="text-xl font-extrabold tracking-tighter">Infra signals</h3>
-                </div>
-                <Workflow className="size-5 text-fuchsia" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {automationsList.map((a) => (
-                  <div key={a.service} className="rounded-md bg-background/40 ring-1 ring-border p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold">{a.service}</p>
-                      <CircleDollarSign className="size-4 text-muted-foreground" />
-                    </div>
-                    <p className={`text-xs font-mono mt-2 ${a.status === 'Sandbox' ? 'text-fuchsia' : 'text-emerald'}`}>{a.status}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{a.detail}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+/* Confidence ring */
+function ConfidenceRing({ value, color }: { value: number; color: string }) {
+  const r = 42, c = 2 * Math.PI * r
+  const pct = Math.max(0, Math.min(100, value))
+  return (
+    <div style={{ position: 'relative', width: 110, height: 110, flexShrink: 0 }}
+         role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+         aria-label={`Confiance ${pct}%`}>
+      <svg width="110" height="110" viewBox="0 0 110 110" aria-hidden="true">
+        <circle cx="55" cy="55" r={r} fill="none" stroke={line2} strokeWidth="6" />
+        <circle cx="55" cy="55" r={r} fill="none" stroke={color} strokeWidth="6"
+                strokeDasharray={`${(pct / 100) * c} ${c}`} strokeLinecap="round"
+                transform="rotate(-90 55 55)" />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, color: text, lineHeight: 1 }}>
+            {pct}<span style={{ fontSize: 14, color: muted2 }}>%</span>
           </div>
-        </section>
-
-        <div className="flex justify-center pb-4">
-          <Link href="/studio/automations"
-            className="px-6 py-2.5 ring-1 ring-border rounded-full text-xs font-bold text-muted-foreground hover:text-foreground hover:ring-accent/40 transition-colors">
-            Ouvrir Automation Center →
-          </Link>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', color: muted, marginTop: 4 }}>CONF</div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* Receipt tile */
+function Receipt({ r }: { r: { label: string; value: string; delta: string; tone: string } }) {
+  const toneColor = r.tone === 'good' ? emerald : r.tone === 'bad' ? rose : muted2
+  return (
+    <div style={{ padding: '10px 12px', borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: muted }}>{r.label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: text, letterSpacing: '-.02em' }}>{r.value}</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: toneColor, letterSpacing: '.06em' }}>{r.delta}</span>
+      </div>
+    </div>
+  )
+}
+
+/* Agent chip */
+function AgentChip({ id }: { id: string }) {
+  const a = agentById(id)
+  if (!a) return null
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '5px 9px', borderRadius: 6,
+      background: surface2, border: `1px solid ${line}`,
+    }}>
+      <span style={{
+        width: 18, height: 18, borderRadius: 4,
+        background: surface, border: `1px solid ${line2}`,
+        display: 'grid', placeItems: 'center',
+        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11, color: text,
+      }}>{a.sigil}</span>
+      <span style={{ fontSize: 12, color: text, fontWeight: 600 }}>{a.name}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2, letterSpacing: '.1em' }}>{a.code}</span>
+    </span>
+  )
+}
+
+/* Chart with hover tooltip */
+function ChartWithTooltip({ title, subtitle, series, tone }: {
+  title: string; subtitle: string; series: number[]; tone: string
+}) {
+  const [hover, setHover] = useState<{ idx: number; x: number } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const W = 100, H = 100
+  const min = Math.min(...series), max = Math.max(...series)
+  const span = max - min || 1
+  const gradId = `df-grad-${title.replace(/\W/g, '')}`
+
+  function onMove(clientX: number) {
+    if (!ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    const xN = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    const idx = Math.round(xN * (series.length - 1))
+    setHover({ idx, x: rect.width * (idx / (series.length - 1)) })
+  }
+
+  return (
+    <div style={{ padding: 14, borderRadius: 10, background: surface2, border: `1px solid ${line}`, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>{title}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted, letterSpacing: '.06em', marginTop: 2 }}>{subtitle}</div>
+        </div>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 7px', borderRadius: 3, background: tone + '1c', color: tone, letterSpacing: '.14em', fontWeight: 700 }}>28j</span>
+      </div>
+      <div ref={ref}
+           onMouseMove={e => onMove(e.clientX)}
+           onMouseLeave={() => setHover(null)}
+           style={{ flex: 1, minHeight: 80, marginTop: 10, position: 'relative' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={tone} stopOpacity=".4" />
+              <stop offset="100%" stopColor={tone} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {[0, 0.5, 1].map((y, i) => (
+            <line key={i} x1="0" x2={W} y1={y * H} y2={y * H} stroke={line} strokeWidth="0.4" strokeDasharray={i === 1 ? '1 2' : 'none'} />
+          ))}
+          <path d={areaPath(series, W, H, 1)} fill={`url(#${gradId})`} />
+          <path d={sparkPath(series, W, H, 1)} fill="none" stroke={tone} strokeWidth="1.4" />
+          {hover && (() => {
+            const x = (hover.idx / (series.length - 1)) * W
+            const v = series[hover.idx]
+            const y = (1 - (v - min) / span) * H
+            return (
+              <g>
+                <line x1={x} y1="0" x2={x} y2={H} stroke={accent} strokeWidth="0.6" strokeDasharray="2 2" />
+                <circle cx={x} cy={y} r="2" fill={accent} />
+              </g>
+            )
+          })()}
+        </svg>
+        {hover && (
+          <div style={{
+            position: 'absolute', left: hover.x, top: 4, transform: 'translateX(-50%)',
+            padding: '5px 9px', borderRadius: 6,
+            background: bg, border: `1px solid ${tone}`,
+            fontFamily: 'var(--font-mono)', fontSize: 10.5, color: text,
+            whiteSpace: 'nowrap', pointerEvents: 'none',
+            boxShadow: '0 4px 12px rgba(0,0,0,.4)', letterSpacing: '.06em',
+          }}>
+            <span style={{ color: muted }}>J-{series.length - 1 - hover.idx}</span>
+            <span style={{ margin: '0 6px', color: muted2 }}>·</span>
+            <span style={{ color: tone, fontWeight: 700 }}>€{(series[hover.idx] * 60).toFixed(0)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* Decision hero */
+interface DecisionItem {
+  id: string; action: string; venture: string; stage: string; conf: number
+  summary: string; primary_metric: string; primary_value: string; primary_delta: string
+  receipts: { label: string; value: string; delta: string; tone: string }[]
+  squad: string[]; next: string; side_effects: string[]
+}
+
+function DecisionHero({ d, idx, total, confirmed, onConfirm }: {
+  d: DecisionItem; idx: number; total: number; confirmed: boolean; onConfirm: () => void
+}) {
+  const t = actionTokens(d.action)
+  const series = useMemo(() => makeSpark(28, 40, 14, d.id.length * 11), [d.id])
+
+  return (
+    <article style={{
+      background: surface, border: `1px solid ${line}`, borderRadius: 16,
+      padding: 24, position: 'relative', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0,
+    }}>
+      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: t.color }} />
+
+      {/* Top row */}
+      <header style={{ display: 'flex', alignItems: 'flex-start', gap: 24 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.24em', textTransform: 'uppercase', color: muted, fontWeight: 600 }}>
+              Decision {idx + 1} / {total} · {d.stage}
+            </span>
+            <span style={{
+              padding: '2px 8px', borderRadius: 999,
+              background: confirmed ? emerald + '22' : accent + '22',
+              color: confirmed ? emerald : accent,
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', fontWeight: 800,
+            }}>
+              ● {confirmed ? 'CONFIRMED' : 'ACTION NEEDED'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              padding: '8px 16px', borderRadius: 8,
+              background: t.color, color: '#0b0d12',
+            }}>
+              <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{t.glyph}</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16, letterSpacing: '.06em' }}>{t.label}</span>
+            </span>
+            <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1.05, color: text }}>
+              {d.venture}
+            </h2>
+          </div>
+          <p style={{ marginTop: 12, fontSize: 14, color: muted, lineHeight: 1.55, maxWidth: 640 }}>{d.summary}</p>
+        </div>
+        <ConfidenceRing value={d.conf} color={t.color} />
+      </header>
+
+      {/* Receipts */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+        {d.receipts.map((r, i) => <Receipt key={i} r={r} />)}
+      </div>
+
+      {/* Chart + side effects */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
+        <ChartWithTooltip
+          title={`${d.primary_metric} · 28 jours`}
+          subtitle={`${d.primary_value} · ${d.primary_delta}`}
+          series={series}
+          tone={t.color}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+          <div>
+            <h3 style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: muted, fontWeight: 600 }}>
+              Squad · {d.squad.length} agents
+            </h3>
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              {d.squad.map(id => <AgentChip key={id} id={id} />)}
+            </div>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+            <h3 style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: muted, fontWeight: 600 }}>
+              Si tu confirmes
+            </h3>
+            <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {d.side_effects.map((s, i) => (
+                <li key={i} style={{
+                  display: 'flex', gap: 8, padding: '6px 10px', borderRadius: 6,
+                  background: surface2, border: `1px solid ${line}`,
+                  fontSize: 12.5, color: text,
+                }}>
+                  <span style={{ color: t.color, flexShrink: 0 }}>→</span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: muted2, lineHeight: 1.45 }}>
+            <strong style={{ color: text }}>Next:</strong> {d.next}
+          </p>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <footer style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button disabled={confirmed} onClick={onConfirm} style={{
+          flex: 1, padding: '12px 16px', borderRadius: 10,
+          background: confirmed ? surface2 : t.color,
+          color: confirmed ? muted : '#0b0d12',
+          border: 'none', cursor: confirmed ? 'default' : 'pointer',
+          fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, letterSpacing: '.02em',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        }}>
+          <span>{confirmed ? '✓' : t.glyph}</span>
+          {confirmed ? 'Confirmed' : `Confirm · ${t.label}`}
+          {!confirmed && <Kbd>↵</Kbd>}
+        </button>
+        <button style={{
+          padding: '12px 16px', borderRadius: 10,
+          background: surface2, color: text,
+          border: `1px solid ${line2}`, cursor: 'pointer',
+          fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 12, letterSpacing: '.14em', textTransform: 'uppercase',
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+        }}>Override <Kbd>S</Kbd><Kbd>P</Kbd><Kbd>C</Kbd><Kbd>X</Kbd></button>
+        <button style={{
+          padding: '12px 16px', borderRadius: 10,
+          background: 'transparent', color: muted,
+          border: `1px solid ${line2}`, cursor: 'pointer',
+          fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 12, letterSpacing: '.14em', textTransform: 'uppercase',
+        }}>Defer 24h</button>
+      </footer>
+    </article>
+  )
+}
+
+/* Up-next queue */
+function UpNext({ queue, selectedIdx, onSelect, confirmedIds }: {
+  queue: DecisionItem[]
+  selectedIdx: number
+  onSelect: (i: number) => void
+  confirmedIds: string[]
+}) {
+  if (!queue.length) return null
+  return (
+    <section style={{
+      background: surface, border: `1px solid ${line}`, borderRadius: 16,
+      padding: 16, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>
+          Up next · {Math.max(0, queue.length - 1)} décisions en attente
+        </h3>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+          <Kbd>J</Kbd> <Kbd>K</Kbd> pour naviguer
+        </span>
+      </div>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, minHeight: 0 }}>
+        {queue.slice(1, 4).map((d, i) => {
+          const actualIdx = i + 1
+          const t = actionTokens(d.action)
+          const spark = makeSpark(20, 40, 14, d.id.length * 7)
+          const confirmed = confirmedIds.includes(d.id)
+          const active = selectedIdx === actualIdx
+          return (
+            <button key={d.id} onClick={() => onSelect(actualIdx)} style={{
+              textAlign: 'left', padding: 12, borderRadius: 10,
+              background: active ? surface2 : bg,
+              border: active ? `1.5px solid ${t.color}` : `1px solid ${line}`,
+              cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 8,
+              position: 'relative', overflow: 'hidden', minWidth: 0,
+            }}>
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: t.color }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 8px', borderRadius: 4,
+                  background: t.color + '1f', color: t.color,
+                  fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', fontWeight: 800,
+                }}>
+                  <span>{t.glyph}</span> {t.label}
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: text, fontWeight: 700 }}>{d.conf}%</span>
+              </div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, letterSpacing: '-.01em', color: text }}>{d.venture}</div>
+              <p style={{ margin: 0, fontSize: 12, color: muted, lineHeight: 1.45, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+                {d.summary}
+              </p>
+              <svg viewBox="0 0 100 24" preserveAspectRatio="none" style={{ width: '100%', height: 22, marginTop: 'auto' }}>
+                <path d={sparkPath(spark, 100, 24, 1)} fill="none" stroke={t.color} strokeWidth="1.2" opacity={confirmed ? 0.4 : 1} />
+              </svg>
+              {confirmed && (
+                <span style={{
+                  position: 'absolute', right: 10, top: 10,
+                  fontFamily: 'var(--font-mono)', fontSize: 9.5,
+                  padding: '2px 6px', borderRadius: 3,
+                  background: emerald + '22', color: emerald,
+                  letterSpacing: '.14em', fontWeight: 700,
+                }}>✓ DONE</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+/* Today's rhythm */
+function TodayRhythm() {
+  return (
+    <section style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Today&apos;s rhythm</h3>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+          {new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+        </span>
+      </div>
+      <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', gap: 4 }}>
+        {RHYTHM.map(r => {
+          const a = agentById(r.agent)
+          const isNow = r.status === 'now'
+          const isDone = r.status === 'done'
+          return (
+            <li key={r.hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'stretch' }}>
+              <div style={{
+                height: 6, borderRadius: 3,
+                background: isDone ? text : isNow ? accent : surface2,
+                border: `1px solid ${isNow ? accent : line}`,
+              }} />
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: isNow ? accent : isDone ? text : muted2, letterSpacing: '.1em', textAlign: 'center', fontWeight: isNow ? 700 : 500 }}>
+                {r.hour}
+              </div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: isNow ? 700 : 500, color: isNow ? text : muted, textAlign: 'center', lineHeight: 1.25 }}>
+                {a?.name}
+              </div>
+              {isNow && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent, letterSpacing: '.14em', textTransform: 'uppercase', textAlign: 'center', fontWeight: 700 }}>
+                  ● now
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
+/* KPI grid */
+function KpiGrid({ kpi }: { kpi: KpiRow | null }) {
+  const kpis = [
+    { label: 'Studio MRR',  value: kpi ? kpi.revenue : '—', delta: kpi ? kpi.revenue_delta : 'loading…', tone: 'good' },
+    { label: 'Conv. rate',  value: kpi ? kpi.conversion : '—', delta: kpi ? kpi.conversion_delta : '—', tone: 'good' },
+    { label: 'CTR',         value: kpi ? kpi.ctr : '—', delta: kpi ? kpi.ctr_delta : '—', tone: 'good' },
+    { label: 'Rétention',   value: kpi ? kpi.retention : '—', delta: kpi ? kpi.retention_delta : '—', tone: 'muted' },
+  ]
+  return (
+    <section style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14 }}>
+      <div style={{ marginBottom: 10 }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '-.01em', color: text }}>KPIs · 30j</h3>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {kpis.map(k => (
+          <div key={k.label} style={{ padding: '10px 12px', borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: muted }}>{k.label}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: text, marginTop: 4 }}>{k.value}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: k.tone === 'good' ? emerald : muted2, letterSpacing: '.06em' }}>{k.delta}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* Mission feed / log */
+function MissionFeedCompact({ tick }: { tick: number }) {
+  const ICONS: Record<string, string> = { signal: '↗', score: '★', order: '▶', handoff: '⇨', event: '◉', ping: '·', report: 'Σ', brief: '✎', trend: '≋', spec: '⟁' }
+  const items = useMemo(() => {
+    return Array.from({ length: 6 }).map((_, i) => {
+      const c = CHATTER[(tick + i) % CHATTER.length]
+      const fa = agentById(c.from)
+      const ta = agentById(c.to)
+      return { ...c, fa, ta, key: `${tick}-${i}`, xp: 6 + (i % 5) * 4 }
+    })
+  }, [tick])
+
+  return (
+    <section style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: text }}>Mission log</h3>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: emerald }}>● live · t-15min</span>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {items.map((it, i) => (
+          <div key={it.key} style={{
+            padding: '7px 9px', borderRadius: 7,
+            background: surface2, border: `1px solid ${line}`,
+            display: 'flex', alignItems: 'center', gap: 7,
+            opacity: 1 - i * 0.05,
+          }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.06em', width: 36, flexShrink: 0 }}>
+              T-{String(i).padStart(2, '0')}m
+            </span>
+            <span style={{ width: 16, textAlign: 'center', flexShrink: 0, color: it.fa.color, fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 800 }}>
+              {ICONS[it.type] || '·'}
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, padding: '2px 5px', borderRadius: 3, background: it.fa.color + '22', color: it.fa.color, letterSpacing: '.08em', fontWeight: 700, flexShrink: 0 }}>
+              {it.fa.code}
+            </span>
+            <span style={{ color: muted2, fontSize: 11, flexShrink: 0 }}>→</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, padding: '2px 5px', borderRadius: 3, background: it.ta.color + '22', color: it.ta.color, letterSpacing: '.08em', fontWeight: 700, flexShrink: 0 }}>
+              {it.ta.code}
+            </span>
+            <span style={{ fontSize: 11, color: text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {it.text}
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: accent2, letterSpacing: '.06em', fontWeight: 700, flexShrink: 0 }}>
+              +{it.xp} XP
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* Cold start hero */
+function ColdStartHero() {
+  const router = useRouter()
+  const steps = [
+    { id: 1, label: 'Supabase connecté',        done: true },
+    { id: 2, label: 'Stripe (test mode)',        done: true },
+    { id: 3, label: 'Decision Agent prêt',       done: true },
+    { id: 4, label: 'Ajouter une première venture', done: false, action: 'Ajouter', onClick: () => router.push('/studio/ventures'), primary: false },
+    { id: 5, label: 'Configurer n8n cron 4h',   done: false, action: 'Configurer', onClick: () => {}, primary: false },
+    { id: 6, label: 'Lancer le premier sweep',  done: false, action: 'Lancer',     onClick: () => router.push('/studio/agents'), primary: true },
+  ]
+  const completed = steps.filter(s => s.done).length
+  return (
+    <article style={{
+      background: surface, border: `1px solid ${line}`, borderRadius: 16,
+      padding: 32, display: 'flex', flexDirection: 'column', gap: 20, minHeight: 0,
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: accent }} />
+      <div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.24em', textTransform: 'uppercase', color: accent, fontWeight: 700 }}>
+          ◆ Jour 1 · setup en cours
+        </div>
+        <h2 style={{ margin: '12px 0 6px', fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 800, letterSpacing: '-.03em', color: text }}>
+          Pas encore de décisions.
+        </h2>
+        <p style={{ margin: 0, fontSize: 15, color: muted, maxWidth: 600, lineHeight: 1.55 }}>
+          Le cockpit est prêt mais les agents n&apos;ont pas encore tourné. Ajoute une venture en validation
+          et active Scout — Decision Agent commencera à proposer des arbitrages dès que les données arrivent.
+        </p>
+      </div>
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: muted, fontWeight: 700 }}>
+            Setup · {completed}/{steps.length}
+          </span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: accent, letterSpacing: '.06em', fontWeight: 700 }}>
+            {Math.round((completed / steps.length) * 100)}%
+          </span>
+        </div>
+        <div style={{ height: 6, borderRadius: 3, background: surface2, overflow: 'hidden', border: `1px solid ${line}` }}>
+          <div style={{ width: `${(completed / steps.length) * 100}%`, height: '100%', background: accent }} />
+        </div>
+      </div>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {steps.map(s => (
+          <li key={s.id} style={{
+            display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 14, alignItems: 'center',
+            padding: '12px 14px', borderRadius: 10,
+            background: s.done ? surface2 : bg,
+            border: `1px solid ${s.done ? line : (s.primary ? accent : line2)}`,
+            opacity: s.done ? 0.55 : 1,
+          }}>
+            <span style={{
+              width: 22, height: 22, borderRadius: 6,
+              background: s.done ? emerald : 'transparent',
+              border: s.done ? 'none' : `1.5px dashed ${s.primary ? accent : line2}`,
+              display: 'grid', placeItems: 'center',
+              color: '#0b0d12', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13,
+            }}>{s.done ? '✓' : s.id}</span>
+            <span style={{ fontSize: 14, color: text, fontWeight: s.primary ? 700 : 500 }}>{s.label}</span>
+            {!s.done && (
+              <button onClick={s.onClick} style={{
+                padding: '7px 12px', borderRadius: 6,
+                background: s.primary ? accent : surface2,
+                color: s.primary ? '#0b0d12' : text,
+                border: s.primary ? 'none' : `1px solid ${line2}`,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
+              }}>{s.action}</button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </article>
+  )
+}
+
+/* ⌘K Palette */
+function CmdkPalette({ onClose }: { onClose: () => void }) {
+  const [query, setQuery] = useState('')
+  const [active, setActive] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  const allItems = [
+    { kind: 'decision', label: 'Scale · Kenomi Forms',     hint: '92% conf · scale',         href: '/studio' },
+    { kind: 'decision', label: 'Continue · Solo CFO',      hint: '84% conf',                  href: '/studio' },
+    { kind: 'decision', label: 'Pivot · Legal Intake',     hint: '76% conf · → HR Ops',       href: '/studio' },
+    { kind: 'decision', label: 'Stop · Creator CRM Lite',  hint: '71% conf · archive',        href: '/studio' },
+    { kind: 'venture',  label: 'Ventures',                 hint: 'kanban + funnel',            href: '/studio/ventures' },
+    { kind: 'agent',    label: 'Agents',                   hint: 'run · pause · config',       href: '/studio/agents' },
+    { kind: 'page',     label: 'Analytics',                hint: 'MRR · cohort · attribution', href: '/studio/analytics' },
+    { kind: 'page',     label: 'Marketing',                hint: 'campagnes · drafts',         href: '/studio/marketing' },
+    { kind: 'page',     label: 'Infrastructure',           hint: 'topology · services',        href: '/studio/infrastructure' },
+    { kind: 'page',     label: 'Automations',              hint: 'n8n · webhooks',             href: '/studio/automations' },
+    { kind: 'page',     label: 'Documents',                hint: 'storage · uploads',          href: '/studio/documents' },
+    { kind: 'action',   label: 'Déconnexion',              hint: 'logout',                     href: '/login' },
+  ]
+
+  const items = useMemo(() => {
+    if (!query) return allItems
+    const q = query.toLowerCase()
+    return allItems.filter(i => i.label.toLowerCase().includes(q) || i.hint.toLowerCase().includes(q))
+  }, [query])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { setActive(0) }, [query])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(items.length - 1, a + 1)) }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setActive(a => Math.max(0, a - 1)) }
+      if (e.key === 'Enter')     { e.preventDefault(); const it = items[active]; if (it) { router.push(it.href); onClose() } }
+      if (e.key === 'Escape')    { e.preventDefault(); onClose() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [items, active, onClose, router])
+
+  const kindStyle: Record<string, { color: string; label: string }> = {
+    decision: { color: accent,  label: 'Decision' },
+    venture:  { color: text,    label: 'Venture'  },
+    agent:    { color: text,    label: 'Agent'    },
+    page:     { color: muted,   label: 'Page'     },
+    action:   { color: muted,   label: 'Action'   },
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(7,9,13,.72)', backdropFilter: 'blur(8px)',
+      zIndex: 100, display: 'grid', placeItems: 'start center', paddingTop: 140,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: 620, background: surface, border: `1px solid ${line2}`, borderRadius: 14,
+        boxShadow: '0 24px 80px rgba(0,0,0,.6)',
+        overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 520,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${line}` }}>
+          <svg width="16" height="16" viewBox="0 0 16 16">
+            <circle cx="7" cy="7" r="5" fill="none" stroke={muted} strokeWidth="1.5"/>
+            <line x1="11" y1="11" x2="14" y2="14" stroke={muted} strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)}
+                 placeholder="Rechercher décisions, ventures, agents, actions…"
+                 style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: text, fontSize: 15, fontFamily: 'var(--font-sans)' }} />
+          <Kbd>esc</Kbd>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+          {items.length === 0 ? (
+            <div style={{ padding: '32px 18px', textAlign: 'center', color: muted, fontSize: 13 }}>
+              Aucun résultat.
+            </div>
+          ) : items.map((it, i) => (
+            <button key={i} onClick={() => { router.push(it.href); onClose() }}
+                    onMouseEnter={() => setActive(i)}
+                    style={{
+                      width: '100%', textAlign: 'left',
+                      display: 'grid', gridTemplateColumns: '70px 1fr auto', gap: 12, alignItems: 'center',
+                      padding: '10px 12px', borderRadius: 8,
+                      background: i === active ? surface2 : 'transparent',
+                      border: '1px solid transparent', cursor: 'pointer',
+                    }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: (kindStyle[it.kind] || kindStyle.page).color, fontWeight: 700 }}>
+                {(kindStyle[it.kind] || kindStyle.page).label}
+              </span>
+              <span style={{ fontSize: 13.5, color: text }}>{it.label}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted2, letterSpacing: '.06em' }}>{it.hint}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ padding: '10px 18px', borderTop: `1px solid ${line}`, display: 'flex', alignItems: 'center', gap: 16, fontFamily: 'var(--font-mono)', fontSize: 10.5, color: muted2, letterSpacing: '.06em' }}>
+          <span><Kbd>↑</Kbd><Kbd>↓</Kbd> nav</span>
+          <span><Kbd>↵</Kbd> ouvrir</span>
+          <span><Kbd>esc</Kbd> fermer</span>
+          <span style={{ marginLeft: 'auto' }}>{items.length} résultats</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* Footer keyboard hints */
+function CkFooter({ state }: { state: string }) {
+  return (
+    <footer style={{
+      padding: '12px 24px',
+      display: 'flex', alignItems: 'center', gap: 16,
+      borderTop: `1px solid ${line}`,
+      fontFamily: 'var(--font-mono)', fontSize: 11, color: muted, letterSpacing: '.06em',
+    }}>
+      <span><Kbd>⌘K</Kbd> command</span>
+      <span><Kbd>J</Kbd><Kbd>K</Kbd> navigate</span>
+      <span><Kbd>↵</Kbd> confirm</span>
+      <span><Kbd>S</Kbd><Kbd>P</Kbd><Kbd>C</Kbd><Kbd>X</Kbd> override</span>
+      <span><Kbd>T</Kbd> theme</span>
+      <span style={{ marginLeft: 'auto', color: muted2 }}>
+        {state === 'cold' && 'SYS · jour 1 · setup en cours'}
+        {state === 'normal' && 'SYS · OK · Supabase live · n8n actif'}
+        {state === 'loading' && 'SYS · chargement…'}
+      </span>
+    </footer>
+  )
+}
+
+/* ─── Main page ──────────────────────────────────────────────── */
+export default function CockpitPage() {
+  const { user } = useAuth()
+  const supabase = createSupabaseBrowser()
+
+  const [ventures, setVentures] = useState<Venture[]>([])
+  const [kpi, setKpi] = useState<KpiRow | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [selectedIdx, setSelectedIdx] = useState(0)
+  const [confirmedIds, setConfirmedIds] = useState<string[]>([])
+  const [showCmdk, setShowCmdk] = useState(false)
+  const [logTick, setLogTick] = useState(0)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    try { setTheme((localStorage.getItem('kenomi-ck-theme') as 'dark' | 'light') || 'dark') } catch {}
+  }, [])
+
+  const toggleTheme = useCallback(() => {
+    setTheme(t => {
+      const next = t === 'dark' ? 'light' : 'dark'
+      try { localStorage.setItem('kenomi-ck-theme', next) } catch {}
+      return next
+    })
+  }, [])
+
+  /* Load data */
+  useEffect(() => {
+    if (!user) return
+    async function load() {
+      setLoading(true)
+      const [{ data: v }, { data: k }] = await Promise.all([
+        supabase.from('ventures').select('*').order('score', { ascending: false }),
+        supabase.from('kpi_snapshots').select('*').eq('period', '30d').limit(1).single(),
+      ])
+      setVentures((v as Venture[]) || [])
+      setKpi(k as KpiRow | null)
+      setLoading(false)
+    }
+    load()
+  }, [user])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Log tick every 2.2s */
+  useEffect(() => {
+    const id = setInterval(() => setLogTick(t => t + 1), 2200)
+    return () => clearInterval(id)
+  }, [])
+
+  /* Keyboard shortcuts */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setShowCmdk(v => !v)
+        return
+      }
+      if (showCmdk) {
+        return
+      }
+      if (e.key === 'j') { e.preventDefault(); setSelectedIdx(i => Math.min(queue.length - 1, i + 1)) }
+      if (e.key === 'k') { e.preventDefault(); setSelectedIdx(i => Math.max(0, i - 1)) }
+      if (e.key === 'Enter' && current) {
+        e.preventDefault()
+        setConfirmedIds(ids => [...new Set([...ids, current.id])])
+      }
+      if (e.key.toLowerCase() === 't') { e.preventDefault(); toggleTheme() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showCmdk, ventures, selectedIdx, toggleTheme])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const queue = useMemo(() => ventures.map(ventureToDecision), [ventures])
+  const current = queue[selectedIdx] ?? queue[0]
+  const isCold = !loading && ventures.length === 0
+  const ckState = loading ? 'loading' : isCold ? 'cold' : 'normal'
+
+  const ckVars = theme === 'dark' ? CK_DARK : CK_LIGHT
+
+  return (
+    <div ref={rootRef} style={{ ...ckVars, background: bg, color: text, fontFamily: 'var(--font-sans)', minHeight: '100dvh', display: 'flex', flexDirection: 'column' } as React.CSSProperties}>
+      <style>{`
+        .ck-btn-focus:focus-visible { outline: 2px solid var(--ck-accent); outline-offset: 2px; }
+        @keyframes ck-rise { 0% { transform: translateY(6px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+        @keyframes ck-pulse { 0%,100% { opacity: .6; } 50% { opacity: 1; } }
+      `}</style>
+
+      <CkHeader theme={theme} onToggleTheme={toggleTheme} onOpenCmdk={() => setShowCmdk(true)} />
+
+      <main style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 16, padding: '16px 24px' }}>
+        {/* Left column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, minHeight: 0 }}>
+          {loading && (
+            <div style={{ flex: 1, display: 'grid', placeItems: 'center', color: muted, fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '.14em' }}>
+              CHARGEMENT…
+            </div>
+          )}
+          {!loading && isCold && <ColdStartHero />}
+          {!loading && !isCold && current && (
+            <>
+              <DecisionHero
+                d={current}
+                idx={selectedIdx}
+                total={queue.length}
+                confirmed={confirmedIds.includes(current.id)}
+                onConfirm={() => setConfirmedIds(ids => [...new Set([...ids, current.id])])}
+              />
+              <UpNext queue={queue} selectedIdx={selectedIdx} onSelect={setSelectedIdx} confirmedIds={confirmedIds} />
+            </>
+          )}
+        </div>
+
+        {/* Right rail */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+          <TodayRhythm />
+          <KpiGrid kpi={kpi} />
+          <MissionFeedCompact tick={logTick} />
+        </div>
+      </main>
+
+      <CkFooter state={ckState} />
+
+      {showCmdk && <CmdkPalette onClose={() => setShowCmdk(false)} />}
     </div>
   )
 }

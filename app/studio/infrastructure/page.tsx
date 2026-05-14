@@ -1,11 +1,13 @@
 'use client'
-
-import Link from 'next/link'
-import { ChevronDown, Database, ExternalLink, HardDrive, Plus, Server, ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import { CkShell } from '@/components/CkShell'
+import {
+  surface, surface2, line, line2, text, muted, muted2,
+  accent, emerald, amber, rose,
+} from '@/lib/ck-vars'
 
 interface Service {
   id: string
@@ -18,13 +20,21 @@ interface Service {
 }
 
 const seedServices = [
-  { name: 'Proxmox VE', status: 'Online', detail: 'Node cluster ready for local workloads', endpoint: 'https://proxmox.local', role: 'Compute layer for local AI jobs, containers and test environments.', next_action: 'Connect proxmox-ssh MCP and expose health metrics.' },
-  { name: 'Coolify', status: 'Online', detail: 'Docker deployments and env management', endpoint: 'https://coolify.local', role: 'Deployment surface for landing pages, APIs and venture experiments.', next_action: 'Add project templates for validation apps and waitlists.' },
-  { name: 'Nginx Proxy Manager', status: 'Healthy', detail: 'Domains, SSL and reverse proxy', endpoint: 'https://npm.local', role: 'Routes public domains to internal services with SSL automation.', next_action: 'Map venture subdomains and automate certificate checks.' },
-  { name: 'Uptime Kuma', status: 'Watching', detail: 'Availability checks for studio services', endpoint: 'https://uptime.local', role: 'Monitors availability for core infrastructure and launched ventures.', next_action: 'Create monitors for each paid validation landing page.' },
-  { name: 'Vaultwarden', status: 'Ready', detail: 'Secrets and credential vault', endpoint: 'https://vault.local', role: 'Stores API keys, Stripe secrets, OAuth credentials and admin access.', next_action: 'Separate production, staging and experiment credentials.' },
-  { name: 'Supabase', status: 'Connected', detail: 'Auth, PostgreSQL and storage backend', endpoint: 'https://supabase.kenomi.eu', role: 'Primary backend for auth, venture records, documents and analytics.', next_action: 'Create venture, KPI and automation event tables with RLS.' },
+  { name: 'Proxmox VE',          status: 'Online',    detail: 'Node cluster ready for local workloads',       endpoint: 'https://proxmox.local',          role: 'Compute layer for local AI jobs, containers and test environments.',        next_action: 'Connect proxmox-ssh MCP and expose health metrics.' },
+  { name: 'Coolify',             status: 'Online',    detail: 'Docker deployments and env management',         endpoint: 'https://coolify.local',           role: 'Deployment surface for landing pages, APIs and venture experiments.',       next_action: 'Add project templates for validation apps and waitlists.' },
+  { name: 'Nginx Proxy Manager', status: 'Healthy',   detail: 'Domains, SSL and reverse proxy',               endpoint: 'https://npm.local',               role: 'Routes public domains to internal services with SSL automation.',           next_action: 'Map venture subdomains and automate certificate checks.' },
+  { name: 'Uptime Kuma',         status: 'Watching',  detail: 'Availability checks for studio services',       endpoint: 'https://uptime.local',            role: 'Monitors availability for core infrastructure and launched ventures.',       next_action: 'Create monitors for each paid validation landing page.' },
+  { name: 'Vaultwarden',         status: 'Ready',     detail: 'Secrets and credential vault',                 endpoint: 'https://vault.local',             role: 'Stores API keys, Stripe secrets, OAuth credentials and admin access.',      next_action: 'Separate production, staging and experiment credentials.' },
+  { name: 'Supabase',            status: 'Connected', detail: 'Auth, PostgreSQL and storage backend',          endpoint: 'https://supabase.kenomi.eu',      role: 'Primary backend for auth, venture records, documents and analytics.',      next_action: 'Create venture, KPI and automation event tables with RLS.' },
 ]
+
+function statusColor(s: string) {
+  if (['Online', 'Connected'].includes(s)) return emerald
+  if (['Healthy', 'Ready'].includes(s)) return '#22d3ee'
+  if (s === 'Watching') return amber
+  if (s === 'Draft') return muted
+  return muted
+}
 
 export default function InfrastructurePage() {
   const { user } = useAuth()
@@ -32,27 +42,25 @@ export default function InfrastructurePage() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', endpoint: '', detail: '', role: '' })
 
+  const supabase = createSupabaseBrowser()
+
   async function load() {
-    const supabase = createSupabaseBrowser()
     const { data } = await supabase.from('services').select('*').order('created_at', { ascending: true })
     const list = (data as Service[]) || []
     if (list.length === 0 && user) {
-      await supabase.from('services').insert(seedServices.map((s) => ({ ...s, user_id: user.id })))
+      await supabase.from('services').insert(seedServices.map(s => ({ ...s, user_id: user.id })))
       return load()
     }
     setItems(list)
     if (!openId && list.length > 0) setOpenId(list[0].id)
   }
-  useEffect(() => { if (user) load() }, [user])
+  useEffect(() => { if (user) load() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function createService(e: React.FormEvent) {
     e.preventDefault()
     if (!user || !form.name.trim()) return
-    const supabase = createSupabaseBrowser()
     const { error } = await supabase.from('services').insert({
-      user_id: user.id,
-      name: form.name.trim(),
-      status: 'Draft',
+      user_id: user.id, name: form.name.trim(), status: 'Draft',
       detail: form.detail.trim() || 'New service awaiting configuration',
       endpoint: form.endpoint.trim() || 'https://service.local',
       role: form.role.trim() || 'Define how this service supports the Venture Studio.',
@@ -63,101 +71,124 @@ export default function InfrastructurePage() {
     load()
   }
 
-  const open = items.find((s) => s.id === openId)
+  const open = items.find(s => s.id === openId)
+
+  const onlineCount = items.filter(s => ['Online', 'Connected', 'Healthy', 'Ready', 'Watching'].includes(s.status)).length
+
+  const headerActions = (
+    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted, letterSpacing: '.1em' }}>
+      {onlineCount} / {items.length} services actifs
+    </span>
+  )
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="h-16 border-b border-border flex items-center justify-between px-8 sticky top-0 bg-background/80 backdrop-blur-md z-10">
-        <h1 className="text-sm font-semibold text-muted-foreground">
-          Studio / <span className="text-foreground">Infrastructure</span>
-        </h1>
-        <Link href="/studio" className="text-sm text-muted-foreground hover:text-foreground">Retour cockpit</Link>
-      </header>
+    <CkShell breadcrumb="Studio / Infrastructure" title="Infrastructure Control" subtitle="Proxmox · Coolify · Docker · Supabase" actions={headerActions}>
 
-      <section className="p-8 max-w-6xl mx-auto space-y-6">
-        <div>
-          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Proxmox · Coolify · Docker · Supabase</p>
-          <h2 className="text-4xl font-extrabold tracking-tighter mt-2">Infrastructure Control</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {([['Compute', 'Proxmox', Server], ['Deploy', 'Coolify', HardDrive], ['Backend', 'Supabase', Database], ['Security', 'Vaultwarden', ShieldCheck]] as [string, string, React.ElementType][]).map(([label, value, Icon]) => (
-            <div key={label} className="bg-surface ring-1 ring-border rounded-lg p-5">
-              <Icon className="size-5 text-accent mb-4" />
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
-              <p className="text-2xl font-extrabold tracking-tighter mt-2">{value}</p>
+      {/* Summary tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        {([['Compute', 'Proxmox', '🖥'], ['Deploy', 'Coolify', '🐳'], ['Backend', 'Supabase', '💾'], ['Security', 'Vaultwarden', '🔐']] as [string, string, string][]).map(([label, value, icon]) => (
+          <div key={label} style={{ background: surface, border: `1px solid ${line}`, borderRadius: 12, padding: '16px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: muted }}>{label}</div>
+              <span style={{ fontSize: 18 }}>{icon}</span>
             </div>
-          ))}
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: text, letterSpacing: '-.01em' }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add form */}
+      <form onSubmit={createService} style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1.3fr 1.3fr auto',
+        gap: 8, marginBottom: 24,
+        background: surface, border: `1px solid ${line}`, borderRadius: 12, padding: 16,
+      }}>
+        {(['name', 'endpoint', 'detail', 'role'] as const).map((field, i) => (
+          <input key={field} className="ck-input" value={form[field]} onChange={e => setForm(c => ({ ...c, [field]: e.target.value }))}
+            placeholder={['Service', 'Endpoint', 'Résumé', 'Rôle'][i]} />
+        ))}
+        <button style={{ padding: '8px 20px', borderRadius: 8, background: accent, color: '#0b0d12', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, whiteSpace: 'nowrap' }}>
+          + Ajouter
+        </button>
+      </form>
+
+      {/* Two-column layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 16 }}>
+        {/* Services list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {items.map(svc => {
+            const isOpen = openId === svc.id
+            const sc = statusColor(svc.status)
+            return (
+              <button key={svc.id} type="button" onClick={() => setOpenId(isOpen ? null : svc.id)} style={{
+                textAlign: 'left', padding: '14px 16px', borderRadius: 10,
+                background: surface, cursor: 'pointer', transition: 'border-color .15s',
+                border: `1px solid ${isOpen ? sc : line}`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: text }}>{svc.name}</div>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 4,
+                    background: sc + '18', color: sc,
+                    fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', fontWeight: 700,
+                    border: `1px solid ${sc}40`, flexShrink: 0,
+                  }}>{svc.status}</span>
+                </div>
+                <div style={{ fontSize: 12, color: muted2, marginTop: 4, lineHeight: 1.45 }}>{svc.detail}</div>
+              </button>
+            )
+          })}
         </div>
 
-        <form onSubmit={createService} className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1.3fr_1.3fr_auto] gap-2 bg-surface ring-1 ring-border rounded-lg p-4">
-          {(['name', 'endpoint', 'detail', 'role'] as const).map((field, i) => (
-            <input key={field} value={form[field]} onChange={(e) => setForm((c) => ({ ...c, [field]: e.target.value }))}
-              placeholder={['Service', 'Endpoint', 'Résumé', 'Rôle'][i]}
-              className="px-3 py-2 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent" />
-          ))}
-          <button className="px-4 py-2 bg-foreground text-background text-xs font-bold rounded-md flex items-center justify-center gap-2">
-            <Plus className="size-4" /> Ajouter
-          </button>
-        </form>
-
-        <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-4">
-          <div className="space-y-2">
-            {items.map((service) => {
-              const active = openId === service.id
-              return (
-                <button key={service.id} type="button" onClick={() => setOpenId(active ? null : service.id)}
-                  className={`w-full text-left bg-surface ring-1 rounded-lg p-5 transition-colors ${active ? 'ring-accent/60' : 'ring-border hover:ring-accent/40 hover:bg-white/[0.03]'}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-sm">{service.name}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] px-2 py-1 rounded-full bg-emerald/10 text-emerald ring-1 ring-emerald/20 font-mono">{service.status}</span>
-                      <ChevronDown className={`size-4 text-muted-foreground transition-transform ${active ? 'rotate-180' : ''}`} />
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">{service.detail}</p>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="bg-surface ring-1 ring-border rounded-lg p-6 min-h-[320px]">
-            {open ? (
-              <div className="space-y-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Service details</p>
-                    <h3 className="text-3xl font-extrabold tracking-tighter mt-2">{open.name}</h3>
-                  </div>
-                  <span className="text-[10px] px-2 py-1 rounded-full bg-emerald/10 text-emerald ring-1 ring-emerald/20 font-mono">{open.status}</span>
+        {/* Detail panel */}
+        <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 12, padding: 24, minHeight: 320 }}>
+          {open ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: muted }}>Service details</div>
+                  <h3 style={{ margin: '6px 0 0', fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 800, letterSpacing: '-.02em', color: text }}>{open.name}</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-background/40 ring-1 ring-border p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Endpoint</p>
-                    <p className="text-sm font-mono mt-2 break-all">{open.endpoint}</p>
-                  </div>
-                  <div className="rounded-lg bg-background/40 ring-1 ring-border p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Role</p>
-                    <p className="text-sm text-muted-foreground mt-2">{open.role}</p>
-                  </div>
-                </div>
-                <div className="rounded-lg bg-background/40 ring-1 ring-border p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Next action</p>
-                  <p className="text-sm text-muted-foreground mt-2">{open.next_action}</p>
-                </div>
-                <a href={open.endpoint} target="_blank" rel="noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold rounded-md">
-                  Ouvrir service <ExternalLink className="size-4" />
-                </a>
+                <span style={{
+                  padding: '3px 10px', borderRadius: 4, flexShrink: 0,
+                  background: statusColor(open.status) + '18', color: statusColor(open.status),
+                  fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.14em', fontWeight: 700,
+                  border: `1px solid ${statusColor(open.status)}40`,
+                }}>{open.status}</span>
               </div>
-            ) : (
-              <div className="h-full min-h-[260px] grid place-items-center text-center text-muted-foreground">
-                <p className="text-sm">Cliquez sur un service pour ouvrir ses détails.</p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ padding: '12px 14px', borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: muted, marginBottom: 6 }}>Endpoint</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: text, wordBreak: 'break-all' }}>{open.endpoint}</div>
+                </div>
+                <div style={{ padding: '12px 14px', borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: muted, marginBottom: 6 }}>Rôle</div>
+                  <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>{open.role}</div>
+                </div>
               </div>
-            )}
-          </div>
+
+              <div style={{ padding: '12px 14px', borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: muted, marginBottom: 6 }}>Next action</div>
+                <div style={{ fontSize: 13, color: text, lineHeight: 1.5 }}>{open.next_action}</div>
+              </div>
+
+              <a href={open.endpoint} target="_blank" rel="noreferrer" style={{
+                alignSelf: 'flex-start',
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '10px 18px', borderRadius: 8,
+                background: accent, color: '#0b0d12',
+                fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13,
+                textDecoration: 'none',
+              }}>Ouvrir service ↗</a>
+            </div>
+          ) : (
+            <div style={{ height: '100%', minHeight: 260, display: 'grid', placeItems: 'center' }}>
+              <p style={{ fontSize: 13, color: muted2, textAlign: 'center' }}>Cliquez sur un service.</p>
+            </div>
+          )}
         </div>
-      </section>
-    </main>
+      </div>
+    </CkShell>
   )
 }
