@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
-import { FileText, Upload, Trash2 } from 'lucide-react'
+import { FileText, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Doc {
@@ -24,13 +24,16 @@ function fmtSize(b: number | null) {
 export default function Documents() {
   const { user } = useAuth()
   const [docs, setDocs] = useState<Doc[]>([])
+  const [selected, setSelected] = useState<Doc | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
   async function load() {
     const supabase = createSupabaseBrowser()
     const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false })
-    setDocs((data as Doc[]) || [])
+    const list = (data as Doc[]) || []
+    setDocs(list)
+    setSelected((prev) => (prev ? (list.find((d) => d.id === prev.id) ?? list[0] ?? null) : (list[0] ?? null)))
   }
   useEffect(() => { if (user) load() }, [user])
 
@@ -60,7 +63,7 @@ export default function Documents() {
   }
 
   return (
-    <div>
+    <main className="min-h-screen bg-background text-foreground">
       <header className="h-16 border-b border-border flex items-center justify-between px-8 sticky top-0 bg-background/80 backdrop-blur-md z-10">
         <h1 className="text-sm font-semibold text-muted-foreground">
           System / <span className="text-foreground">Documents</span>
@@ -71,30 +74,57 @@ export default function Documents() {
         </label>
       </header>
 
-      <div className="p-8 max-w-5xl mx-auto">
-        <div className="divide-y divide-border ring-1 ring-border rounded-xl bg-surface overflow-hidden">
-          {docs.map((d) => (
-            <div key={d.id} className="flex items-center gap-4 p-4 group">
-              <div className="size-10 bg-accent/10 text-accent rounded grid place-items-center">
-                <FileText className="size-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{d.name}</p>
-                <p className="text-xs text-muted-foreground font-mono">{d.mime_type || '—'} · {fmtSize(d.size_bytes)}</p>
-              </div>
-              <p className="text-xs text-muted-foreground">{new Date(d.created_at).toLocaleDateString()}</p>
-              <button onClick={() => del(d)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100">
-                <Trash2 className="size-4" />
-              </button>
-            </div>
-          ))}
-          {docs.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-12">
-              Aucun document. Uploadez votre premier fichier.
-            </p>
-          )}
+      <section className="p-8 max-w-6xl mx-auto space-y-6">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Knowledge Base</p>
+            <h2 className="text-4xl font-extrabold tracking-tighter mt-2">Documents Studio</h2>
+          </div>
         </div>
-      </div>
-    </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
+          <div className="divide-y divide-border ring-1 ring-border rounded-xl bg-surface overflow-hidden">
+            {docs.map((d) => (
+              <button key={d.id} onClick={() => setSelected(d)}
+                className={`w-full text-left flex items-center gap-4 p-4 hover:bg-white/[0.03] ${selected?.id === d.id ? 'bg-white/[0.04]' : ''}`}>
+                <div className="size-10 bg-accent/10 text-accent rounded grid place-items-center">
+                  <FileText className="size-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{d.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{d.mime_type || '—'} · {fmtSize(d.size_bytes)}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">{new Date(d.created_at).toLocaleDateString()}</p>
+              </button>
+            ))}
+            {docs.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-12">
+                Aucun document. Uploadez votre premier fichier.
+              </p>
+            )}
+          </div>
+
+          <aside className="bg-surface ring-1 ring-border rounded-lg p-5 h-fit">
+            {selected ? (
+              <>
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Document details</p>
+                <h3 className="text-xl font-extrabold tracking-tighter mt-2 break-words">{selected.name}</h3>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {selected.mime_type || '—'} · {fmtSize(selected.size_bytes)} · {new Date(selected.created_at).toLocaleDateString()}
+                </p>
+                <button onClick={() => del(selected)}
+                  className="mt-5 w-full px-4 py-2 ring-1 ring-border text-xs font-bold rounded-md flex items-center justify-center gap-2 hover:text-destructive">
+                  <Trash2 className="size-4" /> Supprimer
+                </button>
+              </>
+            ) : (
+              <div className="min-h-[200px] grid place-items-center text-center">
+                <p className="text-sm text-muted-foreground">Sélectionnez un document pour voir ses détails.</p>
+              </div>
+            )}
+          </aside>
+        </div>
+      </section>
+    </main>
   )
 }

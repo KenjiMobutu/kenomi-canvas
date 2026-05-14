@@ -23,44 +23,37 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-8 justify-center">
+    <main className="min-h-screen bg-background text-foreground grid place-items-center px-4">
+      <form onSubmit={handle} className="w-full max-w-md gradient-border rounded-xl p-8 space-y-4">
+        <div className="flex items-center gap-3 mb-8">
           <div className="size-8 rounded brand-logo" />
           <span className="font-extrabold tracking-tighter text-xl uppercase">Kenomi</span>
         </div>
-
-        <form onSubmit={handle} className="bg-surface ring-1 ring-border rounded-xl p-8 space-y-4">
-          <h1 className="text-xl font-bold tracking-tight">Connexion</h1>
-
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email</label>
-            <input
-              type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="vous@exemple.com"
-              className="w-full mt-1 px-3 py-2 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Mot de passe</label>
-            <input
-              type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full mt-1 px-3 py-2 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
-            />
-          </div>
-
-          <button type="submit" disabled={loading}
-            className="w-full py-2.5 bg-foreground text-background text-sm font-bold rounded-md disabled:opacity-50">
-            {loading ? 'Connexion…' : 'Se connecter'}
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-muted-foreground mt-4">
-          Pas encore de compte ?{' '}
-          <Link href="/signup" className="text-foreground hover:underline">Créer un compte</Link>
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tighter">Connexion</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Accédez au cockpit Next.js du Venture Studio.
+          </p>
+        </div>
+        <input
+          type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+          placeholder="email@kenomi.ai"
+          className="w-full px-4 py-3 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
+        />
+        <input
+          type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+          placeholder="Mot de passe"
+          className="w-full px-4 py-3 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
+        />
+        <button type="submit" disabled={loading}
+          className="w-full py-3 bg-foreground text-background font-bold rounded-md disabled:opacity-50">
+          {loading ? 'Connexion…' : 'Se connecter'}
+        </button>
+        <p className="text-sm text-muted-foreground text-center">
+          Pas de compte ?{' '}
+          <Link href="/signup" className="text-accent hover:underline">Créer un compte</Link>
         </p>
-      </div>
-    </div>
+      </form>
+    </main>
   )
 }

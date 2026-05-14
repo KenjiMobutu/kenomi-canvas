@@ -9,7 +9,7 @@ import {
 const pipeline = [
   { stage: 'Ideas', count: 34, signal: '+8 this week', tone: 'text-cyan' },
   { stage: 'Validation', count: 12, signal: '5 paid tests', tone: 'text-emerald' },
-  { stage: 'Build', count: 5, signal: '2 shipping', tone: 'text-violet' },
+  { stage: 'Build', count: 5, signal: '2 shipping', tone: 'text-accent' },
   { stage: 'Launch', count: 3, signal: '1 profitable', tone: 'text-fuchsia' },
   { stage: 'Scale', count: 1, signal: 'Kenomi Forms', tone: 'text-emerald' },
 ]
@@ -232,6 +232,13 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+
+        <div className="flex justify-center pb-4">
+          <Link href="/studio/automations"
+            className="px-6 py-2.5 ring-1 ring-border rounded-full text-xs font-bold text-muted-foreground hover:text-foreground hover:ring-accent/40 transition-colors">
+            Ouvrir Automation Center →
+          </Link>
+        </div>
       </div>
     </div>
   )
