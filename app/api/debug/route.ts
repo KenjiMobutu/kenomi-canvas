@@ -3,38 +3,42 @@ import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-const TEST_SLUG = 'invoiceflow-generateur-de-factures-automatiqu-mp5npuak'
-
 export async function GET() {
   const results: Record<string, unknown> = {}
 
-  // 1. Count simple
+  // 1. Requête dashboard exacte
   try {
-    results.count = await db.venture.count()
-  } catch (e) { results.count_error = String(e) }
-
-  // 2. findFirst sans include
-  try {
-    const v = await db.venture.findFirst({ where: { slug: TEST_SLUG } })
-    results.venture_raw = v ? { id: v.id, nom: v.nom, statut: v.statut } : null
-  } catch (e) { results.venture_raw_error = String(e) }
-
-  // 3. findFirst avec include landing_pages
-  try {
-    const v = await db.venture.findFirst({
-      where: { slug: TEST_SLUG, statut: 'actif' },
-      include: { landing_pages: { take: 1 } },
+    const ventures = await db.venture.findMany({
+      orderBy: { created_at: 'asc' },
+      include: {
+        _count:    { select: { waitlist: true } },
+        decisions: { orderBy: { created_at: 'desc' }, take: 1,
+                     select: { decision: true, reason: true } },
+      },
     })
-    results.venture_with_lp = v
-      ? { id: v.id, nom: v.nom, lp_count: v.landing_pages.length, lp_headline: v.landing_pages[0]?.headline }
-      : null
-  } catch (e) { results.venture_with_lp_error = String(e) }
+    results.dashboard_ok    = true
+    results.dashboard_count = ventures.length
+  } catch (e) { results.dashboard_error = String(e) }
 
-  // 4. Landing pages directes
+  // 2. _count waitlist seul
   try {
-    const lps = await db.landingPage.findMany({ where: { venture: { slug: TEST_SLUG } } })
-    results.landing_pages_direct = lps.length
-  } catch (e) { results.landing_pages_direct_error = String(e) }
+    await db.venture.findMany({ include: { _count: { select: { waitlist: true } } } })
+    results.waitlist_count_ok = true
+  } catch (e) { results.waitlist_count_error = String(e) }
+
+  // 3. decisions seul
+  try {
+    await db.venture.findMany({
+      include: { decisions: { orderBy: { created_at: 'desc' }, take: 1, select: { decision: true, reason: true } } },
+    })
+    results.decisions_ok = true
+  } catch (e) { results.decisions_error = String(e) }
+
+  // 4. landing_pages (fix précédent)
+  try {
+    await db.venture.findFirst({ include: { landing_pages: { take: 1 } } })
+    results.landing_pages_ok = true
+  } catch (e) { results.landing_pages_error = String(e) }
 
   return NextResponse.json(results)
 }
