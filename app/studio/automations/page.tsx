@@ -6,6 +6,14 @@ import {
   accent, emerald, amber, rose, cyan, violet, fuchsia,
 } from '@/lib/ck-vars'
 import { makeSpark, sparkPath } from '@/lib/studio-utils'
+import { createSupabaseBrowser } from '@/lib/supabase-browser'
+import { useAuth } from '@/lib/auth-context'
+import { toast } from 'sonner'
+
+interface DbWorkflow {
+  id: string; name: string; trigger_type: string; webhook_url: string
+  enabled: boolean; run_count: number; last_run_at: string | null; created_at: string
+}
 
 const CHATTER = [
   { text: 'Scored 3 niches, top: CFO Ops (82/100)' },
@@ -340,29 +348,176 @@ const KPI_LIST = [
   { label: 'Workflows',      value: '18',    delta: '2 paused',color: fuchsia },
 ]
 
+function NewWorkflowForm({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
+  const { user } = useAuth()
+  const [name, setName] = useState('')
+  const [triggerType, setTriggerType] = useState('Manual')
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function create() {
+    if (!user || !name.trim()) return
+    setSaving(true)
+    const supabase = createSupabaseBrowser()
+    const { error } = await supabase.from('automation_workflows').insert({
+      user_id: user.id, name: name.trim(), trigger_type: triggerType, webhook_url: webhookUrl.trim(),
+    })
+    setSaving(false)
+    if (error) return toast.error(error.message)
+    toast.success('Workflow créé')
+    onCreated()
+    onClose()
+  }
+
+  return (
+    <div style={{ marginBottom: 14, padding: 18, borderRadius: 12, background: surface, border: `1px solid ${line2}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: text }}>Nouveau workflow</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr .7fr 1.4fr', gap: 10 }}>
+        <div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Nom</div>
+          <input className="ck-input" value={name} onChange={e => setName(e.target.value)} placeholder="Mon workflow" style={{ width: '100%' }} autoFocus />
+        </div>
+        <div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Déclencheur</div>
+          <select className="ck-select" value={triggerType} onChange={e => setTriggerType(e.target.value)} style={{ width: '100%' }}>
+            {['Manual', 'Webhook', 'Schedule · 15m', 'Schedule · 1h', 'Schedule · 6h', 'Event'].map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Webhook URL (optionnel)</div>
+          <input className="ck-input" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://n8n.kenomi.eu/webhook/…" style={{ width: '100%' }} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} style={{ padding: '8px 14px', borderRadius: 8, background: 'transparent', color: muted, border: `1px solid ${line}`, cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Annuler</button>
+        <button onClick={create} disabled={!name.trim() || saving} style={{ padding: '8px 16px', borderRadius: 8, background: name.trim() ? accent : surface2, color: name.trim() ? '#0b0d12' : muted, border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12 }}>
+          {saving ? '…' : '+ Créer'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function DbWorkflowsList({ workflows, selectedId, onSelect, onToggle, onDelete, onRun }: {
+  workflows: DbWorkflow[]; selectedId: string | null; onSelect: (id: string) => void
+  onToggle: (id: string, enabled: boolean) => void; onDelete: (id: string) => void; onRun: (id: string) => void
+}) {
+  return (
+    <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Mes workflows</div>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em' }}>{workflows.length} total</span>
+      </div>
+      {workflows.length === 0 && (
+        <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+          <p style={{ fontSize: 13, color: muted2 }}>Aucun workflow. Créez-en un.</p>
+        </div>
+      )}
+      {workflows.map(w => {
+        const active = w.id === selectedId
+        const color = w.enabled ? cyan : muted2
+        return (
+          <div key={w.id} onClick={() => onSelect(w.id)} style={{
+            padding: 10, borderRadius: 10, cursor: 'pointer',
+            background: active ? surface2 : bg,
+            border: active ? `1.5px solid ${cyan}` : `1px solid ${line}`,
+            display: 'flex', flexDirection: 'column', gap: 6,
+            boxShadow: active ? `0 0 0 3px ${cyan}1c` : 'none',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.enabled ? emerald : muted2, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3, background: `${color}18`, color, letterSpacing: 1 }}>{w.trigger_type.toUpperCase()}</span>
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.1em' }}>
+              {w.run_count} runs · {w.last_run_at ? new Date(w.last_run_at).toLocaleDateString('fr-FR') : 'jamais exécuté'}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={e => { e.stopPropagation(); onRun(w.id) }} style={{
+                flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                background: cyan + '20', color: cyan, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 9.5, letterSpacing: '.1em',
+              }}>▶ RUN</button>
+              <button onClick={e => { e.stopPropagation(); onToggle(w.id, !w.enabled) }} style={{
+                padding: '5px 8px', borderRadius: 6, border: `1px solid ${line}`, cursor: 'pointer',
+                background: 'transparent', color: w.enabled ? amber : emerald, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 9.5,
+              }}>{w.enabled ? 'PAUSE' : 'ENABLE'}</button>
+              <button onClick={e => { e.stopPropagation(); onDelete(w.id) }} style={{
+                padding: '5px 8px', borderRadius: 6, border: `1px solid ${line}`, cursor: 'pointer',
+                background: 'transparent', color: rose, fontFamily: 'var(--font-mono)', fontSize: 9.5,
+              }}>🗑</button>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function AutomationsPage() {
+  const { user } = useAuth()
   const [selectedId, setSelectedId] = useState('validation-loop')
   const [logTick, setLogTick] = useState(0)
+  const [dbWorkflows, setDbWorkflows] = useState<DbWorkflow[]>([])
+  const [showNew, setShowNew] = useState(false)
+  const [dbSelectedId, setDbSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
     const id = setInterval(() => setLogTick(t => t + 1), 1200)
     return () => clearInterval(id)
   }, [])
 
+  async function loadWorkflows() {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    const { data } = await supabase.from('automation_workflows').select('*').order('created_at', { ascending: false })
+    setDbWorkflows((data as DbWorkflow[]) || [])
+  }
+  useEffect(() => { if (user) loadWorkflows() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function toggleWorkflow(id: string, enabled: boolean) {
+    const supabase = createSupabaseBrowser()
+    await supabase.from('automation_workflows').update({ enabled }).eq('id', id)
+    setDbWorkflows(wf => wf.map(w => w.id === id ? { ...w, enabled } : w))
+  }
+
+  async function deleteWorkflow(id: string) {
+    const supabase = createSupabaseBrowser()
+    await supabase.from('automation_workflows').delete().eq('id', id)
+    if (dbSelectedId === id) setDbSelectedId(null)
+    loadWorkflows()
+    toast.success('Workflow supprimé')
+  }
+
+  async function runWorkflow(id: string) {
+    const res = await fetch('/api/studio/automations/trigger', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      toast.error(err.error || 'Erreur déclenchement')
+    } else {
+      toast.success('Workflow déclenché !')
+      loadWorkflows()
+    }
+  }
+
   const selected = WORKFLOWS.find(w => w.id === selectedId) ?? WORKFLOWS[0]
+
+  const totalRuns = dbWorkflows.reduce((s, w) => s + w.run_count, 0)
+  const activeCount = dbWorkflows.filter(w => w.enabled).length
 
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <button style={{
+      <button onClick={() => setShowNew(n => !n)} style={{
         padding: '8px 14px', borderRadius: 999,
         background: accent, color: '#0b0d12', border: 'none', cursor: 'pointer',
         fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.04em',
       }}>+ New workflow</button>
       {[
-        { label: '18 workflows', color: muted },
-        { label: 'success 96%',  color: emerald },
-        { label: '905 runs/24h', color: cyan },
-        { label: '3 queued',     color: muted },
+        { label: `${dbWorkflows.length || 18} workflows`, color: muted },
+        { label: `${activeCount} actifs`,  color: emerald },
+        { label: `${totalRuns} runs`,      color: cyan },
       ].map(({ label, color }) => (
         <span key={label} style={{
           padding: '4px 10px', borderRadius: 5,
@@ -378,15 +533,27 @@ export default function AutomationsPage() {
     <CkShell breadcrumb="Studio / Automations" title="Automation Center" subtitle="n8n · MCP · Webhooks · Workflows" actions={headerActions}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+        {showNew && <NewWorkflowForm onCreated={loadWorkflows} onClose={() => setShowNew(false)} />}
+
         {/* KPI strip */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
           {KPI_LIST.map(k => <AuKpi key={k.label} {...k} />)}
         </div>
 
-        {/* DAG + workflows list */}
+        {/* DAG + workflows list (demo + live) */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 14, alignItems: 'start' }}>
           <WorkflowDAG workflow={selected} />
-          <WorkflowsList selectedId={selectedId} onSelect={setSelectedId} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <DbWorkflowsList
+              workflows={dbWorkflows}
+              selectedId={dbSelectedId}
+              onSelect={setDbSelectedId}
+              onToggle={toggleWorkflow}
+              onDelete={deleteWorkflow}
+              onRun={runWorkflow}
+            />
+            <WorkflowsList selectedId={selectedId} onSelect={setSelectedId} />
+          </div>
         </div>
 
         {/* Runs feed + service health */}

@@ -6,6 +6,100 @@ import {
   accent, emerald, rose, cyan, violet,
 } from '@/lib/ck-vars'
 import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick } from '@/lib/studio-utils'
+import { createSupabaseBrowser } from '@/lib/supabase-browser'
+import { useAuth } from '@/lib/auth-context'
+import { toast } from 'sonner'
+
+interface AgentConfig {
+  model: string
+  system_prompt: string
+  temperature: number
+  max_tokens: number
+}
+
+const DEFAULT_CONFIG: AgentConfig = { model: 'qwen3:8b', system_prompt: '', temperature: 0.7, max_tokens: 2048 }
+const MODELS = ['qwen3:8b', 'qwen3:14b', 'claude-sonnet-4-6', 'gpt-4o-mini']
+
+function TunePanel({ agentId, agentColor, onClose }: { agentId: string; agentColor: string; onClose: () => void }) {
+  const { user } = useAuth()
+  const [cfg, setCfg] = useState<AgentConfig>(DEFAULT_CONFIG)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    supabase.from('agent_configs').select('*').eq('user_id', user.id).eq('agent_id', agentId).maybeSingle()
+      .then(({ data }) => { if (data) setCfg({ model: data.model, system_prompt: data.system_prompt, temperature: data.temperature, max_tokens: data.max_tokens }) })
+  }, [agentId, user])
+
+  async function save() {
+    if (!user) return
+    setSaving(true)
+    const supabase = createSupabaseBrowser()
+    const { error } = await supabase.from('agent_configs').upsert({
+      user_id: user.id, agent_id: agentId, ...cfg,
+    }, { onConflict: 'user_id,agent_id' })
+    setSaving(false)
+    if (error) return toast.error(error.message)
+    toast.success('Config sauvegardée')
+    onClose()
+  }
+
+  return (
+    <div style={{
+      background: surface, border: `1px solid ${line2}`, borderRadius: 12,
+      padding: 20, display: 'flex', flexDirection: 'column', gap: 14,
+      borderTop: `2px solid ${agentColor}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: text }}>Configuration agent</div>
+        <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: muted, cursor: 'pointer', fontSize: 16 }}>✕</button>
+      </div>
+
+      <div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Modèle</div>
+        <select value={cfg.model} onChange={e => setCfg(p => ({ ...p, model: e.target.value }))} className="ck-select" style={{ width: '100%' }}>
+          {MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+      </div>
+
+      <div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>System prompt</div>
+        <textarea
+          value={cfg.system_prompt}
+          onChange={e => setCfg(p => ({ ...p, system_prompt: e.target.value }))}
+          rows={5} className="ck-input"
+          placeholder="Tu es un agent spécialisé dans…"
+          style={{ width: '100%', resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: 11 }}
+        />
+      </div>
+
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Température</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: agentColor, fontWeight: 700 }}>{cfg.temperature.toFixed(2)}</span>
+        </div>
+        <input type="range" min={0} max={1} step={0.01} value={cfg.temperature}
+          onChange={e => setCfg(p => ({ ...p, temperature: parseFloat(e.target.value) }))}
+          style={{ width: '100%', accentColor: agentColor }} />
+      </div>
+
+      <div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Max tokens</div>
+        <input type="number" value={cfg.max_tokens} min={128} max={32768} step={128}
+          onChange={e => setCfg(p => ({ ...p, max_tokens: parseInt(e.target.value) || 2048 }))}
+          className="ck-input" style={{ width: '100%' }} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={save} disabled={saving} style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: agentColor, color: '#0b0d12', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+          {saving ? '…' : 'Sauvegarder'}
+        </button>
+        <button onClick={onClose} style={{ padding: '10px 12px', borderRadius: 8, background: 'transparent', color: muted, border: `1px solid ${line}`, cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Annuler</button>
+      </div>
+    </div>
+  )
+}
 
 type AgentData = typeof AGENTS_DATA[0]
 
@@ -30,6 +124,7 @@ function StatBox({ label, value, color }: { label: string; value: string; color:
 
 function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity: number[]; queue: string[] }) {
   const t = useTick(2400)
+  const [tuneOpen, setTuneOpen] = useState(false)
   return (
     <div style={{
       background: surface, border: `1px solid ${line}`, borderRadius: 14,
@@ -153,7 +248,7 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
           fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.05em',
           cursor: 'pointer',
         }}>▶ Run mission</button>
-        {(['PAUSE', 'TUNE', 'LOGS'] as const).map(label => (
+        {(['PAUSE', 'LOGS'] as const).map(label => (
           <button key={label} style={{
             padding: '10px 12px', borderRadius: 8,
             background: surface2, color: text,
@@ -162,7 +257,17 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
             cursor: 'pointer',
           }}>{label}</button>
         ))}
+        <button onClick={() => setTuneOpen(o => !o)} style={{
+          padding: '10px 12px', borderRadius: 8,
+          background: tuneOpen ? agent.color + '22' : surface2,
+          color: tuneOpen ? agent.color : text,
+          border: `1px solid ${tuneOpen ? agent.color + '55' : line2}`,
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
+          cursor: 'pointer',
+        }}>TUNE</button>
       </div>
+
+      {tuneOpen && <TunePanel agentId={agent.id} agentColor={agent.color} onClose={() => setTuneOpen(false)} />}
     </div>
   )
 }

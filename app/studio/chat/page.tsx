@@ -91,25 +91,46 @@ export default function ChatPage() {
     const msgText = overrideText ?? input.trim()
     if (!msgText || !activeId || sending) return
     setInput('')
-    const tmpId = 'tmp-' + Date.now()
-    setMessages(m => [...m, { id: tmpId, role: 'user', content: msgText, created_at: '' }])
+    const userMsgId = 'u-' + Date.now()
+    const asstMsgId = 'a-' + Date.now()
+    setMessages(m => [...m, { id: userMsgId, role: 'user', content: msgText, created_at: '' }])
     setSending(true)
+
     try {
       const res = await fetch('/api/studio/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId: activeId, message: msgText, agentId }),
       })
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: res.statusText }))
         throw new Error(err.error || res.statusText)
       }
-      const json = await res.json()
-      setMessages(m => [
-        ...m.filter(x => x.id !== tmpId),
-        { id: 'u-' + Date.now(), role: 'user',      content: msgText,      created_at: '' },
-        { id: 'a-' + Date.now(), role: 'assistant', content: json.content, created_at: '' },
-      ])
+
+      // Insert empty assistant bubble immediately
+      setMessages(m => [...m, { id: asstMsgId, role: 'assistant', content: '', created_at: '' }])
+
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += dec.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6)
+          if (payload === '[DONE]') break
+          try {
+            const token = JSON.parse(payload) as string
+            setMessages(m => m.map(x => x.id === asstMsgId ? { ...x, content: x.content + token } : x))
+          } catch { /* skip */ }
+        }
+      }
+
       const conv = convs.find(c => c.id === activeId)
       if (conv?.title === 'Nouvelle conversation') {
         const supabase = createSupabaseBrowser()
@@ -118,7 +139,7 @@ export default function ChatPage() {
       }
     } catch (e) {
       toast.error((e as Error).message)
-      setMessages(m => m.filter(x => x.id !== tmpId))
+      setMessages(m => m.filter(x => x.id !== userMsgId && x.id !== asstMsgId))
     } finally {
       setSending(false)
       setTimeout(() => inputRef.current?.focus(), 50)

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import {
   surface, surface2, line, line2, text, muted, muted2,
-  accent, emerald, rose,
+  accent, emerald, rose, amber,
 } from '@/lib/ck-vars'
 
 interface Doc {
@@ -78,6 +78,12 @@ export default function DocumentsPage() {
     await supabase.from('documents').delete().eq('id', d.id)
     if (selected?.id === d.id) setSelected(null)
     load()
+  }
+
+  async function download(d: Doc) {
+    const { data, error } = await supabase.storage.from('documents').createSignedUrl(d.storage_path, 60)
+    if (error || !data?.signedUrl) return toast.error('Impossible de générer le lien')
+    window.open(data.signedUrl, '_blank')
   }
 
   const uploadAction = (
@@ -161,13 +167,22 @@ export default function DocumentsPage() {
                 ))}
               </div>
 
-              <button onClick={() => del(selected)} style={{
-                width: '100%', padding: '10px 16px', borderRadius: 8,
-                background: rose + '14', color: rose,
-                border: `1px solid ${rose}40`, cursor: 'pointer',
-                fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}>🗑 Supprimer</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button onClick={() => download(selected)} style={{
+                  width: '100%', padding: '10px 16px', borderRadius: 8,
+                  background: amber + '14', color: amber,
+                  border: `1px solid ${amber}40`, cursor: 'pointer',
+                  fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}>↓ Télécharger</button>
+                <button onClick={() => del(selected)} style={{
+                  width: '100%', padding: '10px 16px', borderRadius: 8,
+                  background: rose + '14', color: rose,
+                  border: `1px solid ${rose}40`, cursor: 'pointer',
+                  fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}>🗑 Supprimer</button>
+              </div>
             </>
           ) : (
             <div style={{ minHeight: 200, display: 'grid', placeItems: 'center' }}>

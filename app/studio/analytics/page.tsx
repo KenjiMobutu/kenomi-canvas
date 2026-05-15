@@ -1,11 +1,14 @@
 'use client'
-import { useMemo, useState, Fragment } from 'react'
+import { useEffect, useMemo, useState, Fragment } from 'react'
 import { CkShell } from '@/components/CkShell'
 import {
-  surface, surface2, line, text, muted, muted2,
-  accent, emerald, amber, rose, cyan, violet, fuchsia,
+  surface, surface2, line, line2, text, muted, muted2,
+  accent, accent2, emerald, amber, rose, cyan, violet, fuchsia,
 } from '@/lib/ck-vars'
 import { AGENTS_DATA, makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
+import { createSupabaseBrowser } from '@/lib/supabase-browser'
+import { useAuth } from '@/lib/auth-context'
+import { toast } from 'sonner'
 
 const VENTURES_AN = [
   { id: 'solocfo', name: 'Solo CFO',    mrr: 1840, accent: '#22d3ee' },
@@ -226,32 +229,46 @@ function ChannelBars() {
   )
 }
 
-function ConvFunnel() {
-  const maxN = FUNNEL[0].n
+interface KpiSnapshot {
+  revenue: string; revenue_delta: string
+  ctr: string; ctr_delta: string
+  conversion: string; conversion_delta: string
+  retention: string; retention_delta: string
+}
+
+interface FunnelStep {
+  id: string; position: number; label: string; value: string; rate: string
+}
+
+const FUNNEL_COLORS = [cyan, violet, emerald, accent]
+
+function ConvFunnel({ steps }: { steps: FunnelStep[] }) {
+  const list = steps.length > 0 ? steps : FUNNEL.map((f, i) => ({ id: String(i), position: i, label: f.label, value: String(f.n), rate: i === 0 ? '100%' : `${Math.round((f.n / FUNNEL[i - 1].n) * 100)}%` }))
+  const maxVal = Math.max(...list.map(s => parseFloat(s.value.replace(/[^0-9.]/g, '')) || 0))
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
-      {FUNNEL.map((it, i) => {
-        const w = (it.n / maxN) * 100
-        const prev = i > 0 ? FUNNEL[i - 1].n : it.n
-        const conv = Math.round((it.n / prev) * 100)
+      {list.map((it, i) => {
+        const n = parseFloat(it.value.replace(/[^0-9.]/g, '')) || 0
+        const w = maxVal > 0 ? (n / maxVal) * 100 : 0
+        const color = FUNNEL_COLORS[i % FUNNEL_COLORS.length]
         return (
-          <div key={it.label} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div key={it.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: muted }}>
               <span>{it.label}</span>
-              <span style={{ color: it.color }}>{it.n.toLocaleString('fr')}</span>
+              <span style={{ color }}>{it.value}</span>
             </div>
             <div style={{ height: 28, position: 'relative', display: 'flex', alignItems: 'center' }}>
               <div style={{
                 width: `${w}%`, height: '100%',
-                background: `linear-gradient(90deg, ${it.color}, ${it.color}55)`,
+                background: `linear-gradient(90deg, ${color}, ${color}55)`,
                 clipPath: 'polygon(0 0, 100% 10%, 100% 90%, 0 100%)',
                 display: 'flex', alignItems: 'center', paddingLeft: 12,
               }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: '#0b0d12' }}>{it.n.toLocaleString('fr')}</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: '#0b0d12' }}>{it.value}</span>
               </div>
               {i > 0 && (
                 <span style={{ marginLeft: 10, fontFamily: 'var(--font-mono)', fontSize: 10, color: emerald, letterSpacing: '.14em', fontWeight: 700 }}>
-                  ↓ {conv}%
+                  ↓ {it.rate}
                 </span>
               )}
             </div>
@@ -262,17 +279,95 @@ function ConvFunnel() {
   )
 }
 
-const KPI_LIST = [
-  { label: 'Studio MRR',  value: '€4 240', delta: '+18%',   color: emerald,  trend: true  },
-  { label: 'Avg CAC',     value: '€18',    delta: '-11%',   color: cyan,     trend: true  },
-  { label: 'Signup rate', value: '7.4%',   delta: '+2.1pt', color: violet,   trend: true  },
-  { label: 'LTV',         value: '€280',   delta: '+€42',   color: amber,    trend: true  },
-  { label: 'Churn',       value: '3.1%',   delta: '-0.4pt', color: fuchsia,  trend: true  },
-  { label: 'Runway',      value: '14m',    delta: 'stable', color: rose,     trend: false },
-]
+function KpiEditPanel({ kpi, onSave, onClose }: {
+  kpi: KpiSnapshot; onSave: (k: KpiSnapshot) => void; onClose: () => void
+}) {
+  const [form, setForm] = useState<KpiSnapshot>({ ...kpi })
+  const p = (field: keyof KpiSnapshot) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(prev => ({ ...prev, [field]: e.target.value }))
+
+  const FIELDS: { label: string; key: keyof KpiSnapshot; delta: keyof KpiSnapshot }[] = [
+    { label: 'Revenue',    key: 'revenue',    delta: 'revenue_delta'    },
+    { label: 'CTR',        key: 'ctr',        delta: 'ctr_delta'        },
+    { label: 'Conversion', key: 'conversion', delta: 'conversion_delta' },
+    { label: 'Retention',  key: 'retention',  delta: 'retention_delta'  },
+  ]
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)',
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: surface, border: `1px solid ${line2}`, borderRadius: 16,
+        padding: 28, width: 480, display: 'flex', flexDirection: 'column', gap: 18,
+        boxShadow: `0 0 60px ${accent}20`,
+      }}>
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 800, color: text }}>Éditer les KPIs</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', marginTop: 2 }}>period · current</div>
+        </div>
+        {FIELDS.map(f => (
+          <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>{f.label}</div>
+              <input value={form[f.key]} onChange={p(f.key)} className="ck-input" style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Δ {f.label}</div>
+              <input value={form[f.delta]} onChange={p(f.delta)} className="ck-input" style={{ width: '100%' }} />
+            </div>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 8, background: 'transparent', border: `1px solid ${line}`, color: muted, fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer' }}>Annuler</button>
+          <button onClick={() => onSave(form)} style={{ padding: '9px 18px', borderRadius: 8, background: accent, color: '#0b0d12', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>Sauvegarder</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const DEFAULT_KPI: KpiSnapshot = { revenue: '€0', revenue_delta: '+0%', ctr: '0%', ctr_delta: '+0 pts', conversion: '0%', conversion_delta: '+0 pts', retention: '0%', retention_delta: '+0 pts' }
 
 export default function AnalyticsPage() {
+  const { user } = useAuth()
   const [range, setRange] = useState('30j')
+  const [kpi, setKpi] = useState<KpiSnapshot | null>(null)
+  const [funnel, setFunnel] = useState<FunnelStep[]>([])
+  const [editOpen, setEditOpen] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    supabase.from('kpi_snapshots').select('*').eq('user_id', user.id).eq('period', 'current').maybeSingle()
+      .then(({ data }) => setKpi(data as KpiSnapshot | null))
+    supabase.from('funnel_steps').select('*').eq('user_id', user.id).order('position')
+      .then(({ data }) => setFunnel((data as FunnelStep[]) || []))
+  }, [user])
+
+  async function saveKpi(updated: KpiSnapshot) {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    const { error } = await supabase.from('kpi_snapshots').upsert({
+      user_id: user.id, period: 'current', ...updated, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,period' })
+    if (error) return toast.error(error.message)
+    setKpi(updated)
+    setEditOpen(false)
+    toast.success('KPIs mis à jour')
+  }
+
+  const live = kpi ?? DEFAULT_KPI
+  const KPI_LIST = [
+    { label: 'Studio MRR',  value: live.revenue,    delta: live.revenue_delta,    color: emerald,  trend: true  },
+    { label: 'CTR',         value: live.ctr,         delta: live.ctr_delta,         color: cyan,     trend: true  },
+    { label: 'Conversion',  value: live.conversion,  delta: live.conversion_delta,  color: violet,   trend: true  },
+    { label: 'Retention',   value: live.retention,   delta: live.retention_delta,   color: amber,    trend: true  },
+    { label: 'Churn',       value: '3.1%',           delta: '-0.4pt',               color: fuchsia,  trend: true  },
+    { label: 'Runway',      value: '14m',            delta: 'stable',               color: rose,     trend: false },
+  ]
 
   const mrrSeries = useMemo(() => VENTURES_AN.map((v, i) => {
     const base = v.mrr / 10
@@ -291,6 +386,11 @@ export default function AnalyticsPage() {
 
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <button onClick={() => setEditOpen(true)} style={{
+        padding: '6px 14px', borderRadius: 999,
+        background: accent, color: '#0b0d12', border: 'none', cursor: 'pointer',
+        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.04em',
+      }}>Éditer KPIs</button>
       <div style={{ display: 'flex', gap: 0, background: surface, border: `1px solid ${line}`, borderRadius: 8, padding: 3 }}>
         {['7j', '30j', '90j', 'ALL'].map(r => (
           <button key={r} onClick={() => setRange(r)} style={{
@@ -304,9 +404,9 @@ export default function AnalyticsPage() {
       </div>
       {[
         { label: '5 ventures', color: muted },
-        { label: 'MRR €4 240', color: emerald },
-        { label: 'trial→paid 26%', color: cyan },
-        { label: 'cohort M3 38%', color: muted },
+        { label: live.revenue, color: emerald },
+        { label: 'conv ' + live.conversion, color: cyan },
+        { label: 'rétention ' + live.retention, color: muted },
       ].map(({ label, color }) => (
         <span key={label} style={{
           padding: '4px 10px', borderRadius: 5,
@@ -320,6 +420,7 @@ export default function AnalyticsPage() {
 
   return (
     <CkShell breadcrumb="Studio / Analytics" title="Telemetry" subtitle="MRR · CAC · LTV · Cohorts · Funnel" actions={headerActions}>
+      {editOpen && <KpiEditPanel kpi={live} onSave={saveKpi} onClose={() => setEditOpen(false)} />}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* KPI strip */}
@@ -400,7 +501,7 @@ export default function AnalyticsPage() {
           }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Funnel · all ventures</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>visit → paid</div>
-            <ConvFunnel />
+            <ConvFunnel steps={funnel} />
           </div>
         </div>
       </div>

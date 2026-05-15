@@ -148,7 +148,29 @@ function MiniArea({ label, spark, color }: { label: string; spark: number[]; col
   )
 }
 
-function VentureInspector({ v }: { v: DV | null }) {
+interface EditForm {
+  name: string; niche: string; stage: string; score: string
+  mrr: string; cac: string; conversion: string; next_action: string; insight: string
+}
+
+function VentureInspector({ v, onSave, onDelete }: {
+  v: DV | null
+  onSave: (id: string, form: EditForm) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState<EditForm>({ name: '', niche: '', stage: 'validation', score: '', mrr: '', cac: '', conversion: '', next_action: '', insight: '' })
+  const [confirmDel, setConfirmDel] = useState(false)
+
+  useEffect(() => {
+    if (v) {
+      setForm({ name: v.name, niche: v.niche, stage: v.stage, score: String(v.score), mrr: v.mrr, cac: v.cac, conversion: v.conversion, next_action: v.next_action, insight: v.insight })
+      setEditing(false)
+      setConfirmDel(false)
+    }
+  }, [v?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const stage = v ? (STAGES.find(s => s.id === v.stage) || STAGES[2]) : STAGES[2]
   const sparkA = useMemo(() => v ? makeSpark(28, 40, 14, (v.id?.length ?? 1) + 3) : [], [v?.id])
   const sparkB = useMemo(() => v ? makeSpark(28, 50, 16, (v.id?.length ?? 1) + 11) : [], [v?.id])
@@ -160,6 +182,23 @@ function VentureInspector({ v }: { v: DV | null }) {
   )
 
   const sc = STATUS_COLOR[v.status] || cy
+  const p = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm(prev => ({ ...prev, [field]: e.target.value }))
+
+  async function handleSave() {
+    if (!v) return
+    setSaving(true)
+    await onSave(v.id, form)
+    setSaving(false)
+    setEditing(false)
+  }
+
+  async function handleDelete() {
+    if (!v) return
+    if (!confirmDel) return setConfirmDel(true)
+    await onDelete(v.id)
+  }
+
   const history = [
     { day: -42, action: 'Created',   color: cy, by: 'scout' },
     { day: -28, action: 'Validated', color: vi, by: 'validation' },
@@ -174,79 +213,145 @@ function VentureInspector({ v }: { v: DV | null }) {
       padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
       borderLeft: `3px solid ${stage.color}`, overflowY: 'auto',
     }}>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: stage.color, letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 700 }}>
-            {stage.label} · score {v.score}
-          </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 8px', borderRadius: 4, background: `${sc}22`, color: sc, letterSpacing: 1.5, fontWeight: 800 }}>
-            {v.status.toUpperCase()}
-          </span>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {editing ? (
+            <input className="ck-input" value={form.name} onChange={p('name')} style={{ width: '100%', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800 }} />
+          ) : (
+            <>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: stage.color, letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 700 }}>
+                {stage.label} · score {v.score}
+              </span>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', marginTop: 4, color: text }}>{v.name}</div>
+              <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>{v.insight || v.next_action}</div>
+            </>
+          )}
         </div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', marginTop: 4, color: text }}>{v.name}</div>
-        <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>{v.note}</div>
+        <button onClick={() => setEditing(e => !e)} style={{
+          padding: '5px 10px', borderRadius: 6, border: `1px solid ${line2}`,
+          background: editing ? accent + '20' : 'transparent', color: editing ? accent : muted,
+          fontFamily: 'var(--font-mono)', fontSize: 10, cursor: 'pointer', flexShrink: 0,
+        }}>{editing ? 'Vue' : 'Éditer'}</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
-        {([['MRR', `€${v.mrrNum || 0}`, em], ['CAC', v.cacNum ? `€${v.cacNum}` : '—', cy], ['Conv.', v.convNum ? `${v.convNum}%` : '—', vi], ['Score', String(v.score), stage.color]] as [string, string, string][]).map(([lb, val, col]) => (
-          <div key={lb} style={{ padding: '10px 12px', borderRadius: 10, background: surface2, border: `1px solid ${line}` }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>{lb}</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: col, marginTop: 2, letterSpacing: '-.02em' }}>{val}</div>
+      {/* Edit fields */}
+      {editing && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, borderRadius: 10, background: surface2, border: `1px solid ${line}` }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Niche</div>
+              <input className="ck-input" value={form.niche} onChange={p('niche')} style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Stage</div>
+              <select className="ck-select" value={form.stage} onChange={p('stage')} style={{ width: '100%' }}>
+                {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </div>
           </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <MiniArea label="MRR · 28j"  spark={sparkA} color={em} />
-        <MiniArea label="Conv · 28j" spark={sparkB} color={cy} />
-      </div>
-
-      <div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Squad assignée</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {v.agentIds.map(id => {
-            const a = agentById(id)
-            return (
-              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, background: surface2, border: `1px solid ${line}` }}>
-                <span style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${a.color}`, background: `${a.color}12`, display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, color: a.color }}>{a.sigil}</span>
-                <span style={{ fontSize: 11.5, fontWeight: 600, flex: 1, color: text }}>{a.name}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: a.color, letterSpacing: 1 }}>LV {a.level}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: em, letterSpacing: 1 }}>{60 + Math.round(a.xp * 30)}%</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {([['Score', 'score'], ['MRR', 'mrr'], ['CAC', 'cac'], ['Conv %', 'conversion']] as [string, keyof EditForm][]).map(([label, field]) => (
+              <div key={field}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                <input className="ck-input" value={form[field]} onChange={p(field)} style={{ width: '100%' }} />
               </div>
-            )
-          })}
+            ))}
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Prochaine action</div>
+            <input className="ck-input" value={form.next_action} onChange={p('next_action')} style={{ width: '100%' }} />
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Insight</div>
+            <textarea className="ck-input" value={form.insight} onChange={p('insight')} rows={2} style={{ width: '100%', resize: 'vertical' }} />
+          </div>
         </div>
-      </div>
+      )}
 
-      <div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Decision timeline</div>
-        <div style={{ position: 'relative', paddingLeft: 18 }}>
-          <div style={{ position: 'absolute', left: 6, top: 4, bottom: 4, width: 1.5, background: line2 }} />
-          {history.map((h, i) => {
-            const a = agentById(h.by)
-            return (
-              <div key={i} style={{ position: 'relative', marginBottom: 10 }}>
-                <div style={{ position: 'absolute', left: -16, top: 3, width: 10, height: 10, borderRadius: '50%', background: h.color, boxShadow: `0 0 8px ${h.color}`, border: `2px solid ${surface}` }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: text }}>{h.action}</span>
-                    <span style={{ color: a.color, fontFamily: 'var(--font-mono)', fontSize: 9.5, marginLeft: 6, letterSpacing: 1 }}>· {a.code}</span>
+      {/* Stats */}
+      {!editing && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+            {([['MRR', `€${v.mrrNum || 0}`, em], ['CAC', v.cacNum ? `€${v.cacNum}` : '—', cy], ['Conv.', v.convNum ? `${v.convNum}%` : '—', vi], ['Score', String(v.score), stage.color]] as [string, string, string][]).map(([lb, val, col]) => (
+              <div key={lb} style={{ padding: '10px 12px', borderRadius: 10, background: surface2, border: `1px solid ${line}` }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>{lb}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: col, marginTop: 2, letterSpacing: '-.02em' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <MiniArea label="MRR · 28j"  spark={sparkA} color={em} />
+            <MiniArea label="Conv · 28j" spark={sparkB} color={cy} />
+          </div>
+
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Squad assignée</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {v.agentIds.map(id => {
+                const a = agentById(id)
+                return (
+                  <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, background: surface2, border: `1px solid ${line}` }}>
+                    <span style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${a.color}`, background: `${a.color}12`, display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, color: a.color }}>{a.sigil}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, flex: 1, color: text }}>{a.name}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: a.color, letterSpacing: 1 }}>LV {a.level}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: em, letterSpacing: 1 }}>{60 + Math.round(a.xp * 30)}%</span>
                   </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.1em' }}>{h.day === 0 ? 'today' : `t${h.day}j`}</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+                )
+              })}
+            </div>
+          </div>
 
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button type="button" style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: sc, color: '#0b0d12', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11.5, letterSpacing: '.05em', cursor: 'pointer' }}>
-          Confirm · {v.status}
-        </button>
-        {['OPEN', 'BRIEF'].map(lbl => (
-          <button key={lbl} type="button" style={{ padding: '10px 12px', borderRadius: 8, background: surface2, color: text, border: `1px solid ${line2}`, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em', cursor: 'pointer' }}>{lbl}</button>
-        ))}
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Decision timeline</div>
+            <div style={{ position: 'relative', paddingLeft: 18 }}>
+              <div style={{ position: 'absolute', left: 6, top: 4, bottom: 4, width: 1.5, background: line2 }} />
+              {history.map((h, i) => {
+                const a = agentById(h.by)
+                return (
+                  <div key={i} style={{ position: 'relative', marginBottom: 10 }}>
+                    <div style={{ position: 'absolute', left: -16, top: 3, width: 10, height: 10, borderRadius: '50%', background: h.color, boxShadow: `0 0 8px ${h.color}`, border: `2px solid ${surface}` }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: text }}>{h.action}</span>
+                        <span style={{ color: a.color, fontFamily: 'var(--font-mono)', fontSize: 9.5, marginLeft: 6, letterSpacing: 1 }}>· {a.code}</span>
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.1em' }}>{h.day === 0 ? 'today' : `t${h.day}j`}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
+        {editing ? (
+          <>
+            <button type="button" onClick={handleSave} disabled={saving} style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: accent, color: '#0b0d12', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+              {saving ? '…' : 'Sauvegarder'}
+            </button>
+            <button type="button" onClick={() => { setEditing(false); setConfirmDel(false) }} style={{ padding: '10px 12px', borderRadius: 8, background: 'transparent', color: muted, border: `1px solid ${line2}`, cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 10 }}>Annuler</button>
+            <button type="button" onClick={handleDelete} style={{
+              padding: '10px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: confirmDel ? ro : surface2, color: confirmDel ? '#fff' : ro,
+              fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.1em',
+              transition: 'all .15s',
+            }}>{confirmDel ? 'Confirmer ?' : '🗑'}</button>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={() => setEditing(true)} style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: sc, color: '#0b0d12', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11.5, letterSpacing: '.05em', cursor: 'pointer' }}>
+              Confirm · {v.status}
+            </button>
+            {['OPEN', 'BRIEF'].map(lbl => (
+              <button key={lbl} type="button" style={{ padding: '10px 12px', borderRadius: 8, background: surface2, color: text, border: `1px solid ${line2}`, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em', cursor: 'pointer' }}>{lbl}</button>
+            ))}
+          </>
+        )}
       </div>
     </div>
   )
@@ -288,6 +393,25 @@ export default function VenturesPage() {
     if (error) return toast.error(error.message)
     setForm({ name: '', niche: '', stage: 'validation', score: '', mrr: '' })
     setAdding(false)
+    load()
+  }
+
+  async function update(id: string, f: EditForm) {
+    const { error } = await supabase.from('ventures').update({
+      name: f.name.trim(), niche: f.niche.trim(), stage: f.stage,
+      score: parseInt(f.score) || 0, mrr: f.mrr, cac: f.cac,
+      conversion: f.conversion, next_action: f.next_action, insight: f.insight,
+    }).eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Venture mise à jour')
+    load()
+  }
+
+  async function remove(id: string) {
+    const { error } = await supabase.from('ventures').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    setSelectedId(null)
+    toast.success('Venture supprimée')
     load()
   }
 
@@ -409,7 +533,7 @@ export default function VenturesPage() {
         </div>
 
         {/* Inspector */}
-        <VentureInspector v={selected} />
+        <VentureInspector v={selected} onSave={update} onDelete={remove} />
       </div>
     </CkShell>
   )

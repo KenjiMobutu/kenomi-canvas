@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
@@ -20,19 +20,19 @@ export async function POST(req: NextRequest) {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  let body: { conversationId?: string; message?: string }
+  let body: { conversationId?: string; message?: string; agentId?: string }
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 })
   }
 
-  const { conversationId, message } = body
+  const { conversationId, message, agentId } = body
   if (!conversationId || !message?.trim()) {
-    return NextResponse.json({ error: 'conversationId and message are required' }, { status: 400 })
+    return new Response(JSON.stringify({ error: 'conversationId and message are required' }), { status: 400 })
   }
 
   const { data: settings } = await supabase
@@ -55,33 +55,77 @@ export async function POST(req: NextRequest) {
 
   const messages = [...(history || []), { role: 'user', content: message }]
 
-  let assistantContent = ''
-  try {
-    const resp = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: false, think: false }),
-    })
-    if (!resp.ok) {
-      const t = await resp.text()
-      throw new Error(`Ollama ${resp.status}: ${t.slice(0, 200)}`)
-    }
-    const json = await resp.json() as { message?: { content?: string } }
-    assistantContent = json.message?.content || '(empty response)'
-  } catch (e) {
-    assistantContent = `⚠️ Impossible de joindre Ollama à ${baseUrl}. Vérifie Settings et que ton serveur Ollama est accessible.\n\nErreur: ${(e as Error).message}`
-  }
+  const encoder = new TextEncoder()
+  let fullContent = ''
 
-  await supabase.from('messages').insert({
-    conversation_id: conversationId,
-    user_id: user.id,
-    role: 'assistant',
-    content: assistantContent,
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const resp = await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, messages, stream: true, think: false }),
+        })
+
+        if (!resp.ok || !resp.body) {
+          const errText = await resp.text().catch(() => '')
+          const errMsg = `⚠️ Ollama ${resp.status}: ${errText.slice(0, 200)}`
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(errMsg)}\n\n`))
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          fullContent = errMsg
+          controller.close()
+          return
+        }
+
+        const reader = resp.body.getReader()
+        const dec = new TextDecoder()
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = dec.decode(value, { stream: true })
+          for (const line of chunk.split('\n')) {
+            const trimmed = line.trim()
+            if (!trimmed) continue
+            try {
+              const json = JSON.parse(trimmed) as { message?: { content?: string }; done?: boolean }
+              const token = json.message?.content ?? ''
+              if (token) {
+                fullContent += token
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(token)}\n\n`))
+              }
+            } catch {
+              // non-JSON line — skip
+            }
+          }
+        }
+      } catch (e) {
+        const errMsg = `⚠️ Impossible de joindre Ollama à ${baseUrl}. Erreur: ${(e as Error).message}`
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(errMsg)}\n\n`))
+        fullContent = errMsg
+      }
+
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+      controller.close()
+
+      // Persist assistant message after stream ends
+      await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        user_id: user.id,
+        role: 'assistant',
+        content: fullContent,
+      })
+      await supabase.from('conversations')
+        .update({ updated_at: new Date().toISOString(), ...(agentId ? { agent_id: agentId } : {}) })
+        .eq('id', conversationId)
+    },
   })
 
-  await supabase.from('conversations')
-    .update({ updated_at: new Date().toISOString() })
-    .eq('id', conversationId)
-
-  return NextResponse.json({ content: assistantContent })
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
 }
