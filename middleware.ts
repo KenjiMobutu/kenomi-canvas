@@ -8,9 +8,9 @@ export async function middleware(request: NextRequest) {
   // ── Dashboard admin (cookie maison, pas Supabase) ─────────────────────────
   if (pathname.startsWith('/dashboard')) {
     if (pathname === '/dashboard/login') return NextResponse.next()
-    const auth = request.cookies.get('kenomi-dash-auth')?.value
-    const pwd  = process.env.DASHBOARD_PASSWORD
-    if (!pwd || auth !== pwd)
+    const token = request.cookies.get('kenomi-dash-auth')?.value ?? ''
+    const { verifyDashToken } = await import('@/lib/dashboard-token')
+    if (!await verifyDashToken(token))
       return NextResponse.redirect(new URL('/dashboard/login', request.url))
     return NextResponse.next()
   }
