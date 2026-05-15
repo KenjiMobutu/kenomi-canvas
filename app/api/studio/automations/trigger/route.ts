@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+function isAllowedWebhookUrl(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url)
+    if (!['http:', 'https:'].includes(protocol)) return false
+    if (/^169\.254\./.test(hostname)) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -10,9 +21,7 @@ export async function POST(req: NextRequest) {
     {
       cookies: {
         getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-        },
+        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) },
       },
     }
   )
@@ -20,29 +29,51 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { id } = await req.json()
+  let id: string
+  try {
+    const body = await req.json()
+    id = body.id ?? ''
+  } catch {
+    return NextResponse.json({ error: 'JSON invalide' }, { status: 400 })
+  }
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  const { data: wf } = await supabase.from('automation_workflows')
-    .select('webhook_url, run_count').eq('id', id).eq('user_id', user.id).maybeSingle()
+  const { data: wf } = await supabase
+    .from('automation_workflows')
+    .select('webhook_url, run_count')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle()
 
   if (!wf) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (wf.webhook_url) {
+    if (!isAllowedWebhookUrl(wf.webhook_url)) {
+      return NextResponse.json({ error: 'URL webhook non autorisée' }, { status: 400 })
+    }
     try {
-      await fetch(wf.webhook_url, {
-        method: 'POST',
+      const resp = await fetch(wf.webhook_url, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
+        body:    JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
+        signal:  AbortSignal.timeout(8000),
       })
-    } catch {
-      return NextResponse.json({ error: 'Webhook unreachable' }, { status: 502 })
+      if (!resp.ok) {
+        return NextResponse.json({ error: `Webhook erreur HTTP ${resp.status}` }, { status: 502 })
+      }
+    } catch (e) {
+      const msg = e instanceof Error && e.name === 'TimeoutError'
+        ? 'Webhook timeout (8s)'
+        : 'Webhook injoignable'
+      return NextResponse.json({ error: msg }, { status: 502 })
     }
   }
 
-  await supabase.from('automation_workflows')
+  await supabase
+    .from('automation_workflows')
     .update({ run_count: (wf.run_count || 0) + 1, last_run_at: new Date().toISOString() })
     .eq('id', id)
+    .eq('user_id', user.id)
 
   return NextResponse.json({ ok: true })
 }
