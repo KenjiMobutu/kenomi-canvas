@@ -35,10 +35,18 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'conversationId and message are required' }), { status: 400 })
   }
 
+  if (message.length > 8000) {
+    return new Response(JSON.stringify({ error: 'Message trop long (max 8000 caractères)' }), { status: 400 })
+  }
+
   const { data: settings } = await supabase
     .from('user_settings').select('*').eq('user_id', user.id).maybeSingle()
 
   const baseUrl = (settings?.ollama_base_url || 'http://192.168.0.14:11434').replace(/\/$/, '')
+  if (!/^https?:\/\/./.test(baseUrl) || /^https?:\/\/169\.254\./.test(baseUrl)) {
+    return new Response(JSON.stringify({ error: 'URL Ollama invalide' }), { status: 400 })
+  }
+
   const model = settings?.ollama_model || 'qwen3:8b'
 
   const { data: history } = await supabase
