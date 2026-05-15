@@ -4,6 +4,10 @@
 -- ============================================================
 
 -- ventures already exists with a different schema — add missing columns
+-- Drop legacy NOT NULL constraints that block inserts from the studio page
+ALTER TABLE public.ventures ALTER COLUMN nom        DROP NOT NULL;
+ALTER TABLE public.ventures ALTER COLUMN slug       DROP NOT NULL;
+ALTER TABLE public.ventures ALTER COLUMN domaine    DROP NOT NULL;
 ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
 ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS niche text DEFAULT '';
