@@ -449,20 +449,38 @@ export default function AutomationsPage() {
   async function loadWorkflows() {
     if (!user) return
     const supabase = createSupabaseBrowser()
-    const { data } = await supabase.from('automation_workflows').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase
+      .from('automation_workflows')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    if (error) { toast.error(error.message); return }
     setDbWorkflows((data as DbWorkflow[]) || [])
   }
   useEffect(() => { if (user) loadWorkflows() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function toggleWorkflow(id: string, enabled: boolean) {
+    if (!user) return
     const supabase = createSupabaseBrowser()
-    await supabase.from('automation_workflows').update({ enabled }).eq('id', id)
+    const { error } = await supabase
+      .from('automation_workflows')
+      .update({ enabled })
+      .eq('id', id)
+      .eq('user_id', user.id)
+    if (error) { toast.error(error.message); return }
     setDbWorkflows(wf => wf.map(w => w.id === id ? { ...w, enabled } : w))
   }
 
   async function deleteWorkflow(id: string) {
+    if (!user) return
+    if (!window.confirm('Supprimer ce workflow ? Cette action est irréversible.')) return
     const supabase = createSupabaseBrowser()
-    await supabase.from('automation_workflows').delete().eq('id', id)
+    const { error } = await supabase
+      .from('automation_workflows')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+    if (error) { toast.error(error.message); return }
     if (dbSelectedId === id) setDbSelectedId(null)
     loadWorkflows()
     toast.success('Workflow supprimé')
