@@ -76,13 +76,14 @@ function parseNum(v: string | number | null | undefined): number {
   if (v == null) return 0
   const s = String(v).replace(/[€$, ]/g, '').replace('%', '')
   const n = parseFloat(s)
-  return String(v).toLowerCase().includes('k') ? n * 1000 : (isNaN(n) ? 0 : n)
+  if (isNaN(n)) return 0
+  return String(v).toLowerCase().includes('k') ? n * 1000 : n
 }
 
 function clamp(v: number): number { return Math.round(Math.max(0, Math.min(100, v))) }
 
 function levelFromXp(xp: number, divisor: number): number {
-  return Math.floor(Math.sqrt(xp / divisor))
+  return Math.floor(Math.sqrt(Math.max(0, xp) / divisor))
 }
 
 function xpBarFromXp(xp: number, divisor: number): number {
@@ -125,6 +126,7 @@ function computeUnlocks(input: GamificationInput): Record<string, { unlocked: bo
   return {
     'first-mrr':      { unlocked: mrr >= 1000,                      pct: clamp(mrr / 1000 * 100) },
     'ship-7':         { unlocked: deployed30d.length >= 7,           pct: clamp(deployed30d.length / 7 * 100) },
+    // cac > 0 guards against "no data" — parseNum(null) returns 0, not a real CAC of zero
     'cac-under-20':   { unlocked: cac > 0 && cac <= 20 && mrr > 0,  pct: cac > 0 ? clamp((40 - cac) / 40 * 100) : 0 },
     '100k-imp':       { unlocked: totalViews >= 100_000,             pct: clamp(totalViews / 100_000 * 100) },
     'valid-pivot':    { unlocked: pivotDone && paymentDone,          pct: (pivotDone ? 50 : 0) + (paymentDone ? 50 : 0) },

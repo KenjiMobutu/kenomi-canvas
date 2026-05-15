@@ -70,7 +70,7 @@ describe('computeGamification', () => {
     expect(r.userLevel).toBe(0)
   })
 
-  it('userLevel = 1 avec 100 XP', () => {
+  it('userLevel = 1 avec 250 XP (first-mrr)', () => {
     // first-mrr = 250 XP → level = floor(sqrt(250/100)) = floor(1.58) = 1
     const r = computeGamification({ ...EMPTY_INPUT, claimed: ['first-mrr'] })
     expect(r.userLevel).toBe(1)
@@ -95,6 +95,50 @@ describe('computeGamification', () => {
     }
     const r = computeGamification(input)
     expect(r.newUnlocks).toContain('5-ventures')
+  })
+
+  it('cac-under-20 : unlocked quand cac > 0 et cac <= 20 avec mrr > 0', () => {
+    const input: GamificationInput = {
+      ...EMPTY_INPUT,
+      snapshots: [{ mrr: '500', cac: '15', created_at: new Date().toISOString() }],
+    }
+    const r = computeGamification(input)
+    const a = r.achievements.find(a => a.id === 'cac-under-20')!
+    expect(a.unlocked).toBe(true)
+    expect(a.pct).toBeGreaterThan(0)
+  })
+
+  it('cac-under-20 : non unlocked si pas de données cac (cac=0)', () => {
+    const input: GamificationInput = {
+      ...EMPTY_INPUT,
+      snapshots: [{ mrr: '500', cac: null, created_at: new Date().toISOString() }],
+    }
+    const r = computeGamification(input)
+    const a = r.achievements.find(a => a.id === 'cac-under-20')!
+    expect(a.unlocked).toBe(false)
+    expect(a.pct).toBe(0)
+  })
+
+  it('parseNum : retourne 0 pour une string invalide avec k', () => {
+    const input: GamificationInput = {
+      ...EMPTY_INPUT,
+      snapshots: [{ mrr: 'unknownk', cac: null, created_at: new Date().toISOString() }],
+    }
+    const r = computeGamification(input)
+    expect(r.achievements.every(a => !isNaN(a.pct))).toBe(true)
+  })
+
+  it('agentLevels : paiements négatifs (remboursements) ne produisent pas NaN', () => {
+    const input: GamificationInput = {
+      ...EMPTY_INPUT,
+      payments: [
+        { id: '1', amount_eur: -200, status: 'refunded', created_at: new Date().toISOString() },
+      ],
+    }
+    const r = computeGamification(input)
+    const payment = r.agentLevels.find(a => a.id === 'payment')!
+    expect(isNaN(payment.level)).toBe(false)
+    expect(payment.level).toBe(0)
   })
 
   it('season-podium : toujours locked, pct = 0', () => {
