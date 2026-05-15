@@ -25,6 +25,7 @@ export function useGamification(): GamificationResult & { loading: boolean } {
   useEffect(() => {
     if (!user) { setLoading(false); return }
 
+    let cancelled = false
     const supabase = createSupabaseBrowser()
     const userId = user.id
 
@@ -88,16 +89,20 @@ export function useGamification(): GamificationResult & { loading: boolean } {
             break
           }
         }
-        const newSnap: Record<string, number> = {}
-        for (const al of computed.agentLevels) newSnap[al.id] = al.level
-        localStorage.setItem(LEVELS_SNAP_KEY, JSON.stringify(newSnap))
+        if (!cancelled) {
+          const newSnap: Record<string, number> = {}
+          for (const al of computed.agentLevels) newSnap[al.id] = al.level
+          localStorage.setItem(LEVELS_SNAP_KEY, JSON.stringify(newSnap))
+        }
       } catch { /* localStorage unavailable in SSR */ }
 
+      if (cancelled) return
       setResult({ ...computed, lastLevelUp })
       setLoading(false)
     }
 
     load()
+    return () => { cancelled = true }
   }, [user])
 
   return { ...result, loading }
