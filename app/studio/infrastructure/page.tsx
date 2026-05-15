@@ -5,7 +5,7 @@ import {
   bg, surface, surface2, line, line2, text, muted, muted2,
   accent, emerald, amber, rose, cyan, violet, fuchsia,
 } from '@/lib/ck-vars'
-import { AGENTS_DATA, makeSpark, sparkPath } from '@/lib/studio-utils'
+import { AGENTS_DATA, makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
 
 const SERVICES_IN = [
   { id: 'proxmox',  label: 'Proxmox VE',  short: 'PROX', status: 'Online',    color: '#34d399', cpu: 42, ram: 58, disk: 31, net: 124, uptime: '32d', role: 'Compute · cluster local',   endpoint: 'proxmox.local' },
@@ -414,6 +414,7 @@ const KPI_LIST = [
 export default function InfrastructurePage() {
   const [selectedId, setSelectedId] = useState('proxmox')
   const [logTick, setLogTick] = useState(0)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     const id = setInterval(() => setLogTick(t => t + 1), 1400)
@@ -450,34 +451,76 @@ export default function InfrastructurePage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* KPI strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 10 }}>
           {KPI_LIST.map(k => <InfraKpi key={k.label} {...k} />)}
         </div>
 
         {/* Topology + Service inspector */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: 14, alignItems: 'start' }}>
-          <TopologyGraph selectedId={selectedId} onSelect={setSelectedId} />
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', gap: 14, alignItems: 'start' }}>
+          {!isMobile && <TopologyGraph selectedId={selectedId} onSelect={setSelectedId} />}
           <ServiceInspector svc={selected} />
         </div>
 
         {/* Server rack */}
         <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Server rack · self-host</div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>proxmox cluster · 3 hosts · 8 services</div>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[{ l: 'CPU 22%' }, { l: 'RAM 38%' }, { l: 'DISK 31%' }].map(({ l }) => (
-                <span key={l} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 7px', borderRadius: 3, background: surface2, border: `1px solid ${line}`, color: muted, letterSpacing: '.14em' }}>{l}</span>
-              ))}
-            </div>
+            {!isMobile && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[{ l: 'CPU 22%' }, { l: 'RAM 38%' }, { l: 'DISK 31%' }].map(({ l }) => (
+                  <span key={l} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 7px', borderRadius: 3, background: surface2, border: `1px solid ${line}`, color: muted, letterSpacing: '.14em' }}>{l}</span>
+                ))}
+              </div>
+            )}
           </div>
-          <ServerRack selectedId={selectedId} onSelect={setSelectedId} />
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 14 }}>
+            {[
+              { label: 'RACK-01', host: 'lan-01', svcs: SERVICES_IN.slice(0, 3) },
+              { label: 'RACK-02', host: 'lan-02', svcs: SERVICES_IN.slice(3, 6) },
+              { label: 'RACK-03', host: 'cloud',  svcs: SERVICES_IN.slice(6)    },
+            ].map(rack => (
+              <div key={rack.label} style={{
+                background: surface2, border: `1px solid ${line}`, borderRadius: 10,
+                padding: 8, display: 'flex', flexDirection: 'column', gap: 5,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.18em', textTransform: 'uppercase', fontWeight: 700 }}>{rack.label}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: muted2, letterSpacing: '.14em' }}>{rack.host}</span>
+                </div>
+                <div style={{ height: 4, borderRadius: 2, background: bg, border: `1px solid ${line}` }} />
+                {rack.svcs.map(svc => (
+                  <button key={svc.id} onClick={() => setSelectedId(svc.id)} style={{
+                    textAlign: 'left', padding: '5px 8px', borderRadius: 4,
+                    background: svc.id === selectedId ? `${svc.color}16` : bg,
+                    border: svc.id === selectedId ? `1px solid ${svc.color}` : `1px solid ${line}`,
+                    display: 'grid', gridTemplateColumns: 'auto auto 1fr auto auto auto', gap: 8, alignItems: 'center',
+                    cursor: 'pointer', minHeight: 22,
+                  }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: svc.color, boxShadow: `0 0 6px ${svc.color}` }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: svc.color, letterSpacing: 1, fontWeight: 800 }}>{svc.short}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: text }}>{svc.label}</span>
+                    <div style={{ width: 30, height: 4, borderRadius: 2, background: surface2, overflow: 'hidden' }}>
+                      <div style={{ width: `${svc.cpu}%`, height: '100%', background: cyan }} />
+                    </div>
+                    <div style={{ width: 30, height: 4, borderRadius: 2, background: surface2, overflow: 'hidden' }}>
+                      <div style={{ width: `${svc.ram}%`, height: '100%', background: emerald }} />
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: 1 }}>1U</span>
+                  </button>
+                ))}
+                {Array.from({ length: 3 - rack.svcs.length + 1 }).map((_, i) => (
+                  <div key={i} style={{ height: 16, borderRadius: 2, background: bg, border: `1px dashed ${line}` }} />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Event log + Deploys */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.4fr 1fr', gap: 14 }}>
           <EventLog tick={logTick} />
           <DeploysPanel />
         </div>

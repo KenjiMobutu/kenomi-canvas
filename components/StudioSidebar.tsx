@@ -5,10 +5,11 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   BarChart3, Bot, FileText, GitBranch, KeyRound,
   LayoutDashboard, LogOut, Megaphone, MessageSquare,
-  Network, Server, Settings, Trophy, Workflow,
+  Network, Server, Settings, Trophy, Workflow, Grid2x2,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
+import { useIsMobile } from '@/lib/studio-utils'
 
 const nav = [
   { href: '/studio',                label: 'Cockpit',        icon: LayoutDashboard, group: 'Studio' },
@@ -41,9 +42,102 @@ const SB = {
   accent:  '#ff6a3d',
 }
 
+const BOTTOM_NAV = [
+  { href: '/studio',           label: 'Cockpit',  icon: LayoutDashboard },
+  { href: '/studio/ventures',  label: 'Ventures', icon: GitBranch       },
+  { href: '/studio/agents',    label: 'Agents',   icon: Bot             },
+  { href: '/studio/chat',      label: 'Chat',     icon: MessageSquare   },
+  { href: '/studio/analytics', label: 'Stats',    icon: BarChart3       },
+]
+
+const ALL_NAV_EXTRA = nav.filter(n => !BOTTOM_NAV.some(b => b.href === n.href))
+
+function MobileBottomNav() {
+  const pathname = usePathname()
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  return (
+    <>
+      {/* Bottom bar */}
+      <nav style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 200,
+        height: 60,
+        background: SB.bg, borderTop: `1px solid ${SB.line}`,
+        display: 'flex', alignItems: 'stretch',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}>
+        {BOTTOM_NAV.map(item => {
+          const Icon = item.icon
+          const active = pathname === item.href || (item.href !== '/studio' && pathname.startsWith(item.href))
+          return (
+            <Link key={item.href} href={item.href} style={{
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 3, textDecoration: 'none',
+              color: active ? SB.accent : SB.muted2,
+              background: active ? 'rgba(255,106,61,.08)' : 'transparent',
+              borderTop: active ? `2px solid ${SB.accent}` : '2px solid transparent',
+              transition: 'color .1s',
+            }}>
+              <Icon size={18} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase' }}>{item.label}</span>
+            </Link>
+          )
+        })}
+        {/* More button */}
+        <button onClick={() => setDrawerOpen(true)} style={{
+          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 3, background: 'transparent', border: 'none', cursor: 'pointer',
+          color: drawerOpen ? SB.accent : SB.muted2,
+          borderTop: drawerOpen ? `2px solid ${SB.accent}` : '2px solid transparent',
+        }}>
+          <Grid2x2 size={18} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase' }}>Plus</span>
+        </button>
+      </nav>
+
+      {/* Drawer overlay */}
+      {drawerOpen && (
+        <div
+          onClick={() => setDrawerOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(4px)' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute', bottom: 60, left: 0, right: 0,
+              background: SB.surface, borderTop: `1px solid ${SB.line2}`,
+              borderRadius: '20px 20px 0 0',
+              padding: '20px 16px',
+              display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8,
+            }}
+          >
+            {ALL_NAV_EXTRA.map(item => {
+              const Icon = item.icon
+              const active = pathname.startsWith(item.href)
+              return (
+                <Link key={item.href} href={item.href} onClick={() => setDrawerOpen(false)} style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 6, padding: '14px 8px', borderRadius: 12, textDecoration: 'none',
+                  background: active ? `${SB.accent}18` : 'rgba(255,255,255,.04)',
+                  border: `1px solid ${active ? SB.accent + '44' : SB.line}`,
+                  color: active ? SB.accent : SB.muted,
+                }}>
+                  <Icon size={20} />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase', textAlign: 'center' }}>{item.label}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 export function StudioSidebar() {
   const pathname = usePathname()
   const router   = useRouter()
+  const isMobile = useIsMobile()
   const [width, setWidth]       = useState(264)
   const [dragging, setDragging] = useState(false)
   const [userEmail, setUserEmail] = useState<string>('Kenomi Operator')
@@ -100,6 +194,8 @@ export function StudioSidebar() {
     await supabase.auth.signOut()
     router.replace('/login')
   }
+
+  if (isMobile) return <MobileBottomNav />
 
   return (
     <aside

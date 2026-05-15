@@ -79,6 +79,17 @@
   }
 }
 
+/* ── Mobile responsive utilities ──────────────────────────────── */
+@media (max-width: 767px) {
+  .ck-hide-mobile  { display: none !important; }
+  .ck-show-mobile  { display: flex !important; }
+  .ck-sidebar      { display: none !important; }
+  /* Prevent horizontal overflow on all studio pages */
+  body { overflow-x: hidden; }
+  /* Touch-friendly inputs */
+  input, select, textarea { font-size: 16px !important; }
+}
+
 @layer components {
   .gradient-border {
     background:

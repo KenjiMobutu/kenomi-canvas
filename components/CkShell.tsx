@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { CK_DARK, CK_LIGHT, bg, line, muted, text } from '@/lib/ck-vars'
+import { CK_DARK, CK_LIGHT, bg, line, muted, muted2, text } from '@/lib/ck-vars'
+import { useIsMobile } from '@/lib/studio-utils'
 
 interface CkShellProps {
   breadcrumb: string
@@ -14,6 +15,7 @@ interface CkShellProps {
 export function CkShell({ breadcrumb, title, subtitle, actions, children }: CkShellProps) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const router = useRouter()
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     try { setTheme((localStorage.getItem('kenomi-ck-theme') as 'dark' | 'light') || 'dark') } catch {}
@@ -62,41 +64,50 @@ export function CkShell({ breadcrumb, title, subtitle, actions, children }: CkSh
         }
         .ck-select:focus { border-color: var(--ck-accent); }
         .ck-row-hover:hover { background: var(--ck-surface-2) !important; }
+        @media (max-width: 767px) {
+          .ck-actions-wrap { flex-wrap: wrap; gap: 6px !important; overflow-x: auto; }
+          .ck-actions-wrap > * { flex-shrink: 0; }
+        }
       `}</style>
 
       <header style={{
         position: 'sticky', top: 0, zIndex: 10,
-        height: 56,
+        minHeight: isMobile ? 50 : 56,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px',
+        padding: isMobile ? '0 12px' : '0 24px',
+        gap: 8,
         background: bg,
         borderBottom: `1px solid ${line}`,
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
       }}>
-        <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: muted }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: isMobile ? 9 : 10, letterSpacing: '.18em', textTransform: 'uppercase', color: muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {breadcrumb}
           </div>
-          {subtitle && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ck-muted-2)', letterSpacing: '.06em', marginTop: 1 }}>
+          {subtitle && !isMobile && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2, letterSpacing: '.06em', marginTop: 1 }}>
               {subtitle}
             </div>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="ck-actions-wrap" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {actions}
-          <button
-            onClick={() => router.push('/studio')}
-            style={{
-              padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-              background: 'transparent', color: muted,
-              border: `1px solid ${line}`,
-              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.12em',
-            }}
-          >← Cockpit</button>
+          {!isMobile && (
+            <button
+              onClick={() => router.push('/studio')}
+              style={{
+                padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
+                background: 'transparent', color: muted,
+                border: `1px solid ${line}`,
+                fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.12em',
+                whiteSpace: 'nowrap',
+              }}
+            >← Cockpit</button>
+          )}
           <button
             onClick={toggleTheme}
-            title="Toggle theme (T)"
+            title="Toggle theme"
             style={{
               padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
               background: 'transparent', color: muted,
@@ -107,11 +118,11 @@ export function CkShell({ breadcrumb, title, subtitle, actions, children }: CkSh
         </div>
       </header>
 
-      <div style={{ padding: '28px 32px 40px' }}>
-        <div style={{ marginBottom: 28 }}>
+      <div style={{ padding: isMobile ? '16px 12px 24px' : '28px 32px 40px' }}>
+        <div style={{ marginBottom: isMobile ? 16 : 28 }}>
           <h1 style={{
             margin: 0,
-            fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 800,
+            fontFamily: 'var(--font-display)', fontSize: isMobile ? 22 : 32, fontWeight: 800,
             letterSpacing: '-.03em', color: text, lineHeight: 1.1,
           }}>{title}</h1>
         </div>

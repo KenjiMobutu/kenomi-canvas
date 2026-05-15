@@ -5,7 +5,7 @@ import {
   bg, surface, surface2, line, text, muted, muted2,
   accent, emerald, amber, cyan, violet, fuchsia,
 } from '@/lib/ck-vars'
-import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick } from '@/lib/studio-utils'
+import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick, useIsMobile } from '@/lib/studio-utils'
 
 const CHANNELS = [
   { id: 'linkedin', label: 'LinkedIn',   icon: 'in', color: '#22d3ee', reach: '14.2k', ctr: '3.8%', drafts: 12, status: 'Posting',  waveSeed: 7  },
@@ -385,6 +385,7 @@ const KPI_LIST = [
 
 export default function MarketingPage() {
   const [selChannel, setSelChannel] = useState<typeof CHANNELS[number]['id']>('linkedin')
+  const isMobile = useIsMobile()
   const agent = AGENTS_DATA.find(a => a.id === 'marketing')!
   const activeChannel = CHANNELS.find(c => c.id === selChannel)!
 
@@ -416,19 +417,19 @@ export default function MarketingPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* KPI strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 10 }}>
           {KPI_LIST.map(k => <MkKpi key={k.label} {...k} />)}
         </div>
 
         {/* Row 1: Channels + Agent inspector */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', gap: 14 }}>
 
           {/* Channels grid */}
           <div style={{
             background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 16,
             display: 'flex', flexDirection: 'column', gap: 12,
           }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
               <div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Broadcast channels</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>MKT · 7 jours · reach / CTR</div>
@@ -451,25 +452,31 @@ export default function MarketingPage() {
           background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 16,
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Content calendar · 7 jours</div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>programmé · agent MKT</div>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {CHANNELS.map(c => (
-                <span key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: c.color }} />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.1em' }}>{c.label}</span>
-                </span>
-              ))}
+            {!isMobile && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {CHANNELS.map(c => (
+                  <span key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: c.color }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.1em' }}>{c.label}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: isMobile ? 560 : 'auto' }}>
+              <Calendar />
             </div>
           </div>
-          <Calendar />
         </div>
 
         {/* Row 3: Asset previews */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 14 }}>
           {(['linkedin', 'tiktok', 'seo', 'newsletter'] as const).map(kind => (
             <AssetPreview key={kind} kind={kind} />
           ))}

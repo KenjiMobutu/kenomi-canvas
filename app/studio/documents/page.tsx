@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
+import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import {
@@ -41,6 +42,7 @@ function mimeIcon(mime: string | null) {
 
 export default function DocumentsPage() {
   const { user } = useAuth()
+  const isMobile = useIsMobile()
   const [docs, setDocs] = useState<Doc[]>([])
   const [selected, setSelected] = useState<Doc | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -103,7 +105,7 @@ export default function DocumentsPage() {
   return (
     <CkShell breadcrumb="System / Documents" title="Knowledge Base" subtitle={`${docs.length} fichier${docs.length !== 1 ? 's' : ''}`} actions={uploadAction}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: 16 }}>
         {/* File list */}
         <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 12, overflow: 'hidden' }}>
           {docs.map((d, i) => (

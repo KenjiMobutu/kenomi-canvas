@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
+import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import { surface, surface2, line, line2, text, muted, muted2, accent, bg } from '@/lib/ck-vars'
@@ -361,6 +362,7 @@ function VentureInspector({ v, onSave, onDelete }: {
 
 export default function VenturesPage() {
   const { user } = useAuth()
+  const isMobile = useIsMobile()
   const [items, setItems] = useState<DV[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -442,14 +444,14 @@ export default function VenturesPage() {
 
       {/* Add form */}
       {adding && (
-        <form onSubmit={create} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr .5fr .3fr .3fr auto', gap: 8, marginBottom: 14, background: surface, border: `1px solid ${line}`, borderRadius: 12, padding: 14 }}>
+        <form onSubmit={create} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr .5fr .3fr .3fr auto', gap: 8, marginBottom: 14, background: surface, border: `1px solid ${line}`, borderRadius: 12, padding: 14 }}>
           <input className="ck-input" placeholder="Nom" value={form.name} onChange={e => setForm(c => ({ ...c, name: e.target.value }))} />
           <input className="ck-input" placeholder="Niche" value={form.niche} onChange={e => setForm(c => ({ ...c, niche: e.target.value }))} />
           <select className="ck-select" value={form.stage} onChange={e => setForm(c => ({ ...c, stage: e.target.value }))}>
             {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
-          <input className="ck-input" placeholder="Score" type="number" min="0" max="100" value={form.score} onChange={e => setForm(c => ({ ...c, score: e.target.value }))} />
-          <input className="ck-input" placeholder="MRR" value={form.mrr} onChange={e => setForm(c => ({ ...c, mrr: e.target.value }))} />
+          {!isMobile && <input className="ck-input" placeholder="Score" type="number" min="0" max="100" value={form.score} onChange={e => setForm(c => ({ ...c, score: e.target.value }))} />}
+          {!isMobile && <input className="ck-input" placeholder="MRR" value={form.mrr} onChange={e => setForm(c => ({ ...c, mrr: e.target.value }))} />}
           <div style={{ display: 'flex', gap: 6 }}>
             <button style={{ padding: '8px 16px', borderRadius: 8, background: accent, color: '#0b0d12', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12 }}>+ Ajouter</button>
             <button type="button" onClick={() => setAdding(false)} style={{ padding: '8px 12px', borderRadius: 8, background: 'transparent', color: muted, border: `1px solid ${line2}`, cursor: 'pointer', fontSize: 12 }}>✕</button>
@@ -503,9 +505,9 @@ export default function VenturesPage() {
       </div>
 
       {/* Kanban + inspector */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 14, height: 'calc(100vh - 350px)', minHeight: 480 }}>
-        {/* Kanban */}
-        <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, minHeight: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 420px', gap: 14, minHeight: isMobile ? 'auto' : 'calc(100vh - 350px)' }}>
+        {/* Kanban — scroll horizontal sur mobile */}
+        <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, display: 'grid', gridTemplateColumns: isMobile ? 'repeat(5, minmax(160px, 1fr))' : 'repeat(5, 1fr)', gap: 10, overflowX: isMobile ? 'auto' : 'visible' }}>
           {STAGES.map(stage => {
             const cards = items.filter(v => v.stage === stage.id)
             return (
@@ -532,8 +534,10 @@ export default function VenturesPage() {
           })}
         </div>
 
-        {/* Inspector */}
-        <VentureInspector v={selected} onSave={update} onDelete={remove} />
+        {/* Inspector — toujours visible sur desktop, conditionnel sur mobile */}
+        {(!isMobile || selectedId) && (
+          <VentureInspector v={selected} onSave={update} onDelete={remove} />
+        )}
       </div>
     </CkShell>
   )

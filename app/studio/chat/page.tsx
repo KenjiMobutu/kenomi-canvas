@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
-import { AGENTS_DATA } from '@/lib/studio-utils'
+import { AGENTS_DATA, useIsMobile } from '@/lib/studio-utils'
 import {
   CK_DARK, CK_LIGHT,
   bg, surface, surface2, line, line2, text, muted, muted2,
   accent, accent2, emerald, rose, cyan,
 } from '@/lib/ck-vars'
-import { Plus, Trash2, Send, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, Send, ChevronDown, Menu, X } from 'lucide-react'
 
 interface Conv { id: string; title: string; updated_at: string; agent_id?: string }
 interface Msg  { id: string; role: string; content: string; created_at: string }
@@ -35,6 +35,8 @@ export default function ChatPage() {
   const [sending, setSending]   = useState(false)
   const [agentId, setAgentId]   = useState('decision')
   const [agentOpen, setAgentOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isMobile = useIsMobile()
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
 
@@ -162,23 +164,36 @@ export default function ChatPage() {
 
       {/* Header */}
       <header style={{
-        height: 56, flexShrink: 0,
+        height: isMobile ? 50 : 56, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px',
+        padding: isMobile ? '0 12px' : '0 24px',
         background: bg, borderBottom: `1px solid ${line}`,
         zIndex: 10,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: muted }}>
-            System · Command Chat
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 16 }}>
+          {isMobile && (
+            <button onClick={() => setSidebarOpen(o => !o)} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 32, height: 32, borderRadius: 6,
+              background: sidebarOpen ? surface2 : 'transparent',
+              border: `1px solid ${sidebarOpen ? line2 : line}`,
+              color: muted, cursor: 'pointer', flexShrink: 0,
+            }}>
+              {sidebarOpen ? <X size={14} /> : <Menu size={14} />}
+            </button>
+          )}
+          {!isMobile && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: muted }}>
+              System · Command Chat
+            </div>
+          )}
           {activeConv && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: text, fontWeight: 600 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: isMobile ? 11 : 12, color: text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isMobile ? 140 : 'none' }}>
               {activeConv.title}
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {/* Agent selector */}
           <div style={{ position: 'relative' }}>
             <button onClick={() => setAgentOpen(o => !o)} style={{
@@ -221,13 +236,15 @@ export default function ChatPage() {
             background: accent, color: '#0b0d12', border: 'none', cursor: 'pointer',
             fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800, letterSpacing: '.1em',
           }}>
-            <Plus size={12} /> Nouveau
+            <Plus size={12} /> {!isMobile && 'Nouveau'}
           </button>
-          <button onClick={() => router.push('/studio')} style={{
-            padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-            background: 'transparent', color: muted, border: `1px solid ${line}`,
-            fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.12em',
-          }}>← Cockpit</button>
+          {!isMobile && (
+            <button onClick={() => router.push('/studio')} style={{
+              padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
+              background: 'transparent', color: muted, border: `1px solid ${line}`,
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.12em',
+            }}>← Cockpit</button>
+          )}
           <button onClick={toggleTheme} style={{
             padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
             background: 'transparent', color: muted, border: `1px solid ${line}`,
@@ -241,9 +258,11 @@ export default function ChatPage() {
 
         {/* Sidebar */}
         <aside style={{
-          width: 260, flexShrink: 0,
-          display: 'flex', flexDirection: 'column',
-          background: surface, borderRight: `1px solid ${line}`,
+          width: isMobile ? '100%' : 260, flexShrink: 0,
+          display: isMobile ? (sidebarOpen ? 'flex' : 'none') : 'flex',
+          flexDirection: 'column',
+          background: surface, borderRight: isMobile ? 'none' : `1px solid ${line}`,
+          ...(isMobile ? { position: 'fixed', top: 50, left: 0, right: 0, bottom: 60, zIndex: 80 } : {}),
         }}>
           <div style={{ padding: '10px 10px 8px', borderBottom: `1px solid ${line}` }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.18em', textTransform: 'uppercase', color: muted2, padding: '0 4px', marginBottom: 6 }}>
@@ -255,7 +274,7 @@ export default function ChatPage() {
               const ag = AGENTS_DATA.find(a => a.id === c.agent_id)
               const isActive = activeId === c.id
               return (
-                <div key={c.id} onClick={() => setActiveId(c.id)} style={{
+                <div key={c.id} onClick={() => { setActiveId(c.id); if (isMobile) setSidebarOpen(false) }} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '9px 10px', borderRadius: 8,
                   background: isActive ? surface2 : 'transparent',
@@ -295,8 +314,8 @@ export default function ChatPage() {
         {/* Main chat area */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {/* Messages */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '32px 0' }}>
-            <div style={{ maxWidth: 780, margin: '0 auto', padding: '0 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 0' : '32px 0' }}>
+            <div style={{ maxWidth: 780, margin: '0 auto', padding: isMobile ? '0 12px' : '0 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
               {/* Welcome / empty state */}
               {!activeId && (
@@ -417,7 +436,10 @@ export default function ChatPage() {
           {/* Input bar */}
           {activeId && (
             <div style={{
-              borderTop: `1px solid ${line}`, padding: '16px 32px', flexShrink: 0,
+              borderTop: `1px solid ${line}`,
+              padding: isMobile ? '10px 12px' : '16px 32px',
+              paddingBottom: isMobile ? 'calc(10px + env(safe-area-inset-bottom))' : '16px',
+              flexShrink: 0,
               background: bg,
             }}>
               <div style={{ maxWidth: 780, margin: '0 auto' }}>
@@ -466,9 +488,11 @@ export default function ChatPage() {
                     <Send size={14} />
                   </button>
                 </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, marginTop: 6, letterSpacing: '.08em' }}>
-                  Agent: {activeAgent.name} ({activeAgent.role}) · Modèle: {activeAgent.model}
-                </div>
+                {!isMobile && (
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, marginTop: 6, letterSpacing: '.08em' }}>
+                    Agent: {activeAgent.name} ({activeAgent.role}) · Modèle: {activeAgent.model}
+                  </div>
+                )}
               </div>
             </div>
           )}

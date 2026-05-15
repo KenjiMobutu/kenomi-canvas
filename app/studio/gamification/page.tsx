@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { agentById } from '@/lib/studio-utils'
+import { agentById, useIsMobile } from '@/lib/studio-utils'
 import {
   CK_DARK, CK_LIGHT,
   bg, surface, surface2, line, line2, text, muted, muted2,
@@ -226,6 +226,7 @@ function StatDelta({ stat, active, delay }: { stat: { label: string; from: numbe
 /* ─────── LevelUpTab ─────── */
 function LevelUpTab() {
   const agent = agentById('builder')
+  const isMobile = useIsMobile()
   const fromLevel = 17, toLevel = 18
   const [lvl, setLvl] = useState(toLevel)
   const [phase, setPhase] = useState<'locked' | 'burst'>('locked')
@@ -385,7 +386,7 @@ function LevelUpTab() {
         </div>
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, width: '100%', maxWidth: 520 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 10, width: '100%', maxWidth: 520 }}>
           {stats.map((s, i) => (
             <StatDelta key={s.label} stat={s} active={phase === 'burst'} delay={i * 0.15} />
           ))}
@@ -422,7 +423,7 @@ function LevelUpTab() {
         </div>
 
         {/* CTAs */}
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button style={{
             padding: '12px 28px', borderRadius: 999,
             background: `linear-gradient(90deg, ${agent.color}, ${accent2})`, color: '#0b0d12',
@@ -457,6 +458,7 @@ function LevelUpTab() {
 /* ─────── AchievementsTab ─────── */
 function AchievementsTab() {
   const { user } = useAuth()
+  const isMobile = useIsMobile()
   const [filter, setFilter] = useState<string>('all')
   const [claimed, setClaimed] = useState<Set<string>>(new Set())
 
@@ -495,13 +497,13 @@ function AchievementsTab() {
   const justUnlocked = ACHIEVEMENTS.find(a => a.id === 'valid-pivot')!
 
   return (
-    <div style={{ padding: '24px 32px 40px', maxWidth: 1400 }}>
+    <div style={{ padding: isMobile ? '16px 12px 40px' : '24px 32px 40px', maxWidth: 1400 }}>
       {/* Hero banner */}
       <div style={{
         position: 'relative', padding: 24, borderRadius: 18, marginBottom: 24,
         background: `linear-gradient(135deg, ${justUnlocked.color}18, transparent 50%), ${surface}`,
         border: `1.5px solid ${justUnlocked.color}`,
-        display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 28, alignItems: 'center',
+        display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'auto 1fr auto', gap: isMobile ? 16 : 28, alignItems: 'center',
         overflow: 'hidden',
         boxShadow: `0 0 60px ${justUnlocked.color}22`,
       }}>
@@ -646,6 +648,7 @@ function AchievementsTab() {
 /* ─────── Page ─────── */
 export default function GamificationPage() {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [tab, setTab] = useState<'levelup' | 'achievements'>('levelup')
 
@@ -731,24 +734,26 @@ export default function GamificationPage() {
 
       {/* Header */}
       <header style={{
-        position: 'sticky', top: 0, zIndex: 20, height: 56,
+        position: 'sticky', top: 0, zIndex: 20, height: isMobile ? 50 : 56,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px',
+        padding: isMobile ? '0 12px' : '0 24px',
         background: bg,
         borderBottom: `1px solid ${line}`,
         backdropFilter: 'blur(12px)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: muted }}>
-              Studio · Gamification
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 24 }}>
+          {!isMobile && (
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: muted }}>
+                Studio · Gamification
+              </div>
             </div>
-          </div>
+          )}
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 4 }}>
             {[
-              { id: 'levelup', label: 'Level Up' },
-              { id: 'achievements', label: 'Achievements' },
+              { id: 'levelup', label: isMobile ? 'LvlUp' : 'Level Up' },
+              { id: 'achievements', label: isMobile ? 'Achiev.' : 'Achievements' },
             ].map(t => (
               <button key={t.id} onClick={() => setTab(t.id as typeof tab)} style={{
                 padding: '5px 14px', borderRadius: 6,
@@ -762,13 +767,15 @@ export default function GamificationPage() {
             ))}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={() => router.push('/studio')} style={{
-            padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-            background: 'transparent', color: muted,
-            border: `1px solid ${line}`,
-            fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.12em',
-          }}>← Cockpit</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {!isMobile && (
+            <button onClick={() => router.push('/studio')} style={{
+              padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
+              background: 'transparent', color: muted,
+              border: `1px solid ${line}`,
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.12em',
+            }}>← Cockpit</button>
+          )}
           <button onClick={toggleTheme} style={{
             padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
             background: 'transparent', color: muted,

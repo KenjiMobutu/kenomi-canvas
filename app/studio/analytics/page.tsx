@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState, Fragment } from 'react'
 import { CkShell } from '@/components/CkShell'
+import { useIsMobile } from '@/lib/studio-utils'
 import {
   surface, surface2, line, line2, text, muted, muted2,
   accent, accent2, emerald, amber, rose, cyan, violet, fuchsia,
@@ -333,6 +334,7 @@ const DEFAULT_KPI: KpiSnapshot = { revenue: '€0', revenue_delta: '+0%', ctr: '
 
 export default function AnalyticsPage() {
   const { user } = useAuth()
+  const isMobile = useIsMobile()
   const [range, setRange] = useState('30j')
   const [kpi, setKpi] = useState<KpiSnapshot | null>(null)
   const [funnel, setFunnel] = useState<FunnelStep[]>([])
@@ -424,12 +426,12 @@ export default function AnalyticsPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* KPI strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 10 }}>
           {KPI_LIST.map(k => <BigKPI key={k.label} {...k} />)}
         </div>
 
         {/* MRR chart + donut */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: 14 }}>
 
           {/* Stacked area */}
           <div style={{
@@ -467,7 +469,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Cohort + Channel + Funnel */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr 1fr', gap: 14 }}>
 
           {/* Cohort heatmap */}
           <div style={{

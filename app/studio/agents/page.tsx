@@ -1,6 +1,7 @@
 'use client'
 import { useMemo, useEffect, useState } from 'react'
 import { CkShell } from '@/components/CkShell'
+import { useIsMobile } from '@/lib/studio-utils'
 import {
   surface, surface2, line, line2, text, muted, muted2,
   accent, emerald, rose, cyan, violet,
@@ -392,6 +393,7 @@ function RunsTimeline({ tick }: { tick: number }) {
 }
 
 export default function AgentsPage() {
+  const isMobile = useIsMobile()
   const [selectedId, setSelectedId] = useState('decision')
   const [logTick, setLogTick] = useState(0)
 
@@ -435,7 +437,7 @@ export default function AgentsPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* Main 2-col */}
-        <div style={{ display: 'grid', gridTemplateColumns: '480px 1fr', gap: 14, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '480px 1fr', gap: 14, alignItems: 'start' }}>
 
           {/* Left: AgentInspector */}
           <AgentInspector agent={selected} activity={activity} queue={queue} />
@@ -449,7 +451,7 @@ export default function AgentsPage() {
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Roster</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>click pour inspecter</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
                 {AGENTS_DATA.map((a, i) => (
                   <RosterTile key={a.id} agent={a} idx={i} active={a.id === selectedId} onClick={() => setSelectedId(a.id)} />
                 ))}

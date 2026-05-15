@@ -10,6 +10,7 @@ import {
   accent, accent2, emerald, amber, rose, cyan, violet,
 } from '@/lib/ck-vars'
 import { Bot, CreditCard, Database, Save, Server, User, Zap } from 'lucide-react'
+import { useIsMobile } from '@/lib/studio-utils'
 
 interface Settings {
   ollama_base_url: string
@@ -103,6 +104,7 @@ export default function SettingsPage() {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [section, setSection] = useState<Section>('modeles')
+  const isMobile = useIsMobile()
 
   function patch(partial: Partial<Settings>) {
     setCfg(prev => ({ ...prev, ...partial }))
@@ -248,7 +250,7 @@ export default function SettingsPage() {
                 />
               </Field>
               <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 1fr',
+                display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
                 gap: 12, padding: '12px 14px', borderRadius: 8,
                 background: surface2, border: `1px solid ${line}`,
               }}>
@@ -361,7 +363,7 @@ export default function SettingsPage() {
 
             <SectionCard title="Sécurité" icon={<Zap size={16} />}>
               <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 1fr',
+                display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
                 gap: 12, padding: '12px 14px', borderRadius: 8,
                 background: surface2, border: `1px solid ${line}`,
               }}>

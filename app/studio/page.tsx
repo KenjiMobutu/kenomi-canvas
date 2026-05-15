@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { useRouter } from 'next/navigation'
+import { useIsMobile } from '@/lib/studio-utils'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Venture {
@@ -455,6 +456,7 @@ function DecisionHero({ d, idx, total, confirmed, onConfirm }: {
 }) {
   const t = actionTokens(d.action)
   const series = useMemo(() => makeSpark(28, 40, 14, d.id.length * 11), [d.id])
+  const isMobile = useIsMobile()
 
   return (
     <article style={{
@@ -499,12 +501,12 @@ function DecisionHero({ d, idx, total, confirmed, onConfirm }: {
       </header>
 
       {/* Receipts */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 8 }}>
         {d.receipts.map((r, i) => <Receipt key={i} r={r} />)}
       </div>
 
       {/* Chart + side effects */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.4fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
         <ChartWithTooltip
           title={`${d.primary_metric} · 28 jours`}
           subtitle={`${d.primary_value} · ${d.primary_delta}`}
@@ -582,6 +584,7 @@ function UpNext({ queue, selectedIdx, onSelect, confirmedIds }: {
   onSelect: (i: number) => void
   confirmedIds: string[]
 }) {
+  const isMobile = useIsMobile()
   if (!queue.length) return null
   return (
     <section style={{
@@ -596,7 +599,7 @@ function UpNext({ queue, selectedIdx, onSelect, confirmedIds }: {
           <Kbd>J</Kbd> <Kbd>K</Kbd> pour naviguer
         </span>
       </div>
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 10, minHeight: 0 }}>
         {queue.slice(1, 4).map((d, i) => {
           const actualIdx = i + 1
           const t = actionTokens(d.action)
@@ -977,6 +980,7 @@ function CkFooter({ state }: { state: string }) {
 export default function CockpitPage() {
   const { user } = useAuth()
   const supabase = createSupabaseBrowser()
+  const isMobile = useIsMobile()
 
   const [ventures, setVentures] = useState<Venture[]>([])
   const [kpi, setKpi] = useState<KpiRow | null>(null)
@@ -1062,7 +1066,7 @@ export default function CockpitPage() {
 
       <CkHeader theme={theme} onToggleTheme={toggleTheme} onOpenCmdk={() => setShowCmdk(true)} />
 
-      <main style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 16, padding: '16px 24px' }}>
+      <main style={{ flex: 1, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) 380px', gap: 16, padding: isMobile ? '12px' : '16px 24px' }}>
         {/* Left column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, minHeight: 0 }}>
           {loading && (
@@ -1085,12 +1089,14 @@ export default function CockpitPage() {
           )}
         </div>
 
-        {/* Right rail */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-          <TodayRhythm />
-          <KpiGrid kpi={kpi} />
-          <MissionFeedCompact tick={logTick} />
-        </div>
+        {/* Right rail — en bas sur mobile */}
+        {!isMobile && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+            <TodayRhythm />
+            <KpiGrid kpi={kpi} />
+            <MissionFeedCompact tick={logTick} />
+          </div>
+        )}
       </main>
 
       <CkFooter state={ckState} />

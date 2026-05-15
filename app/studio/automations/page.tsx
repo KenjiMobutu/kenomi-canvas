@@ -5,7 +5,7 @@ import {
   bg, surface, surface2, line, line2, text, muted, muted2,
   accent, emerald, amber, rose, cyan, violet, fuchsia,
 } from '@/lib/ck-vars'
-import { makeSpark, sparkPath } from '@/lib/studio-utils'
+import { makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
@@ -455,6 +455,7 @@ function DbWorkflowsList({ workflows, selectedId, onSelect, onToggle, onDelete, 
 
 export default function AutomationsPage() {
   const { user } = useAuth()
+  const isMobile = useIsMobile()
   const [selectedId, setSelectedId] = useState('validation-loop')
   const [logTick, setLogTick] = useState(0)
   const [dbWorkflows, setDbWorkflows] = useState<DbWorkflow[]>([])
@@ -536,12 +537,12 @@ export default function AutomationsPage() {
         {showNew && <NewWorkflowForm onCreated={loadWorkflows} onClose={() => setShowNew(false)} />}
 
         {/* KPI strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 10 }}>
           {KPI_LIST.map(k => <AuKpi key={k.label} {...k} />)}
         </div>
 
         {/* DAG + workflows list (demo + live) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 14, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 420px', gap: 14, alignItems: 'start' }}>
           <WorkflowDAG workflow={selected} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <DbWorkflowsList
@@ -557,7 +558,7 @@ export default function AutomationsPage() {
         </div>
 
         {/* Runs feed + service health */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.4fr 1fr', gap: 14 }}>
           <RunsFeed tick={logTick} />
           <ServiceHealth />
         </div>

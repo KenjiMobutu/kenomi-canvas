@@ -45,6 +45,17 @@ export function areaPath(values: number[], w: number, h: number, pad = 2): strin
   return `${ln} L${w - pad},${h - pad} L${pad},${h - pad} Z`
 }
 
+export function useIsMobile(breakpoint = 768): boolean {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return mobile
+}
+
 export function useTick(period = 4000): number {
   const [t, setT] = useState(0)
   useEffect(() => {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
+import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import {
@@ -42,6 +43,7 @@ function timeSince(iso: string) {
 
 export default function ApiKeysPage() {
   const { user } = useAuth()
+  const isMobile = useIsMobile()
   const [keys, setKeys]       = useState<ApiKey[]>([])
   const [name, setName]       = useState('')
   const [reveal, setReveal]   = useState<string | null>(null)
@@ -175,23 +177,29 @@ export default function ApiKeysPage() {
       {/* Keys list */}
       <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, overflow: 'hidden' }}>
         {/* Header row */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 160px 140px 100px 40px',
-          padding: '10px 20px',
-          borderBottom: `1px solid ${line}`,
-          fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.14em', textTransform: 'uppercase', color: muted2,
-        }}>
-          <span>Nom / Préfixe</span>
-          <span>Créée le</span>
-          <span>Dernière utilisation</span>
-          <span>Statut</span>
-          <span />
-        </div>
+        {!isMobile && (
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 160px 140px 100px 40px',
+            padding: '10px 20px',
+            borderBottom: `1px solid ${line}`,
+            fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.14em', textTransform: 'uppercase', color: muted2,
+          }}>
+            <span>Nom / Préfixe</span>
+            <span>Créée le</span>
+            <span>Dernière utilisation</span>
+            <span>Statut</span>
+            <span />
+          </div>
+        )}
 
         {keys.map((k, i) => (
           <div key={k.id} style={{
-            display: 'grid', gridTemplateColumns: '1fr 160px 140px 100px 40px',
-            padding: '14px 20px', alignItems: 'center',
+            display: isMobile ? 'flex' : 'grid',
+            gridTemplateColumns: isMobile ? undefined : '1fr 160px 140px 100px 40px',
+            flexDirection: isMobile ? 'row' : undefined,
+            alignItems: 'center',
+            justifyContent: isMobile ? 'space-between' : undefined,
+            padding: isMobile ? '12px 16px' : '14px 20px',
             borderBottom: i < keys.length - 1 ? `1px solid ${line}` : 'none',
             transition: 'background .1s',
           }}
@@ -215,17 +223,21 @@ export default function ApiKeysPage() {
               </div>
             </div>
             {/* Created */}
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>
-              {new Date(k.created_at).toLocaleDateString('fr-FR')}
-            </span>
+            {!isMobile && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>
+                {new Date(k.created_at).toLocaleDateString('fr-FR')}
+              </span>
+            )}
             {/* Last used */}
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: k.last_used_at ? muted : muted2 }}>
-              {k.last_used_at ? timeSince(k.last_used_at) : 'Jamais utilisée'}
-            </span>
+            {!isMobile && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: k.last_used_at ? muted : muted2 }}>
+                {k.last_used_at ? timeSince(k.last_used_at) : 'Jamais utilisée'}
+              </span>
+            )}
             {/* Status */}
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: emerald }} />
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: emerald, letterSpacing: '.1em' }}>Active</span>
+              {!isMobile && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: emerald, letterSpacing: '.1em' }}>Active</span>}
             </div>
             {/* Actions */}
             <button onClick={() => del(k.id)} style={{
