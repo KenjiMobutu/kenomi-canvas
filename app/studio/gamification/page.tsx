@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { agentById, useIsMobile } from '@/lib/studio-utils'
+import { ACHIEVEMENTS_META, type Achievement, type AgentLevel } from '@/lib/gamification'
+import { useGamification } from '@/lib/use-gamification'
 import {
   CK_DARK, CK_LIGHT,
   bg, surface, surface2, line, line2, text, muted, muted2,
@@ -14,34 +16,6 @@ import { toast } from 'sonner'
 
 /* ─────── types ─────── */
 type V = React.CSSProperties & { [key: string]: string | number | undefined }
-
-interface Achievement {
-  id: string
-  label: string
-  desc: string
-  unlocked: boolean
-  rarity: 'common' | 'rare' | 'epic' | 'legendary'
-  xp: number
-  badge: string
-  color: string
-  pct: number
-}
-
-/* ─────── data ─────── */
-const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first-mrr',      label: 'First €1k MRR',       desc: 'Atteindre €1 000 de MRR mensuel',            unlocked: false, rarity: 'rare',      xp: 250,  badge: '★', color: '#22d3ee', pct: 0 },
-  { id: 'ship-7',         label: 'Ship 7 landings',      desc: 'Lancer 7 landings sur 30 jours',             unlocked: false, rarity: 'rare',      xp: 200,  badge: '▲', color: '#34d399', pct: 0 },
-  { id: 'cac-under-20',   label: 'CAC < €20',            desc: 'Maintenir CAC sous €20 sur 14j',             unlocked: false, rarity: 'epic',      xp: 320,  badge: '◈', color: '#fbbf24', pct: 0 },
-  { id: '100k-imp',       label: '100k impressions',     desc: 'Cumuler 100 000 impressions',                unlocked: false, rarity: 'common',    xp: 100,  badge: '≋', color: '#60a5fa', pct: 0 },
-  { id: 'valid-pivot',    label: 'Validate pivot',       desc: 'Réussir un pivot validé en moins de 30j',    unlocked: false, rarity: 'epic',      xp: 380,  badge: '✦', color: '#a78bfa', pct: 0 },
-  { id: '20-experiments', label: '20 expériences live',  desc: '20 expériences actives simultanément',       unlocked: false, rarity: 'common',    xp:  80,  badge: '◬', color: '#22d3ee', pct: 0 },
-  { id: 'first-scale',    label: 'First scale call',     desc: "Premier verdict 'Scale' du Decision Agent", unlocked: false, rarity: 'epic',      xp: 420,  badge: '◮', color: '#fb923c', pct: 0 },
-  { id: '5-ventures',     label: '5 ventures launched',  desc: 'Lancer 5 ventures live',                     unlocked: false, rarity: 'rare',      xp: 280,  badge: '◇', color: '#34d399', pct: 0 },
-  { id: 'auto-30',        label: '30 workflows n8n',     desc: 'Configurer 30 workflows actifs',             unlocked: false, rarity: 'common',    xp: 120,  badge: '⟁', color: '#60a5fa', pct: 0 },
-  { id: '20k-mrr',        label: '€20k MRR',             desc: 'Atteindre €20 000 de MRR studio',            unlocked: false, rarity: 'legendary', xp: 1200, badge: '✺', color: '#e879f9', pct: 0 },
-  { id: '10-ventures',    label: '10 ventures live',     desc: 'Maintenir 10 ventures live',                 unlocked: false, rarity: 'epic',      xp: 600,  badge: '◐', color: '#a78bfa', pct: 0 },
-  { id: 'season-podium',  label: 'Season podium',        desc: "Finir top 3 d'une season",                   unlocked: false, rarity: 'legendary', xp: 1500, badge: '✦', color: '#ff6a3d', pct: 0 },
-]
 
 const RARITY: Record<Achievement['rarity'], { color: string; label: string }> = {
   common:    { color: '#94a3b8', label: 'Common'    },
@@ -224,10 +198,18 @@ function StatDelta({ stat, active, delay }: { stat: { label: string; from: numbe
 }
 
 /* ─────── LevelUpTab ─────── */
-function LevelUpTab() {
-  const agent = agentById('builder')
+function LevelUpTab({
+  lastLevelUp,
+  agentLevels,
+}: {
+  lastLevelUp: { agentId: string; fromLevel: number; toLevel: number } | null
+  agentLevels: AgentLevel[]
+}) {
+  const agentId  = lastLevelUp?.agentId ?? 'builder'
+  const agent    = agentById(agentId)
   const isMobile = useIsMobile()
-  const fromLevel = 17, toLevel = 18
+  const fromLevel = lastLevelUp?.fromLevel ?? (agentLevels.find(a => a.id === agentId)?.level ?? 1)
+  const toLevel   = lastLevelUp?.toLevel   ?? fromLevel + 1
   const [lvl, setLvl] = useState(toLevel)
   const [phase, setPhase] = useState<'locked' | 'burst'>('locked')
 
@@ -240,7 +222,7 @@ function LevelUpTab() {
     }
     loop()
     return () => { clearTimeout(idA); clearTimeout(idB) }
-  }, [])
+  }, [fromLevel, toLevel])
 
   const stats = [
     { label: 'Win rate',    from: 78,  to: 81,  suffix: '%', color: emerald },
@@ -365,7 +347,7 @@ function LevelUpTab() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>XP overflow</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: agent.color, letterSpacing: '.1em' }}>
-              1000 / 1000 → 124 / 1100 (next: LV {toLevel + 1})
+              LV {toLevel} → LV {toLevel + 1}
             </span>
           </div>
           <div style={{ height: 10, borderRadius: 5, background: surface2, overflow: 'hidden', border: `1px solid ${line}`, position: 'relative' }}>
@@ -456,7 +438,7 @@ function LevelUpTab() {
 }
 
 /* ─────── AchievementsTab ─────── */
-function AchievementsTab() {
+function AchievementsTab({ achievements }: { achievements: Achievement[] }) {
   const { user } = useAuth()
   const isMobile = useIsMobile()
   const [filter, setFilter] = useState<string>('all')
@@ -483,18 +465,18 @@ function AchievementsTab() {
     toast.success(`+${xp} XP crédités`)
   }
 
-  const filtered = ACHIEVEMENTS.filter(a => {
+  const filtered = achievements.filter(a => {
     if (filter === 'all') return true
     if (filter === 'unlocked') return a.unlocked
     if (filter === 'locked') return !a.unlocked
     return a.rarity === filter
   })
 
-  const unlockedCount = ACHIEVEMENTS.filter(a => a.unlocked).length
-  const totalCount = ACHIEVEMENTS.length
-  const xpEarned = ACHIEVEMENTS.filter(a => a.unlocked).reduce((s, a) => s + a.xp, 0)
-  const xpPossible = ACHIEVEMENTS.reduce((s, a) => s + a.xp, 0)
-  const justUnlocked = ACHIEVEMENTS[0]
+  const unlockedCount = achievements.filter(a => a.unlocked).length
+  const totalCount = achievements.length
+  const xpEarned = achievements.filter(a => a.unlocked).reduce((s, a) => s + a.xp, 0)
+  const xpPossible = achievements.reduce((s, a) => s + a.xp, 0)
+  const justUnlocked = achievements.find(a => !a.unlocked) ?? achievements[0] ?? { ...ACHIEVEMENTS_META[0], unlocked: false, pct: 0 }
 
   return (
     <div style={{ padding: isMobile ? '16px 12px 40px' : '24px 32px 40px', maxWidth: 1400 }}>
@@ -651,6 +633,7 @@ export default function GamificationPage() {
   const isMobile = useIsMobile()
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [tab, setTab] = useState<'levelup' | 'achievements'>('levelup')
+  const { achievements, agentLevels, lastLevelUp, userLevel, userXP, loading } = useGamification()
 
   useEffect(() => {
     try { setTheme((localStorage.getItem('kenomi-ck-theme') as 'dark' | 'light') || 'dark') } catch {}
@@ -768,6 +751,13 @@ export default function GamificationPage() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {!loading && (
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em',
+              padding: '4px 10px', borderRadius: 999,
+              background: surface2, color: muted, border: `1px solid ${line}`,
+            }}>LV {userLevel} · {userXP} XP</span>
+          )}
           {!isMobile && (
             <button onClick={() => router.push('/studio')} style={{
               padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
@@ -785,7 +775,9 @@ export default function GamificationPage() {
         </div>
       </header>
 
-      {tab === 'levelup' ? <LevelUpTab /> : <AchievementsTab />}
+      {tab === 'levelup'
+        ? <LevelUpTab lastLevelUp={lastLevelUp} agentLevels={agentLevels} />
+        : <AchievementsTab achievements={achievements} />}
     </div>
   )
 }
