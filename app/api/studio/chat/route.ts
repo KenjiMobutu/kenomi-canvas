@@ -55,6 +55,14 @@ export async function POST(req: NextRequest) {
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true })
 
+  const { data: conv } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('id', conversationId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (!conv) return new Response(JSON.stringify({ error: 'Conversation not found' }), { status: 404 })
+
   await supabase.from('messages').insert({
     conversation_id: conversationId,
     user_id: user.id,
@@ -74,6 +82,7 @@ export async function POST(req: NextRequest) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model, messages, stream: true, think: false }),
+          signal: AbortSignal.timeout(30_000),
         })
 
         if (!resp.ok || !resp.body) {

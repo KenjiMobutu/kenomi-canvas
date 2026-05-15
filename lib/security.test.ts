@@ -17,6 +17,15 @@ describe('isAllowedWebhookUrl', () => {
   it('rejette une URL malformée', () => {
     expect(isAllowedWebhookUrl('not-a-url')).toBe(false)
   })
+  it('rejette localhost (SSRF loopback)', () => {
+    expect(isAllowedWebhookUrl('http://localhost/admin')).toBe(false)
+  })
+  it('rejette 127.0.0.1 (SSRF loopback)', () => {
+    expect(isAllowedWebhookUrl('http://127.0.0.1:8080/secret')).toBe(false)
+  })
+  it('rejette [::1] (SSRF IPv6 loopback)', () => {
+    expect(isAllowedWebhookUrl('http://[::1]:3000/')).toBe(false)
+  })
 })
 
 describe('isAllowedOllamaUrl', () => {

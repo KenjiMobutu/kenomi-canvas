@@ -4,7 +4,8 @@ export function isAllowedWebhookUrl(url: string): boolean {
   try {
     const { protocol, hostname } = new URL(url)
     if (!['http:', 'https:'].includes(protocol)) return false
-    if (/^169\.254\./.test(hostname)) return false
+    const SSRF_BLOCKED = /^(localhost|127\.|0\.0\.0\.0|169\.254\.|\[::1\])/i
+    if (SSRF_BLOCKED.test(hostname)) return false
     return true
   } catch {
     return false
