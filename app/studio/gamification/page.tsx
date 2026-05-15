@@ -684,12 +684,239 @@ function AchievementsTab({ achievements, claimedIds, onRefetch, loading }: {
   )
 }
 
+/* ─────── Constellation constants ─────── */
+const CHATTER = [
+  { from: 'scout',      to: 'validation', type: 'signal',  text: "r/solopreneur spike +312% — 'AI inbox triage'" },
+  { from: 'validation', to: 'decision',   type: 'score',   text: 'HR Ops Inbox · score 78 / CPC 0.42€' },
+  { from: 'decision',   to: 'builder',    type: 'order',   text: 'Build landing — Solo CFO v2' },
+  { from: 'builder',    to: 'payment',    type: 'handoff', text: 'Pricing page ready — wire Stripe' },
+  { from: 'payment',    to: 'analytics',  type: 'event',   text: 'checkout.completed · €29 MRR' },
+  { from: 'marketing',  to: 'analytics',  type: 'ping',    text: 'LinkedIn carousel — 14k impressions' },
+  { from: 'analytics',  to: 'decision',   type: 'report',  text: 'Forms · CAC -11% · MRR +18%' },
+  { from: 'decision',   to: 'marketing',  type: 'brief',   text: 'Push waitlist — Solo CFO' },
+  { from: 'scout',      to: 'marketing',  type: 'trend',   text: "TikTok hook — 'AI bookkeeper'" },
+  { from: 'validation', to: 'builder',    type: 'spec',    text: 'Niche: bilingual freelancer invoicing' },
+]
+const TYPE_COLOR: Record<string, string> = {
+  signal: '#22d3ee', score: '#a78bfa', order: '#ff6a3d',
+  handoff: '#34d399', event: '#fbbf24', ping: '#e879f9',
+  report: '#60a5fa', brief: '#fb923c', trend: '#22d3ee', spec: '#a78bfa',
+}
+const ORBITAL_IDS = ['scout', 'validation', 'builder', 'payment', 'marketing', 'analytics'] as const
+const CST_CX = 320, CST_CY = 250, CST_R = 190
+const CST_ORB: Record<string, { x: number; y: number }> = { decision: { x: CST_CX, y: CST_CY } }
+ORBITAL_IDS.forEach((id, i) => {
+  const a = -Math.PI / 2 + (i / ORBITAL_IDS.length) * Math.PI * 2
+  CST_ORB[id] = { x: Math.round((CST_CX + CST_R * Math.cos(a)) * 10) / 10, y: Math.round((CST_CY + CST_R * Math.sin(a)) * 10) / 10 }
+})
+
+/* ─────── ConstellationTab ─────── */
+function ConstellationTab({ agentLevels }: { agentLevels: AgentLevel[] }) {
+  const isMobile = useIsMobile()
+  const [feedIdx, setFeedIdx] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setFeedIdx(n => (n + 1) % CHATTER.length), 2800)
+    return () => clearInterval(id)
+  }, [])
+
+  const levelMap = useMemo(
+    () => Object.fromEntries(agentLevels.map(al => [al.id, al])),
+    [agentLevels]
+  )
+
+  const feedEntries = Array.from({ length: 5 }, (_, i) =>
+    CHATTER[(feedIdx - 4 + i + CHATTER.length) % CHATTER.length]
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100dvh - 56px)' }}>
+      <div style={{
+        flex: 1, display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        alignItems: 'stretch',
+      }}>
+        {/* SVG orbital map */}
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: isMobile ? '12px 8px 8px' : '20px 24px',
+        }}>
+          <svg viewBox="0 0 640 500" width="100%"
+            style={{ maxWidth: isMobile ? 360 : 640, overflow: 'visible' }}>
+            {/* Orbit ring */}
+            <circle cx={CST_CX} cy={CST_CY} r={CST_R}
+              fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="1" strokeDasharray="5 12" />
+            {/* Inner halo */}
+            <circle cx={CST_CX} cy={CST_CY} r={62}
+              fill="none" stroke="rgba(255,106,61,.12)" strokeWidth="1" />
+
+            {/* Beam static lines */}
+            {CHATTER.map((c, i) => {
+              const f = CST_ORB[c.from], t = CST_ORB[c.to]
+              if (!f || !t) return null
+              return <line key={`sl${i}`} x1={f.x} y1={f.y} x2={t.x} y2={t.y}
+                stroke={TYPE_COLOR[c.type] ?? '#888'} strokeWidth="0.6" opacity="0.2" />
+            })}
+
+            {/* Animated pulse dots */}
+            {CHATTER.map((c, i) => {
+              const f = CST_ORB[c.from], t = CST_ORB[c.to]
+              if (!f || !t) return null
+              const col = TYPE_COLOR[c.type] ?? '#888'
+              return (
+                <circle key={`pd${i}`} r="3" fill={col}
+                  style={{ filter: `drop-shadow(0 0 5px ${col})` } as V}>
+                  <animateMotion
+                    dur={`${(2.0 + (i * 0.43) % 2.8).toFixed(1)}s`}
+                    repeatCount="indefinite"
+                    begin={`${((i * 0.55) % 3.5).toFixed(2)}s`}
+                    calcMode="linear"
+                    path={`M ${f.x} ${f.y} L ${t.x} ${t.y}`}
+                  />
+                </circle>
+              )
+            })}
+
+            {/* Decision Core */}
+            <circle cx={CST_CX} cy={CST_CY} r={50} fill="rgba(255,106,61,.07)" />
+            <circle cx={CST_CX} cy={CST_CY} r={38} fill="var(--ck-surface)" stroke="#ff6a3d" strokeWidth="1.5" />
+            <text x={CST_CX} y={CST_CY + 10} textAnchor="middle"
+              fill="#ff6a3d" fontSize="26" fontFamily="var(--font-display)" fontWeight="800">✦</text>
+            <text x={CST_CX} y={CST_CY + 64} textAnchor="middle"
+              fill="#ff6a3d" fontSize="8" fontFamily="var(--font-mono)" letterSpacing="2">DECISION</text>
+            <text x={CST_CX} y={CST_CY + 76} textAnchor="middle"
+              fill="rgba(255,106,61,.55)" fontSize="7.5" fontFamily="var(--font-mono)">
+              {`LV ${levelMap['decision']?.level ?? 0}`}
+            </text>
+
+            {/* Orbital agents */}
+            {ORBITAL_IDS.map(id => {
+              const pos = CST_ORB[id]!
+              const ag = agentById(id)
+              const al = levelMap[id]
+              const xpBar = al?.xpBar ?? 0
+              const level = al?.level ?? 0
+              const arcR = 32
+              const circ = 2 * Math.PI * arcR
+              const offset = circ * (1 - xpBar)
+              return (
+                <g key={id} transform={`translate(${pos.x}, ${pos.y})`}>
+                  {/* XP arc bg */}
+                  <circle r={arcR} fill="none" stroke={ag.color + '22'} strokeWidth="2.5" />
+                  {/* XP arc fill */}
+                  <circle r={arcR} fill="none" stroke={ag.color} strokeWidth="2.5"
+                    strokeDasharray={circ.toFixed(1)} strokeDashoffset={offset.toFixed(1)}
+                    strokeLinecap="round" transform="rotate(-90)" />
+                  {/* Node circle */}
+                  <circle r={24} fill="var(--ck-surface)" stroke={ag.color + '66'} strokeWidth="1" />
+                  {/* Sigil */}
+                  <text textAnchor="middle" dominantBaseline="middle" y="1"
+                    fill={ag.color} fontSize="18" fontFamily="var(--font-display)" fontWeight="800">{ag.sigil}</text>
+                  {/* Code */}
+                  <text y={arcR + 14} textAnchor="middle"
+                    fill="var(--ck-muted)" fontSize="7.5" fontFamily="var(--font-mono)" letterSpacing="1.5">{ag.code}</text>
+                  {/* Level */}
+                  <text y={-(arcR + 9)} textAnchor="middle"
+                    fill={ag.color} fontSize="7.5" fontFamily="var(--font-mono)" fontWeight="800">LV{level}</text>
+                </g>
+              )
+            })}
+          </svg>
+        </div>
+
+        {/* Mission feed — desktop only */}
+        {!isMobile && (
+          <div style={{
+            width: 296, flexShrink: 0,
+            borderLeft: `1px solid ${line}`,
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{
+              padding: '12px 16px 10px',
+              fontFamily: 'var(--font-mono)', fontSize: 8.5, letterSpacing: '.28em',
+              textTransform: 'uppercase', color: muted,
+              borderBottom: `1px solid ${line}`,
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span style={{
+                display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
+                background: emerald, boxShadow: `0 0 6px ${emerald}`,
+                animation: 'lu-glow 2s ease-in-out infinite',
+              }} />
+              Mission Feed
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              {feedEntries.map((entry, i) => {
+                const isCurrent = i === 4
+                const fromAg = agentById(entry.from)
+                const toAg = agentById(entry.to)
+                const tColor = TYPE_COLOR[entry.type] ?? accent
+                return (
+                  <div key={i} style={{
+                    padding: '10px 16px',
+                    opacity: 0.28 + i * 0.18,
+                    transition: 'opacity .4s ease',
+                    borderBottom: `1px solid ${line}`,
+                    background: isCurrent ? tColor + '0a' : 'transparent',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 7.5, padding: '2px 5px', borderRadius: 3,
+                        background: tColor + '22', color: tColor, letterSpacing: '.12em',
+                        textTransform: 'uppercase', fontWeight: 700,
+                      }}>{entry.type}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: fromAg.color, fontWeight: 700 }}>{fromAg.code}</span>
+                      <span style={{ fontSize: 9, color: muted }}>→</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: toAg.color, fontWeight: 700 }}>{toAg.code}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: isCurrent ? text : muted, lineHeight: 1.35 }}>{entry.text}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Ticker */}
+      <div style={{
+        height: 36, borderTop: `1px solid ${line}`, background: surface,
+        overflow: 'hidden', display: 'flex', alignItems: 'center',
+        position: 'relative', flexShrink: 0,
+      }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 48, zIndex: 1, pointerEvents: 'none', background: `linear-gradient(90deg, ${surface}, transparent)` }} />
+        <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 48, zIndex: 1, pointerEvents: 'none', background: `linear-gradient(-90deg, ${surface}, transparent)` }} />
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
+          animation: 'const-ticker 30s linear infinite',
+        }}>
+          {[...CHATTER, ...CHATTER].map((c, i) => {
+            const tColor = TYPE_COLOR[c.type] ?? accent
+            const fromAg = agentById(c.from)
+            const toAg = agentById(c.to)
+            return (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 18px' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7.5, color: tColor, letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 700 }}>{c.type}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: fromAg.color, fontWeight: 700 }}>{fromAg.code}</span>
+                <span style={{ color: muted, fontSize: 9 }}>→</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: toAg.color, fontWeight: 700 }}>{toAg.code}</span>
+                <span style={{ fontSize: 10, color: muted }}>{c.text}</span>
+                <span style={{ color: line2, fontSize: 12, paddingLeft: 8 }}>·</span>
+              </span>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─────── Page ─────── */
 export default function GamificationPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [tab, setTab] = useState<'levelup' | 'achievements'>('achievements')
+  const [tab, setTab] = useState<'levelup' | 'achievements' | 'constellation'>('achievements')
   const { achievements, agentLevels, lastLevelUp, userLevel, userXP, loading, claimed, refetch } = useGamification()
 
   useEffect(() => {
@@ -770,6 +997,10 @@ export default function GamificationPage() {
           0%, 100% { transform: translateY(0); }
           50%      { transform: translateY(-4px); }
         }
+        @keyframes const-ticker {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
+        }
       `}</style>
 
       {/* Header */}
@@ -792,8 +1023,9 @@ export default function GamificationPage() {
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 4 }}>
             {[
-              { id: 'levelup', label: isMobile ? 'LvlUp' : 'Level Up' },
-              { id: 'achievements', label: isMobile ? 'Achiev.' : 'Achievements' },
+              { id: 'levelup',       label: isMobile ? 'LvlUp'   : 'Level Up'      },
+              { id: 'achievements',  label: isMobile ? 'Achiev.' : 'Achievements'  },
+              { id: 'constellation', label: isMobile ? 'Orbits'  : 'Constellation' },
             ].map(t => (
               <button key={t.id} onClick={() => setTab(t.id as typeof tab)} style={{
                 padding: '5px 14px', borderRadius: 6,
@@ -834,6 +1066,8 @@ export default function GamificationPage() {
 
       {tab === 'levelup'
         ? <LevelUpTab lastLevelUp={lastLevelUp} agentLevels={agentLevels} onSwitchTab={() => setTab('achievements')} />
+        : tab === 'constellation'
+        ? <ConstellationTab agentLevels={agentLevels} />
         : <AchievementsTab achievements={achievements} claimedIds={claimed} onRefetch={refetch} loading={loading} />}
     </div>
   )
