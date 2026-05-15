@@ -11,29 +11,9 @@ import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 
-const VENTURES_AN = [
-  { id: 'solocfo', name: 'Solo CFO',    mrr: 1840, accent: '#22d3ee' },
-  { id: 'forms',   name: 'Kenomi Forms',mrr: 1240, accent: '#a78bfa' },
-  { id: 'legal',   name: 'Legal Intake',mrr:  720, accent: '#34d399' },
-  { id: 'hrops',   name: 'HR Ops Inbox',mrr:  320, accent: '#fbbf24' },
-  { id: 'cfo2',    name: 'CFO Niche 2', mrr:  120, accent: '#e879f9' },
-]
+const VENTURE_ACCENTS = ['#22d3ee', '#a78bfa', '#34d399', '#fbbf24', '#e879f9', '#fb7185', '#f97316']
 
-const CHANNELS_AN = [
-  { id: 'seo',        label: 'SEO',        value: 38, color: emerald  },
-  { id: 'linkedin',   label: 'LinkedIn',   value: 24, color: cyan     },
-  { id: 'tiktok',     label: 'TikTok',     value: 16, color: fuchsia  },
-  { id: 'newsletter', label: 'Newsletter', value: 12, color: violet   },
-  { id: 'ads',        label: 'Paid ads',   value:  6, color: amber    },
-  { id: 'referral',   label: 'Referral',   value:  4, color: rose     },
-]
-
-const FUNNEL = [
-  { label: 'Visits',  n: 18420, color: cyan    },
-  { label: 'Signups', n:  1342, color: violet  },
-  { label: 'Trial',   n:   612, color: emerald },
-  { label: 'Paid',    n:   162, color: accent  },
-]
+type VentureAN = { id: string; name: string; mrr: number; accent: string }
 
 function BigKPI({ label, value, delta, color, trend }: { label: string; value: string; delta: string; color: string; trend?: boolean }) {
   const spark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
@@ -65,7 +45,7 @@ function BigKPI({ label, value, delta, color, trend }: { label: string; value: s
   )
 }
 
-function StackedArea({ series }: { series: { v: typeof VENTURES_AN[0]; values: number[] }[] }) {
+function StackedArea({ series }: { series: { v: VentureAN; values: number[] }[] }) {
   const W = 900, H = 280, pad = 10
   const n = series[0].values.length
   const stacked = Array.from({ length: n }, () => 0)
@@ -121,8 +101,10 @@ function StackedArea({ series }: { series: { v: typeof VENTURES_AN[0]; values: n
   )
 }
 
-function AgentContributionChart() {
-  const contrib = AGENTS_DATA.map((a, i) => ({ agent: a, pct: [16, 14, 18, 11, 17, 13, 11][i] ?? 10 }))
+function AgentContributionChart({ totalMrr }: { totalMrr: string }) {
+  const n = AGENTS_DATA.length
+  const equal = Math.floor(100 / n)
+  const contrib = AGENTS_DATA.map(a => ({ agent: a, pct: equal }))
   const total = contrib.reduce((s, i) => s + i.pct, 0)
   const r = 60, c = 2 * Math.PI * r
   let acc = 0
@@ -147,7 +129,7 @@ function AgentContributionChart() {
           <circle cx="80" cy="80" r={r - 14} fill={surface} />
         </svg>
         <div style={{ position: 'absolute', textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: text }}>€4.2k</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: text }}>{totalMrr}</div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em' }}>MRR / 30j</div>
         </div>
       </div>
@@ -213,19 +195,12 @@ function CohortHeatmap({ data }: { data: (number | null)[][] }) {
 }
 
 function ChannelBars() {
-  const max = Math.max(...CHANNELS_AN.map(i => i.value))
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
-      {CHANNELS_AN.map(it => (
-        <div key={it.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 40px', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: muted, letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600 }}>{it.label}</span>
-          <div style={{ height: 18, borderRadius: 4, background: surface2, border: `1px solid ${line}`, overflow: 'hidden', position: 'relative' }}>
-            <div style={{ width: `${(it.value / max) * 100}%`, height: '100%', background: `linear-gradient(90deg, ${it.color}, ${it.color}80)` }} />
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px)', backgroundSize: '16px 100%' }} />
-          </div>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: it.color, fontWeight: 700, textAlign: 'right' }}>{it.value}%</span>
-        </div>
-      ))}
+    <div style={{ flex: 1, display: 'grid', placeItems: 'center', marginTop: 14 }}>
+      <p style={{ fontSize: 12, color: muted2, textAlign: 'center', lineHeight: 1.6 }}>
+        Aucune donnée d&apos;attribution<br />
+        <span style={{ fontSize: 10, color: muted, letterSpacing: '.1em' }}>Connectez votre source de trafic</span>
+      </p>
     </div>
   )
 }
@@ -235,6 +210,8 @@ interface KpiSnapshot {
   ctr: string; ctr_delta: string
   conversion: string; conversion_delta: string
   retention: string; retention_delta: string
+  churn: string; churn_delta: string
+  runway: string; runway_delta: string
 }
 
 interface FunnelStep {
@@ -244,7 +221,15 @@ interface FunnelStep {
 const FUNNEL_COLORS = [cyan, violet, emerald, accent]
 
 function ConvFunnel({ steps }: { steps: FunnelStep[] }) {
-  const list = steps.length > 0 ? steps : FUNNEL.map((f, i) => ({ id: String(i), position: i, label: f.label, value: String(f.n), rate: i === 0 ? '100%' : `${Math.round((f.n / FUNNEL[i - 1].n) * 100)}%` }))
+  if (steps.length === 0) return (
+    <div style={{ flex: 1, display: 'grid', placeItems: 'center', marginTop: 14 }}>
+      <p style={{ fontSize: 12, color: muted2, textAlign: 'center', lineHeight: 1.6 }}>
+        Aucune étape de funnel<br />
+        <span style={{ fontSize: 10, color: muted, letterSpacing: '.1em' }}>Ajoutez des étapes via la base</span>
+      </p>
+    </div>
+  )
+  const list = steps
   const maxVal = Math.max(...list.map(s => parseFloat(s.value.replace(/[^0-9.]/g, '')) || 0))
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
@@ -292,6 +277,8 @@ function KpiEditPanel({ kpi, onSave, onClose }: {
     { label: 'CTR',        key: 'ctr',        delta: 'ctr_delta'        },
     { label: 'Conversion', key: 'conversion', delta: 'conversion_delta' },
     { label: 'Retention',  key: 'retention',  delta: 'retention_delta'  },
+    { label: 'Churn',      key: 'churn',      delta: 'churn_delta'      },
+    { label: 'Runway',     key: 'runway',     delta: 'runway_delta'     },
   ]
 
   return (
@@ -330,7 +317,7 @@ function KpiEditPanel({ kpi, onSave, onClose }: {
   )
 }
 
-const DEFAULT_KPI: KpiSnapshot = { revenue: '€0', revenue_delta: '+0%', ctr: '0%', ctr_delta: '+0 pts', conversion: '0%', conversion_delta: '+0 pts', retention: '0%', retention_delta: '+0 pts' }
+const DEFAULT_KPI: KpiSnapshot = { revenue: '€0', revenue_delta: '+0%', ctr: '0%', ctr_delta: '+0 pts', conversion: '0%', conversion_delta: '+0 pts', retention: '0%', retention_delta: '+0 pts', churn: '—', churn_delta: '—', runway: '—', runway_delta: '—' }
 
 export default function AnalyticsPage() {
   const { user } = useAuth()
@@ -338,6 +325,7 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState('30j')
   const [kpi, setKpi] = useState<KpiSnapshot | null>(null)
   const [funnel, setFunnel] = useState<FunnelStep[]>([])
+  const [ventures, setVentures] = useState<VentureAN[]>([])
   const [editOpen, setEditOpen] = useState(false)
 
   useEffect(() => {
@@ -347,6 +335,16 @@ export default function AnalyticsPage() {
       .then(({ data }) => setKpi(data as KpiSnapshot | null))
     supabase.from('funnel_steps').select('*').eq('user_id', user.id).order('position')
       .then(({ data }) => setFunnel((data as FunnelStep[]) || []))
+    supabase.from('ventures').select('id,name,mrr').eq('user_id', user.id).order('score', { ascending: false })
+      .then(({ data }) => {
+        const list = (data || []) as { id: string; name: string; mrr: string }[]
+        setVentures(list.map((v, i) => ({
+          id: v.id,
+          name: v.name,
+          mrr: parseFloat(String(v.mrr || '0').replace(/[^0-9.]/g, '')) || 0,
+          accent: VENTURE_ACCENTS[i % VENTURE_ACCENTS.length],
+        })))
+      })
   }, [user])
 
   async function saveKpi(updated: KpiSnapshot) {
@@ -367,15 +365,15 @@ export default function AnalyticsPage() {
     { label: 'CTR',         value: live.ctr,         delta: live.ctr_delta,         color: cyan,     trend: true  },
     { label: 'Conversion',  value: live.conversion,  delta: live.conversion_delta,  color: violet,   trend: true  },
     { label: 'Retention',   value: live.retention,   delta: live.retention_delta,   color: amber,    trend: true  },
-    { label: 'Churn',       value: '3.1%',           delta: '-0.4pt',               color: fuchsia,  trend: true  },
-    { label: 'Runway',      value: '14m',            delta: 'stable',               color: rose,     trend: false },
+    { label: 'Churn',       value: live.churn,       delta: live.churn_delta,       color: fuchsia,  trend: true  },
+    { label: 'Runway',      value: live.runway,      delta: live.runway_delta,      color: rose,     trend: false },
   ]
 
-  const mrrSeries = useMemo(() => VENTURES_AN.map((v, i) => {
+  const mrrSeries = useMemo(() => ventures.map((v, i) => {
     const base = v.mrr / 10
     const vol = 6 + i * 1.5
     return { v, values: makeSpark(60, base + 5, vol, (i + 1) * 13 + 5).map((x, j) => Math.max(0, x * (base / 30) + (j / 60) * (v.mrr / 30))) }
-  }), [])
+  }), [ventures])
 
   const cohort = useMemo(() => Array.from({ length: 8 }).map((_, row) =>
     Array.from({ length: 8 }).map((_, col) => {
@@ -405,7 +403,7 @@ export default function AnalyticsPage() {
         ))}
       </div>
       {[
-        { label: '5 ventures', color: muted },
+        { label: `${ventures.length} venture${ventures.length !== 1 ? 's' : ''}`, color: muted },
         { label: live.revenue, color: emerald },
         { label: 'conv ' + live.conversion, color: cyan },
         { label: 'rétention ' + live.retention, color: muted },
@@ -443,17 +441,25 @@ export default function AnalyticsPage() {
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Studio MRR · 60 jours</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>contribution par venture · stacked</div>
               </div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                {VENTURES_AN.map(v => (
-                  <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: v.accent }} />
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.1em' }}>{v.name}</span>
-                  </div>
-                ))}
-              </div>
+              {ventures.length > 0 && (
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {ventures.map(v => (
+                    <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: v.accent }} />
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.1em' }}>{v.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div style={{ flex: 1, minHeight: 240 }}>
-              <StackedArea series={mrrSeries} />
+              {mrrSeries.length === 0 ? (
+                <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}>
+                  <p style={{ fontSize: 12, color: muted2, textAlign: 'center' }}>Aucune venture · créez-en une dans Ventures</p>
+                </div>
+              ) : (
+                <StackedArea series={mrrSeries} />
+              )}
             </div>
           </div>
 
@@ -464,7 +470,7 @@ export default function AnalyticsPage() {
           }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Agent contribution</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>attribution MRR · 30j</div>
-            <AgentContributionChart />
+            <AgentContributionChart totalMrr={live.revenue} />
           </div>
         </div>
 

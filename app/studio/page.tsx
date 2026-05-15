@@ -42,26 +42,23 @@ const AGENTS_STATIC = [
 ]
 
 const RHYTHM = [
-  { hour: '06:00', label: 'Scout sweep',     agent: 'scout',      status: 'done' as const },
-  { hour: '09:00', label: 'Validation',      agent: 'validation', status: 'done' as const },
-  { hour: '12:00', label: 'Builder push',    agent: 'builder',    status: 'done' as const },
-  { hour: '15:00', label: 'Decision review', agent: 'decision',   status: 'now'  as const },
-  { hour: '17:00', label: 'Marketing batch', agent: 'marketing',  status: 'soon' as const },
-  { hour: '20:00', label: 'Analytics digest',agent: 'analytics',  status: 'soon' as const },
+  { hour: '06:00', label: 'Scout sweep',     agent: 'scout'      },
+  { hour: '09:00', label: 'Validation',      agent: 'validation' },
+  { hour: '12:00', label: 'Builder push',    agent: 'builder'    },
+  { hour: '15:00', label: 'Decision review', agent: 'decision'   },
+  { hour: '17:00', label: 'Marketing batch', agent: 'marketing'  },
+  { hour: '20:00', label: 'Analytics digest',agent: 'analytics'  },
 ]
 
-const CHATTER = [
-  { from: 'scout',      to: 'validation', type: 'signal',  text: "r/solopreneur spike +312% — 'AI inbox triage'" },
-  { from: 'validation', to: 'decision',   type: 'score',   text: 'HR Ops Inbox · score 78 / CPC 0.42€' },
-  { from: 'decision',   to: 'builder',    type: 'order',   text: 'Build landing — Solo CFO v2' },
-  { from: 'builder',    to: 'payment',    type: 'handoff', text: 'Pricing page ready — wire Stripe' },
-  { from: 'payment',    to: 'analytics',  type: 'event',   text: 'checkout.completed · €29 MRR' },
-  { from: 'marketing',  to: 'analytics',  type: 'ping',    text: 'LinkedIn carousel — 14k impressions' },
-  { from: 'analytics',  to: 'decision',   type: 'report',  text: 'Forms · CAC -11% · MRR +18%' },
-  { from: 'decision',   to: 'marketing',  type: 'brief',   text: 'Push waitlist — Solo CFO' },
-  { from: 'scout',      to: 'marketing',  type: 'trend',   text: "TikTok hook — 'AI bookkeeper'" },
-  { from: 'validation', to: 'builder',    type: 'spec',    text: 'Niche: bilingual freelancer invoicing' },
-]
+function rhythmStatus(hour: string): 'done' | 'now' | 'soon' {
+  const now = new Date()
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const [h, m] = hour.split(':').map(Number)
+  const rMin = h * 60 + m
+  if (rMin <= nowMin - 60) return 'done'
+  if (Math.abs(rMin - nowMin) <= 60) return 'now'
+  return 'soon'
+}
 
 /* ─── Spark chart utilities ──────────────────────────────────── */
 function makeSpark(n = 24, base = 50, vol = 18, seed = 1) {
@@ -670,8 +667,9 @@ function TodayRhythm() {
       <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', gap: 4 }}>
         {RHYTHM.map(r => {
           const a = agentById(r.agent)
-          const isNow = r.status === 'now'
-          const isDone = r.status === 'done'
+          const status = rhythmStatus(r.hour)
+          const isNow = status === 'now'
+          const isDone = status === 'done'
           return (
             <li key={r.hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'stretch' }}>
               <div style={{
@@ -725,52 +723,18 @@ function KpiGrid({ kpi }: { kpi: KpiRow | null }) {
 }
 
 /* Mission feed / log */
-function MissionFeedCompact({ tick }: { tick: number }) {
-  const ICONS: Record<string, string> = { signal: '↗', score: '★', order: '▶', handoff: '⇨', event: '◉', ping: '·', report: 'Σ', brief: '✎', trend: '≋', spec: '⟁' }
-  const items = useMemo(() => {
-    return Array.from({ length: 6 }).map((_, i) => {
-      const c = CHATTER[(tick + i) % CHATTER.length]
-      const fa = agentById(c.from)
-      const ta = agentById(c.to)
-      return { ...c, fa, ta, key: `${tick}-${i}`, xp: 6 + (i % 5) * 4 }
-    })
-  }, [tick])
-
+function MissionFeedCompact() {
   return (
     <section style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: text }}>Mission log</h3>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: emerald }}>● live · t-15min</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: muted2 }}>● en attente</span>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {items.map((it, i) => (
-          <div key={it.key} style={{
-            padding: '7px 9px', borderRadius: 7,
-            background: surface2, border: `1px solid ${line}`,
-            display: 'flex', alignItems: 'center', gap: 7,
-            opacity: 1 - i * 0.05,
-          }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.06em', width: 36, flexShrink: 0 }}>
-              T-{String(i).padStart(2, '0')}m
-            </span>
-            <span style={{ width: 16, textAlign: 'center', flexShrink: 0, color: it.fa.color, fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 800 }}>
-              {ICONS[it.type] || '·'}
-            </span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, padding: '2px 5px', borderRadius: 3, background: it.fa.color + '22', color: it.fa.color, letterSpacing: '.08em', fontWeight: 700, flexShrink: 0 }}>
-              {it.fa.code}
-            </span>
-            <span style={{ color: muted2, fontSize: 11, flexShrink: 0 }}>→</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, padding: '2px 5px', borderRadius: 3, background: it.ta.color + '22', color: it.ta.color, letterSpacing: '.08em', fontWeight: 700, flexShrink: 0 }}>
-              {it.ta.code}
-            </span>
-            <span style={{ fontSize: 11, color: text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {it.text}
-            </span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: accent2, letterSpacing: '.06em', fontWeight: 700, flexShrink: 0 }}>
-              +{it.xp} XP
-            </span>
-          </div>
-        ))}
+      <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
+        <p style={{ fontSize: 12, color: muted2, textAlign: 'center', lineHeight: 1.6 }}>
+          Aucune mission en cours<br />
+          <span style={{ fontSize: 10, color: muted, letterSpacing: '.1em' }}>Lancez un agent pour voir les logs</span>
+        </p>
       </div>
     </section>
   )
@@ -995,7 +959,6 @@ export default function CockpitPage() {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [confirmedIds, setConfirmedIds] = useState<string[]>([])
   const [showCmdk, setShowCmdk] = useState(false)
-  const [logTick, setLogTick] = useState(0)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -1027,11 +990,6 @@ export default function CockpitPage() {
     load()
   }, [user])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* Log tick every 2.2s */
-  useEffect(() => {
-    const id = setInterval(() => setLogTick(t => t + 1), 2200)
-    return () => clearInterval(id)
-  }, [])
 
   /* Keyboard shortcuts */
   useEffect(() => {
@@ -1101,7 +1059,7 @@ export default function CockpitPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
             <TodayRhythm />
             <KpiGrid kpi={kpi} />
-            <MissionFeedCompact tick={logTick} />
+            <MissionFeedCompact />
           </div>
         )}
       </main>

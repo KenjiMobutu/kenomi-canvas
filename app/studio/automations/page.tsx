@@ -15,23 +15,10 @@ interface DbWorkflow {
   enabled: boolean; run_count: number; last_run_at: string | null; created_at: string
 }
 
-const CHATTER = [
-  { text: 'Scored 3 niches, top: CFO Ops (82/100)' },
-  { text: 'Upserted 12 venture scores to Supabase' },
-  { text: 'Webhook received from Stripe · checkout.session.completed' },
-  { text: 'Marketing draft queued · LinkedIn carousel CFO v3' },
-  { text: 'Decision signal: Forms → Scale (threshold met)' },
-  { text: 'MCP infra probe · all 9 servers OK' },
-  { text: 'CAC recomputed · CFO niche: €14 (down -8%)' },
-  { text: 'SEO page published: alternatives-typeform.html' },
-  { text: 'Stripe webhook → analytics event sunk' },
-  { text: 'Cohort data refreshed · 8 cohorts × 8 months' },
-]
-
 const WORKFLOWS = [
   {
     id: 'validation-loop', name: 'n8n validation loop', trigger: 'Schedule · */15min',
-    runs: 248, success: 96, avg: '1.4s', enabled: true, color: '#a78bfa',
+    runs: 0, success: 0, avg: '—', enabled: true, color: '#a78bfa',
     nodes: [
       { id: 'trig',  x:  60, y: 70,  type: 'trigger', label: 'Cron 15m'         },
       { id: 'scout', x: 220, y: 30,  type: 'agent',   label: 'Scout · scan'      },
@@ -43,11 +30,11 @@ const WORKFLOWS = [
     ],
     edges: [['trig','scout'],['trig','score'],['scout','merge'],['score','merge'],['merge','sup'],['merge','deci'],['sup','out'],['deci','out']] as [string,string][],
   },
-  { id: 'mcp-probe',       name: 'MCP infrastructure probe',  trigger: 'Webhook',       runs: 124, success: 99, avg: '0.6s', enabled: true,  color: '#22d3ee', nodes: [], edges: [] as [string,string][] },
-  { id: 'stripe-ready',    name: 'Stripe checkout readiness', trigger: 'Manual',        runs:  18, success: 88, avg: '2.1s', enabled: false, color: '#fbbf24', nodes: [], edges: [] as [string,string][] },
-  { id: 'marketing-queue', name: 'Marketing content queue',   trigger: 'Schedule · 6h', runs:  72, success: 94, avg: '3.4s', enabled: true,  color: '#e879f9', nodes: [], edges: [] as [string,string][] },
-  { id: 'billing-events',  name: 'Billing events sink',       trigger: 'Webhook',       runs: 412, success: 99, avg: '0.3s', enabled: true,  color: '#34d399', nodes: [], edges: [] as [string,string][] },
-  { id: 'venture-promote', name: 'Venture stage promotion',   trigger: 'Event',         runs:  31, success: 87, avg: '5.2s', enabled: true,  color: '#fb7185', nodes: [], edges: [] as [string,string][] },
+  { id: 'mcp-probe',       name: 'MCP infrastructure probe',  trigger: 'Webhook',       runs: 0, success: 0, avg: '—', enabled: true,  color: '#22d3ee', nodes: [], edges: [] as [string,string][] },
+  { id: 'stripe-ready',    name: 'Stripe checkout readiness', trigger: 'Manual',        runs: 0, success: 0, avg: '—', enabled: false, color: '#fbbf24', nodes: [], edges: [] as [string,string][] },
+  { id: 'marketing-queue', name: 'Marketing content queue',   trigger: 'Schedule · 6h', runs: 0, success: 0, avg: '—', enabled: true,  color: '#e879f9', nodes: [], edges: [] as [string,string][] },
+  { id: 'billing-events',  name: 'Billing events sink',       trigger: 'Webhook',       runs: 0, success: 0, avg: '—', enabled: true,  color: '#34d399', nodes: [], edges: [] as [string,string][] },
+  { id: 'venture-promote', name: 'Venture stage promotion',   trigger: 'Event',         runs: 0, success: 0, avg: '—', enabled: true,  color: '#fb7185', nodes: [], edges: [] as [string,string][] },
 ]
 
 type Workflow = typeof WORKFLOWS[0]
@@ -244,13 +231,15 @@ function WorkflowsList({ selectedId, onSelect }: { selectedId: string; onSelect:
   )
 }
 
-function RunsFeed({ tick }: { tick: number }) {
-  const lines = useMemo(() => Array.from({ length: 9 }).map((_, i) => {
-    const wf = WORKFLOWS[(tick + i) % WORKFLOWS.length]
-    const c = CHATTER[(tick + i) % CHATTER.length]
-    const ok = ((tick + i * 7) % 12) !== 0
-    return { wf, c, ok, key: `${tick}-${i}`, dur: (0.4 + ((i + tick) % 20) / 10).toFixed(1) }
-  }), [tick])
+function RunsFeed({ dbWorkflows }: { dbWorkflows: DbWorkflow[] }) {
+  const lines = useMemo(() => dbWorkflows
+    .filter(w => w.last_run_at)
+    .sort((a, b) => new Date(b.last_run_at!).getTime() - new Date(a.last_run_at!).getTime())
+    .slice(0, 9)
+    .map(w => ({
+      id: w.id, name: w.name, trigger: w.trigger_type, runCount: w.run_count,
+      lastRun: w.last_run_at!, enabled: w.enabled,
+    })), [dbWorkflows])
 
   return (
     <div style={{
@@ -259,34 +248,37 @@ function RunsFeed({ tick }: { tick: number }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Live runs feed</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>tail -f · t-15min</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Derniers runs</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>activité récente</div>
         </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: emerald, letterSpacing: '.14em' }}>● follow</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: lines.length > 0 ? emerald : muted2, letterSpacing: '.14em' }}>● {lines.length > 0 ? 'live' : 'vide'}</span>
       </div>
+      {lines.length === 0 ? (
+        <div style={{ padding: '28px 16px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: muted2 }}>Aucun run enregistré. Déclenchez un workflow.</p>
+        </div>
+      ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {lines.map((l, i) => (
-          <div key={l.key} style={{
+          <div key={l.id} style={{
             padding: '6px 10px', borderRadius: 6, background: surface2, border: `1px solid ${line}`,
             display: 'grid', gridTemplateColumns: '60px 6px 1fr auto auto', gap: 8, alignItems: 'center',
             opacity: 1 - i * 0.07,
           }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: 1 }}>T-{String(i).padStart(2, '0')}m</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: l.wf.color }} />
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: 1 }}>{new Date(l.lastRun).toLocaleDateString('fr-FR', { month: 'numeric', day: 'numeric' })}</span>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: l.enabled ? emerald : amber }} />
             <span style={{ fontSize: 11.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <span style={{ color: l.wf.color }}>{l.wf.name}</span>
-              <span style={{ color: muted, marginLeft: 6 }}>· {l.c.text.slice(0, 48)}{l.c.text.length > 48 ? '…' : ''}</span>
+              <span style={{ color: cyan }}>{l.name}</span>
+              <span style={{ color: muted, marginLeft: 6 }}>· {l.runCount} runs</span>
             </span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: 1, flexShrink: 0 }}>{l.dur}s</span>
             <span style={{
               fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3, flexShrink: 0,
-              background: l.ok ? `${emerald}22` : `${rose}22`,
-              color: l.ok ? emerald : rose,
-              letterSpacing: 1, fontWeight: 800,
-            }}>{l.ok ? 'OK 200' : 'FAIL 503'}</span>
+              background: `${emerald}22`, color: emerald, letterSpacing: 1, fontWeight: 800,
+            }}>OK</span>
           </div>
         ))}
       </div>
+      )}
     </div>
   )
 }
@@ -340,13 +332,6 @@ function ServiceHealth() {
   )
 }
 
-const KPI_LIST = [
-  { label: 'Total runs 24h', value: '905',   delta: '+12%',    color: cyan    },
-  { label: 'Success rate',   value: '96.4%', delta: '+0.8',    color: emerald },
-  { label: 'Avg duration',   value: '1.4s',  delta: '-0.2',    color: violet  },
-  { label: 'Queue depth',    value: '3',     delta: '0',       color: amber   },
-  { label: 'Workflows',      value: '18',    delta: '2 paused',color: fuchsia },
-]
 
 function NewWorkflowForm({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
   const { user } = useAuth()
@@ -457,15 +442,9 @@ export default function AutomationsPage() {
   const { user } = useAuth()
   const isMobile = useIsMobile()
   const [selectedId, setSelectedId] = useState('validation-loop')
-  const [logTick, setLogTick] = useState(0)
   const [dbWorkflows, setDbWorkflows] = useState<DbWorkflow[]>([])
   const [showNew, setShowNew] = useState(false)
   const [dbSelectedId, setDbSelectedId] = useState<string | null>(null)
-
-  useEffect(() => {
-    const id = setInterval(() => setLogTick(t => t + 1), 1200)
-    return () => clearInterval(id)
-  }, [])
 
   async function loadWorkflows() {
     if (!user) return
@@ -507,6 +486,15 @@ export default function AutomationsPage() {
 
   const totalRuns = dbWorkflows.reduce((s, w) => s + w.run_count, 0)
   const activeCount = dbWorkflows.filter(w => w.enabled).length
+  const pausedCount = dbWorkflows.filter(w => !w.enabled).length
+
+  const KPI_LIST = [
+    { label: 'Total runs', value: String(totalRuns),        delta: '—',                    color: cyan    },
+    { label: 'Success',    value: '—',                      delta: '—',                    color: emerald },
+    { label: 'Avg durée',  value: '—',                      delta: '—',                    color: violet  },
+    { label: 'En queue',   value: '—',                      delta: '—',                    color: amber   },
+    { label: 'Workflows',  value: String(dbWorkflows.length), delta: `${pausedCount} paused`, color: fuchsia },
+  ]
 
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -516,7 +504,7 @@ export default function AutomationsPage() {
         fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.04em',
       }}>+ New workflow</button>
       {[
-        { label: `${dbWorkflows.length || 18} workflows`, color: muted },
+        { label: `${dbWorkflows.length} workflows`, color: muted },
         { label: `${activeCount} actifs`,  color: emerald },
         { label: `${totalRuns} runs`,      color: cyan },
       ].map(({ label, color }) => (
@@ -559,7 +547,7 @@ export default function AutomationsPage() {
 
         {/* Runs feed + service health */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.4fr 1fr', gap: 14 }}>
-          <RunsFeed tick={logTick} />
+          <RunsFeed dbWorkflows={dbWorkflows} />
           <ServiceHealth />
         </div>
       </div>

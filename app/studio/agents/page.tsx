@@ -104,15 +104,7 @@ function TunePanel({ agentId, agentColor, onClose }: { agentId: string; agentCol
 
 type AgentData = typeof AGENTS_DATA[0]
 
-const QUEUE: Record<string, string[]> = {
-  scout:      ['Scan r/saas · t-2m', 'Crawl PH top 50 · t-12m', 'Trend brief #42 · t-1h'],
-  validation: ['Score HR Ops Inbox', 'Reprice CFO niche', 'Compare Legal vs HR CPC'],
-  builder:    ['Landing CFO v2', 'Pricing block — Forms', 'Hero copy — Legal pivot'],
-  payment:    ['Wire Stripe — CFO', 'Webhook → analytics', 'Coupon LAUNCH50'],
-  marketing:  ['Carousel LI · CFO', 'TikTok hook #7', 'SEO brief: CFO niche'],
-  analytics:  ['Compute CAC W42', 'Cohort retention Forms', 'Push report → Decision'],
-  decision:   ['Arbitrate Forms · scale', 'Review Legal pivot', 'Stop CRM Lite'],
-}
+const QUEUE: Record<string, string[]> = {}
 
 function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
   return (
@@ -223,7 +215,11 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
           Mission queue · 3 prochaines
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {queue.map((q, i) => (
+          {queue.length === 0 ? (
+            <div style={{ padding: '16px 10px', textAlign: 'center' }}>
+              <p style={{ fontSize: 12, color: muted2 }}>Aucune mission en queue</p>
+            </div>
+          ) : queue.map((q, i) => (
             <div key={i} style={{
               padding: '8px 10px', borderRadius: 8, background: surface2,
               border: `1px dashed ${line2}`,
@@ -406,21 +402,19 @@ export default function AgentsPage() {
   const activity = useMemo(() => makeSpark(48, 50, 22, selectedId.length * 7), [selectedId])
   const queue = QUEUE[selectedId] ?? []
 
-  const throughput = AGENTS_DATA.map((a, i) => ({
+  const throughput = AGENTS_DATA.map(a => ({
     ...a,
-    runs: 24 + Math.round(a.xp * 220 + i * 11),
-    win: Math.round(60 + a.xp * 30),
-    avg: (1.2 + (1 - a.xp) * 3.5).toFixed(1),
+    runs: 0,
+    win: 0,
+    avg: '—',
   }))
   const maxRuns = Math.max(...throughput.map(t => t.runs))
 
   const headerActions = (
     <div style={{ display: 'flex', gap: 8 }}>
       {[
-        { label: '7 agents', color: muted },
-        { label: '6 live', color: emerald },
-        { label: '248 runs / 24h', color: cyan },
-        { label: 'uptime 99.4%', color: muted },
+        { label: `${AGENTS_DATA.length} agents`, color: muted },
+        { label: `${AGENTS_DATA.length - 1} live`, color: emerald },
       ].map(({ label, color }) => (
         <span key={label} style={{
           padding: '4px 10px', borderRadius: 5,

@@ -8,14 +8,14 @@ import {
 import { AGENTS_DATA, makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
 
 const SERVICES_IN = [
-  { id: 'proxmox',  label: 'Proxmox VE',  short: 'PROX', status: 'Online',    color: '#34d399', cpu: 42, ram: 58, disk: 31, net: 124, uptime: '32d', role: 'Compute · cluster local',   endpoint: 'proxmox.local' },
-  { id: 'coolify',  label: 'Coolify',     short: 'COOL', status: 'Online',    color: '#34d399', cpu: 31, ram: 44, disk: 22, net:  86, uptime: '28d', role: 'Deploy · landings + APIs',  endpoint: 'coolify.local' },
-  { id: 'nginx',    label: 'Nginx PM',    short: 'NPM',  status: 'Healthy',   color: '#22d3ee', cpu:  8, ram: 14, disk:  4, net: 412, uptime: '44d', role: 'Proxy · SSL · domains',     endpoint: 'npm.local' },
-  { id: 'uptime',   label: 'Uptime Kuma', short: 'UPT',  status: 'Watching',  color: '#a78bfa', cpu:  4, ram:  9, disk:  2, net:  18, uptime: '18d', role: 'Monitor · 38 checks',       endpoint: 'uptime.local' },
-  { id: 'vault',    label: 'Vaultwarden', short: 'VLT',  status: 'Ready',     color: '#fbbf24', cpu:  6, ram: 11, disk:  3, net:   4, uptime: '44d', role: 'Secrets · creds · OAuth',   endpoint: 'vault.local' },
-  { id: 'supabase', label: 'Supabase',    short: 'SUP',  status: 'Connected', color: '#34d399', cpu: 24, ram: 38, disk: 47, net: 240, uptime: '—',   role: 'Auth · Postgres · Storage', endpoint: 'supabase.com' },
-  { id: 'n8n',      label: 'n8n',         short: 'N8N',  status: 'Online',    color: '#e879f9', cpu: 18, ram: 26, disk: 12, net:  98, uptime: '21d', role: 'Automation · 18 wf',        endpoint: 'n8n.local' },
-  { id: 'stripe',   label: 'Stripe',      short: 'STR',  status: 'Sandbox',   color: '#fbbf24', cpu:  0, ram:  0, disk:  0, net:  62, uptime: '—',   role: 'Payments · checkout',       endpoint: 'api.stripe.com' },
+  { id: 'proxmox',  label: 'Proxmox VE',  short: 'PROX', status: '—', color: '#34d399', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Compute · cluster local',   endpoint: 'proxmox.local' },
+  { id: 'coolify',  label: 'Coolify',     short: 'COOL', status: '—', color: '#34d399', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Deploy · landings + APIs',  endpoint: 'coolify.local' },
+  { id: 'nginx',    label: 'Nginx PM',    short: 'NPM',  status: '—', color: '#22d3ee', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Proxy · SSL · domains',     endpoint: 'npm.local' },
+  { id: 'uptime',   label: 'Uptime Kuma', short: 'UPT',  status: '—', color: '#a78bfa', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Monitor',                   endpoint: 'uptime.local' },
+  { id: 'vault',    label: 'Vaultwarden', short: 'VLT',  status: '—', color: '#fbbf24', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Secrets · creds · OAuth',   endpoint: 'vault.local' },
+  { id: 'supabase', label: 'Supabase',    short: 'SUP',  status: '—', color: '#34d399', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Auth · Postgres · Storage', endpoint: 'supabase.com' },
+  { id: 'n8n',      label: 'n8n',         short: 'N8N',  status: '—', color: '#e879f9', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Automation',                endpoint: 'n8n.local' },
+  { id: 'stripe',   label: 'Stripe',      short: 'STR',  status: '—', color: '#fbbf24', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Payments · checkout',       endpoint: 'api.stripe.com' },
 ]
 
 const POSITIONS: Record<string, { x: number; y: number; kind: string }> = {
@@ -35,34 +35,7 @@ const TOPO_EDGES: [string, string][] = [
   ['n8n','supabase'], ['n8n','stripe'], ['coolify','supabase'], ['nginx','supabase'],
 ]
 
-const EVENT_SAMPLES = [
-  'Coolify deploy succeeded · sha 8af31c',
-  'Nginx PM cert renewed · forms.kenomi.studio',
-  'Uptime check OK · uptime.local',
-  'n8n workflow finished · 0.4s',
-  'Vaultwarden cred rotated · stripe-test',
-  'Supabase RLS policy updated · ventures',
-  'Stripe webhook received · checkout.completed',
-  'Proxmox cluster heartbeat · 3/3 online',
-  'Disk usage warning · proxmox-02 78%',
-  'Backup job started · supabase pg_dump',
-]
-const EVENT_LEVELS = [
-  { lvl: 'INFO',  color: emerald },
-  { lvl: 'INFO',  color: emerald },
-  { lvl: 'INFO',  color: emerald },
-  { lvl: 'WARN',  color: amber   },
-  { lvl: 'INFO',  color: emerald },
-  { lvl: 'ERROR', color: rose    },
-  { lvl: 'INFO',  color: emerald },
-]
-
-const DEPLOYS = [
-  { name: 'forms.kenomi.studio', sha: '8af31c', status: 'deployed', color: emerald, time: '12m ago',   agent: 'builder'  },
-  { name: 'cfo.kenomi.studio',   sha: '2e7d44', status: 'deployed', color: emerald, time: '1h ago',    agent: 'builder'  },
-  { name: 'legal.kenomi.studio', sha: '9c1ab0', status: 'failed',   color: rose,    time: '3h ago',    agent: 'builder'  },
-  { name: 'uptime.local',        sha: '44ee21', status: 'deployed', color: emerald, time: 'yesterday', agent: 'decision' },
-]
+const DEPLOYS: { name: string; sha: string; status: string; color: string; time: string; agent: string }[] = []
 
 type ServiceIn = typeof SERVICES_IN[0]
 
@@ -320,13 +293,7 @@ function ServerRack({ selectedId, onSelect }: { selectedId: string; onSelect: (i
   )
 }
 
-function EventLog({ tick }: { tick: number }) {
-  const events = useMemo(() => Array.from({ length: 10 }).map((_, i) => {
-    const L = EVENT_LEVELS[(tick + i * 3) % EVENT_LEVELS.length]
-    const s = EVENT_SAMPLES[(tick + i) % EVENT_SAMPLES.length]
-    return { id: `${tick}-${i}`, ...L, msg: s }
-  }), [tick])
-
+function EventLog() {
   return (
     <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -345,20 +312,8 @@ function EventLog({ tick }: { tick: number }) {
           ))}
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontFamily: 'var(--font-mono)' }}>
-        {events.map((e, i) => {
-          const ts = new Date(Date.now() - i * 9200).toISOString().slice(11, 19)
-          return (
-            <div key={e.id} style={{
-              display: 'grid', gridTemplateColumns: '78px 56px 1fr', gap: 8, alignItems: 'center',
-              fontSize: 11, opacity: 1 - i * 0.06,
-            }}>
-              <span style={{ color: muted2 }}>{ts}</span>
-              <span style={{ color: e.color, textAlign: 'center', fontWeight: 700, letterSpacing: 1, background: `${e.color}1a`, borderRadius: 3, padding: '1px 4px' }}>{e.lvl}</span>
-              <span style={{ color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.msg}</span>
-            </div>
-          )
-        })}
+      <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+        <p style={{ fontSize: 12, color: muted2 }}>Aucun événement · configurez votre monitoring</p>
       </div>
     </div>
   )
@@ -374,6 +329,11 @@ function DeploysPanel() {
         </div>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: emerald, letterSpacing: '.14em' }}>3/4 ok</span>
       </div>
+      {DEPLOYS.length === 0 ? (
+        <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: muted2 }}>Aucun déploiement enregistré</p>
+        </div>
+      ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {DEPLOYS.map((d, i) => {
           const a = AGENTS_DATA.find(ag => ag.id === d.agent) ?? AGENTS_DATA[0]
@@ -399,27 +359,22 @@ function DeploysPanel() {
           )
         })}
       </div>
+      )}
     </div>
   )
 }
 
 const KPI_LIST = [
-  { label: 'CPU avg',     value: '22%',    delta: '4 core idle',  color: cyan    },
-  { label: 'RAM avg',     value: '38%',    delta: '12 GB free',   color: emerald },
-  { label: 'Network I/O', value: '412Mb',  delta: '+18%',         color: violet  },
-  { label: 'Containers',  value: '32',     delta: '0 unhealthy',  color: amber   },
-  { label: 'Uptime',      value: '99.94%', delta: '30d',          color: fuchsia },
+  { label: 'CPU avg',     value: '—', delta: '—', color: cyan    },
+  { label: 'RAM avg',     value: '—', delta: '—', color: emerald },
+  { label: 'Network I/O', value: '—', delta: '—', color: violet  },
+  { label: 'Containers',  value: '—', delta: '—', color: amber   },
+  { label: 'Uptime',      value: '—', delta: '—', color: fuchsia },
 ]
 
 export default function InfrastructurePage() {
   const [selectedId, setSelectedId] = useState('proxmox')
-  const [logTick, setLogTick] = useState(0)
   const isMobile = useIsMobile()
-
-  useEffect(() => {
-    const id = setInterval(() => setLogTick(t => t + 1), 1400)
-    return () => clearInterval(id)
-  }, [])
 
   const selected = SERVICES_IN.find(s => s.id === selectedId) ?? SERVICES_IN[0]
 
@@ -431,10 +386,8 @@ export default function InfrastructurePage() {
         fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.04em',
       }}>+ Add service</button>
       {[
-        { label: '8 services',         color: muted   },
-        { label: 'all healthy',        color: emerald },
-        { label: 'uptime 99.94%',      color: cyan    },
-        { label: 'self-host · Proxmox',color: muted   },
+        { label: `${SERVICES_IN.length} services`, color: muted },
+        { label: 'self-host · Proxmox',            color: muted },
       ].map(({ label, color }) => (
         <span key={label} style={{
           padding: '4px 10px', borderRadius: 5,
@@ -521,7 +474,7 @@ export default function InfrastructurePage() {
 
         {/* Event log + Deploys */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.4fr 1fr', gap: 14 }}>
-          <EventLog tick={logTick} />
+          <EventLog />
           <DeploysPanel />
         </div>
       </div>

@@ -29,18 +29,18 @@ interface Achievement {
 
 /* ─────── data ─────── */
 const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first-mrr',      label: 'First €1k MRR',       desc: 'Atteindre €1 000 de MRR mensuel',            unlocked: true,  rarity: 'rare',      xp: 250,  badge: '★', color: '#22d3ee', pct: 100 },
-  { id: 'ship-7',         label: 'Ship 7 landings',      desc: 'Lancer 7 landings sur 30 jours',             unlocked: true,  rarity: 'rare',      xp: 200,  badge: '▲', color: '#34d399', pct: 100 },
-  { id: 'cac-under-20',   label: 'CAC < €20',            desc: 'Maintenir CAC sous €20 sur 14j',             unlocked: true,  rarity: 'epic',      xp: 320,  badge: '◈', color: '#fbbf24', pct: 100 },
-  { id: '100k-imp',       label: '100k impressions',     desc: 'Cumuler 100 000 impressions',                unlocked: true,  rarity: 'common',    xp: 100,  badge: '≋', color: '#60a5fa', pct: 100 },
-  { id: 'valid-pivot',    label: 'Validate pivot',       desc: 'Réussir un pivot validé en moins de 30j',    unlocked: true,  rarity: 'epic',      xp: 380,  badge: '✦', color: '#a78bfa', pct: 100 },
-  { id: '20-experiments', label: '20 expériences live',  desc: '20 expériences actives simultanément',       unlocked: true,  rarity: 'common',    xp:  80,  badge: '◬', color: '#22d3ee', pct: 100 },
-  { id: 'first-scale',    label: 'First scale call',     desc: "Premier verdict 'Scale' du Decision Agent", unlocked: false, rarity: 'epic',      xp: 420,  badge: '◮', color: '#fb923c', pct: 78  },
-  { id: '5-ventures',     label: '5 ventures launched',  desc: 'Lancer 5 ventures live',                     unlocked: false, rarity: 'rare',      xp: 280,  badge: '◇', color: '#34d399', pct: 60  },
-  { id: 'auto-30',        label: '30 workflows n8n',     desc: 'Configurer 30 workflows actifs',             unlocked: false, rarity: 'common',    xp: 120,  badge: '⟁', color: '#60a5fa', pct: 60  },
-  { id: '20k-mrr',        label: '€20k MRR',             desc: 'Atteindre €20 000 de MRR studio',            unlocked: false, rarity: 'legendary', xp: 1200, badge: '✺', color: '#e879f9', pct: 21  },
-  { id: '10-ventures',    label: '10 ventures live',     desc: 'Maintenir 10 ventures live',                 unlocked: false, rarity: 'epic',      xp: 600,  badge: '◐', color: '#a78bfa', pct: 30  },
-  { id: 'season-podium',  label: 'Season podium',        desc: "Finir top 3 d'une season",                   unlocked: false, rarity: 'legendary', xp: 1500, badge: '✦', color: '#ff6a3d', pct: 8   },
+  { id: 'first-mrr',      label: 'First €1k MRR',       desc: 'Atteindre €1 000 de MRR mensuel',            unlocked: false, rarity: 'rare',      xp: 250,  badge: '★', color: '#22d3ee', pct: 0 },
+  { id: 'ship-7',         label: 'Ship 7 landings',      desc: 'Lancer 7 landings sur 30 jours',             unlocked: false, rarity: 'rare',      xp: 200,  badge: '▲', color: '#34d399', pct: 0 },
+  { id: 'cac-under-20',   label: 'CAC < €20',            desc: 'Maintenir CAC sous €20 sur 14j',             unlocked: false, rarity: 'epic',      xp: 320,  badge: '◈', color: '#fbbf24', pct: 0 },
+  { id: '100k-imp',       label: '100k impressions',     desc: 'Cumuler 100 000 impressions',                unlocked: false, rarity: 'common',    xp: 100,  badge: '≋', color: '#60a5fa', pct: 0 },
+  { id: 'valid-pivot',    label: 'Validate pivot',       desc: 'Réussir un pivot validé en moins de 30j',    unlocked: false, rarity: 'epic',      xp: 380,  badge: '✦', color: '#a78bfa', pct: 0 },
+  { id: '20-experiments', label: '20 expériences live',  desc: '20 expériences actives simultanément',       unlocked: false, rarity: 'common',    xp:  80,  badge: '◬', color: '#22d3ee', pct: 0 },
+  { id: 'first-scale',    label: 'First scale call',     desc: "Premier verdict 'Scale' du Decision Agent", unlocked: false, rarity: 'epic',      xp: 420,  badge: '◮', color: '#fb923c', pct: 0 },
+  { id: '5-ventures',     label: '5 ventures launched',  desc: 'Lancer 5 ventures live',                     unlocked: false, rarity: 'rare',      xp: 280,  badge: '◇', color: '#34d399', pct: 0 },
+  { id: 'auto-30',        label: '30 workflows n8n',     desc: 'Configurer 30 workflows actifs',             unlocked: false, rarity: 'common',    xp: 120,  badge: '⟁', color: '#60a5fa', pct: 0 },
+  { id: '20k-mrr',        label: '€20k MRR',             desc: 'Atteindre €20 000 de MRR studio',            unlocked: false, rarity: 'legendary', xp: 1200, badge: '✺', color: '#e879f9', pct: 0 },
+  { id: '10-ventures',    label: '10 ventures live',     desc: 'Maintenir 10 ventures live',                 unlocked: false, rarity: 'epic',      xp: 600,  badge: '◐', color: '#a78bfa', pct: 0 },
+  { id: 'season-podium',  label: 'Season podium',        desc: "Finir top 3 d'une season",                   unlocked: false, rarity: 'legendary', xp: 1500, badge: '✦', color: '#ff6a3d', pct: 0 },
 ]
 
 const RARITY: Record<Achievement['rarity'], { color: string; label: string }> = {
@@ -494,7 +494,7 @@ function AchievementsTab() {
   const totalCount = ACHIEVEMENTS.length
   const xpEarned = ACHIEVEMENTS.filter(a => a.unlocked).reduce((s, a) => s + a.xp, 0)
   const xpPossible = ACHIEVEMENTS.reduce((s, a) => s + a.xp, 0)
-  const justUnlocked = ACHIEVEMENTS.find(a => a.id === 'valid-pivot')!
+  const justUnlocked = ACHIEVEMENTS[0]
 
   return (
     <div style={{ padding: isMobile ? '16px 12px 40px' : '24px 32px 40px', maxWidth: 1400 }}>
@@ -549,13 +549,13 @@ function AchievementsTab() {
         {/* Text */}
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.42em', textTransform: 'uppercase', color: justUnlocked.color, fontWeight: 800 }}>
-            ◆ Achievement Unlocked · il y a 2 minutes
+            ◇ Prochain objectif
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1.05, marginTop: 6, color: text }}>
             {justUnlocked.label}
           </div>
           <div style={{ fontSize: 14, color: muted, marginTop: 6, maxWidth: 500 }}>
-            {justUnlocked.desc}. Solo CFO Copilot a été pivoté depuis Legal Intake Bot en 23 jours, validé par 3 paying customers.
+            {justUnlocked.desc}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <RarityPill rarity={justUnlocked.rarity} />

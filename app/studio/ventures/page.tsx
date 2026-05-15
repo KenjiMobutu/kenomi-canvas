@@ -30,18 +30,6 @@ const STAGE_AGENTS: Record<string, string[]> = {
   scale:      ['analytics', 'marketing', 'payment', 'decision'],
 }
 
-const seedVentures = [
-  { name: 'AI Inbox Triage',    niche: 'AI inbox',        stage: 'ideas',      score: 62, mrr: '0',   cac: '0',  conversion: '0',   next_action: 'Scan Reddit',       insight: 'r/solopreneur signals' },
-  { name: 'Voice Notes → CRM',  niche: 'Voice to CRM',    stage: 'ideas',      score: 71, mrr: '0',   cac: '0',  conversion: '0',   next_action: 'Build landing',     insight: 'TikTok hook viral' },
-  { name: 'HR Ops Inbox',       niche: 'HR inbox auto',   stage: 'validation', score: 78, mrr: '0',   cac: '0',  conversion: '0',   next_action: 'Run paid test',     insight: 'CPC €0.42 · TAM €18M' },
-  { name: 'Solo CFO Copilot',   niche: 'Finance AI',      stage: 'validation', score: 84, mrr: '620', cac: '21', conversion: '6.2', next_action: 'Pricing A/B test', insight: 'waitlist 482 · SEO strong' },
-  { name: 'Legal Intake Bot',   niche: 'Legal intake',    stage: 'build',      score: 68, mrr: '310', cac: '39', conversion: '4.1', next_action: 'Pivot HR ops',      insight: 'high CPC — pivot HR ops' },
-  { name: 'Resto Menu Studio',  niche: 'Restaurant menus',stage: 'build',      score: 72, mrr: '180', cac: '24', conversion: '5.0', next_action: 'Scale to 50',       insight: 'first 12 paying' },
-  { name: 'Creator CRM Lite',   niche: 'CRM creators',    stage: 'launch',     score: 42, mrr: '120', cac: '52', conversion: '1.9', next_action: 'Archive',           insight: 'CTR below threshold' },
-  { name: 'Agency Brief Engine',niche: 'Agency briefs',   stage: 'launch',     score: 70, mrr: '540', cac: '31', conversion: '5.8', next_action: 'Double paid spend', insight: 'LinkedIn 14k imp' },
-  { name: 'Kenomi Forms',       niche: 'No-code forms',   stage: 'scale',      score: 91, mrr: '2800',cac: '14', conversion: '9.8', next_action: 'Increase acquisition',insight: 'MRR +18% · CAC -11%' },
-]
-
 interface Venture {
   id: string; name: string; niche: string; stage: string; score: number
   mrr: string; cac: string; conversion: string; next_action: string; insight: string
@@ -201,11 +189,7 @@ function VentureInspector({ v, onSave, onDelete }: {
   }
 
   const history = [
-    { day: -42, action: 'Created',   color: cy, by: 'scout' },
-    { day: -28, action: 'Validated', color: vi, by: 'validation' },
-    { day: -14, action: 'Built v1',  color: em, by: 'builder' },
-    { day:  -7, action: 'Launched',  color: am, by: 'marketing' },
-    { day:   0, action: v.status,    color: sc, by: 'decision' },
+    { day: 0, action: v.status, color: sc, by: 'decision' },
   ]
 
   return (
@@ -373,10 +357,6 @@ export default function VenturesPage() {
   async function load() {
     const { data } = await supabase.from('ventures').select('*').order('score', { ascending: false })
     const list = (data as Venture[]) || []
-    if (list.length === 0 && user) {
-      await supabase.from('ventures').insert(seedVentures.map(v => ({ ...v, user_id: user.id })))
-      return load()
-    }
     const dvs = list.map(toDisplay)
     setItems(dvs)
     if (!selectedId && dvs.length > 0) setSelectedId(dvs[0].id)

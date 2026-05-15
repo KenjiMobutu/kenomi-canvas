@@ -8,29 +8,15 @@ import {
 import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick, useIsMobile } from '@/lib/studio-utils'
 
 const CHANNELS = [
-  { id: 'linkedin', label: 'LinkedIn',   icon: 'in', color: '#22d3ee', reach: '14.2k', ctr: '3.8%', drafts: 12, status: 'Posting',  waveSeed: 7  },
-  { id: 'tiktok',   label: 'TikTok',     icon: '▶',  color: '#e879f9', reach: '62.4k', ctr: '1.9%', drafts:  8, status: 'Live',     waveSeed: 11 },
-  { id: 'seo',      label: 'SEO',        icon: 'Σ',  color: '#34d399', reach: '8.2k',  ctr: '5.1%', drafts: 21, status: 'Indexing', waveSeed: 19 },
-  { id: 'news',     label: 'Newsletter', icon: '✉',  color: '#fbbf24', reach: '3.6k',  ctr: '6.4%', drafts:  4, status: 'Queued',   waveSeed: 23 },
+  { id: 'linkedin', label: 'LinkedIn',   icon: 'in', color: '#22d3ee', reach: '—', ctr: '—', drafts: 0, status: 'Inactif', waveSeed: 7  },
+  { id: 'tiktok',   label: 'TikTok',     icon: '▶',  color: '#e879f9', reach: '—', ctr: '—', drafts: 0, status: 'Inactif', waveSeed: 11 },
+  { id: 'seo',      label: 'SEO',        icon: 'Σ',  color: '#34d399', reach: '—', ctr: '—', drafts: 0, status: 'Inactif', waveSeed: 19 },
+  { id: 'news',     label: 'Newsletter', icon: '✉',  color: '#fbbf24', reach: '—', ctr: '—', drafts: 0, status: 'Inactif', waveSeed: 23 },
 ] as const
 
 type Channel = typeof CHANNELS[number]
 
-const CAL_ITEMS = [
-  { day: 0, ch: 'linkedin', title: 'Founder story #7',    time: '08:30' },
-  { day: 0, ch: 'seo',      title: 'Comparison page',     time: '10:00' },
-  { day: 1, ch: 'tiktok',   title: 'Pain hook AI inbox',  time: '12:00' },
-  { day: 1, ch: 'linkedin', title: 'Carousel · CFO',      time: '17:00' },
-  { day: 2, ch: 'news',     title: 'Issue · build log',   time: '09:00' },
-  { day: 2, ch: 'seo',      title: 'Alternatives page',   time: '14:00' },
-  { day: 3, ch: 'tiktok',   title: 'How it works clip',   time: '11:00' },
-  { day: 3, ch: 'linkedin', title: 'Validation thread',   time: '16:00' },
-  { day: 4, ch: 'linkedin', title: 'Pricing teardown',    time: '09:00' },
-  { day: 4, ch: 'tiktok',   title: 'Day-in-the-life',     time: '18:00' },
-  { day: 5, ch: 'news',     title: 'Build-in-public',     time: '10:00' },
-  { day: 6, ch: 'seo',      title: 'Job-to-be-done',      time: '11:00' },
-  { day: 6, ch: 'linkedin', title: 'Forecast post',       time: '15:00' },
-]
+const CAL_ITEMS: { day: number; ch: string; title: string; time: string }[] = []
 
 function MkKpi({ label, value, delta, color }: { label: string; value: string; delta: string; color: string }) {
   const spark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
@@ -376,11 +362,11 @@ function AssetPreview({ kind }: { kind: AssetKind }) {
 }
 
 const KPI_LIST = [
-  { label: 'Reach 24h',    value: '88.4k', delta: '+24%', color: cyan },
-  { label: 'Avg CTR',      value: '3.8%',  delta: '+0.4', color: emerald },
-  { label: 'Engagement',   value: '6.2%',  delta: '+1.1', color: violet },
-  { label: 'Drafts queue', value: '45',    delta: '+12',  color: amber },
-  { label: 'A/B wins',     value: '14/19', delta: '74%',  color: fuchsia },
+  { label: 'Reach 24h',    value: '—', delta: '—', color: cyan },
+  { label: 'Avg CTR',      value: '—', delta: '—', color: emerald },
+  { label: 'Engagement',   value: '—', delta: '—', color: violet },
+  { label: 'Drafts queue', value: '—', delta: '—', color: amber },
+  { label: 'A/B wins',     value: '—', delta: '—', color: fuchsia },
 ]
 
 export default function MarketingPage() {
@@ -397,10 +383,7 @@ export default function MarketingPage() {
         fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.04em',
       }}>+ Brief campagne</button>
       {[
-        { label: '4 channels live', color: muted },
-        { label: '88.4k reach 24h', color: cyan },
-        { label: 'CTR 3.8%', color: emerald },
-        { label: '45 drafts', color: muted },
+        { label: `${CHANNELS.length} channels`, color: muted },
       ].map(({ label, color }) => (
         <span key={label} style={{
           padding: '4px 10px', borderRadius: 5,
