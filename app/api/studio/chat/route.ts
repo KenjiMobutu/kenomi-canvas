@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { isAllowedOllamaUrl } from '@/lib/security'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     .from('user_settings').select('*').eq('user_id', user.id).maybeSingle()
 
   const baseUrl = (settings?.ollama_base_url || 'http://192.168.0.14:11434').replace(/\/$/, '')
-  if (!/^https?:\/\/./.test(baseUrl) || /^https?:\/\/169\.254\./.test(baseUrl)) {
+  if (!isAllowedOllamaUrl(baseUrl)) {
     return new Response(JSON.stringify({ error: 'URL Ollama invalide' }), { status: 400 })
   }
 

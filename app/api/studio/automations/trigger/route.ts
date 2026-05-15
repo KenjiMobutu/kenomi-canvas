@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-
-function isAllowedWebhookUrl(url: string): boolean {
-  try {
-    const { protocol, hostname } = new URL(url)
-    if (!['http:', 'https:'].includes(protocol)) return false
-    if (/^169\.254\./.test(hostname)) return false
-    return true
-  } catch {
-    return false
-  }
-}
+import { isAllowedWebhookUrl } from '@/lib/security'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
