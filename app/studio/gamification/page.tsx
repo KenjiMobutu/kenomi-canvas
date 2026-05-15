@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { agentById, useIsMobile } from '@/lib/studio-utils'
+import { agentById, AGENTS_DATA, makeSpark, sparkPath, areaPath, useIsMobile } from '@/lib/studio-utils'
 import { ACHIEVEMENTS_META, type Achievement, type AgentLevel } from '@/lib/gamification'
 import { useGamification } from '@/lib/use-gamification'
 import {
@@ -684,8 +684,8 @@ function AchievementsTab({ achievements, claimedIds, onRefetch, loading }: {
   )
 }
 
-/* ─────── Constellation constants ─────── */
-const CHATTER = [
+/* ─────── Constellation data ─────── */
+const CHATTER_DATA = [
   { from: 'scout',      to: 'validation', type: 'signal',  text: "r/solopreneur spike +312% — 'AI inbox triage'" },
   { from: 'validation', to: 'decision',   type: 'score',   text: 'HR Ops Inbox · score 78 / CPC 0.42€' },
   { from: 'decision',   to: 'builder',    type: 'order',   text: 'Build landing — Solo CFO v2' },
@@ -697,211 +697,477 @@ const CHATTER = [
   { from: 'scout',      to: 'marketing',  type: 'trend',   text: "TikTok hook — 'AI bookkeeper'" },
   { from: 'validation', to: 'builder',    type: 'spec',    text: 'Niche: bilingual freelancer invoicing' },
 ]
-const TYPE_COLOR: Record<string, string> = {
-  signal: '#22d3ee', score: '#a78bfa', order: '#ff6a3d',
-  handoff: '#34d399', event: '#fbbf24', ping: '#e879f9',
-  report: '#60a5fa', brief: '#fb923c', trend: '#22d3ee', spec: '#a78bfa',
+const VENTURES_QUEST = [
+  { id: 'forms', name: 'Kenomi Forms',      status: 'Scale',    score: 91, mrr: 2800, cac: 14, agents: ['analytics','marketing','payment','decision'] },
+  { id: 'cfo',   name: 'Solo CFO Copilot',  status: 'Continue', score: 84, mrr:  620, cac: 21, agents: ['validation','marketing','analytics'] },
+  { id: 'ops',   name: 'HR Ops Inbox',      status: 'Continue', score: 78, mrr:    0, cac:  0, agents: ['validation','marketing','builder'] },
+  { id: 'legal', name: 'Legal Intake Bot',  status: 'Pivot',    score: 68, mrr:  310, cac: 39, agents: ['builder','payment','marketing'] },
+  { id: 'crm',   name: 'Creator CRM Lite',  status: 'Stop',     score: 42, mrr:  120, cac: 52, agents: ['marketing','analytics'] },
+]
+const TRAFFIC_VOLS: Record<string, Record<string, number>> = {
+  scout:      { validation: 142, marketing:  87 },
+  validation: { decision:  156, builder:   198 },
+  builder:    { payment:   241 },
+  payment:    { analytics:  89 },
+  marketing:  { analytics: 134 },
+  analytics:  { decision:  178 },
+  decision:   { builder:   167, marketing: 143 },
 }
-const ORBITAL_IDS = ['scout', 'validation', 'builder', 'payment', 'marketing', 'analytics'] as const
-const CST_CX = 320, CST_CY = 250, CST_R = 190
-const CST_ORB: Record<string, { x: number; y: number }> = { decision: { x: CST_CX, y: CST_CY } }
-ORBITAL_IDS.forEach((id, i) => {
-  const a = -Math.PI / 2 + (i / ORBITAL_IDS.length) * Math.PI * 2
-  CST_ORB[id] = { x: Math.round((CST_CX + CST_R * Math.cos(a)) * 10) / 10, y: Math.round((CST_CY + CST_R * Math.sin(a)) * 10) / 10 }
-})
+const MAX_TVOL = 241
+const AGENT_IDS = ['scout','validation','builder','payment','marketing','analytics','decision'] as const
+const STATUS_COLOR: Record<string, string> = {
+  Scale: '#34d399', Continue: '#22d3ee', Pivot: '#e879f9', Stop: '#fb7185',
+}
+const CST_CX = 550, CST_CY = 310, CST_R = 215
+
+type AgentPos = typeof AGENTS_DATA[0] & { x: number; y: number }
+type BeamItem = typeof CHATTER_DATA[0]
+
+/* ─────── ConstellationSVG ─────── */
+function ConstellationSVG({ agentPositions, activeBeams, levelMap }: {
+  agentPositions: AgentPos[]
+  activeBeams: BeamItem[]
+  levelMap: Record<string, AgentLevel>
+}) {
+  const W = 1100, H = 600
+  return (
+    <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
+      style={{ display: 'block', minHeight: 400 } as V}>
+      <defs>
+        <radialGradient id="cstCoreGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor="var(--ck-accent)" stopOpacity=".55" />
+          <stop offset="60%"  stopColor="var(--ck-accent)" stopOpacity=".05" />
+          <stop offset="100%" stopColor="var(--ck-accent)" stopOpacity="0"   />
+        </radialGradient>
+        <filter id="cstSoftGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" />
+        </filter>
+      </defs>
+
+      {/* Backdrop glow */}
+      <circle cx={CST_CX} cy={CST_CY} r={CST_R + 110} fill="url(#cstCoreGlow)" />
+
+      {/* Concentric rings */}
+      {[1, 1.4, 1.85, 2.25].map((m, i) => (
+        <circle key={i} cx={CST_CX} cy={CST_CY} r={CST_R * m * 0.42}
+          fill="none" stroke="var(--ck-line)" strokeDasharray={i % 2 ? '2 6' : undefined} />
+      ))}
+
+      {/* Tick marks */}
+      {Array.from({ length: 60 }).map((_, i) => {
+        const a = (i / 60) * Math.PI * 2
+        const r1 = CST_R + 60, r2 = CST_R + (i % 5 === 0 ? 68 : 64)
+        return (
+          <line key={i}
+            x1={CST_CX + Math.cos(a) * r1} y1={CST_CY + Math.sin(a) * r1}
+            x2={CST_CX + Math.cos(a) * r2} y2={CST_CY + Math.sin(a) * r2}
+            stroke={i % 5 === 0 ? 'var(--ck-text)' : 'var(--ck-muted-2)'}
+            strokeOpacity={i % 5 === 0 ? .55 : .22}
+            strokeWidth={i % 5 === 0 ? 1.2 : 0.8} />
+        )
+      })}
+
+      {/* Rotating compass dot (SMIL) */}
+      <g>
+        <animateTransform attributeName="transform" type="rotate"
+          from={`0 ${CST_CX} ${CST_CY}`} to={`360 ${CST_CX} ${CST_CY}`}
+          dur="8s" repeatCount="indefinite" />
+        <circle cx={CST_CX + CST_R + 70} cy={CST_CY} r={4} fill="var(--ck-accent)" />
+        <circle cx={CST_CX + CST_R + 70} cy={CST_CY} r={10} fill="var(--ck-accent)" opacity=".22" />
+      </g>
+
+      {/* Active beams */}
+      {activeBeams.map((beam, idx) => {
+        const fromA = agentPositions.find(a => a.id === beam.from)
+        const toA   = agentPositions.find(a => a.id === beam.to)
+        if (!fromA || !toA) return null
+        return (
+          <g key={`${idx}-${beam.text}`}>
+            <line x1={fromA.x} y1={fromA.y} x2={toA.x} y2={toA.y}
+              stroke={fromA.color} strokeOpacity=".55" strokeWidth="1.4"
+              strokeDasharray="4 6"
+              style={{ animation: 'dash-flow 1.4s linear infinite' } as V} />
+            <circle r={5} fill={fromA.color} filter="url(#cstSoftGlow)">
+              <animate attributeName="cx" from={String(Math.round(fromA.x))} to={String(Math.round(toA.x))} dur="1.5s" repeatCount="indefinite" />
+              <animate attributeName="cy" from={String(Math.round(fromA.y))} to={String(Math.round(toA.y))} dur="1.5s" repeatCount="indefinite" />
+            </circle>
+            <circle r={3} fill="#fff">
+              <animate attributeName="cx" from={String(Math.round(fromA.x))} to={String(Math.round(toA.x))} dur="1.5s" repeatCount="indefinite" />
+              <animate attributeName="cy" from={String(Math.round(fromA.y))} to={String(Math.round(toA.y))} dur="1.5s" repeatCount="indefinite" />
+            </circle>
+          </g>
+        )
+      })}
+
+      {/* Central core */}
+      <g transform={`translate(${CST_CX}, ${CST_CY})`}>
+        <circle r={56} fill="var(--ck-surface)" stroke="var(--ck-accent)" strokeOpacity=".7" />
+        <circle r={56} fill="none" stroke="var(--ck-accent)" strokeOpacity=".25" strokeDasharray="2 4">
+          <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="14s" repeatCount="indefinite" />
+        </circle>
+        <circle r={46} fill="none" stroke="var(--ck-accent)" strokeOpacity=".4" strokeDasharray="3 7">
+          <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="10s" repeatCount="indefinite" />
+        </circle>
+        <text textAnchor="middle" y={-6} fontSize={9} letterSpacing="3"
+          fill="var(--ck-muted)" fontFamily="var(--font-mono)">DECISION CORE</text>
+        <text textAnchor="middle" y={14} fontSize={22} fontWeight="800"
+          fill="var(--ck-text)" fontFamily="var(--font-display)" letterSpacing="-.02em">CONTINUE</text>
+        <text textAnchor="middle" y={32} fontSize={10}
+          fill="var(--ck-accent)" fontFamily="var(--font-mono)" letterSpacing="2">CONF 89%</text>
+      </g>
+
+      {/* Agent nodes */}
+      {agentPositions.map(a => {
+        const active  = activeBeams.some(b => b.from === a.id || b.to === a.id)
+        const isRight = (a.x - CST_CX) > 0
+        const al      = levelMap[a.id]
+        const xpVal   = al ? al.xpBar : a.xp
+        const lvlVal  = al ? al.level  : a.level
+        return (
+          <g key={a.id} transform={`translate(${Math.round(a.x)}, ${Math.round(a.y)})`}>
+            {active && (
+              <circle r={30} fill="none" stroke={a.color} strokeOpacity=".5">
+                <animate attributeName="r"              from="28" to="52" dur="1.6s" repeatCount="indefinite" />
+                <animate attributeName="stroke-opacity" from=".7"  to="0" dur="1.6s" repeatCount="indefinite" />
+              </circle>
+            )}
+            <circle r={28} fill="var(--ck-surface)" stroke={a.color} strokeOpacity=".8" strokeWidth="1.4" />
+            <circle r={24} fill={a.color} fillOpacity=".09" />
+            <text textAnchor="middle" y={7} fontSize={22}
+              fill={a.color} fontFamily="var(--font-display)" fontWeight="700">{a.sigil}</text>
+            <g transform={isRight ? 'translate(36, 0)' : 'translate(-36, 0)'}>
+              <text textAnchor={isRight ? 'start' : 'end'} y={-2} fontSize={13} fontWeight="700"
+                fill="var(--ck-text)" fontFamily="var(--font-display)" letterSpacing="-.01em">{a.name}</text>
+              <text textAnchor={isRight ? 'start' : 'end'} y={12} fontSize={9}
+                fill="var(--ck-muted)" fontFamily="var(--font-mono)" letterSpacing="1.4">
+                {`LV ${lvlVal} · ${a.model.toUpperCase()}`}
+              </text>
+              <rect x={isRight ? 0 : -90} y={20} width={90} height={3} rx={1.5} fill="var(--ck-line-2)" />
+              <rect x={isRight ? 0 : -(90 * xpVal)} y={20} width={90 * xpVal} height={3} rx={1.5} fill={a.color} />
+            </g>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+/* ─────── GaugeCard ─────── */
+function GaugeCard({ label, value, delta, tone, spark }: {
+  label: string; value: string; delta: string; tone: string; spark: number[]
+}) {
+  const safeId  = label.replace(/\s+/g, '-').toLowerCase()
+  const pathLine = sparkPath(spark, 140, 44)
+  const pathArea = areaPath(spark, 140, 44)
+  return (
+    <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 12, padding: 12, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.14em', textTransform: 'uppercase' as const, color: muted }}>{label}</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 4, background: tone + '1a', color: tone, letterSpacing: 1 }}>{delta}</span>
+      </div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', marginTop: 8, color: text }}>{value}</div>
+      <svg width="100%" height="44" style={{ marginTop: 6 }} viewBox="0 0 140 44" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={`cg-${safeId}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%"   stopColor={tone} stopOpacity=".35" />
+            <stop offset="100%" stopColor={tone} stopOpacity="0"   />
+          </linearGradient>
+        </defs>
+        <path d={pathArea} fill={`url(#cg-${safeId})`} />
+        <path d={pathLine} fill="none" stroke={tone} strokeWidth="1.6" />
+      </svg>
+    </div>
+  )
+}
+
+/* ─────── DecisionQueuePanel ─────── */
+function DecisionQueuePanel() {
+  const queue = [
+    { action: 'Scale',    venture: 'Kenomi Forms',     conf: 92, color: emerald     },
+    { action: 'Continue', venture: 'Solo CFO Copilot', conf: 84, color: cyan        },
+    { action: 'Pivot',    venture: 'Legal Intake Bot',  conf: 76, color: fuchsia     },
+    { action: 'Stop',     venture: 'Creator CRM Lite',  conf: 71, color: '#fb7185'  },
+  ]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {queue.map(d => (
+        <div key={d.venture} style={{
+          padding: 10, borderRadius: 8, border: `1px solid ${line}`,
+          background: surface2, display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 10, alignItems: 'center',
+        }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '4px 8px', borderRadius: 4, background: d.color + '22', color: d.color, letterSpacing: 1.5, fontWeight: 700 }}>
+            {d.action.toUpperCase()}
+          </span>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: text }}>{d.venture}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: 1, marginTop: 2 }}>conf {d.conf}%</div>
+          </div>
+          <div style={{ width: 38, height: 38, position: 'relative' }}>
+            <svg width="38" height="38" viewBox="0 0 38 38">
+              <circle cx="19" cy="19" r="15" fill="none" stroke={line2} strokeWidth="3" />
+              <circle cx="19" cy="19" r="15" fill="none" stroke={d.color} strokeWidth="3"
+                strokeDasharray={`${(d.conf / 100) * 94} 94`} strokeLinecap="round" transform="rotate(-90 19 19)" />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: d.color }}>{d.conf}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ─────── AgentCard ─────── */
+function AgentCard({ agent, level, xpBar }: {
+  agent: typeof AGENTS_DATA[0]; level: number; xpBar: number
+}) {
+  return (
+    <div style={{ position: 'relative', background: surface, border: `1px solid ${line}`, borderRadius: 12, padding: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 2, background: agent.color }} />
+      <div style={{ position: 'absolute', right: -8, bottom: -16, fontFamily: 'var(--font-display)', fontSize: 100, fontWeight: 800, color: agent.color, opacity: .07, lineHeight: 1, pointerEvents: 'none' }}>{agent.sigil}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ position: 'relative', width: 34, height: 34, flexShrink: 0 }}>
+          <div style={{ position: 'absolute', inset: 0, borderRadius: 8, background: `conic-gradient(from 0deg, ${agent.color}, transparent 60%, ${agent.color})`, opacity: 0.6 }} />
+          <div style={{ position: 'absolute', inset: 2, borderRadius: 6, background: surface, border: `1px solid ${agent.color}55`, display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16, color: agent.color }}>{agent.sigil}</div>
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '-.01em', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.name}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', borderRadius: 3, background: agent.color + '22', color: agent.color, fontWeight: 700, flexShrink: 0 }}>LV{level}</span>
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: 1 }}>{agent.code} · {agent.model.toUpperCase()}</div>
+        </div>
+      </div>
+      <div style={{ height: 4, borderRadius: 2, background: surface2, overflow: 'hidden' }}>
+        <div style={{ width: `${xpBar * 100}%`, height: '100%', background: agent.color, transition: 'width .6s ease' }} />
+      </div>
+      <div style={{ padding: '6px 8px', borderRadius: 6, background: surface2, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: agent.color, flexShrink: 0, boxShadow: `0 0 5px ${agent.color}` }} />
+        <span style={{ fontSize: 11, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.role}</span>
+      </div>
+    </div>
+  )
+}
+
+/* ─────── VentureQuestsPanel ─────── */
+function VentureQuestsPanel() {
+  return (
+    <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, overflow: 'hidden' }}>
+      {VENTURES_QUEST.map((v, i) => (
+        <div key={v.id} style={{
+          padding: '12px 14px',
+          borderBottom: i < VENTURES_QUEST.length - 1 ? `1px solid ${line}` : 'none',
+          display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center',
+        }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, padding: '3px 8px', borderRadius: 4, background: (STATUS_COLOR[v.status] ?? accent) + '22', color: STATUS_COLOR[v.status] ?? accent, letterSpacing: 1.5, fontWeight: 700, textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const }}>
+            {v.status}
+          </span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: text }}>{v.name}</div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
+              {v.mrr > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: emerald }}>€{v.mrr.toLocaleString()} MRR</span>}
+              {v.cac > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted }}>CAC €{v.cac}</span>}
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted }}>score {v.score}</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex' }}>
+            {v.agents.map((agId, j) => {
+              const ag = agentById(agId)
+              return (
+                <div key={agId} title={ag.name} style={{ width: 22, height: 22, borderRadius: '50%', background: ag.color + '22', border: `1.5px solid ${ag.color}66`, display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontSize: 11, color: ag.color, marginLeft: j === 0 ? 0 : -4 }}>
+                  {ag.sigil}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ─────── TrafficMatrixPanel ─────── */
+function TrafficMatrixPanel() {
+  return (
+    <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, overflow: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr>
+            <th style={{ padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 7.5, color: muted, textAlign: 'left', borderBottom: `1px solid ${line}`, whiteSpace: 'nowrap' as const }}>FROM ↓ · TO →</th>
+            {AGENT_IDS.map(id => {
+              const ag = agentById(id)
+              return (
+                <th key={id} style={{ padding: '8px 6px', fontFamily: 'var(--font-mono)', fontSize: 8, color: ag.color, textAlign: 'center', letterSpacing: 1, borderBottom: `1px solid ${line}` }}>
+                  {ag.code}
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {AGENT_IDS.map(fromId => {
+            const fromAg = agentById(fromId)
+            return (
+              <tr key={fromId}>
+                <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', fontSize: 8, color: fromAg.color, letterSpacing: 1, borderBottom: `1px solid ${line}`, whiteSpace: 'nowrap' as const }}>
+                  {fromAg.code}
+                </td>
+                {AGENT_IDS.map(toId => {
+                  const vol       = TRAFFIC_VOLS[fromId]?.[toId] ?? 0
+                  const intensity = vol / MAX_TVOL
+                  const isDiag    = fromId === toId
+                  const alpha     = Math.round(15 + intensity * 60).toString(16).padStart(2, '0')
+                  return (
+                    <td key={toId} style={{
+                      padding: '7px 4px', textAlign: 'center',
+                      background: isDiag ? surface2 : vol > 0 ? fromAg.color + alpha : 'transparent',
+                      borderBottom: `1px solid ${line}`,
+                    }}>
+                      {isDiag ? (
+                        <span style={{ color: muted2, fontSize: 10 }}>—</span>
+                      ) : vol > 0 ? (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: intensity > 0.5 ? 700 : 400, color: intensity > 0.4 ? fromAg.color : muted }}>
+                          {vol}
+                        </span>
+                      ) : (
+                        <span style={{ color: line2, fontSize: 10 }}>·</span>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 /* ─────── ConstellationTab ─────── */
 function ConstellationTab({ agentLevels }: { agentLevels: AgentLevel[] }) {
   const isMobile = useIsMobile()
-  const [feedIdx, setFeedIdx] = useState(0)
+  const [logIndex, setLogIndex] = useState(0)
 
   useEffect(() => {
-    const id = setInterval(() => setFeedIdx(n => (n + 1) % CHATTER.length), 2800)
+    const id = setInterval(() => setLogIndex(n => (n + 1) % CHATTER_DATA.length), 1800)
     return () => clearInterval(id)
   }, [])
+
+  const agentPositions = useMemo<AgentPos[]>(() =>
+    AGENTS_DATA.map((a, i) => {
+      const angle = (i / AGENTS_DATA.length) * Math.PI * 2 - Math.PI / 2
+      return { ...a, x: CST_CX + Math.cos(angle) * CST_R, y: CST_CY + Math.sin(angle) * CST_R }
+    }), [])
+
+  const activeBeams = useMemo<BeamItem[]>(
+    () => [0, 1, 2].map(k => CHATTER_DATA[(logIndex + k) % CHATTER_DATA.length]),
+    [logIndex]
+  )
 
   const levelMap = useMemo(
     () => Object.fromEntries(agentLevels.map(al => [al.id, al])),
     [agentLevels]
   )
 
-  const feedEntries = Array.from({ length: 5 }, (_, i) =>
-    CHATTER[(feedIdx - 4 + i + CHATTER.length) % CHATTER.length]
-  )
+  const sparkMRR  = useMemo(() => makeSpark(36, 30, 12,  7), [])
+  const sparkCAC  = useMemo(() => makeSpark(36, 60, 14, 11), [])
+  const sparkConv = useMemo(() => makeSpark(36, 45, 16, 19), [])
+  const sparkExp  = useMemo(() => makeSpark(36, 40, 22, 23), [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100dvh - 56px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100dvh - 56px)', overflow: 'auto' }}>
+
+      {/* Row 1: SVG + right rail */}
       <div style={{
-        flex: 1, display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
-        alignItems: 'stretch',
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 400px',
+        minHeight: isMobile ? 'auto' : 560,
+        borderBottom: `1px solid ${line}`,
       }}>
-        {/* SVG orbital map */}
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: isMobile ? '12px 8px 8px' : '20px 24px',
-        }}>
-          <svg viewBox="0 0 640 500" width="100%"
-            style={{ maxWidth: isMobile ? 360 : 640, overflow: 'visible' }}>
-            {/* Orbit ring */}
-            <circle cx={CST_CX} cy={CST_CY} r={CST_R}
-              fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="1" strokeDasharray="5 12" />
-            {/* Inner halo */}
-            <circle cx={CST_CX} cy={CST_CY} r={62}
-              fill="none" stroke="rgba(255,106,61,.12)" strokeWidth="1" />
-
-            {/* Beam static lines */}
-            {CHATTER.map((c, i) => {
-              const f = CST_ORB[c.from], t = CST_ORB[c.to]
-              if (!f || !t) return null
-              return <line key={`sl${i}`} x1={f.x} y1={f.y} x2={t.x} y2={t.y}
-                stroke={TYPE_COLOR[c.type] ?? '#888'} strokeWidth="0.6" opacity="0.2" />
-            })}
-
-            {/* Animated pulse dots */}
-            {CHATTER.map((c, i) => {
-              const f = CST_ORB[c.from], t = CST_ORB[c.to]
-              if (!f || !t) return null
-              const col = TYPE_COLOR[c.type] ?? '#888'
-              return (
-                <circle key={`pd${i}`} r="3" fill={col}
-                  style={{ filter: `drop-shadow(0 0 5px ${col})` } as V}>
-                  <animateMotion
-                    dur={`${(2.0 + (i * 0.43) % 2.8).toFixed(1)}s`}
-                    repeatCount="indefinite"
-                    begin={`${((i * 0.55) % 3.5).toFixed(2)}s`}
-                    calcMode="linear"
-                    path={`M ${f.x} ${f.y} L ${t.x} ${t.y}`}
-                  />
-                </circle>
-              )
-            })}
-
-            {/* Decision Core */}
-            <circle cx={CST_CX} cy={CST_CY} r={50} fill="rgba(255,106,61,.07)" />
-            <circle cx={CST_CX} cy={CST_CY} r={38} fill="var(--ck-surface)" stroke="#ff6a3d" strokeWidth="1.5" />
-            <text x={CST_CX} y={CST_CY + 10} textAnchor="middle"
-              fill="#ff6a3d" fontSize="26" fontFamily="var(--font-display)" fontWeight="800">✦</text>
-            <text x={CST_CX} y={CST_CY + 64} textAnchor="middle"
-              fill="#ff6a3d" fontSize="8" fontFamily="var(--font-mono)" letterSpacing="2">DECISION</text>
-            <text x={CST_CX} y={CST_CY + 76} textAnchor="middle"
-              fill="rgba(255,106,61,.55)" fontSize="7.5" fontFamily="var(--font-mono)">
-              {`LV ${levelMap['decision']?.level ?? 0}`}
-            </text>
-
-            {/* Orbital agents */}
-            {ORBITAL_IDS.map(id => {
-              const pos = CST_ORB[id]!
-              const ag = agentById(id)
-              const al = levelMap[id]
-              const xpBar = al?.xpBar ?? 0
-              const level = al?.level ?? 0
-              const arcR = 32
-              const circ = 2 * Math.PI * arcR
-              const offset = circ * (1 - xpBar)
-              return (
-                <g key={id} transform={`translate(${pos.x}, ${pos.y})`}>
-                  {/* XP arc bg */}
-                  <circle r={arcR} fill="none" stroke={ag.color + '22'} strokeWidth="2.5" />
-                  {/* XP arc fill */}
-                  <circle r={arcR} fill="none" stroke={ag.color} strokeWidth="2.5"
-                    strokeDasharray={circ.toFixed(1)} strokeDashoffset={offset.toFixed(1)}
-                    strokeLinecap="round" transform="rotate(-90)" />
-                  {/* Node circle */}
-                  <circle r={24} fill="var(--ck-surface)" stroke={ag.color + '66'} strokeWidth="1" />
-                  {/* Sigil */}
-                  <text textAnchor="middle" dominantBaseline="middle" y="1"
-                    fill={ag.color} fontSize="18" fontFamily="var(--font-display)" fontWeight="800">{ag.sigil}</text>
-                  {/* Code */}
-                  <text y={arcR + 14} textAnchor="middle"
-                    fill="var(--ck-muted)" fontSize="7.5" fontFamily="var(--font-mono)" letterSpacing="1.5">{ag.code}</text>
-                  {/* Level */}
-                  <text y={-(arcR + 9)} textAnchor="middle"
-                    fill={ag.color} fontSize="7.5" fontFamily="var(--font-mono)" fontWeight="800">LV{level}</text>
-                </g>
-              )
-            })}
-          </svg>
+        {/* SVG panel */}
+        <div style={{ padding: isMobile ? '12px 4px' : '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ConstellationSVG agentPositions={agentPositions} activeBeams={activeBeams} levelMap={levelMap} />
         </div>
 
-        {/* Mission feed — desktop only */}
+        {/* Right rail */}
         {!isMobile && (
-          <div style={{
-            width: 296, flexShrink: 0,
-            borderLeft: `1px solid ${line}`,
-            display: 'flex', flexDirection: 'column',
-          }}>
-            <div style={{
-              padding: '12px 16px 10px',
-              fontFamily: 'var(--font-mono)', fontSize: 8.5, letterSpacing: '.28em',
-              textTransform: 'uppercase', color: muted,
-              borderBottom: `1px solid ${line}`,
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <span style={{
-                display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
-                background: emerald, boxShadow: `0 0 6px ${emerald}`,
-                animation: 'lu-glow 2s ease-in-out infinite',
-              }} />
-              Mission Feed
+          <div style={{ borderLeft: `1px solid ${line}`, display: 'flex', flexDirection: 'column', gap: 0, overflow: 'auto' }}>
+            {/* KPI Gauges */}
+            <div style={{ padding: '14px 14px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <GaugeCard label="MRR Studio"    value="€3 750"  delta="+18%"  tone={emerald} spark={sparkMRR}  />
+              <GaugeCard label="CAC moyen"     value="€22"     delta="-11%"  tone={cyan}    spark={sparkCAC}  />
+              <GaugeCard label="Conv. rate"    value="4.8%"    delta="+0.7%" tone={violet}  spark={sparkConv} />
+              <GaugeCard label="Exp. actives"  value="23"      delta="+3"    tone={fuchsia} spark={sparkExp}  />
             </div>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              {feedEntries.map((entry, i) => {
-                const isCurrent = i === 4
-                const fromAg = agentById(entry.from)
-                const toAg = agentById(entry.to)
-                const tColor = TYPE_COLOR[entry.type] ?? accent
-                return (
-                  <div key={i} style={{
-                    padding: '10px 16px',
-                    opacity: 0.28 + i * 0.18,
-                    transition: 'opacity .4s ease',
-                    borderBottom: `1px solid ${line}`,
-                    background: isCurrent ? tColor + '0a' : 'transparent',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                      <span style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 7.5, padding: '2px 5px', borderRadius: 3,
-                        background: tColor + '22', color: tColor, letterSpacing: '.12em',
-                        textTransform: 'uppercase', fontWeight: 700,
-                      }}>{entry.type}</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: fromAg.color, fontWeight: 700 }}>{fromAg.code}</span>
-                      <span style={{ fontSize: 9, color: muted }}>→</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: toAg.color, fontWeight: 700 }}>{toAg.code}</span>
-                    </div>
-                    <div style={{ fontSize: 11, color: isCurrent ? text : muted, lineHeight: 1.35 }}>{entry.text}</div>
-                  </div>
-                )
-              })}
+            {/* Decision Queue */}
+            <div style={{ padding: '14px 14px', flex: 1 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, letterSpacing: '.28em', textTransform: 'uppercase' as const, color: muted, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: accent, boxShadow: `0 0 6px ${accent}`, animation: 'lu-glow 2s ease-in-out infinite' }} />
+                Decision Queue
+              </div>
+              <DecisionQueuePanel />
             </div>
           </div>
         )}
       </div>
 
+      {/* Row 2: Agent roster */}
+      <div style={{
+        padding: '14px 16px',
+        display: 'grid',
+        gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(7, 1fr)',
+        gap: 10,
+        borderBottom: `1px solid ${line}`,
+      }}>
+        {AGENTS_DATA.map(agent => {
+          const al = levelMap[agent.id]
+          return <AgentCard key={agent.id} agent={agent} level={al?.level ?? 0} xpBar={al?.xpBar ?? 0} />
+        })}
+      </div>
+
+      {/* Row 3: Venture Quests + Traffic Matrix */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 520px',
+        gap: 14,
+        padding: '14px 16px',
+        borderBottom: `1px solid ${line}`,
+      }}>
+        <div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, letterSpacing: '.28em', textTransform: 'uppercase' as const, color: muted, marginBottom: 10 }}>
+            Venture Quests
+          </div>
+          <VentureQuestsPanel />
+        </div>
+        <div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, letterSpacing: '.28em', textTransform: 'uppercase' as const, color: muted, marginBottom: 10 }}>
+            Traffic Matrix
+          </div>
+          <TrafficMatrixPanel />
+        </div>
+      </div>
+
       {/* Ticker */}
       <div style={{
-        height: 36, borderTop: `1px solid ${line}`, background: surface,
+        height: 44, background: surface,
         overflow: 'hidden', display: 'flex', alignItems: 'center',
         position: 'relative', flexShrink: 0,
       }}>
         <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 48, zIndex: 1, pointerEvents: 'none', background: `linear-gradient(90deg, ${surface}, transparent)` }} />
         <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 48, zIndex: 1, pointerEvents: 'none', background: `linear-gradient(-90deg, ${surface}, transparent)` }} />
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
-          animation: 'const-ticker 30s linear infinite',
-        }}>
-          {[...CHATTER, ...CHATTER].map((c, i) => {
-            const tColor = TYPE_COLOR[c.type] ?? accent
+        <div style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap', animation: 'const-ticker 32s linear infinite' }}>
+          {[...CHATTER_DATA, ...CHATTER_DATA].map((c, i) => {
             const fromAg = agentById(c.from)
-            const toAg = agentById(c.to)
+            const toAg   = agentById(c.to)
+            const ts = `T+${String(Math.floor(i * 1.8 / 60)).padStart(2,'0')}:${String(Math.floor(i * 1.8 % 60)).padStart(2,'0')}`
             return (
               <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 18px' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7.5, color: tColor, letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 700 }}>{c.type}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: fromAg.color, fontWeight: 700 }}>{fromAg.code}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: muted2, letterSpacing: 1 }}>{ts}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, padding: '2px 5px', borderRadius: 3, background: fromAg.color + '22', color: fromAg.color, fontWeight: 700, letterSpacing: 1 }}>{fromAg.code}</span>
                 <span style={{ color: muted, fontSize: 9 }}>→</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: toAg.color, fontWeight: 700 }}>{toAg.code}</span>
-                <span style={{ fontSize: 10, color: muted }}>{c.text}</span>
-                <span style={{ color: line2, fontSize: 12, paddingLeft: 8 }}>·</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, padding: '2px 5px', borderRadius: 3, background: toAg.color + '22', color: toAg.color, fontWeight: 700, letterSpacing: 1 }}>{toAg.code}</span>
+                <span style={{ fontSize: 10, color: muted, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.text}</span>
+                <span style={{ color: line2, fontSize: 12, paddingLeft: 6 }}>·</span>
               </span>
             )
           })}
@@ -1000,6 +1266,9 @@ export default function GamificationPage() {
         @keyframes const-ticker {
           from { transform: translateX(0); }
           to   { transform: translateX(-50%); }
+        }
+        @keyframes dash-flow {
+          to { stroke-dashoffset: -20; }
         }
       `}</style>
 
