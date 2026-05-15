@@ -689,7 +689,7 @@ export default function GamificationPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [tab, setTab] = useState<'levelup' | 'achievements'>('levelup')
+  const [tab, setTab] = useState<'levelup' | 'achievements'>('achievements')
   const { achievements, agentLevels, lastLevelUp, userLevel, userXP, loading, claimed, refetch } = useGamification()
 
   useEffect(() => {
