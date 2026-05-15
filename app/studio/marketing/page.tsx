@@ -140,50 +140,18 @@ function MarketingAgentInspector({ channel }: { channel: Channel }) {
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>
           Drafts en cours · {channel.label}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {[
-            { title: 'Solo CFO · founder story 7', progress: 0.92, eta: '2m' },
-            { title: 'Kenomi Forms · feature hook',  progress: 0.64, eta: '5m' },
-            { title: 'Legal pivot · hot take',       progress: 0.34, eta: '8m' },
-          ].map((d, i) => (
-            <div key={i} style={{
-              padding: '7px 9px', borderRadius: 7, background: surface2, border: `1px solid ${line}`,
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <span style={{ fontSize: 11.5, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: text }}>{d.title}</span>
-              <div style={{ width: 60, height: 4, borderRadius: 2, background: surface, overflow: 'hidden', flexShrink: 0 }}>
-                <div style={{ width: `${d.progress * 100}%`, height: '100%', background: channel.color }} />
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: 1, flexShrink: 0 }}>{d.eta}</span>
-            </div>
-          ))}
+        <div style={{ padding: '16px 10px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: muted2 }}>Aucun draft · lancez une campagne</p>
         </div>
       </div>
 
       {/* A/B arena */}
       <div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>
-          A/B test · Solo CFO landing
+          A/B test
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {[{ label: 'Var A', ctr: 4.2, winner: false }, { label: 'Var B', ctr: 6.8, winner: true }].map(v => (
-            <div key={v.label} style={{
-              padding: 10, borderRadius: 8, position: 'relative',
-              background: v.winner ? `linear-gradient(135deg, ${agent.color}25, transparent)` : surface2,
-              border: v.winner ? `1px solid ${agent.color}` : `1px solid ${line}`,
-            }}>
-              {v.winner && (
-                <span style={{
-                  position: 'absolute', top: -8, right: 8,
-                  fontFamily: 'var(--font-mono)', fontSize: 8.5, padding: '2px 6px', borderRadius: 3,
-                  background: agent.color, color: '#0b0d12', letterSpacing: 1.5, fontWeight: 800,
-                }}>WINNER</span>
-              )}
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>{v.label}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: v.winner ? agent.color : text, marginTop: 4, letterSpacing: '-.02em' }}>{v.ctr}%</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.1em', marginTop: 2 }}>CTR · n=2400</div>
-            </div>
-          ))}
+        <div style={{ padding: '16px 10px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: muted2 }}>Aucun test actif</p>
         </div>
       </div>
 
@@ -199,11 +167,17 @@ function MarketingAgentInspector({ channel }: { channel: Channel }) {
 }
 
 function Calendar() {
-  const DAYS = ['LUN 18', 'MAR 19', 'MER 20', 'JEU 21', 'VEN 22', 'SAM 23', 'DIM 24']
+  const today = new Date()
+  const todayIdx = today.getDay() === 0 ? 6 : today.getDay() - 1
+  const DAYS = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today)
+    d.setDate(today.getDate() - todayIdx + i)
+    return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }).toUpperCase()
+  })
   return (
     <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
       {DAYS.map((d, i) => {
-        const isToday = i === 1
+        const isToday = i === todayIdx
         return (
           <div key={d} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <div style={{

@@ -819,7 +819,7 @@ function ColdStartHero() {
 }
 
 /* ⌘K Palette */
-function CmdkPalette({ onClose }: { onClose: () => void }) {
+function CmdkPalette({ onClose, ventures }: { onClose: () => void; ventures: Venture[] }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -827,11 +827,15 @@ function CmdkPalette({ onClose }: { onClose: () => void }) {
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
+  const ventureItems = ventures.map(v => ({
+    kind: 'decision',
+    label: `${v.score >= 75 ? 'Scale' : v.score >= 50 ? 'Continue' : 'Pivot'} · ${v.name}`,
+    hint: `${v.score}% score · ${v.stage}`,
+    href: '/studio/ventures',
+  }))
+
   const allItems = [
-    { kind: 'decision', label: 'Scale · Kenomi Forms',     hint: '92% conf · scale',         href: '/studio' },
-    { kind: 'decision', label: 'Continue · Solo CFO',      hint: '84% conf',                  href: '/studio' },
-    { kind: 'decision', label: 'Pivot · Legal Intake',     hint: '76% conf · → HR Ops',       href: '/studio' },
-    { kind: 'decision', label: 'Stop · Creator CRM Lite',  hint: '71% conf · archive',        href: '/studio' },
+    ...ventureItems,
     { kind: 'venture',  label: 'Ventures',                 hint: 'kanban + funnel',            href: '/studio/ventures' },
     { kind: 'agent',    label: 'Agents',                   hint: 'run · pause · config',       href: '/studio/agents' },
     { kind: 'page',     label: 'Analytics',                hint: 'MRR · cohort · attribution', href: '/studio/analytics' },
@@ -1066,7 +1070,7 @@ export default function CockpitPage() {
 
       <CkFooter state={ckState} />
 
-      {showCmdk && <CmdkPalette onClose={() => setShowCmdk(false)} />}
+      {showCmdk && <CmdkPalette onClose={() => setShowCmdk(false)} ventures={ventures} />}
     </div>
   )
 }

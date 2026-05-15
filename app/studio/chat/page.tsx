@@ -17,10 +17,10 @@ interface Conv { id: string; title: string; updated_at: string; agent_id?: strin
 interface Msg  { id: string; role: string; content: string; created_at: string }
 
 const QUICK_CMDS = [
-  'Lance une analyse niche crypto AI',
-  'Génère une landing Webflow pour CFO Copilot',
+  'Lance une analyse niche pour ma prochaine venture',
+  'Génère une landing pour ma venture en cours',
   'Résume les métriques de la semaine',
-  'Crée un workflow n8n pour score lead',
+  'Crée un workflow n8n pour scorer mes leads',
   'Quel est le CAC moyen ce mois-ci ?',
 ]
 

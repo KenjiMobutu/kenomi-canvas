@@ -371,7 +371,7 @@ export default function SettingsPage() {
                   { label: 'Authentification', value: 'Supabase Auth (email)', color: emerald },
                   { label: 'Session', value: 'JWT · 1h expiry', color: muted },
                   { label: 'RLS', value: '✓ Activé (toutes tables)', color: emerald },
-                  { label: 'Dernière connexion', value: 'Aujourd\'hui', color: muted },
+                  { label: 'Dernière connexion', value: user?.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleDateString('fr-FR') : '—', color: muted },
                 ].map(s => (
                   <div key={s.label}>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.14em', textTransform: 'uppercase', color: muted2 }}>{s.label}</div>
