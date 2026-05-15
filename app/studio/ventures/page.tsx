@@ -354,14 +354,35 @@ export default function VenturesPage() {
 
   const supabase = createSupabaseBrowser()
 
-  async function load() {
-    const { data } = await supabase.from('ventures').select('*').order('score', { ascending: false })
-    const list = (data as Venture[]) || []
-    const dvs = list.map(toDisplay)
-    setItems(dvs)
-    if (!selectedId && dvs.length > 0) setSelectedId(dvs[0].id)
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    async function load() {
+      const { data, error } = await supabase
+        .from('ventures')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('score', { ascending: false })
+      if (cancelled) return
+      if (error) { toast.error(error.message); return }
+      const dvs = ((data as Venture[]) || []).map(toDisplay)
+      setItems(dvs)
+      if (!selectedId && dvs.length > 0) setSelectedId(dvs[0].id)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function reload() {
+    if (!user) return
+    supabase.from('ventures').select('*')
+      .eq('user_id', user!.id)
+      .order('score', { ascending: false })
+      .then(({ data }) => {
+        const dvs = ((data as Venture[]) || []).map(toDisplay)
+        setItems(dvs)
+      })
   }
-  useEffect(() => { if (user) load() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function create(e: React.FormEvent) {
     e.preventDefault()
@@ -375,7 +396,7 @@ export default function VenturesPage() {
     if (error) return toast.error(error.message)
     setForm({ name: '', niche: '', stage: 'validation', score: '', mrr: '' })
     setAdding(false)
-    load()
+    reload()
   }
 
   async function update(id: string, f: EditForm) {
@@ -383,18 +404,18 @@ export default function VenturesPage() {
       name: f.name.trim(), niche: f.niche.trim(), stage: f.stage,
       score: parseInt(f.score) || 0, mrr: f.mrr, cac: f.cac,
       conversion: f.conversion, next_action: f.next_action, insight: f.insight,
-    }).eq('id', id)
+    }).eq('id', id).eq('user_id', user!.id)
     if (error) { toast.error(error.message); return }
     toast.success('Venture mise à jour')
-    load()
+    reload()
   }
 
   async function remove(id: string) {
-    const { error } = await supabase.from('ventures').delete().eq('id', id)
+    const { error } = await supabase.from('ventures').delete().eq('id', id).eq('user_id', user!.id)
     if (error) { toast.error(error.message); return }
     setSelectedId(null)
     toast.success('Venture supprimée')
-    load()
+    reload()
   }
 
   const selected = items.find(v => v.id === selectedId) ?? null
