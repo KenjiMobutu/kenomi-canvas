@@ -229,6 +229,7 @@ function CkHeader({ theme, onToggleTheme, onOpenCmdk }: {
   onOpenCmdk: () => void
 }) {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const navItems = [
     { label: 'Cockpit',    href: '/studio' },
     { label: 'Ventures',   href: '/studio/ventures' },
@@ -240,66 +241,72 @@ function CkHeader({ theme, onToggleTheme, onOpenCmdk }: {
     <header style={{
       position: 'sticky', top: 0, zIndex: 10,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '14px 24px',
+      padding: isMobile ? '10px 14px' : '14px 24px',
       background: bg,
       borderBottom: `1px solid ${line}`,
+      overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14, minWidth: 0 }}>
         {/* Logo mark */}
         <div style={{
-          width: 36, height: 36, borderRadius: 8,
+          width: isMobile ? 28 : 36, height: isMobile ? 28 : 36, borderRadius: 8,
           background: accent, display: 'grid', placeItems: 'center', flexShrink: 0,
         }}>
           <div style={{
-            width: 20, height: 20, borderRadius: 4,
+            width: isMobile ? 16 : 20, height: isMobile ? 16 : 20, borderRadius: 4,
             background: theme === 'light' ? '#fff' : bg,
             display: 'grid', placeItems: 'center',
-            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, color: text,
+            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: isMobile ? 10 : 13, color: text,
           }}>K</div>
         </div>
-        <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', color: muted, textTransform: 'uppercase' }}>
-            Kenomi · cockpit
-          </div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, letterSpacing: '-.02em', color: text, lineHeight: 1.1 }}>
-            Decisions today
+        <div style={{ minWidth: 0 }}>
+          {!isMobile && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', color: muted, textTransform: 'uppercase' }}>
+              Kenomi · cockpit
+            </div>
+          )}
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: isMobile ? 16 : 20, fontWeight: 700, letterSpacing: '-.02em', color: text, lineHeight: 1.1, whiteSpace: 'nowrap' }}>
+            {isMobile ? 'Cockpit' : 'Decisions today'}
           </div>
         </div>
-        <nav style={{ marginLeft: 20, display: 'flex', gap: 4 }}>
-          {navItems.map((item, i) => (
-            <button key={item.label} onClick={() => router.push(item.href)} style={{
-              padding: '6px 12px', borderRadius: 6,
-              background: i === 0 ? surface : 'transparent',
-              color: i === 0 ? text : muted,
-              border: i === 0 ? `1px solid ${line2}` : '1px solid transparent',
-              fontSize: 12, fontWeight: 600,
-              cursor: 'pointer', letterSpacing: '-.005em',
-              fontFamily: 'var(--font-sans)',
-            }}>{item.label}</button>
-          ))}
-        </nav>
+        {!isMobile && (
+          <nav style={{ marginLeft: 20, display: 'flex', gap: 4 }}>
+            {navItems.map((item, i) => (
+              <button key={item.label} onClick={() => router.push(item.href)} style={{
+                padding: '6px 12px', borderRadius: 6,
+                background: i === 0 ? surface : 'transparent',
+                color: i === 0 ? text : muted,
+                border: i === 0 ? `1px solid ${line2}` : '1px solid transparent',
+                fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', letterSpacing: '-.005em',
+                fontFamily: 'var(--font-sans)',
+              }}>{item.label}</button>
+            ))}
+          </nav>
+        )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button onClick={onOpenCmdk} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '7px 12px 7px 14px', borderRadius: 999,
-          background: surface, color: muted,
-          border: `1px solid ${line2}`, cursor: 'pointer',
-          fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '.06em',
-        }}>
-          <span>Search · jump · run</span>
-          <Kbd>⌘K</Kbd>
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        {!isMobile && (
+          <button onClick={onOpenCmdk} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '7px 12px 7px 14px', borderRadius: 999,
+            background: surface, color: muted,
+            border: `1px solid ${line2}`, cursor: 'pointer',
+            fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '.06em',
+          }}>
+            <span>Search · jump · run</span>
+            <Kbd>⌘K</Kbd>
+          </button>
+        )}
         <button onClick={onToggleTheme} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '7px 12px', borderRadius: 999,
+          padding: isMobile ? '6px 10px' : '7px 12px', borderRadius: 999,
           background: surface, color: text,
           border: `1px solid ${line2}`, cursor: 'pointer',
           fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
         }}>
           {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
-          <span>{theme === 'dark' ? 'Night' : 'Day'}</span>
-          <Kbd>T</Kbd>
+          {!isMobile && <><span>{theme === 'dark' ? 'Night' : 'Day'}</span><Kbd>T</Kbd></>}
         </button>
       </div>
     </header>
