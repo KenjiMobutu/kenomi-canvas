@@ -407,13 +407,6 @@ function LevelUpTab({
         {/* CTAs */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button style={{
-            padding: '12px 28px', borderRadius: 999,
-            background: `linear-gradient(90deg, ${agent.color}, ${accent2})`, color: '#0b0d12',
-            border: 'none', cursor: 'pointer',
-            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, letterSpacing: '.06em',
-            boxShadow: `0 6px 30px ${agent.color}55`,
-          }}>RÉCLAMER · +250 XP</button>
-          <button style={{
             padding: '12px 22px', borderRadius: 999,
             background: surface, color: text,
             border: `1px solid ${line2}`, cursor: 'pointer',
