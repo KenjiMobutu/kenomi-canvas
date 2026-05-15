@@ -21,6 +21,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'slug et email requis' }, { status: 400 })
     }
 
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+    if (!EMAIL_RE.test(email)) {
+      return NextResponse.json({ error: 'Format email invalide' }, { status: 400 })
+    }
+
     const venture = await db.venture.findFirst({ where: { slug }, select: { id: true } })
 
     await db.waitlist.upsert({
@@ -29,8 +34,8 @@ export async function POST(req: NextRequest) {
       update: {},
     })
 
-    const origin = req.headers.get('origin') ?? `https://lab.kenomi.eu`
-    return NextResponse.redirect(`${origin}/${slug}?waitlist=ok`, { status: 302 })
+    const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
+    return NextResponse.redirect(`${BASE}/${slug}?waitlist=ok`, { status: 302 })
   } catch (err) {
     console.error('[waitlist]', err)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
