@@ -201,9 +201,11 @@ function StatDelta({ stat, active, delay }: { stat: { label: string; from: numbe
 function LevelUpTab({
   lastLevelUp,
   agentLevels,
+  onSwitchTab,
 }: {
   lastLevelUp: { agentId: string; fromLevel: number; toLevel: number } | null
   agentLevels: AgentLevel[]
+  onSwitchTab: () => void
 }) {
   const agentId  = lastLevelUp?.agentId ?? 'builder'
   const agent    = agentById(agentId)
@@ -230,6 +232,48 @@ function LevelUpTab({
     { label: 'Quality',     from: 86,  to: 91,  suffix: '',  color: violet },
   ]
   const skill = { name: 'Pricing optimizer', desc: 'Auto-A/B prix selon CPC, churn et signal payeur', badge: '✦' }
+
+  if (!lastLevelUp) {
+    return (
+      <div style={{
+        minHeight: 'calc(100dvh - 56px)', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 32, padding: '40px 24px',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.42em', textTransform: 'uppercase', color: muted, marginBottom: 8 }}>NIVEAU ACTUEL</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: text, letterSpacing: '-.02em' }}>
+            {agentLevels.length === 0 ? 'En attente de données…' : 'Aucun level-up récent'}
+          </div>
+          <div style={{ fontSize: 13, color: muted, marginTop: 6, maxWidth: 380 }}>
+            Continue à builder — la prochaine progression déclenchera l&apos;animation
+          </div>
+        </div>
+        {agentLevels.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 10, width: '100%', maxWidth: 620 }}>
+            {agentLevels.map(al => {
+              const ag = agentById(al.id)
+              return (
+                <div key={al.id} style={{ padding: '12px 14px', borderRadius: 10, background: surface, border: `1px solid ${line}`, textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 24, color: ag.color }}>{ag.sigil}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 4 }}>{ag.code}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, color: text, marginTop: 2 }}>LV {al.level}</div>
+                  <div style={{ height: 3, borderRadius: 2, background: surface2, marginTop: 6, overflow: 'hidden' }}>
+                    <div style={{ width: `${al.xpBar * 100}%`, height: '100%', background: ag.color }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <button onClick={onSwitchTab} style={{
+          padding: '10px 22px', borderRadius: 999,
+          background: surface, color: text,
+          border: `1px solid ${line2}`, cursor: 'pointer',
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
+        }}>Voir les achievements</button>
+      </div>
+    )
+  }
 
   return (
     <div style={{
@@ -406,7 +450,7 @@ function LevelUpTab({
 
         {/* CTAs */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button style={{
+          <button onClick={onSwitchTab} style={{
             padding: '12px 22px', borderRadius: 999,
             background: surface, color: text,
             border: `1px solid ${line2}`, cursor: 'pointer',
@@ -431,31 +475,43 @@ function LevelUpTab({
 }
 
 /* ─────── AchievementsTab ─────── */
-function AchievementsTab({ achievements }: { achievements: Achievement[] }) {
+function AchievementsTab({ achievements, claimedIds, onRefetch, loading }: {
+  achievements: Achievement[]
+  claimedIds: string[]
+  onRefetch: () => void
+  loading: boolean
+}) {
   const { user } = useAuth()
   const isMobile = useIsMobile()
   const [filter, setFilter] = useState<string>('all')
-  const [claimed, setClaimed] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('kenomi-claimed-achievements')
-      if (stored) setClaimed(new Set(JSON.parse(stored)))
-    } catch {}
-  }, [])
+  const [optimisticClaimed, setOptimisticClaimed] = useState<string[]>([])
+  const claimed = useMemo(() => new Set([...claimedIds, ...optimisticClaimed]), [claimedIds, optimisticClaimed])
 
   async function handleClaim(id: string, xp: number) {
-    const next = new Set(claimed).add(id)
-    setClaimed(next)
-    try { localStorage.setItem('kenomi-claimed-achievements', JSON.stringify([...next])) } catch {}
+    setOptimisticClaimed(prev => [...prev, id])
     if (user) {
       const supabase = createSupabaseBrowser()
-      await supabase.from('achievement_claims').upsert({ user_id: user.id, achievement_id: id, xp })
-        .then(({ error }) => {
-          if (error && !error.message.includes('does not exist')) toast.error(error.message)
-        })
+      const { error } = await supabase.from('achievement_claims').upsert({ user_id: user.id, achievement_id: id, xp })
+      if (error && !error.message.includes('does not exist')) {
+        toast.error(error.message)
+        return
+      }
+      onRefetch()
     }
     toast.success(`+${xp} XP crédités`)
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: isMobile ? '16px 12px 40px' : '24px 32px 40px', maxWidth: 1400 }}>
+        <div style={{ height: 178, borderRadius: 18, background: surface, border: `1px solid ${line}`, marginBottom: 24, animation: 'ach-shimmer 1.8s linear infinite', backgroundImage: `linear-gradient(110deg, ${surface} 30%, ${surface2} 50%, ${surface} 70%)`, backgroundSize: '200% 100%' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} style={{ height: 120, borderRadius: 12, background: surface, border: `1px solid ${line}`, animation: 'ach-shimmer 1.8s linear infinite', animationDelay: `${i * 0.1}s`, backgroundImage: `linear-gradient(110deg, ${surface} 30%, ${surface2} 50%, ${surface} 70%)`, backgroundSize: '200% 100%' }} />
+          ))}
+        </div>
+      </div>
+    )
   }
 
   const filtered = achievements.filter(a => {
@@ -544,24 +600,32 @@ function AchievementsTab({ achievements }: { achievements: Achievement[] }) {
           </div>
         </div>
         {/* CTAs */}
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button
-            onClick={() => handleClaim(justUnlocked.id, justUnlocked.xp)}
-            style={{
-              padding: '12px 22px', borderRadius: 999,
-              background: `linear-gradient(90deg, ${justUnlocked.color}, ${accent2})`, color: '#0b0d12',
-              border: 'none', cursor: 'pointer',
-              fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12.5, letterSpacing: '.06em',
-              boxShadow: `0 6px 24px ${justUnlocked.color}55`,
-              opacity: claimed.has(justUnlocked.id) ? 0.5 : 1,
-            }}
-          >{claimed.has(justUnlocked.id) ? '✓ Réclamé' : `RÉCLAMER · +${justUnlocked.xp} XP`}</button>
-          <button style={{
-            padding: '10px 18px', borderRadius: 999,
-            background: 'transparent', color: text,
-            border: `1px solid ${line2}`, cursor: 'pointer',
-            fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10.5, letterSpacing: '.14em', textTransform: 'uppercase',
-          }}>Partager</button>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 160 }}>
+          {justUnlocked.unlocked ? (
+            <button
+              onClick={() => handleClaim(justUnlocked.id, justUnlocked.xp)}
+              disabled={claimed.has(justUnlocked.id)}
+              style={{
+                padding: '12px 22px', borderRadius: 999,
+                background: claimed.has(justUnlocked.id) ? surface2 : `linear-gradient(90deg, ${justUnlocked.color}, ${accent2})`,
+                color: claimed.has(justUnlocked.id) ? muted : '#0b0d12',
+                border: claimed.has(justUnlocked.id) ? `1px solid ${line}` : 'none',
+                cursor: claimed.has(justUnlocked.id) ? 'default' : 'pointer',
+                fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12.5, letterSpacing: '.06em',
+                boxShadow: claimed.has(justUnlocked.id) ? 'none' : `0 6px 24px ${justUnlocked.color}55`,
+              }}
+            >{claimed.has(justUnlocked.id) ? '✓ Réclamé' : `RÉCLAMER · +${justUnlocked.xp} XP`}</button>
+          ) : (
+            <div style={{ padding: '10px 14px', borderRadius: 12, background: surface2, border: `1px solid ${line}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Progression</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: justUnlocked.color, letterSpacing: '.1em', fontWeight: 700 }}>{justUnlocked.pct}%</span>
+              </div>
+              <div style={{ height: 6, borderRadius: 3, background: surface, overflow: 'hidden', border: `1px solid ${line}` }}>
+                <div style={{ width: `${justUnlocked.pct}%`, height: '100%', background: `linear-gradient(90deg, ${justUnlocked.color}, ${accent2})`, transition: 'width .6s ease' }} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -626,7 +690,7 @@ export default function GamificationPage() {
   const isMobile = useIsMobile()
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [tab, setTab] = useState<'levelup' | 'achievements'>('levelup')
-  const { achievements, agentLevels, lastLevelUp, userLevel, userXP, loading } = useGamification()
+  const { achievements, agentLevels, lastLevelUp, userLevel, userXP, loading, claimed, refetch } = useGamification()
 
   useEffect(() => {
     try { setTheme((localStorage.getItem('kenomi-ck-theme') as 'dark' | 'light') || 'dark') } catch {}
@@ -769,8 +833,8 @@ export default function GamificationPage() {
       </header>
 
       {tab === 'levelup'
-        ? <LevelUpTab lastLevelUp={lastLevelUp} agentLevels={agentLevels} />
-        : <AchievementsTab achievements={achievements} />}
+        ? <LevelUpTab lastLevelUp={lastLevelUp} agentLevels={agentLevels} onSwitchTab={() => setTab('achievements')} />
+        : <AchievementsTab achievements={achievements} claimedIds={claimed} onRefetch={refetch} loading={loading} />}
     </div>
   )
 }

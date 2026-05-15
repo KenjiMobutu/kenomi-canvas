@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import {
@@ -17,10 +17,13 @@ const INITIAL: GamificationResult = {
   agentLevels: [], newUnlocks: [], lastLevelUp: null,
 }
 
-export function useGamification(): GamificationResult & { loading: boolean } {
+export function useGamification(): GamificationResult & { loading: boolean; claimed: string[]; refetch: () => void } {
   const { user } = useAuth()
   const [result, setResult] = useState<GamificationResult>(INITIAL)
   const [loading, setLoading] = useState(true)
+  const [claimed, setClaimed] = useState<string[]>([])
+  const [tick, setTick] = useState(0)
+  const refetch = useCallback(() => setTick(t => t + 1), [])
 
   useEffect(() => {
     if (!user) { setLoading(false); return }
@@ -65,6 +68,8 @@ export function useGamification(): GamificationResult & { loading: boolean } {
         supabase.from('achievement_claims').select('achievement_id').eq('user_id', userId),
       ])
 
+      const claimedIds = (claims ?? []).map((c: { achievement_id: string }) => c.achievement_id)
+
       const input: GamificationInput = {
         ventures:  (ventures  ?? []) as GamificationInput['ventures'],
         snapshots: (snapshots ?? []) as GamificationInput['snapshots'],
@@ -73,7 +78,7 @@ export function useGamification(): GamificationResult & { loading: boolean } {
         payments:  (payments  ?? []) as GamificationInput['payments'],
         metrics:   (metrics   ?? []) as GamificationInput['metrics'],
         decisions: (decisions ?? []) as GamificationInput['decisions'],
-        claimed:   (claims ?? []).map((c: { achievement_id: string }) => c.achievement_id),
+        claimed:   claimedIds,
       }
 
       const computed = computeGamification(input)
@@ -98,12 +103,13 @@ export function useGamification(): GamificationResult & { loading: boolean } {
 
       if (cancelled) return
       setResult({ ...computed, lastLevelUp })
+      setClaimed(claimedIds)
       setLoading(false)
     }
 
     load()
     return () => { cancelled = true }
-  }, [user])
+  }, [user, tick])
 
-  return { ...result, loading }
+  return { ...result, loading, claimed, refetch }
 }
