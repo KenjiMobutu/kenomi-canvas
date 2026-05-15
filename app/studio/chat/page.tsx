@@ -53,9 +53,14 @@ export default function ChatPage() {
   }, [])
 
   async function loadConvs() {
+    if (!user) return
     const supabase = createSupabaseBrowser()
-    const { data } = await supabase.from('conversations').select('id,title,updated_at,agent_id')
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('id,title,updated_at,agent_id')
+      .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
+    if (error) { toast.error(error.message); return }
     setConvs(data || [])
     if (!activeId && data?.[0]) setActiveId(data[0].id)
   }
@@ -83,8 +88,11 @@ export default function ChatPage() {
   }
 
   async function deleteConv(id: string) {
+    if (!user) return
     const supabase = createSupabaseBrowser()
-    await supabase.from('conversations').delete().eq('id', id)
+    const { error } = await supabase.from('conversations').delete()
+      .eq('id', id).eq('user_id', user.id)
+    if (error) { toast.error(error.message); return }
     if (activeId === id) { setActiveId(null); setMessages([]) }
     loadConvs()
   }
@@ -93,8 +101,8 @@ export default function ChatPage() {
     const msgText = overrideText ?? input.trim()
     if (!msgText || !activeId || sending) return
     setInput('')
-    const userMsgId = 'u-' + Date.now()
-    const asstMsgId = 'a-' + Date.now()
+    const userMsgId = 'u-' + crypto.randomUUID()
+    const asstMsgId = 'a-' + crypto.randomUUID()
     setMessages(m => [...m, { id: userMsgId, role: 'user', content: msgText, created_at: '' }])
     setSending(true)
 
