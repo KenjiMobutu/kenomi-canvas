@@ -26,6 +26,12 @@ describe('isAllowedWebhookUrl', () => {
   it('rejette [::1] (SSRF IPv6 loopback)', () => {
     expect(isAllowedWebhookUrl('http://[::1]:3000/')).toBe(false)
   })
+  it('rejette 10.x.x.x (VPC interne)', () => {
+    expect(isAllowedWebhookUrl('http://10.0.0.1/internal')).toBe(false)
+  })
+  it('rejette 172.16.x.x (VPC interne)', () => {
+    expect(isAllowedWebhookUrl('http://172.16.0.1/secret')).toBe(false)
+  })
 })
 
 describe('isAllowedOllamaUrl', () => {
