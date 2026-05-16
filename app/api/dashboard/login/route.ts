@@ -1,17 +1,24 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { createDashToken } from '@/lib/dashboard-token'
+import { isRateLimited } from '@/lib/rate-limit'
+import { apiError } from '@/lib/api-response'
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
+  if (isRateLimited(`dashboard-login:${ip}`, { limit: 5, windowMs: 15 * 60 * 1000 })) {
+    return apiError('Trop de tentatives. Réessayez dans 15 minutes.', 429)
+  }
+
   let password: string
   try {
     const body = await req.json()
     password = body.password ?? ''
   } catch {
-    return NextResponse.json({ error: 'JSON invalide' }, { status: 400 })
+    return apiError('JSON invalide', 400)
   }
 
   if (!process.env.DASHBOARD_PASSWORD || password !== process.env.DASHBOARD_PASSWORD) {
-    return NextResponse.json({ error: 'Mot de passe incorrect' }, { status: 401 })
+    return apiError('Mot de passe incorrect', 401)
   }
 
   const token = await createDashToken()
