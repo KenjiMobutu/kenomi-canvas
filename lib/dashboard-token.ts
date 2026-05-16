@@ -10,16 +10,21 @@ async function hmacHex(key: string, data: string): Promise<string> {
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-function getDayWindow(): number {
-  return Math.floor(Date.now() / (1000 * 60 * 60 * 24))
+function getSecret(): string {
+  const secret = process.env.DASHBOARD_TOKEN_SECRET
+  if (!secret) throw new Error('DASHBOARD_TOKEN_SECRET est requis')
+  return secret
+}
+
+async function generateToken(dateKey: string, secret: string): Promise<string> {
+  const payload = `${dateKey}`
+  return hmacHex(secret, payload)
 }
 
 export async function createDashToken(): Promise<string> {
-  const password = process.env.DASHBOARD_PASSWORD
-  if (!password) throw new Error('DASHBOARD_PASSWORD is not set')
-  const secret  = process.env.DASHBOARD_TOKEN_SECRET ?? password
-  const payload = `${password}:${getDayWindow()}`
-  return hmacHex(secret, payload)
+  const secret = getSecret()
+  const dateKey = new Date().toISOString().slice(0, 10)
+  return generateToken(dateKey, secret)
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -35,8 +40,12 @@ function constantTimeEqual(a: string, b: string): boolean {
 export async function verifyDashToken(token: string): Promise<boolean> {
   if (!token || token.length !== 64) return false
   try {
-    const expected = await createDashToken()
-    return constantTimeEqual(token, expected)
+    const secret = getSecret()
+    const dateKey = new Date().toISOString().slice(0, 10)
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const validToday = await generateToken(dateKey, secret)
+    const validYesterday = await generateToken(yesterday, secret)
+    return constantTimeEqual(token, validToday) || constantTimeEqual(token, validYesterday)
   } catch {
     return false
   }
