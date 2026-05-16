@@ -525,7 +525,13 @@ function AchievementsTab({ achievements, claimedIds, onRefetch, loading }: {
   const totalCount = achievements.length
   const xpEarned = achievements.filter(a => a.unlocked).reduce((s, a) => s + a.xp, 0)
   const xpPossible = achievements.reduce((s, a) => s + a.xp, 0)
-  const justUnlocked = achievements.find(a => !a.unlocked) ?? achievements[0] ?? { ...ACHIEVEMENTS_META[0], unlocked: false, pct: 0 }
+  // Priorité 1 : achievement débloqué mais pas encore réclamé (bouton RÉCLAMER visible)
+  // Priorité 2 : prochain achievement non encore débloqué (affiche la progression)
+  const justUnlocked =
+    achievements.find(a => a.unlocked && !claimed.has(a.id)) ??
+    achievements.find(a => !a.unlocked) ??
+    achievements[0] ??
+    { ...ACHIEVEMENTS_META[0], unlocked: false, pct: 0 }
 
   return (
     <div style={{ padding: isMobile ? '16px 12px 40px' : '24px 32px 40px', maxWidth: 1400 }}>
