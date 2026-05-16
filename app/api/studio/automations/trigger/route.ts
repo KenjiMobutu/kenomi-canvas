@@ -78,7 +78,9 @@ export async function POST(req: NextRequest) {
     .eq('id', id)
     .eq('user_id', user!.id)
 
-  await Promise.all([runInsert, wfUpdate])
+  const [runRes, wfRes] = await Promise.all([runInsert, wfUpdate])
+  if (runRes.error) console.error('[trigger] automation_runs insert failed:', runRes.error.message)
+  if (wfRes.error) console.error('[trigger] workflow update failed:', wfRes.error.message)
 
   if (status !== 'success') {
     return NextResponse.json(
