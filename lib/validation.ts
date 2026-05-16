@@ -38,3 +38,9 @@ export function isAllowedMimeType(mime: string): boolean {
 export function isAllowedFileSize(bytes: number): boolean {
   return bytes > 0 && bytes <= MAX_UPLOAD_BYTES
 }
+
+const SLUG_RE = /^[a-z0-9-]{1,100}$/
+
+export function isValidSlug(slug: string): boolean {
+  return SLUG_RE.test(slug)
+}

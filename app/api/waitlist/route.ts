@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
+import { isValidEmail, isValidSlug } from '@/lib/validation'
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
@@ -31,11 +32,9 @@ export async function POST(req: NextRequest) {
       return apiError('slug et email requis', 400)
     }
 
-    const SLUG_RE = /^[a-z0-9-]{1,100}$/
-    if (!SLUG_RE.test(slug)) return apiError('slug invalide', 400)
+    if (!isValidSlug(slug)) return apiError('slug invalide', 400)
 
-    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
-    if (!EMAIL_RE.test(email)) {
+    if (!isValidEmail(email)) {
       return apiError('Format email invalide', 400)
     }
 
