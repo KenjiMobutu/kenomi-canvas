@@ -109,8 +109,23 @@ export default function DocumentsPage() {
   }
 
   async function del(d: Doc) {
-    await supabase.storage.from('documents').remove([d.storage_path])
-    await supabase.from('documents').delete().eq('id', d.id).eq('user_id', user!.id)
+    const { error: storageError } = await supabase.storage
+      .from('documents')
+      .remove([d.storage_path])
+    if (storageError) {
+      return toast.error(`Suppression storage échouée : ${storageError.message}`)
+    }
+
+    const { error: dbError } = await supabase
+      .from('documents')
+      .delete()
+      .eq('id', d.id)
+      .eq('user_id', user!.id)
+    if (dbError) {
+      return toast.error(`Suppression base échouée : ${dbError.message}`)
+    }
+
+    toast.success('Document supprimé')
     if (selected?.id === d.id) setSelected(null)
     load()
   }
