@@ -9,6 +9,7 @@ import {
   surface, surface2, line, line2, text, muted, muted2,
   accent, emerald, rose, amber,
 } from '@/lib/ck-vars'
+import { isAllowedMimeType, isAllowedFileSize, sanitizeFilename, MAX_UPLOAD_BYTES } from '@/lib/validation'
 
 interface Doc {
   id: string
@@ -63,14 +64,38 @@ export default function DocumentsPage() {
   async function upload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !user) return
+
+    if (!isAllowedFileSize(file.size)) {
+      toast.error(`Fichier trop volumineux (max ${MAX_UPLOAD_BYTES / 1024 / 1024} Mo)`)
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
+    if (!isAllowedMimeType(file.type)) {
+      toast.error(`Type de fichier non autorisé : ${file.type || 'inconnu'}`)
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
     setUploading(true)
-    const path = `${user.id}/${Date.now()}_${file.name}`
+    const safeName = sanitizeFilename(file.name)
+    const path = `${user.id}/${Date.now()}_${safeName}`
+
     const { error } = await supabase.storage.from('documents').upload(path, file)
-    if (error) { setUploading(false); return toast.error(error.message) }
+    if (error) {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+      return toast.error(error.message)
+    }
+
     await supabase.from('documents').insert({
-      user_id: user.id, name: file.name, storage_path: path,
-      mime_type: file.type, size_bytes: file.size,
+      user_id: user.id,
+      name: safeName,
+      storage_path: path,
+      mime_type: file.type,
+      size_bytes: file.size,
     })
+
     setUploading(false)
     if (fileRef.current) fileRef.current.value = ''
     toast.success('Document uploadé')
