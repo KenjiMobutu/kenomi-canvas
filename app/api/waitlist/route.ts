@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     })
 
     const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
-    return NextResponse.redirect(`${BASE}/${slug}?waitlist=ok`, { status: 302 })
+    return NextResponse.redirect(`${BASE}/${encodeURIComponent(slug)}?waitlist=ok`, { status: 302 })
   } catch (err) {
     console.error('[waitlist]', err)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
