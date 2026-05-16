@@ -109,13 +109,6 @@ export default function DocumentsPage() {
   }
 
   async function del(d: Doc) {
-    const { error: storageError } = await supabase.storage
-      .from('documents')
-      .remove([d.storage_path])
-    if (storageError) {
-      return toast.error(`Suppression storage échouée : ${storageError.message}`)
-    }
-
     const { error: dbError } = await supabase
       .from('documents')
       .delete()
@@ -123,6 +116,13 @@ export default function DocumentsPage() {
       .eq('user_id', user!.id)
     if (dbError) {
       return toast.error(`Suppression base échouée : ${dbError.message}`)
+    }
+
+    const { error: storageError } = await supabase.storage
+      .from('documents')
+      .remove([d.storage_path])
+    if (storageError) {
+      console.error('[del] storage orphan:', d.storage_path, storageError.message)
     }
 
     toast.success('Document supprimé')

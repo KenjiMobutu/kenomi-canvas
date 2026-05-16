@@ -466,8 +466,17 @@ export default function AutomationsPage() {
   const loadRuns = async (workflowId: string) => {
     setRunsLoading(true)
     try {
-      const res = await fetch(`/api/studio/automations/runs?workflow_id=${workflowId}`)
-      if (res.ok) setRuns(await res.json())
+      const res = await fetch(`/api/studio/automations/runs?workflow_id=${encodeURIComponent(workflowId)}`)
+      if (!res.ok) {
+        setRuns([])
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'Erreur chargement des runs')
+        return
+      }
+      setRuns(await res.json())
+    } catch {
+      setRuns([])
+      toast.error('Erreur réseau')
     } finally {
       setRunsLoading(false)
     }
@@ -534,8 +543,8 @@ export default function AutomationsPage() {
     } else {
       toast.success('Workflow déclenché !')
       loadWorkflows()
+      loadRuns(id)
     }
-    loadRuns(id)
   }
 
   const selected = WORKFLOWS.find(w => w.id === selectedId) ?? WORKFLOWS[0]
