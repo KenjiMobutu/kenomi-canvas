@@ -35,8 +35,20 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
-  const loggedIn = !!session
+  const { data: { user } } = await supabase.auth.getUser()
+  const loggedIn = !!user
+
+  // ── Whitelist : seul l'email autorisé peut accéder au studio ──────────────
+  const ALLOWED_EMAIL = process.env.ALLOWED_EMAIL
+  if (loggedIn && ALLOWED_EMAIL && user.email !== ALLOWED_EMAIL) {
+    await supabase.auth.signOut()
+    return NextResponse.redirect(new URL('/login?error=unauthorized', request.url))
+  }
+
+  // ── /signup → désactivé, rediriger vers /login ────────────────────────────
+  if (pathname === '/signup') {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
 
   // ── / → cockpit si connecté, sinon login ──────────────────────────────────
   if (pathname === '/') {
@@ -45,8 +57,8 @@ export async function middleware(request: NextRequest) {
     )
   }
 
-  // ── /login, /signup → déjà connecté → cockpit ─────────────────────────────
-  if (pathname === '/login' || pathname === '/signup') {
+  // ── /login → déjà connecté → cockpit ──────────────────────────────────────
+  if (pathname === '/login') {
     if (loggedIn)
       return NextResponse.redirect(new URL('/studio', request.url))
     return response
@@ -71,3 +83,4 @@ export const config = {
     '/studio/:path*',
   ],
 }
+
