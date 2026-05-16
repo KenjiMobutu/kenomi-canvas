@@ -4,6 +4,7 @@ import { requireAllowedUser } from '@/lib/auth-server'
 import { isAllowedOllamaUrl } from '@/lib/security'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
+import { validateChatInput } from '@/lib/chat-validation'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -23,14 +24,11 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 })
   }
 
-  const { conversationId, message, agentId } = body
-  if (!conversationId || !message?.trim()) {
-    return new Response(JSON.stringify({ error: 'conversationId and message are required' }), { status: 400 })
+  const validation = validateChatInput(body)
+  if (!validation.ok) {
+    return new Response(JSON.stringify({ error: validation.error }), { status: validation.status })
   }
-
-  if (message.length > 8000) {
-    return new Response(JSON.stringify({ error: 'Message trop long (max 8000 caractères)' }), { status: 400 })
-  }
+  const { conversationId, message, agentId } = validation
 
   // Vérifier ownership AVANT tout autre accès DB
   const { data: conv, error: convError } = await supabase
