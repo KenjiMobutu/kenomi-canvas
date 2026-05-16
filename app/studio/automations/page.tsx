@@ -535,7 +535,7 @@ export default function AutomationsPage() {
       toast.success('Workflow déclenché !')
       loadWorkflows()
     }
-    if (dbSelectedId) loadRuns(dbSelectedId)
+    loadRuns(id)
   }
 
   const selected = WORKFLOWS.find(w => w.id === selectedId) ?? WORKFLOWS[0]
