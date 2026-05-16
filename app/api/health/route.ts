@@ -50,6 +50,25 @@ export async function GET() {
     checks.supabase = { ok: false, latencyMs: Date.now() - sbStart, error: process.env.NODE_ENV === 'production' ? 'supabase check failed' : (e as Error).message }
   }
 
+  // 4. Storage bucket documents
+  const stStart = Date.now()
+  try {
+    const { error: stError } = await supabaseAdmin.storage
+      .from('documents')
+      .list('', { limit: 1 })
+    checks.storage = {
+      ok: !stError,
+      latencyMs: Date.now() - stStart,
+      ...(stError ? { error: process.env.NODE_ENV === 'production' ? 'storage check failed' : stError.message } : {}),
+    }
+  } catch (e) {
+    checks.storage = {
+      ok: false,
+      latencyMs: Date.now() - stStart,
+      error: process.env.NODE_ENV === 'production' ? 'storage check failed' : (e as Error).message,
+    }
+  }
+
   const allOk = Object.values(checks).every(c => c.ok)
   const status = allOk ? 200 : 503
 
