@@ -15,6 +15,15 @@ interface DbWorkflow {
   enabled: boolean; run_count: number; last_run_at: string | null; created_at: string
 }
 
+interface AutoRun {
+  id: string
+  status: 'success' | 'error' | 'timeout'
+  http_status: number | null
+  duration_ms: number | null
+  error_message: string | null
+  triggered_at: string
+}
+
 const WORKFLOWS = [
   {
     id: 'validation-loop', name: 'n8n validation loop', trigger: 'Schedule · */15min',
@@ -231,53 +240,58 @@ function WorkflowsList({ selectedId, onSelect }: { selectedId: string; onSelect:
   )
 }
 
-function RunsFeed({ dbWorkflows }: { dbWorkflows: DbWorkflow[] }) {
-  const lines = useMemo(() => dbWorkflows
-    .filter(w => w.last_run_at)
-    .sort((a, b) => new Date(b.last_run_at!).getTime() - new Date(a.last_run_at!).getTime())
-    .slice(0, 9)
-    .map(w => ({
-      id: w.id, name: w.name, trigger: w.trigger_type, runCount: w.run_count,
-      lastRun: w.last_run_at!, enabled: w.enabled,
-    })), [dbWorkflows])
+function RunsFeed({ runs, loading }: { runs: AutoRun[]; loading: boolean }) {
+  const statusColor = (s: AutoRun['status']) =>
+    s === 'success' ? '#34d399' : s === 'timeout' ? '#fbbf24' : '#fb7185'
+  const statusLabel = (s: AutoRun['status']) =>
+    s === 'success' ? '✓' : s === 'timeout' ? '⏱' : '✗'
 
   return (
     <div style={{
-      background: surface, border: `1px solid ${line}`, borderRadius: 14,
-      padding: 14, display: 'flex', flexDirection: 'column', gap: 8,
+      background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 16,
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Derniers runs</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>activité récente</div>
-        </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: lines.length > 0 ? emerald : muted2, letterSpacing: '.14em' }}>● {lines.length > 0 ? 'live' : 'vide'}</span>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: text, marginBottom: 12 }}>
+        Derniers runs
       </div>
-      {lines.length === 0 ? (
-        <div style={{ padding: '28px 16px', textAlign: 'center' }}>
-          <p style={{ fontSize: 12, color: muted2 }}>Aucun run enregistré. Déclenchez un workflow.</p>
+      {loading ? (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>Chargement…</div>
+      ) : runs.length === 0 ? (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>
+          Aucun run enregistré. Déclenchez un workflow pour voir l&apos;historique.
         </div>
       ) : (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {lines.map((l, i) => (
-          <div key={l.id} style={{
-            padding: '6px 10px', borderRadius: 6, background: surface2, border: `1px solid ${line}`,
-            display: 'grid', gridTemplateColumns: '60px 6px 1fr auto auto', gap: 8, alignItems: 'center',
-            opacity: 1 - i * 0.07,
-          }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: 1 }}>{new Date(l.lastRun).toLocaleDateString('fr-FR', { month: 'numeric', day: 'numeric' })}</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: l.enabled ? emerald : amber }} />
-            <span style={{ fontSize: 11.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <span style={{ color: cyan }}>{l.name}</span>
-              <span style={{ color: muted, marginLeft: 6 }}>· {l.runCount} runs</span>
-            </span>
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3, flexShrink: 0,
-              background: `${emerald}22`, color: emerald, letterSpacing: 1, fontWeight: 800,
-            }}>OK</span>
-          </div>
-        ))}
-      </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {runs.map(r => (
+            <div key={r.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '6px 10px', borderRadius: 8,
+              background: surface2, border: `1px solid ${line}`,
+            }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+                color: statusColor(r.status), minWidth: 14, textAlign: 'center',
+              }}>{statusLabel(r.status)}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, flex: 1 }}>
+                {new Date(r.triggered_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+              </span>
+              {r.duration_ms !== null && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted }}>
+                  {r.duration_ms}ms
+                </span>
+              )}
+              {r.http_status !== null && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted }}>
+                  HTTP {r.http_status}
+                </span>
+              )}
+              {r.error_message && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#fb7185', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.error_message}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -446,6 +460,18 @@ export default function AutomationsPage() {
   const [showNew, setShowNew] = useState(false)
   const [dbSelectedId, setDbSelectedId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [runs, setRuns] = useState<AutoRun[]>([])
+  const [runsLoading, setRunsLoading] = useState(false)
+
+  const loadRuns = async (workflowId: string) => {
+    setRunsLoading(true)
+    try {
+      const res = await fetch(`/api/studio/automations/runs?workflow_id=${workflowId}`)
+      if (res.ok) setRuns(await res.json())
+    } finally {
+      setRunsLoading(false)
+    }
+  }
 
   async function loadWorkflows() {
     if (!user) return
@@ -509,6 +535,7 @@ export default function AutomationsPage() {
       toast.success('Workflow déclenché !')
       loadWorkflows()
     }
+    if (dbSelectedId) loadRuns(dbSelectedId)
   }
 
   const selected = WORKFLOWS.find(w => w.id === selectedId) ?? WORKFLOWS[0]
@@ -565,7 +592,7 @@ export default function AutomationsPage() {
             <DbWorkflowsList
               workflows={dbWorkflows}
               selectedId={dbSelectedId}
-              onSelect={setDbSelectedId}
+              onSelect={(id) => { setDbSelectedId(id); loadRuns(id) }}
               onToggle={toggleWorkflow}
               onDelete={setConfirmDelete}
               onRun={runWorkflow}
@@ -576,7 +603,7 @@ export default function AutomationsPage() {
 
         {/* Runs feed + service health */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.4fr 1fr', gap: 14 }}>
-          <RunsFeed dbWorkflows={dbWorkflows} />
+          <RunsFeed runs={runs} loading={runsLoading} />
           <ServiceHealth />
         </div>
       </div>
