@@ -41,28 +41,8 @@ ALTER TABLE public.ventures ALTER COLUMN user_id SET NOT NULL;
 --    Ces tables accèdent via venture_id → ventures.user_id
 -- ──────────────────────────────────────────────────────────
 
--- 2a. ideas
+-- 2a. ideas (pas de venture_id ni user_id — RLS activé sans policy = accès service_role uniquement)
 ALTER TABLE public.ideas ENABLE ROW LEVEL SECURITY;
-
-DO $$ BEGIN
-  CREATE POLICY "ideas_own" ON public.ideas
-    FOR ALL
-    USING (
-      EXISTS (
-        SELECT 1 FROM public.ventures v
-        WHERE v.id = ideas.venture_id
-          AND v.user_id = auth.uid()
-      )
-    )
-    WITH CHECK (
-      EXISTS (
-        SELECT 1 FROM public.ventures v
-        WHERE v.id = ideas.venture_id
-          AND v.user_id = auth.uid()
-      )
-    );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
 
 -- 2b. landing_pages
 ALTER TABLE public.landing_pages ENABLE ROW LEVEL SECURITY;
@@ -187,10 +167,7 @@ CREATE INDEX IF NOT EXISTS api_keys_user_id_idx
 CREATE INDEX IF NOT EXISTS achievement_claims_user_id_idx
   ON public.achievement_claims(user_id);
 
--- Index pour les tables legacy
-CREATE INDEX IF NOT EXISTS ideas_venture_id_idx
-  ON public.ideas(venture_id);
-
+-- Index pour les tables legacy (ideas exclue : pas de venture_id)
 CREATE INDEX IF NOT EXISTS landing_pages_venture_id_idx
   ON public.landing_pages(venture_id);
 
