@@ -1,28 +1,13 @@
 import { NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { requireAllowedUser } from '@/lib/auth-server'
 import { isAllowedOllamaUrl } from '@/lib/security'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-        },
-      },
-    }
-  )
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-  }
+  const { user, supabase, response } = await requireAllowedUser(cookieStore)
+  if (response) return response
+  const userId = user!.id
 
   let body: { conversationId?: string; message?: string; agentId?: string }
   try {
@@ -40,8 +25,23 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Message trop long (max 8000 caractères)' }), { status: 400 })
   }
 
+  // Vérifier ownership AVANT tout autre accès DB
+  const { data: conv, error: convError } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('id', conversationId)
+    .eq('user_id', userId)
+    .single()
+
+  if (convError || !conv) {
+    return new Response(JSON.stringify({ error: 'Conversation not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   const { data: settings } = await supabase
-    .from('user_settings').select('*').eq('user_id', user.id).maybeSingle()
+    .from('user_settings').select('*').eq('user_id', userId).maybeSingle()
 
   const baseUrl = (settings?.ollama_base_url || 'http://192.168.0.14:11434').replace(/\/$/, '')
   if (!isAllowedOllamaUrl(baseUrl)) {
@@ -55,17 +55,9 @@ export async function POST(req: NextRequest) {
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true })
 
-  const { data: conv } = await supabase
-    .from('conversations')
-    .select('id')
-    .eq('id', conversationId)
-    .eq('user_id', user.id)
-    .maybeSingle()
-  if (!conv) return new Response(JSON.stringify({ error: 'Conversation not found' }), { status: 404 })
-
   await supabase.from('messages').insert({
     conversation_id: conversationId,
-    user_id: user.id,
+    user_id: userId,
     role: 'user',
     content: message,
   })
@@ -129,7 +121,7 @@ export async function POST(req: NextRequest) {
       // Persist assistant message after stream ends
       await supabase.from('messages').insert({
         conversation_id: conversationId,
-        user_id: user.id,
+        user_id: userId,
         role: 'assistant',
         content: fullContent,
       })
