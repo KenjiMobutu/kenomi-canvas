@@ -88,13 +88,19 @@ export default function DocumentsPage() {
       return toast.error(error.message)
     }
 
-    await supabase.from('documents').insert({
+    const { error: dbError } = await supabase.from('documents').insert({
       user_id: user.id,
       name: safeName,
       storage_path: path,
       mime_type: file.type,
       size_bytes: file.size,
     })
+    if (dbError) {
+      await supabase.storage.from('documents').remove([path])
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+      return toast.error(dbError.message)
+    }
 
     setUploading(false)
     if (fileRef.current) fileRef.current.value = ''

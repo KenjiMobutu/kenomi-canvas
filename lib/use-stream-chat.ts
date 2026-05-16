@@ -17,6 +17,7 @@ export function useStreamChat({ onToken, onDone, onError }: StreamChatOptions) {
       abortRef.current = controller
 
       let full = ''
+      let aborted = false
 
       try {
         const res = await fetch('/api/studio/chat', {
@@ -35,6 +36,7 @@ export function useStreamChat({ onToken, onDone, onError }: StreamChatOptions) {
         const reader = res.body.getReader()
         const dec = new TextDecoder()
 
+        let streamDone = false
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -43,7 +45,7 @@ export function useStreamChat({ onToken, onDone, onError }: StreamChatOptions) {
             const t = line.trim()
             if (!t.startsWith('data: ')) continue
             const raw = t.slice(6)
-            if (raw === '[DONE]') break
+            if (raw === '[DONE]') { streamDone = true; break }
             try {
               const token = JSON.parse(raw) as string
               full += token
@@ -52,14 +54,17 @@ export function useStreamChat({ onToken, onDone, onError }: StreamChatOptions) {
               // ligne non-JSON — ignorer
             }
           }
+          if (streamDone) break
         }
       } catch (e) {
-        if ((e as Error).name !== 'AbortError') {
+        if ((e as Error).name === 'AbortError') {
+          aborted = true
+        } else {
           onError((e as Error).message)
         }
       }
 
-      onDone()
+      if (!aborted) onDone()
     },
     [onToken, onDone, onError]
   )
