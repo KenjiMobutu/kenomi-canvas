@@ -2,11 +2,18 @@ import { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { isAllowedOllamaUrl } from '@/lib/security'
+import { isRateLimited } from '@/lib/rate-limit'
+import { apiError } from '@/lib/api-response'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
+
+  if (isRateLimited(`chat:${user!.id}`, { limit: 20, windowMs: 60_000 })) {
+    return apiError('Trop de messages. Réessayez dans une minute.', 429)
+  }
+
   const userId = user!.id
 
   let body: { conversationId?: string; message?: string; agentId?: string }
