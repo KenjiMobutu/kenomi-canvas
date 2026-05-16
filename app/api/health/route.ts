@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { checkEnvVars } from '@/lib/health-check'
 
 interface Check {
   ok: boolean
@@ -11,22 +12,7 @@ export async function GET() {
   const checks: Record<string, Check> = {}
 
   // 1. Variables d'env critiques
-  const requiredEnvs = [
-    'NEXT_PUBLIC_SUPABASE_URL',
-    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-    'SUPABASE_SERVICE_ROLE_KEY',
-    'DATABASE_URL',
-    'DASHBOARD_PASSWORD',
-    'DASHBOARD_TOKEN_SECRET',
-    'ALLOWED_EMAIL',
-  ]
-  const missingEnvs = requiredEnvs.filter(k => !process.env[k])
-  checks.env = {
-    ok: missingEnvs.length === 0,
-    ...(missingEnvs.length > 0
-      ? { error: process.env.NODE_ENV === 'production' ? 'configuration incomplete' : `Manquantes: ${missingEnvs.join(', ')}` }
-      : {}),
-  }
+  checks.env = checkEnvVars()
 
   // 2. Base de données Prisma
   const dbStart = Date.now()
