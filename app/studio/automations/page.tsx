@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useState, useCallback } from 'react'
 import { CkShell } from '@/components/CkShell'
 import {
   bg, surface, surface2, line, line2, text, muted, muted2,
@@ -24,29 +24,6 @@ interface AutoRun {
   triggered_at: string
 }
 
-const WORKFLOWS = [
-  {
-    id: 'validation-loop', name: 'n8n validation loop', trigger: 'Schedule · */15min',
-    runs: 0, success: 0, avg: '—', enabled: true, color: '#a78bfa',
-    nodes: [
-      { id: 'trig',  x:  60, y: 70,  type: 'trigger', label: 'Cron 15m'         },
-      { id: 'scout', x: 220, y: 30,  type: 'agent',   label: 'Scout · scan'      },
-      { id: 'score', x: 220, y: 110, type: 'agent',   label: 'Validation · score'},
-      { id: 'merge', x: 380, y: 70,  type: 'logic',   label: 'Merge ↻'          },
-      { id: 'sup',   x: 540, y: 30,  type: 'service', label: 'Supabase upsert'  },
-      { id: 'deci',  x: 540, y: 110, type: 'agent',   label: 'Decision · notify' },
-      { id: 'out',   x: 700, y: 70,  type: 'out',     label: 'Webhook + queue'  },
-    ],
-    edges: [['trig','scout'],['trig','score'],['scout','merge'],['score','merge'],['merge','sup'],['merge','deci'],['sup','out'],['deci','out']] as [string,string][],
-  },
-  { id: 'mcp-probe',       name: 'MCP infrastructure probe',  trigger: 'Webhook',       runs: 0, success: 0, avg: '—', enabled: true,  color: '#22d3ee', nodes: [], edges: [] as [string,string][] },
-  { id: 'stripe-ready',    name: 'Stripe checkout readiness', trigger: 'Manual',        runs: 0, success: 0, avg: '—', enabled: false, color: '#fbbf24', nodes: [], edges: [] as [string,string][] },
-  { id: 'marketing-queue', name: 'Marketing content queue',   trigger: 'Schedule · 6h', runs: 0, success: 0, avg: '—', enabled: true,  color: '#e879f9', nodes: [], edges: [] as [string,string][] },
-  { id: 'billing-events',  name: 'Billing events sink',       trigger: 'Webhook',       runs: 0, success: 0, avg: '—', enabled: true,  color: '#34d399', nodes: [], edges: [] as [string,string][] },
-  { id: 'venture-promote', name: 'Venture stage promotion',   trigger: 'Event',         runs: 0, success: 0, avg: '—', enabled: true,  color: '#fb7185', nodes: [], edges: [] as [string,string][] },
-]
-
-type Workflow = typeof WORKFLOWS[0]
 
 const TYPE_META: Record<string, { color: string; label: string }> = {
   trigger: { color: '#22d3ee',   label: 'TRIG' },
@@ -85,8 +62,40 @@ function AuStatBox({ label, value, color }: { label: string; value: string; colo
   )
 }
 
-function WorkflowDAG({ workflow }: { workflow: Workflow }) {
-  const W = 800, H = 240, NODE_W = 130, NODE_H = 50
+function WorkflowDAG({ workflow, runs }: { workflow: DbWorkflow | null; runs: AutoRun[] }) {
+  const color = workflow?.enabled ? cyan : muted2
+  const successCount = runs.filter(r => r.status === 'success').length
+  const successPct = runs.length > 0 ? Math.round((successCount / runs.length) * 100) : null
+  const avgDur = runs.length > 0 && runs.some(r => r.duration_ms !== null)
+    ? Math.round(runs.filter(r => r.duration_ms !== null).reduce((s, r) => s + r.duration_ms!, 0) / runs.filter(r => r.duration_ms !== null).length)
+    : null
+  const lastRun = workflow?.last_run_at ? new Date(workflow.last_run_at) : null
+  const lastRunLabel = lastRun
+    ? `${Math.round((Date.now() - lastRun.getTime()) / 60000)}m ago`
+    : 'jamais'
+
+  // Nœuds générés depuis le trigger_type du workflow réel
+  const W = 800, H = 160, NODE_W = 130, NODE_H = 50
+  const dagNodes = workflow ? [
+    { id: 'trig', x: 60,  y: 55, label: workflow.trigger_type, type: 'trigger' },
+    { id: 'wh',   x: 280, y: 55, label: workflow.webhook_url ? 'Webhook n8n' : 'Manuel', type: 'service' },
+    { id: 'log',  x: 500, y: 55, label: 'automation_runs', type: 'out' },
+  ] : []
+  const dagEdges: [string, string][] = workflow ? [['trig', 'wh'], ['wh', 'log']] : []
+
+  if (!workflow) {
+    return (
+      <div style={{
+        background: surface, border: `1px solid ${line}`, borderRadius: 14,
+        padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200,
+      }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted, textAlign: 'center' }}>
+          Sélectionnez un workflow pour voir son DAG
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{
       background: surface, border: `1px solid ${line}`, borderRadius: 14,
@@ -96,74 +105,51 @@ function WorkflowDAG({ workflow }: { workflow: Workflow }) {
         <div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>{workflow.name}</div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>
-            DAG · {workflow.trigger} · {workflow.nodes.length} nœuds · {workflow.edges.length} arêtes
+            DAG · {workflow.trigger_type} · {workflow.webhook_url ? 'webhook actif' : 'pas de webhook'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button style={{
-            padding: '6px 12px', borderRadius: 6,
-            background: workflow.color, color: '#0b0d12', border: 'none',
-            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11, letterSpacing: '.06em', cursor: 'pointer',
-          }}>▶ RUN NOW</button>
-          {(['EDIT', workflow.enabled ? 'PAUSE' : 'ENABLE'] as const).map(label => (
-            <button key={label} style={{
-              padding: '6px 12px', borderRadius: 6,
-              background: surface2, color: text, border: `1px solid ${line2}`,
-              fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em', cursor: 'pointer',
-            }}>{label}</button>
-          ))}
-        </div>
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 8px', borderRadius: 4,
+          background: workflow.enabled ? `${emerald}22` : `${muted2}22`,
+          color: workflow.enabled ? emerald : muted2, letterSpacing: 1, fontWeight: 700,
+        }}>{workflow.enabled ? '● ACTIF' : '○ PAUSÉ'}</span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-        <AuStatBox label="Runs"    value={String(workflow.runs)} color={workflow.color} />
-        <AuStatBox label="Success" value={`${workflow.success}%`} color={emerald} />
-        <AuStatBox label="Avg dur" value={workflow.avg}           color={cyan} />
-        <AuStatBox label="Last"    value="2m ago"                 color={violet} />
+        <AuStatBox label="Runs"    value={String(workflow.run_count)} color={color} />
+        <AuStatBox label="Success" value={successPct !== null ? `${successPct}%` : '—'} color={emerald} />
+        <AuStatBox label="Avg dur" value={avgDur !== null ? `${avgDur}ms` : '—'} color={cyan} />
+        <AuStatBox label="Last"    value={lastRunLabel} color={violet} />
       </div>
 
-      <div style={{ flex: 1, minHeight: 200 }}>
+      <div style={{ flex: 1, minHeight: 160 }}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%' }}>
-          <defs>
-            <linearGradient id="auEdge" x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0%"   stopColor={workflow.color} stopOpacity="0" />
-              <stop offset="50%"  stopColor={workflow.color} stopOpacity=".7" />
-              <stop offset="100%" stopColor={workflow.color} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {workflow.edges.map(([from, to], idx) => {
-            const f = workflow.nodes.find(n => n.id === from)
-            const t = workflow.nodes.find(n => n.id === to)
+          {dagEdges.map(([from, to], idx) => {
+            const f = dagNodes.find(n => n.id === from)
+            const t = dagNodes.find(n => n.id === to)
             if (!f || !t) return null
-            const fx = f.x + NODE_W / 2, fy = f.y + NODE_H / 2
-            const tx = t.x + NODE_W / 2, ty = t.y + NODE_H / 2
-            const offset = (idx * 0.13) % 1
+            const fx = f.x + NODE_W, fy = f.y + NODE_H / 2
+            const tx = t.x, ty = t.y + NODE_H / 2
+            const offset = (idx * 0.3) % 1
             return (
               <g key={idx}>
-                <line x1={fx} y1={fy} x2={tx} y2={ty} stroke={workflow.color} strokeOpacity=".35" strokeWidth="1.2" strokeDasharray="3 5" />
-                <circle r="3.5" fill={workflow.color}>
-                  <animate attributeName="cx" from={fx} to={tx} dur="1.6s" begin={`${-offset * 1.6}s`} repeatCount="indefinite" />
-                  <animate attributeName="cy" from={fy} to={ty} dur="1.6s" begin={`${-offset * 1.6}s`} repeatCount="indefinite" />
-                </circle>
-                <circle r="2" fill="#fff">
+                <line x1={fx} y1={fy} x2={tx} y2={ty} stroke={color} strokeOpacity=".35" strokeWidth="1.2" strokeDasharray="3 5" />
+                <circle r="3.5" fill={color}>
                   <animate attributeName="cx" from={fx} to={tx} dur="1.6s" begin={`${-offset * 1.6}s`} repeatCount="indefinite" />
                   <animate attributeName="cy" from={fy} to={ty} dur="1.6s" begin={`${-offset * 1.6}s`} repeatCount="indefinite" />
                 </circle>
               </g>
             )
           })}
-          {workflow.nodes.map(n => {
+          {dagNodes.map(n => {
             const meta = TYPE_META[n.type] ?? { color: '#8a93a6', label: '' }
-            const nodeColor = n.type === 'agent' ? workflow.color : meta.color
+            const nodeColor = n.type === 'trigger' ? color : meta.color
             return (
-              <g key={n.id} transform={`translate(${n.x}, ${n.y})`} style={{ cursor: 'pointer' }}>
+              <g key={n.id} transform={`translate(${n.x}, ${n.y})`}>
                 <rect width={NODE_W} height={NODE_H} rx="8" ry="8" fill={surface2} stroke={nodeColor} strokeOpacity=".7" strokeWidth="1" />
                 <rect width="3" height={NODE_H} rx="2" ry="2" fill={nodeColor} />
                 <text x="14" y="18" fontSize="8.5" fill={nodeColor} fontFamily="var(--font-mono)" letterSpacing="1.4" fontWeight="700">{meta.label}</text>
                 <text x="14" y="34" fontSize="11" fill={text} fontFamily="var(--font-display)" fontWeight="600">{n.label}</text>
-                <circle cx={NODE_W - 12} cy="12" r="3.5" fill={nodeColor}>
-                  <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite" />
-                </circle>
               </g>
             )
           })}
@@ -173,72 +159,6 @@ function WorkflowDAG({ workflow }: { workflow: Workflow }) {
   )
 }
 
-function WorkflowRow({ w, active, onClick }: { w: Workflow; active: boolean; onClick: () => void }) {
-  const spark = useMemo(() => makeSpark(20, 40, 16, w.id.length * 7), [w.id])
-  return (
-    <button onClick={onClick} style={{
-      textAlign: 'left', padding: 10, borderRadius: 10,
-      background: active ? surface2 : bg,
-      border: active ? `1.5px solid ${w.color}` : `1px solid ${line}`,
-      display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 10, alignItems: 'center',
-      cursor: 'pointer', position: 'relative', overflow: 'hidden',
-      boxShadow: active ? `0 0 0 4px ${w.color}1c` : 'none',
-      transition: 'border-color .15s, box-shadow .15s',
-    }}>
-      <div style={{
-        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-        background: `${w.color}1a`, border: `1px solid ${w.color}55`,
-        display: 'grid', placeItems: 'center',
-      }}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M2 4 H8 M2 7 H12 M2 10 H6" stroke={w.color} strokeWidth="1.4" strokeLinecap="round" />
-          <circle cx="11" cy="4" r="1.5" fill={w.color} />
-        </svg>
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: text }}>{w.name}</span>
-          {!w.enabled && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, padding: '1px 5px', borderRadius: 3, background: surface, color: muted2, letterSpacing: 1, flexShrink: 0 }}>PAUSED</span>}
-        </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.1em', marginTop: 2 }}>{w.trigger} · {w.runs} runs · {w.success}% ok</div>
-      </div>
-      <svg viewBox="0 0 60 30" preserveAspectRatio="none" style={{ width: 60, height: 30, flexShrink: 0 }}>
-        <path d={sparkPath(spark, 60, 30, 1)} fill="none" stroke={w.color} strokeWidth="1.4" />
-      </svg>
-    </button>
-  )
-}
-
-function WorkflowsList({ selectedId, onSelect }: { selectedId: string; onSelect: (id: string) => void }) {
-  return (
-    <div style={{
-      background: surface, border: `1px solid ${line}`, borderRadius: 14,
-      padding: 14, display: 'flex', flexDirection: 'column', gap: 8,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 2 }}>
-        <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>All workflows</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>{WORKFLOWS.length} workflows · 16 actifs</div>
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['all', 'active', 'paused'].map((s, i) => (
-            <span key={s} style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 7px', borderRadius: 4, letterSpacing: '.14em', textTransform: 'uppercase',
-              background: i === 0 ? surface2 : 'transparent',
-              color: i === 0 ? text : muted,
-              border: `1px solid ${line}`,
-            }}>{s}</span>
-          ))}
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {WORKFLOWS.map(w => (
-          <WorkflowRow key={w.id} w={w} active={w.id === selectedId} onClick={() => onSelect(w.id)} />
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function RunsFeed({ runs, loading }: { runs: AutoRun[]; loading: boolean }) {
   const statusColor = (s: AutoRun['status']) =>
@@ -455,7 +375,6 @@ function DbWorkflowsList({ workflows, selectedId, onSelect, onToggle, onDelete, 
 export default function AutomationsPage() {
   const { user } = useAuth()
   const isMobile = useIsMobile()
-  const [selectedId, setSelectedId] = useState('validation-loop')
   const [dbWorkflows, setDbWorkflows] = useState<DbWorkflow[]>([])
   const [showNew, setShowNew] = useState(false)
   const [dbSelectedId, setDbSelectedId] = useState<string | null>(null)
@@ -463,7 +382,9 @@ export default function AutomationsPage() {
   const [runs, setRuns] = useState<AutoRun[]>([])
   const [runsLoading, setRunsLoading] = useState(false)
 
-  const loadRuns = async (workflowId: string) => {
+  const selectedWorkflow = dbWorkflows.find(w => w.id === dbSelectedId) ?? null
+
+  const loadRuns = useCallback(async (workflowId: string) => {
     setRunsLoading(true)
     try {
       const res = await fetch(`/api/studio/automations/runs?workflow_id=${encodeURIComponent(workflowId)}`)
@@ -480,7 +401,7 @@ export default function AutomationsPage() {
     } finally {
       setRunsLoading(false)
     }
-  }
+  }, [])
 
   async function loadWorkflows() {
     if (!user) return
@@ -547,17 +468,22 @@ export default function AutomationsPage() {
     }
   }
 
-  const selected = WORKFLOWS.find(w => w.id === selectedId) ?? WORKFLOWS[0]
-
   const totalRuns = dbWorkflows.reduce((s, w) => s + w.run_count, 0)
   const activeCount = dbWorkflows.filter(w => w.enabled).length
   const pausedCount = dbWorkflows.filter(w => !w.enabled).length
 
+  const successRuns = runs.filter(r => r.status === 'success')
+  const successPct = runs.length > 0 ? Math.round((successRuns.length / runs.length) * 100) : null
+  const runsWithDur = runs.filter(r => r.duration_ms !== null)
+  const avgDur = runsWithDur.length > 0
+    ? Math.round(runsWithDur.reduce((s, r) => s + r.duration_ms!, 0) / runsWithDur.length)
+    : null
+
   const KPI_LIST = [
-    { label: 'Total runs', value: String(totalRuns),        delta: '—',                    color: cyan    },
-    { label: 'Success',    value: '—',                      delta: '—',                    color: emerald },
-    { label: 'Avg durée',  value: '—',                      delta: '—',                    color: violet  },
-    { label: 'En queue',   value: '—',                      delta: '—',                    color: amber   },
+    { label: 'Total runs', value: String(totalRuns),          delta: '—',                    color: cyan    },
+    { label: 'Success',    value: successPct !== null ? `${successPct}%` : '—', delta: dbSelectedId ? `${runs.length} runs` : 'sélect. wf', color: emerald },
+    { label: 'Avg durée',  value: avgDur !== null ? `${avgDur}ms` : '—',        delta: dbSelectedId ? `${runsWithDur.length} mesures` : 'sélect. wf', color: violet  },
+    { label: 'En queue',   value: '—',                        delta: '—',                    color: amber   },
     { label: 'Workflows',  value: String(dbWorkflows.length), delta: `${pausedCount} paused`, color: fuchsia },
   ]
 
@@ -594,20 +520,17 @@ export default function AutomationsPage() {
           {KPI_LIST.map(k => <AuKpi key={k.label} {...k} />)}
         </div>
 
-        {/* DAG + workflows list (demo + live) */}
+        {/* DAG + workflows list */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 420px', gap: 14, alignItems: 'start' }}>
-          <WorkflowDAG workflow={selected} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <DbWorkflowsList
-              workflows={dbWorkflows}
-              selectedId={dbSelectedId}
-              onSelect={(id) => { setDbSelectedId(id); loadRuns(id) }}
-              onToggle={toggleWorkflow}
-              onDelete={setConfirmDelete}
-              onRun={runWorkflow}
-            />
-            <WorkflowsList selectedId={selectedId} onSelect={setSelectedId} />
-          </div>
+          <WorkflowDAG workflow={selectedWorkflow} runs={runs} />
+          <DbWorkflowsList
+            workflows={dbWorkflows}
+            selectedId={dbSelectedId}
+            onSelect={(id) => { setDbSelectedId(id); loadRuns(id) }}
+            onToggle={toggleWorkflow}
+            onDelete={setConfirmDelete}
+            onRun={runWorkflow}
+          />
         </div>
 
         {/* Runs feed + service health */}
