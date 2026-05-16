@@ -445,6 +445,7 @@ export default function AutomationsPage() {
   const [dbWorkflows, setDbWorkflows] = useState<DbWorkflow[]>([])
   const [showNew, setShowNew] = useState(false)
   const [dbSelectedId, setDbSelectedId] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   async function loadWorkflows() {
     if (!user) return
@@ -473,7 +474,6 @@ export default function AutomationsPage() {
 
   async function deleteWorkflow(id: string) {
     if (!user) return
-    if (!window.confirm('Supprimer ce workflow ? Cette action est irréversible.')) return
     const supabase = createSupabaseBrowser()
     const { error } = await supabase
       .from('automation_workflows')
@@ -482,9 +482,20 @@ export default function AutomationsPage() {
       .eq('user_id', user.id)
     if (error) { toast.error(error.message); return }
     if (dbSelectedId === id) setDbSelectedId(null)
-    loadWorkflows()
     toast.success('Workflow supprimé')
+    setConfirmDelete(null)
+    loadWorkflows()
   }
+
+  useEffect(() => {
+    if (!confirmDelete) return
+    const id = confirmDelete
+    toast('Supprimer ce workflow ?', {
+      description: 'Cette action est irréversible.',
+      action: { label: 'Supprimer', onClick: () => deleteWorkflow(id) },
+      cancel: { label: 'Annuler', onClick: () => setConfirmDelete(null) },
+    })
+  }, [confirmDelete]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function runWorkflow(id: string) {
     const res = await fetch('/api/studio/automations/trigger', {
@@ -556,7 +567,7 @@ export default function AutomationsPage() {
               selectedId={dbSelectedId}
               onSelect={setDbSelectedId}
               onToggle={toggleWorkflow}
-              onDelete={deleteWorkflow}
+              onDelete={setConfirmDelete}
               onRun={runWorkflow}
             />
             <WorkflowsList selectedId={selectedId} onSelect={setSelectedId} />
