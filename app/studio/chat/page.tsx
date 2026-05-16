@@ -68,23 +68,62 @@ export default function ChatPage() {
   useEffect(() => { if (user) loadConvs() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!activeId) { setMessages([]); return }
+    if (!activeId || !user) { setMessages([]); return }
     const supabase = createSupabaseBrowser()
     supabase.from('messages').select('*').eq('conversation_id', activeId)
+      .eq('user_id', user.id)
       .order('created_at').then(({ data }) => setMessages(data || []))
-  }, [activeId])
+  }, [activeId, user])
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  async function newConv() {
-    if (!user) return
+  async function newConv(): Promise<string | null> {
+    if (!user) return null
     const supabase = createSupabaseBrowser()
     const { data, error } = await supabase.from('conversations')
       .insert({ user_id: user.id, title: 'Nouvelle conversation', agent_id: agentId })
       .select().single()
-    if (error) return toast.error(error.message)
+    if (error) { toast.error(error.message); return null }
     await loadConvs()
     setActiveId(data.id)
+    return data.id
+  }
+
+  async function newConvAndSend(text: string) {
+    const id = await newConv()
+    if (!id) return
+    if (!user) return
+    setSending(true)
+    setInput('')
+    const userMsg: Msg = { id: crypto.randomUUID(), role: 'user', content: text, created_at: new Date().toISOString() }
+    setMessages(prev => [...prev, userMsg])
+    try {
+      const res = await fetch('/api/studio/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: id, message: text, agentId }),
+      })
+      if (!res.ok || !res.body) { toast.error('Erreur chat'); setSending(false); return }
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let full = ''
+      const assistantId = crypto.randomUUID()
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', created_at: new Date().toISOString() }])
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = dec.decode(value, { stream: true })
+        for (const line of chunk.split('\n')) {
+          const t = line.trim()
+          if (!t.startsWith('data: ')) continue
+          const raw = t.slice(6)
+          if (raw === '[DONE]') break
+          try { const token = JSON.parse(raw) as string; full += token; setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: full } : m)) } catch { }
+        }
+      }
+    } catch (e) { toast.error((e as Error).message) }
+    setSending(false)
+    loadConvs()
   }
 
   async function deleteConv(id: string) {
@@ -142,9 +181,9 @@ export default function ChatPage() {
       }
 
       const conv = convs.find(c => c.id === activeId)
-      if (conv?.title === 'Nouvelle conversation') {
+      if (conv?.title === 'Nouvelle conversation' && user) {
         const supabase = createSupabaseBrowser()
-        await supabase.from('conversations').update({ title: msgText.slice(0, 48) }).eq('id', activeId)
+        await supabase.from('conversations').update({ title: msgText.slice(0, 48) }).eq('id', activeId).eq('user_id', user.id)
         loadConvs()
       }
     } catch (e) {
@@ -355,7 +394,7 @@ export default function ChatPage() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 500, margin: '0 auto' }}>
                       {QUICK_CMDS.map(cmd => (
-                        <button key={cmd} onClick={async () => { await newConv(); }} style={{
+                        <button key={cmd} onClick={() => newConvAndSend(cmd)} style={{
                           padding: '9px 16px', borderRadius: 8,
                           background: surface, border: `1px solid ${line}`,
                           color: muted, cursor: 'pointer', textAlign: 'left',
