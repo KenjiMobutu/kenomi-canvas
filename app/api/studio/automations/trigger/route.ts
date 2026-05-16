@@ -4,6 +4,7 @@ import { requireAllowedUser } from '@/lib/auth-server'
 import { isAllowedWebhookUrl } from '@/lib/security'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
+import { buildRunResult } from '@/lib/automation-run-status'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -34,9 +35,8 @@ export async function POST(req: NextRequest) {
 
   const startMs = Date.now()
 
-  let status: 'success' | 'error' | 'timeout' = 'success'
-  let httpStatus: number | null = null
-  let errorMessage: string | null = null
+  let fetchError: Error | null = null
+  let fetchStatus: number | null = null
 
   if (wf.webhook_url) {
     if (!isAllowedWebhookUrl(wf.webhook_url)) {
@@ -49,17 +49,17 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
         signal: AbortSignal.timeout(8000),
       })
-      httpStatus = resp.status
-      if (!resp.ok) {
-        status = 'error'
-        errorMessage = `HTTP ${resp.status}`
-      }
+      fetchStatus = resp.status
     } catch (e) {
-      const isTimeout = e instanceof Error && e.name === 'TimeoutError'
-      status = isTimeout ? 'timeout' : 'error'
-      errorMessage = isTimeout ? 'Webhook timeout (8s)' : 'Webhook injoignable'
+      fetchError = e as Error
     }
   }
+
+  const { status, httpStatus, errorMessage } = buildRunResult({
+    webhookUrl: wf.webhook_url,
+    fetchError,
+    fetchStatus,
+  })
 
   const durationMs = Date.now() - startMs
 
