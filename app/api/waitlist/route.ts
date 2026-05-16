@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { isRateLimited } from '@/lib/rate-limit'
+import { apiError } from '@/lib/api-response'
 
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
+  if (isRateLimited(`waitlist:${ip}`, { limit: 3, windowMs: 60 * 60 * 1000 })) {
+    return apiError('Trop de requêtes. Réessayez dans une heure.', 429)
+  }
+
   try {
     let slug: string, email: string
 
@@ -18,12 +25,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (!slug || !email) {
-      return NextResponse.json({ error: 'slug et email requis' }, { status: 400 })
+      return apiError('slug et email requis', 400)
     }
 
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
     if (!EMAIL_RE.test(email)) {
-      return NextResponse.json({ error: 'Format email invalide' }, { status: 400 })
+      return apiError('Format email invalide', 400)
     }
 
     const venture = await db.venture.findFirst({ where: { slug }, select: { id: true } })
@@ -38,6 +45,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.redirect(`${BASE}/${encodeURIComponent(slug)}?waitlist=ok`, { status: 302 })
   } catch (err) {
     console.error('[waitlist]', err)
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+    return apiError('Erreur serveur', 500)
   }
 }
