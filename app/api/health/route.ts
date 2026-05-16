@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 interface Check {
   ok: boolean
@@ -23,7 +23,9 @@ export async function GET() {
   const missingEnvs = requiredEnvs.filter(k => !process.env[k])
   checks.env = {
     ok: missingEnvs.length === 0,
-    ...(missingEnvs.length > 0 ? { error: `Manquantes: ${missingEnvs.join(', ')}` } : {}),
+    ...(missingEnvs.length > 0
+      ? { error: process.env.NODE_ENV === 'production' ? 'configuration incomplete' : `Manquantes: ${missingEnvs.join(', ')}` }
+      : {}),
   }
 
   // 2. Base de données Prisma
@@ -32,24 +34,20 @@ export async function GET() {
     await db.$queryRaw`SELECT 1`
     checks.database = { ok: true, latencyMs: Date.now() - dbStart }
   } catch (e) {
-    checks.database = { ok: false, latencyMs: Date.now() - dbStart, error: (e as Error).message }
+    checks.database = { ok: false, latencyMs: Date.now() - dbStart, error: process.env.NODE_ENV === 'production' ? 'database check failed' : (e as Error).message }
   }
 
   // 3. Supabase Auth (ping simple)
   const sbStart = Date.now()
   try {
-    const sb = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-    const { error } = await sb.from('profiles').select('id').limit(1)
+    const { error } = await supabaseAdmin.from('profiles').select('id').limit(1)
     checks.supabase = {
       ok: !error,
       latencyMs: Date.now() - sbStart,
       ...(error ? { error: error.message } : {}),
     }
   } catch (e) {
-    checks.supabase = { ok: false, latencyMs: Date.now() - sbStart, error: (e as Error).message }
+    checks.supabase = { ok: false, latencyMs: Date.now() - sbStart, error: process.env.NODE_ENV === 'production' ? 'supabase check failed' : (e as Error).message }
   }
 
   const allOk = Object.values(checks).every(c => c.ok)

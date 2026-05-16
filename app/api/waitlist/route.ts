@@ -9,6 +9,9 @@ export async function POST(req: NextRequest) {
     return apiError('Trop de requêtes. Réessayez dans une heure.', 429)
   }
 
+  const contentLength = Number(req.headers.get('content-length') ?? 0)
+  if (contentLength > 10_000) return apiError('Payload trop grand', 413)
+
   try {
     let slug: string, email: string
 
@@ -28,6 +31,9 @@ export async function POST(req: NextRequest) {
       return apiError('slug et email requis', 400)
     }
 
+    const SLUG_RE = /^[a-z0-9-]{1,100}$/
+    if (!SLUG_RE.test(slug)) return apiError('slug invalide', 400)
+
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
     if (!EMAIL_RE.test(email)) {
       return apiError('Format email invalide', 400)
@@ -41,7 +47,15 @@ export async function POST(req: NextRequest) {
       update: {},
     })
 
-    const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
+    const rawOrigin = process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu'
+    let BASE: string
+    try {
+      const u = new URL(rawOrigin)
+      if (!['https:', 'http:'].includes(u.protocol)) throw new Error('protocol invalide')
+      BASE = u.origin
+    } catch {
+      BASE = 'https://lab.kenomi.eu'
+    }
     return NextResponse.redirect(`${BASE}/${encodeURIComponent(slug)}?waitlist=ok`, { status: 302 })
   } catch (err) {
     console.error('[waitlist]', err)
