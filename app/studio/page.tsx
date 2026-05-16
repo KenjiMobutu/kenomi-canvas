@@ -138,7 +138,7 @@ const amber    = 'var(--ck-amber)'
 const rose     = 'var(--ck-rose)'
 
 /* ─── Helpers ────────────────────────────────────────────────── */
-const agentById = (id: string) => AGENTS_STATIC.find(a => a.id === id)!
+const agentById = (id: string) => AGENTS_STATIC.find(a => a.id === id) ?? AGENTS_STATIC[0]
 
 function actionTokens(action: string) {
   switch (action) {
@@ -954,7 +954,7 @@ function CkFooter({ state }: { state: string }) {
 /* ─── Main page ──────────────────────────────────────────────── */
 export default function CockpitPage() {
   const { user } = useAuth()
-  const supabase = createSupabaseBrowser()
+  const supabase = useMemo(() => createSupabaseBrowser(), [])
   const isMobile = useIsMobile()
 
   const [ventures, setVentures] = useState<Venture[]>([])
@@ -984,8 +984,8 @@ export default function CockpitPage() {
     async function load() {
       setLoading(true)
       const [{ data: v }, { data: k }] = await Promise.all([
-        supabase.from('ventures').select('*').order('score', { ascending: false }),
-        supabase.from('kpi_snapshots').select('*').eq('period', '30d').limit(1).single(),
+        supabase.from('ventures').select('*').eq('user_id', user!.id).order('score', { ascending: false }),
+        supabase.from('kpi_snapshots').select('*').eq('user_id', user!.id).eq('period', '30d').limit(1).maybeSingle(),
       ])
       setVentures((v as Venture[]) || [])
       setKpi(k as KpiRow | null)
