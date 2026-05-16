@@ -20,6 +20,13 @@ DO $$ BEGIN
   );
 END $$;
 
+-- Garde : échoue explicitement si aucun utilisateur n'existe
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM auth.users) THEN
+    RAISE EXCEPTION 'auth.users est vide — migration impossible sans utilisateur existant';
+  END IF;
+END $$;
+
 -- Assigner les ventures orphelines au premier utilisateur trouvé
 -- (application mono-utilisateur : safe)
 UPDATE public.ventures
@@ -198,7 +205,7 @@ CREATE INDEX IF NOT EXISTS decisions_venture_id_idx
 --    (automation_workflows est la table active)
 -- ──────────────────────────────────────────────────────────
 
-DROP TABLE IF EXISTS public.automations;
+DROP TABLE IF EXISTS public.automations CASCADE;
 
 -- ──────────────────────────────────────────────────────────
 -- Commentaire de documentation
