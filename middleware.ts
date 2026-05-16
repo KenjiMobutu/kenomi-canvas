@@ -35,13 +35,16 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError) {
+    // Supabase injoignable — traiter comme non connecté (fail-open)
+    console.error('[middleware] getUser error:', authError.message)
+  }
   const loggedIn = !!user
 
   // ── Whitelist : seul l'email autorisé peut accéder au studio ──────────────
   const ALLOWED_EMAIL = process.env.ALLOWED_EMAIL
-  if (loggedIn && ALLOWED_EMAIL && user.email !== ALLOWED_EMAIL) {
-    await supabase.auth.signOut()
+  if (loggedIn && ALLOWED_EMAIL && (!user.email || user.email !== ALLOWED_EMAIL)) {
     return NextResponse.redirect(new URL('/login?error=unauthorized', request.url))
   }
 
