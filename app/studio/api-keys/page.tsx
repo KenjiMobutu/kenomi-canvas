@@ -54,6 +54,7 @@ export default function ApiKeysPage() {
     const supabase = createSupabaseBrowser()
     const { data } = await supabase.from('api_keys')
       .select('id,name,key_prefix,last_used_at,created_at')
+      .eq('user_id', user!.id)
       .order('created_at', { ascending: false })
     setKeys((data as ApiKey[]) || [])
   }
@@ -78,7 +79,7 @@ export default function ApiKeysPage() {
 
   async function del(id: string) {
     const supabase = createSupabaseBrowser()
-    await supabase.from('api_keys').delete().eq('id', id)
+    await supabase.from('api_keys').delete().eq('id', id).eq('user_id', user!.id)
     toast.success('Clé supprimée')
     load()
   }

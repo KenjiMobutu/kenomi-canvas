@@ -51,7 +51,9 @@ export default function DocumentsPage() {
   const supabase = createSupabaseBrowser()
 
   async function load() {
-    const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false })
+    const { data } = await supabase.from('documents').select('*')
+      .eq('user_id', user!.id)
+      .order('created_at', { ascending: false })
     const list = (data as Doc[]) || []
     setDocs(list)
     setSelected(prev => prev ? (list.find(d => d.id === prev.id) ?? list[0] ?? null) : (list[0] ?? null))
@@ -77,7 +79,7 @@ export default function DocumentsPage() {
 
   async function del(d: Doc) {
     await supabase.storage.from('documents').remove([d.storage_path])
-    await supabase.from('documents').delete().eq('id', d.id)
+    await supabase.from('documents').delete().eq('id', d.id).eq('user_id', user!.id)
     if (selected?.id === d.id) setSelected(null)
     load()
   }
