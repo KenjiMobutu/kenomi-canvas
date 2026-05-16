@@ -2,57 +2,90 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { isAllowedWebhookUrl } from '@/lib/security'
+import { isRateLimited } from '@/lib/rate-limit'
+import { apiError } from '@/lib/api-response'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
+  if (isRateLimited(`automation-trigger:${user!.id}`, { limit: 10, windowMs: 60_000 })) {
+    return apiError('Trop de triggers. Réessayez dans une minute.', 429)
+  }
+
   let id: string
   try {
     const body = await req.json()
     id = body.id ?? ''
   } catch {
-    return NextResponse.json({ error: 'JSON invalide' }, { status: 400 })
+    return apiError('JSON invalide', 400)
   }
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  if (!id) return apiError('id required', 400)
 
   const { data: wf } = await supabase
     .from('automation_workflows')
     .select('webhook_url, run_count')
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', user!.id)
     .maybeSingle()
 
-  if (!wf) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!wf) return apiError('Not found', 404)
+
+  const startMs = Date.now()
+
+  let status: 'success' | 'error' | 'timeout' = 'success'
+  let httpStatus: number | null = null
+  let errorMessage: string | null = null
 
   if (wf.webhook_url) {
     if (!isAllowedWebhookUrl(wf.webhook_url)) {
-      return NextResponse.json({ error: 'URL webhook non autorisée' }, { status: 400 })
+      return apiError('URL webhook non autorisée', 400)
     }
     try {
       const resp = await fetch(wf.webhook_url, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
-        signal:  AbortSignal.timeout(8000),
+        body: JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
+        signal: AbortSignal.timeout(8000),
       })
+      httpStatus = resp.status
       if (!resp.ok) {
-        return NextResponse.json({ error: `Webhook erreur HTTP ${resp.status}` }, { status: 502 })
+        status = 'error'
+        errorMessage = `HTTP ${resp.status}`
       }
     } catch (e) {
-      const msg = e instanceof Error && e.name === 'TimeoutError'
-        ? 'Webhook timeout (8s)'
-        : 'Webhook injoignable'
-      return NextResponse.json({ error: msg }, { status: 502 })
+      const isTimeout = e instanceof Error && e.name === 'TimeoutError'
+      status = isTimeout ? 'timeout' : 'error'
+      errorMessage = isTimeout ? 'Webhook timeout (8s)' : 'Webhook injoignable'
     }
   }
 
-  await supabase
+  const durationMs = Date.now() - startMs
+
+  const runInsert = supabase.from('automation_runs').insert({
+    user_id: user!.id,
+    workflow_id: id,
+    status,
+    http_status: httpStatus,
+    duration_ms: durationMs,
+    error_message: errorMessage,
+  })
+
+  const wfUpdate = supabase
     .from('automation_workflows')
     .update({ run_count: (wf.run_count || 0) + 1, last_run_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', user!.id)
 
-  return NextResponse.json({ ok: true })
+  await Promise.all([runInsert, wfUpdate])
+
+  if (status !== 'success') {
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: status === 'timeout' ? 504 : 502 }
+    )
+  }
+
+  return NextResponse.json({ ok: true, durationMs })
 }
