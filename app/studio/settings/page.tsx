@@ -15,6 +15,8 @@ import { useIsMobile } from '@/lib/studio-utils'
 interface Settings {
   ollama_base_url: string
   ollama_model: string
+  n8n_base_url: string
+  n8n_api_key: string
   claude_api_key: string
   openai_api_key: string
   stripe_secret_key: string
@@ -28,6 +30,8 @@ interface Settings {
 const DEFAULTS: Settings = {
   ollama_base_url:       'http://192.168.0.14:11434',
   ollama_model:          'qwen3:8b',
+  n8n_base_url:          '',
+  n8n_api_key:           '',
   claude_api_key:        '',
   openai_api_key:        '',
   stripe_secret_key:     '',
@@ -204,6 +208,25 @@ export default function SettingsPage() {
                   {MODELS_OLLAMA.map(m => <option key={m} value={m}>{m}</option>)}
                   <option value={cfg.ollama_model}>{cfg.ollama_model}</option>
                 </select>
+              </Field>
+            </SectionCard>
+
+            <SectionCard title="n8n — Automations" icon={<Zap size={16} />}>
+              <Field label="Base URL" hint="URL de votre instance n8n (self-hosted ou cloud). Ex: http://192.168.0.19:5678">
+                <input
+                  value={cfg.n8n_base_url}
+                  onChange={e => patch({ n8n_base_url: e.target.value })}
+                  placeholder="http://192.168.0.19:5678"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+              <Field label="API Key" hint="Clé API n8n pour déclencher les workflows depuis le studio.">
+                <SecretInput
+                  value={cfg.n8n_api_key}
+                  onChange={v => patch({ n8n_api_key: v })}
+                  placeholder="n8n_api_key_…"
+                />
               </Field>
             </SectionCard>
 
