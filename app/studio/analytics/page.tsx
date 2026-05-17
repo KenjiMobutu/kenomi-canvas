@@ -15,8 +15,9 @@ const VENTURE_ACCENTS = ['#22d3ee', '#a78bfa', '#34d399', '#fbbf24', '#e879f9', 
 
 type VentureAN = { id: string; name: string; mrr: number; accent: string }
 
-function BigKPI({ label, value, delta, color, trend }: { label: string; value: string; delta: string; color: string; trend?: boolean }) {
-  const spark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
+function BigKPI({ label, value, delta, color, trend, sparkData }: { label: string; value: string; delta: string; color: string; trend?: boolean; sparkData?: number[] }) {
+  const fallbackSpark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
+  const spark = sparkData && sparkData.length >= 2 ? sparkData : fallbackSpark
   const uid = label.replace(/\W/g, '')
   return (
     <div style={{
@@ -327,6 +328,23 @@ export default function AnalyticsPage() {
   const [funnel, setFunnel] = useState<FunnelStep[]>([])
   const [ventures, setVentures] = useState<VentureAN[]>([])
   const [editOpen, setEditOpen] = useState(false)
+  const [mrrSparkSeries, setMrrSparkSeries] = useState<number[]>([])
+
+  useEffect(() => {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    supabase
+      .from('kpi_snapshots')
+      .select('mrr, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(30)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setMrrSparkSeries(data.map(d => typeof d.mrr === 'number' ? d.mrr : parseFloat(String(d.mrr ?? '0')) || 0))
+        }
+      })
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user) return
@@ -361,7 +379,7 @@ export default function AnalyticsPage() {
 
   const live = kpi ?? DEFAULT_KPI
   const KPI_LIST = [
-    { label: 'Studio MRR',  value: live.revenue,    delta: live.revenue_delta,    color: emerald,  trend: true  },
+    { label: 'Studio MRR',  value: live.revenue,    delta: live.revenue_delta,    color: emerald,  trend: true,  sparkData: mrrSparkSeries },
     { label: 'CTR',         value: live.ctr,         delta: live.ctr_delta,         color: cyan,     trend: true  },
     { label: 'Conversion',  value: live.conversion,  delta: live.conversion_delta,  color: violet,   trend: true  },
     { label: 'Retention',   value: live.retention,   delta: live.retention_delta,   color: amber,    trend: true  },
