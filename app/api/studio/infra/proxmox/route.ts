@@ -35,6 +35,8 @@ export async function GET() {
         cpu_pct: Math.round(vm.cpu * 100),
         mem_pct: vm.maxmem > 0 ? Math.round((vm.mem / vm.maxmem) * 100) : 0,
         disk_pct: vm.maxdisk > 0 ? Math.round((vm.disk / vm.maxdisk) * 100) : 0,
+        netin: vm.netin ?? 0,
+        netout: vm.netout ?? 0,
       })),
     };
 

@@ -384,7 +384,7 @@ export default function InfrastructurePage() {
     { label: 'Latency avg',    value: avgLatency !== null ? `${avgLatency}ms` : '—',                                 delta: 'p50',                          color: cyan    },
     { label: 'CPU node',       value: pxNode ? `${pxNode.cpu_pct}%` : '—',                                          delta: 'proxmox',                      color: pxNode && pxNode.cpu_pct >= 90 ? rose : pxNode && pxNode.cpu_pct >= 70 ? amber : violet  },
     { label: 'RAM node',       value: pxNode ? `${pxNode.mem_pct}%` : '—',                                          delta: pxNode ? `${pxNode.mem_used_fmt}/${pxNode.mem_total_fmt}` : 'proxmox',  color: pxNode && pxNode.mem_pct >= 90 ? rose : pxNode && pxNode.mem_pct >= 70 ? amber : emerald },
-    { label: 'VMs actives',    value: runningVMs !== null ? `${runningVMs}/${proxmox!.vms.length}` : '—',           delta: 'proxmox',                      color: amber   },
+    { label: 'VMs actives',    value: runningVMs !== null ? `${runningVMs}/${proxmox?.vms.length ?? 0}` : '—',           delta: 'proxmox',                      color: amber   },
   ]
 
   const headerActions = (

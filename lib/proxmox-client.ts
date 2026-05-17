@@ -32,6 +32,8 @@ export type ProxmoxVM = {
   maxdisk: number;
   uptime: number;
   node: string;
+  netin: number;
+  netout: number;
 };
 
 export type ProxmoxMetrics = {
