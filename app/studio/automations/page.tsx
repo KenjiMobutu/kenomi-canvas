@@ -217,16 +217,25 @@ function RunsFeed({ runs, loading }: { runs: AutoRun[]; loading: boolean }) {
   )
 }
 
-const SERVICES = [
-  { id: 'n8n',      label: 'n8n',      desc: '18 wf · 0 stuck',          status: 'Online',    color: emerald },
-  { id: 'mcp',      label: 'MCP',      desc: '9 servers · 0 errors',     status: 'Healthy',   color: emerald },
-  { id: 'supabase', label: 'Supabase', desc: 'Auth + Postgres + S3',     status: 'Connected', color: emerald },
-  { id: 'stripe',   label: 'Stripe',   desc: 'test mode · 12 checkouts', status: 'Sandbox',   color: amber   },
-  { id: 'coolify',  label: 'Coolify',  desc: '4 deploys · 0 failed',     status: 'Online',    color: emerald },
-  { id: 'nginx',    label: 'Nginx PM', desc: '8 domains · SSL valid',    status: 'Healthy',   color: emerald },
-]
-
 function ServiceHealth() {
+  const [health, setHealth] = useState<Record<string, { ok: boolean; latencyMs?: number; error?: string }>>({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/studio/services/health')
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setHealth(data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const SERVICES_DISPLAY = [
+    { id: 'ollama',   label: 'Ollama',   desc: 'LLM local' },
+    { id: 'n8n',      label: 'n8n',      desc: 'Automations' },
+    { id: 'supabase', label: 'Supabase', desc: 'Auth + DB + Storage', static: true },
+    { id: 'coolify',  label: 'Coolify',  desc: 'Déploiement', static: true },
+  ]
+
   return (
     <div style={{
       background: surface, border: `1px solid ${line}`, borderRadius: 14,
@@ -235,32 +244,38 @@ function ServiceHealth() {
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Service health</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>integrations · live</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>live checks</div>
         </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: emerald, letterSpacing: '.14em' }}>● 6/6 OK</span>
+        {loading && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted }}>⏳ Vérification…</span>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {SERVICES.map(s => (
-          <div key={s.id} style={{
-            padding: 10, borderRadius: 8,
-            background: surface2, border: `1px solid ${line}`,
-            display: 'flex', flexDirection: 'column', gap: 4,
-            borderLeft: `3px solid ${s.color}`,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: text }}>{s.label}</span>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3,
-                background: `${s.color}22`, color: s.color, letterSpacing: 1, fontWeight: 700,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.color }} />
-                {s.status.toUpperCase()}
-              </span>
+        {SERVICES_DISPLAY.map(s => {
+          const h = health[s.id]
+          const isOk = s.static ? null : (h?.ok ?? null)
+          const color = isOk === null ? muted : isOk ? emerald : rose
+          const statusLabel = isOk === null ? (loading ? '…' : 'N/A') : isOk ? 'OK' : 'KO'
+          return (
+            <div key={s.id} style={{
+              padding: 10, borderRadius: 8,
+              background: surface2, border: `1px solid ${line}`,
+              display: 'flex', flexDirection: 'column', gap: 4,
+              borderLeft: `3px solid ${color}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: text }}>{s.label}</span>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3,
+                  background: `${color}22`, color, letterSpacing: 1, fontWeight: 700,
+                }}>● {statusLabel}</span>
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted }}>
+                {s.desc}
+                {'latencyMs' in (h ?? {}) && ` · ${(h as { latencyMs: number }).latencyMs}ms`}
+                {h?.error && ` · ${h.error}`}
+              </div>
             </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.1em' }}>{s.desc}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
