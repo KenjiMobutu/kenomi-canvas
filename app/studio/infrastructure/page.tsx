@@ -239,24 +239,26 @@ function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: He
       </div>
 
       {(() => {
-        const pxNode = svc.id === 'proxmox' && proxmox?.nodes[0] ? proxmox.nodes[0] : null
+        const pxNode = svc.id === 'proxmox' ? (proxmox?.nodes[0] ?? null) : null
+        const vmRunning = proxmox ? proxmox.vms.filter(v => v.status === 'running').length : 0
+        const vmTotal = proxmox?.vms.length ?? 1
         return (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <ArcGauge label="CPU"  value={pxNode ? pxNode.cpu_pct  : 0} max={100} color={cyan} />
-            <ArcGauge label="RAM"  value={pxNode ? pxNode.mem_pct  : 0} max={100} color={emerald} />
-            <ArcGauge label="Disk" value={pxNode ? pxNode.disk_pct : 0} max={100} color={violet} />
-            <ArcGauge label="VMs"  value={proxmox ? proxmox.vms.filter(v => v.status === 'running').length : 0} max={Math.max(proxmox?.vms.length ?? 1, 1)} color={amber} unit="" />
+            <ArcGauge label="CPU"  value={pxNode?.cpu_pct  ?? 0} max={100} color={cyan} />
+            <ArcGauge label="RAM"  value={pxNode?.mem_pct  ?? 0} max={100} color={emerald} />
+            <ArcGauge label="Disk" value={pxNode?.disk_pct ?? 0} max={100} color={violet} />
+            <ArcGauge label="VMs"  value={svc.id === 'proxmox' ? vmRunning : 0} max={Math.max(vmTotal, 1)} color={amber} unit="" />
           </div>
         )
       })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-        <InfraStat label="Uptime"    value={svc.id === 'proxmox' && proxmox?.nodes[0] ? proxmox.nodes[0].uptime_fmt : '—'}  color={emerald} />
-        <InfraStat label="Latency"   value={latency !== null ? `${latency}ms` : '—'}                                          color={cyan}    />
-        <InfraStat label="Monitored" value={hk ? 'oui' : 'non'}                                                               color={hk ? emerald : muted} />
+        <InfraStat label="Uptime"    value={svc.id === 'proxmox' ? (proxmox?.nodes[0]?.uptime_fmt ?? '—') : '—'} color={emerald} />
+        <InfraStat label="Latency"   value={latency !== null ? `${latency}ms` : '—'}                              color={cyan}    />
+        <InfraStat label="Monitored" value={hk ? 'oui' : svc.id === 'proxmox' && proxmox ? 'oui' : 'non'}        color={hk || (svc.id === 'proxmox' && proxmox) ? emerald : muted} />
       </div>
 
-      {!hk && (
+      {!hk && !(svc.id === 'proxmox' && proxmox) && (
         <div style={{ padding: '10px 12px', borderRadius: 8, background: `${amber}12`, border: `1px solid ${amber}33`, fontSize: 11, color: amber, fontFamily: 'var(--font-mono)' }}>
           ⚠ Métriques non disponibles · API Proxmox/Coolify non configurée
         </div>

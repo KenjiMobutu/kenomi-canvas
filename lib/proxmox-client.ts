@@ -54,21 +54,41 @@ const PROXMOX_NODE =
 // ─── Fetch avec auth token ────────────────────────────────────────────────────
 
 async function proxmoxFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${PROXMOX_BASE_URL}/api2/json${path}`, {
-    headers: {
-      Authorization: `PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}`,
-    },
-    // Proxmox self-hosted utilise un cert self-signed — on désactive la vérif TLS
-    // @ts-expect-error — Node.js fetch option
-    agent: new (await import("https")).Agent({ rejectUnauthorized: false }),
+  const https = await import("https");
+  const url = new URL(`${PROXMOX_BASE_URL}/api2/json${path}`);
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: url.hostname,
+        port: url.port || 8006,
+        path: url.pathname + url.search,
+        method: "GET",
+        rejectUnauthorized: false,
+        headers: {
+          Authorization: `PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}`,
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => { data += chunk; });
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 400) {
+            reject(new Error(`Proxmox API ${res.statusCode} sur ${path}: ${data}`));
+            return;
+          }
+          try {
+            resolve(JSON.parse(data).data as T);
+          } catch {
+            reject(new Error(`Proxmox JSON invalide sur ${path}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.setTimeout(10_000, () => { req.destroy(new Error("Proxmox timeout")); });
+    req.end();
   });
-
-  if (!res.ok) {
-    throw new Error(`Proxmox API ${res.status} sur ${path}: ${await res.text()}`);
-  }
-
-  const json = await res.json();
-  return json.data as T;
 }
 
 // ─── Métriques nœud ──────────────────────────────────────────────────────────
