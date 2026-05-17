@@ -9,14 +9,14 @@ import { AGENTS_DATA, makeSpark, sparkPath, useIsMobile } from '@/lib/studio-uti
 
 // Services de l'infra — statuts alimentés par /api/studio/services/health
 const SERVICES_IN = [
-  { id: 'proxmox',  label: 'Proxmox VE',  short: 'PROX', color: '#34d399', role: 'Compute · cluster local',   endpoint: 'proxmox.local',    healthKey: null        },
-  { id: 'coolify',  label: 'Coolify',     short: 'COOL', color: '#34d399', role: 'Deploy · landings + APIs',  endpoint: '192.168.0.19:8000', healthKey: 'coolify'   },
-  { id: 'nginx',    label: 'Nginx PM',    short: 'NPM',  color: '#22d3ee', role: 'Proxy · SSL · domains',     endpoint: 'npm.local',         healthKey: null        },
-  { id: 'uptime',   label: 'Uptime Kuma', short: 'UPT',  color: '#a78bfa', role: 'Monitor',                   endpoint: 'uptime.local',      healthKey: null        },
-  { id: 'vault',    label: 'Vaultwarden', short: 'VLT',  color: '#fbbf24', role: 'Secrets · creds · OAuth',   endpoint: 'vault.local',       healthKey: null        },
-  { id: 'supabase', label: 'Supabase',    short: 'SUP',  color: '#34d399', role: 'Auth · Postgres · Storage', endpoint: 'supabase.kenomi.eu', healthKey: 'supabase' },
-  { id: 'n8n',      label: 'n8n',         short: 'N8N',  color: '#e879f9', role: 'Automation',                endpoint: 'n8n.kenomi.eu',     healthKey: 'n8n'       },
-  { id: 'ollama',   label: 'Ollama',      short: 'OLL',  color: '#fb923c', role: 'LLM · inference locale',    endpoint: '192.168.0.14:11434', healthKey: 'ollama'   },
+  { id: 'proxmox',  vmid: null, label: 'Proxmox VE',  short: 'PROX', color: '#34d399', role: 'Compute · cluster local',   endpoint: 'proxmox.local',     healthKey: null       },
+  { id: 'coolify',  vmid: 102,  label: 'Coolify',     short: 'COOL', color: '#34d399', role: 'Deploy · landings + APIs',  endpoint: '192.168.0.19:8000', healthKey: 'coolify'  },
+  { id: 'nginx',    vmid: 101,  label: 'Nginx PM',    short: 'NPM',  color: '#22d3ee', role: 'Proxy · SSL · domains',     endpoint: 'npm.local',         healthKey: null       },
+  { id: 'uptime',   vmid: null, label: 'Uptime Kuma', short: 'UPT',  color: '#a78bfa', role: 'Monitor',                   endpoint: 'uptime.local',      healthKey: null       },
+  { id: 'vault',    vmid: 100,  label: 'Vaultwarden', short: 'VLT',  color: '#fbbf24', role: 'Secrets · creds · OAuth',   endpoint: 'vault.local',       healthKey: null       },
+  { id: 'supabase', vmid: null, label: 'Supabase',    short: 'SUP',  color: '#34d399', role: 'Auth · Postgres · Storage', endpoint: 'supabase.kenomi.eu', healthKey: 'supabase'},
+  { id: 'n8n',      vmid: null, label: 'n8n',         short: 'N8N',  color: '#e879f9', role: 'Automation',                endpoint: 'n8n.kenomi.eu',     healthKey: 'n8n'      },
+  { id: 'ollama',   vmid: null, label: 'Ollama',      short: 'OLL',  color: '#fb923c', role: 'LLM · inference locale',    endpoint: '192.168.0.14:11434', healthKey: 'ollama'  },
 ]
 
 const POSITIONS: Record<string, { x: number; y: number; kind: string }> = {
@@ -59,9 +59,14 @@ type ProxmoxVM = {
   type: 'qemu' | 'lxc'
   cpu_pct: number
   mem_pct: number
+  disk_pct: number
   mem_fmt: string
   maxmem_fmt: string
+  disk_used_fmt: string
+  maxdisk_fmt: string
   uptime_fmt: string
+  netin: number
+  netout: number
 }
 type ProxmoxData = { nodes: ProxmoxNode[]; vms: ProxmoxVM[]; fetched_at: string }
 type ServiceIn = typeof SERVICES_IN[0]
