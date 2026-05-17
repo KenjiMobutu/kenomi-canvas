@@ -242,8 +242,8 @@ function ServiceHealth() {
   const SERVICES_DISPLAY = [
     { id: 'ollama',   label: 'Ollama',   desc: 'LLM local' },
     { id: 'n8n',      label: 'n8n',      desc: 'Automations' },
-    { id: 'supabase', label: 'Supabase', desc: 'Auth + DB + Storage', static: true },
-    { id: 'coolify',  label: 'Coolify',  desc: 'Déploiement', static: true },
+    { id: 'supabase', label: 'Supabase', desc: 'Auth + DB + Storage' },
+    { id: 'coolify',  label: 'Coolify',  desc: 'Déploiement' },
   ]
 
   return (
@@ -261,7 +261,7 @@ function ServiceHealth() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {SERVICES_DISPLAY.map(s => {
           const h = health[s.id]
-          const isOk = s.static ? null : (h?.ok ?? null)
+          const isOk = h?.ok ?? null
           const color = isOk === null ? muted : isOk ? emerald : rose
           const statusLabel = isOk === null ? (loading ? '…' : 'N/A') : isOk ? 'OK' : 'KO'
           return (

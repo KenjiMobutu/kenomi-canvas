@@ -27,21 +27,29 @@ export async function GET() {
   const ollamaBase = (settings?.ollama_base_url ?? 'http://192.168.0.14:11434').replace(/\/$/, '')
   const n8nBase = settings?.n8n_base_url?.replace(/\/$/, '') ?? null
 
-  const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {}
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const coolifyUrl = process.env.COOLIFY_URL ?? 'http://192.168.0.19:8000'
 
-  if (isAllowedOllamaUrl(ollamaBase)) {
-    checks.ollama = await pingUrl(`${ollamaBase}/api/tags`)
-  } else {
-    checks.ollama = { ok: false, error: 'URL non autorisée' }
-  }
+  const [ollamaResult, n8nResult, supabaseResult, coolifyResult] = await Promise.all([
+    isAllowedOllamaUrl(ollamaBase)
+      ? pingUrl(`${ollamaBase}/api/tags`)
+      : Promise.resolve({ ok: false, latencyMs: 0, error: 'URL non autorisée' }),
 
-  if (n8nBase && isAllowedWebhookUrl(n8nBase)) {
-    checks.n8n = await pingUrl(`${n8nBase}/healthz`)
-  } else if (!n8nBase) {
-    checks.n8n = { ok: false, error: 'Non configuré' }
-  } else {
-    checks.n8n = { ok: false, error: 'URL non autorisée' }
-  }
+    n8nBase && isAllowedWebhookUrl(n8nBase)
+      ? pingUrl(`${n8nBase}/healthz`)
+      : Promise.resolve({ ok: false, latencyMs: 0, error: n8nBase ? 'URL non autorisée' : 'Non configuré' }),
 
-  return NextResponse.json(checks)
+    supabaseUrl
+      ? pingUrl(`${supabaseUrl}/rest/v1/`)
+      : Promise.resolve({ ok: false, latencyMs: 0, error: 'URL non configurée' }),
+
+    pingUrl(`${coolifyUrl}/api/v1/version`),
+  ])
+
+  return NextResponse.json({
+    ollama: ollamaResult,
+    n8n: n8nResult,
+    supabase: supabaseResult,
+    coolify: coolifyResult,
+  })
 }
