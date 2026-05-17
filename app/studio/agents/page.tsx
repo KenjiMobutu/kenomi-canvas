@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useEffect, useState } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { CkShell } from '@/components/CkShell'
 import { useIsMobile } from '@/lib/studio-utils'
 import {
@@ -20,6 +20,12 @@ interface AgentConfig {
 
 const DEFAULT_CONFIG: AgentConfig = { model: 'qwen3:8b', system_prompt: '', temperature: 0.7, max_tokens: 2048 }
 const MODELS = ['qwen3:8b', 'qwen3:14b', 'claude-sonnet-4-6', 'gpt-4o-mini']
+
+interface DbAgentState {
+  run_count: number
+  last_run_at: string | null
+  paused: boolean
+}
 
 function TunePanel({ agentId, agentColor, onClose }: { agentId: string; agentColor: string; onClose: () => void }) {
   const { user } = useAuth()
@@ -116,8 +122,76 @@ function StatBox({ label, value, color }: { label: string; value: string; color:
 }
 
 function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity: number[]; queue: string[] }) {
+  const { user } = useAuth()
   const t = useTick(2400)
   const [tuneOpen, setTuneOpen] = useState(false)
+  const [logsOpen, setLogsOpen] = useState(false)
+  const [logs, setLogs] = useState<{ role: string; content: string; created_at: string }[]>([])
+  const [running, setRunning] = useState(false)
+  const [dbState, setDbState] = useState<DbAgentState>({ run_count: 0, last_run_at: null, paused: false })
+
+  useEffect(() => {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    supabase.from('agent_configs')
+      .select('run_count, last_run_at, paused')
+      .eq('user_id', user.id)
+      .eq('agent_id', agent.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setDbState({ run_count: data.run_count ?? 0, last_run_at: data.last_run_at, paused: data.paused ?? false })
+        else setDbState({ run_count: 0, last_run_at: null, paused: false })
+      })
+  }, [agent.id, user])
+
+  async function handleRun() {
+    setRunning(true)
+    try {
+      const res = await fetch('/api/studio/agents/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: agent.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Erreur run agent')
+      } else {
+        toast.success(`${agent.name} — mission complète (${data.durationMs}ms)`)
+        setDbState(s => ({ ...s, run_count: s.run_count + 1, last_run_at: new Date().toISOString() }))
+      }
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  async function handlePause() {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    const newPaused = !dbState.paused
+    const { error } = await supabase.from('agent_configs').upsert({
+      user_id: user.id, agent_id: agent.id, paused: newPaused,
+    }, { onConflict: 'user_id,agent_id' })
+    if (error) return toast.error(error.message)
+    setDbState(s => ({ ...s, paused: newPaused }))
+    toast.success(newPaused ? `${agent.name} mis en pause` : `${agent.name} réactivé`)
+  }
+
+  async function handleLogs() {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    const { data } = await supabase
+      .from('messages')
+      .select('role, content, created_at')
+      .eq('user_id', user.id)
+      .eq('agent_id', agent.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    setLogs(data ?? [])
+    setLogsOpen(true)
+  }
+
   return (
     <div style={{
       background: surface, border: `1px solid ${line}`, borderRadius: 14,
@@ -185,10 +259,10 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-        <StatBox label="Runs"   value={String(42 + Math.round(agent.xp * 220))} color={agent.color} />
-        <StatBox label="Win"    value={`${Math.round(60 + agent.xp * 30)}%`}     color={emerald} />
-        <StatBox label="Avg"    value={`${(1.2 + (1 - agent.xp) * 3.5).toFixed(1)}s`} color={cyan} />
-        <StatBox label="Uptime" value="99.4%"                                     color={violet} />
+        <StatBox label="Runs"   value={String(dbState.run_count)} color={agent.color} />
+        <StatBox label="Status" value={dbState.paused ? 'PAUSÉ' : 'ACTIF'} color={dbState.paused ? '#fbbf24' : emerald} />
+        <StatBox label="Last"   value={dbState.last_run_at ? `${Math.round((Date.now() - new Date(dbState.last_run_at).getTime()) / 60000)}m` : '—'} color={cyan} />
+        <StatBox label="LV"     value={String(agent.level)} color={violet} />
       </div>
 
       {/* Activity sparkline */}
@@ -239,21 +313,30 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
 
       {/* Controls */}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button style={{
+        <button onClick={handleRun} disabled={running || dbState.paused} style={{
           flex: 1, padding: '10px 12px', borderRadius: 8,
-          background: agent.color, color: '#0b0d12', border: 'none',
+          background: running || dbState.paused ? `${agent.color}55` : agent.color,
+          color: '#0b0d12', border: 'none',
           fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.05em',
+          cursor: running || dbState.paused ? 'not-allowed' : 'pointer',
+          opacity: running || dbState.paused ? 0.7 : 1,
+        }}>{running ? '⏳ Running…' : '▶ Run mission'}</button>
+        <button onClick={handlePause} style={{
+          padding: '10px 12px', borderRadius: 8,
+          background: dbState.paused ? '#fbbf2422' : surface2,
+          color: dbState.paused ? '#fbbf24' : text,
+          border: `1px solid ${dbState.paused ? '#fbbf2455' : line2}`,
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
           cursor: 'pointer',
-        }}>▶ Run mission</button>
-        {(['PAUSE', 'LOGS'] as const).map(label => (
-          <button key={label} style={{
-            padding: '10px 12px', borderRadius: 8,
-            background: surface2, color: text,
-            border: `1px solid ${line2}`,
-            fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
-            cursor: 'pointer',
-          }}>{label}</button>
-        ))}
+        }}>{dbState.paused ? 'RESUME' : 'PAUSE'}</button>
+        <button onClick={handleLogs} style={{
+          padding: '10px 12px', borderRadius: 8,
+          background: logsOpen ? `${agent.color}22` : surface2,
+          color: logsOpen ? agent.color : text,
+          border: `1px solid ${logsOpen ? `${agent.color}55` : line2}`,
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
+          cursor: 'pointer',
+        }}>LOGS</button>
         <button onClick={() => setTuneOpen(o => !o)} style={{
           padding: '10px 12px', borderRadius: 8,
           background: tuneOpen ? agent.color + '22' : surface2,
@@ -263,6 +346,27 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
           cursor: 'pointer',
         }}>TUNE</button>
       </div>
+
+      {logsOpen && (
+        <div style={{ background: surface2, border: `1px solid ${line}`, borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Derniers logs · {agent.name}</span>
+            <button onClick={() => setLogsOpen(false)} style={{ background: 'transparent', border: 'none', color: muted, cursor: 'pointer' }}>✕</button>
+          </div>
+          {logs.length === 0 ? (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted2 }}>Aucun log — déclenchez une mission d&apos;abord.</div>
+          ) : logs.map((l, i) => (
+            <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: surface, border: `1px solid ${line}` }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: l.role === 'assistant' ? agent.color : muted, letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' }}>
+                {l.role} · {new Date(l.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+              </div>
+              <div style={{ fontSize: 12, color: text, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3 as React.CSSProperties['WebkitLineClamp'], WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'] }}>
+                {l.content}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {tuneOpen && <TunePanel agentId={agent.id} agentColor={agent.color} onClose={() => setTuneOpen(false)} />}
     </div>
