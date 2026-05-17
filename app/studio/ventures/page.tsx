@@ -142,10 +142,23 @@ interface EditForm {
   mrr: string; cac: string; conversion: string; next_action: string; insight: string
 }
 
-function VentureInspector({ v, onSave, onDelete }: {
+function generateBrief(v: DV): string {
+  return [
+    `# ${v.name}`,
+    `Niche : ${v.niche || '—'}`,
+    `Stage : ${v.stage} | Score : ${v.score}/100 | Statut : ${v.status}`,
+    `MRR : ${v.mrr || '—'} | CAC : ${v.cac || '—'} | Conversion : ${v.conversion || '—'}`,
+    `Prochaine action : ${v.next_action || '—'}`,
+    `Insight : ${v.insight || '—'}`,
+  ].join('\n')
+}
+
+function VentureInspector({ v, onSave, onDelete, onOpen, onBrief }: {
   v: DV | null
   onSave: (id: string, form: EditForm) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  onOpen: () => void
+  onBrief: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -332,9 +345,8 @@ function VentureInspector({ v, onSave, onDelete }: {
             <button type="button" onClick={() => setEditing(true)} style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: sc, color: '#0b0d12', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11.5, letterSpacing: '.05em', cursor: 'pointer' }}>
               Confirm · {v.status}
             </button>
-            {['OPEN', 'BRIEF'].map(lbl => (
-              <button key={lbl} type="button" style={{ padding: '10px 12px', borderRadius: 8, background: surface2, color: text, border: `1px solid ${line2}`, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em', cursor: 'pointer' }}>{lbl}</button>
-            ))}
+            <button type="button" onClick={e => { e.stopPropagation(); onOpen() }} style={{ padding: '10px 12px', borderRadius: 8, background: surface2, color: text, border: `1px solid ${line2}`, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em', cursor: 'pointer' }}>OPEN</button>
+            <button type="button" onClick={e => { e.stopPropagation(); onBrief() }} style={{ padding: '10px 12px', borderRadius: 8, background: surface2, color: text, border: `1px solid ${line2}`, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em', cursor: 'pointer' }}>BRIEF</button>
           </>
         )}
       </div>
@@ -537,7 +549,18 @@ export default function VenturesPage() {
 
         {/* Inspector — toujours visible sur desktop, conditionnel sur mobile */}
         {(!isMobile || selectedId) && (
-          <VentureInspector v={selected} onSave={update} onDelete={remove} />
+          <VentureInspector
+            v={selected}
+            onSave={update}
+            onDelete={remove}
+            onOpen={() => { if (selected) setSelectedId(selected.id) }}
+            onBrief={() => {
+              if (!selected) return
+              navigator.clipboard.writeText(generateBrief(selected))
+                .then(() => toast.success('Brief copié dans le presse-papier'))
+                .catch(() => toast.error('Impossible de copier'))
+            }}
+          />
         )}
       </div>
     </CkShell>
