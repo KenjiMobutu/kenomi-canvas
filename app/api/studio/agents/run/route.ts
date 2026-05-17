@@ -4,6 +4,7 @@ import { requireAllowedUser } from '@/lib/auth-server'
 import { isRateLimited } from '@/lib/rate-limit'
 import { isAllowedOllamaUrl } from '@/lib/security'
 import { apiError } from '@/lib/api-response'
+import { isAgentUnlocked, parsePipelineIdea, buildSystemPrompt, type PipelineRow } from '@/lib/pipeline-types'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -33,6 +34,22 @@ export async function POST(req: NextRequest) {
 
   if (cfg?.paused) return apiError('Agent en pause', 409)
 
+  const { data: pipeline } = await supabase
+    .from('venture_pipeline')
+    .select('*')
+    .eq('user_id', user!.id)
+    .not('status', 'eq', 'rejected')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle() as { data: PipelineRow | null }
+
+  if (!isAgentUnlocked(agentId, pipeline)) {
+    if (!pipeline || pipeline.status === 'pending_validation') {
+      return apiError("Validez l'idée Scout avant de lancer cet agent", 409)
+    }
+    return apiError("Cet agent attend la fin de l'étape précédente", 409)
+  }
+
   const { data: settings } = await supabase
     .from('user_settings')
     .select('ollama_base_url')
@@ -43,10 +60,18 @@ export async function POST(req: NextRequest) {
   if (!isAllowedOllamaUrl(baseUrl)) return apiError('URL Ollama non autorisée', 400)
 
   const model = cfg?.model ?? 'qwen3:8b'
-  const systemPrompt = cfg?.system_prompt ?? `Tu es l'agent ${agentId}. Tu es opérationnel et prêt à exécuter des missions.`
-  const userPrompt = prompt || 'Confirme que tu es opérationnel et décris ta mission en 1 phrase.'
+  const systemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
+  const userPrompt = prompt || (agentId === 'scout'
+    ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
+    : 'Exécute ta mission.')
 
   const startMs = Date.now()
+
+  if (pipeline && agentId !== 'scout') {
+    await supabase.from('venture_pipeline')
+      .update({ current_agent: agentId, updated_at: new Date().toISOString() })
+      .eq('id', pipeline.id)
+  }
 
   try {
     const resp = await fetch(`${baseUrl}/api/chat`, {
@@ -68,32 +93,79 @@ export async function POST(req: NextRequest) {
       signal: AbortSignal.timeout(30_000),
     })
 
-    if (!resp.ok) {
-      return apiError(`Ollama ${resp.status}`, 502)
-    }
+    if (!resp.ok) return apiError(`Ollama ${resp.status}`, 502)
 
     const json = await resp.json() as { message?: { content?: string } }
     const content = json.message?.content ?? ''
     const durationMs = Date.now() - startMs
 
-    // Persister le run dans agent_runs (table dédiée — messages du chat a des colonnes NOT NULL incompatibles)
     await supabase.from('agent_runs').insert({
-      user_id: user!.id,
-      agent_id: agentId,
-      model,
-      prompt: userPrompt,
-      response: content,
-      duration_ms: durationMs,
+      user_id: user!.id, agent_id: agentId, model,
+      prompt: userPrompt, response: content, duration_ms: durationMs,
     })
 
-    // UPDATE ciblé — ne touche que run_count et last_run_at, préserve system_prompt/temperature/max_tokens
+    if (agentId === 'scout') {
+      const parsed = parsePipelineIdea(content)
+      if (pipeline && pipeline.status === 'pending_validation') {
+        await supabase.from('venture_pipeline')
+          .update({ status: 'rejected', updated_at: new Date().toISOString() })
+          .eq('id', pipeline.id)
+      }
+      const { data: newPipeline } = await supabase.from('venture_pipeline')
+        .insert({
+          user_id: user!.id,
+          ...parsed,
+          scout_raw: content,
+          status: 'pending_validation',
+        })
+        .select('id')
+        .single()
+
+      await supabase.from('agent_configs')
+        .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: new Date().toISOString() })
+        .eq('user_id', user!.id).eq('agent_id', agentId)
+
+      return NextResponse.json({
+        ok: true, content, durationMs, model,
+        pipeline: { id: newPipeline?.id, ...parsed, status: 'pending_validation' },
+      })
+    }
+
+    const outputCol: Record<string, string> = {
+      validation: 'validation_output',
+      builder:    'builder_output',
+      payment:    'payment_output',
+      marketing:  'marketing_output',
+      decision:   'decision_output',
+    }
+    const col = outputCol[agentId]
+    if (col && pipeline) {
+      const extraFields: Record<string, unknown> = {
+        [col]: content,
+        current_agent: null,
+        updated_at: new Date().toISOString(),
+      }
+      if (agentId === 'validation') {
+        try {
+          const parsed = JSON.parse(content)
+          if (typeof parsed.score === 'number') extraFields.validation_score = parsed.score
+        } catch { /* score non parseable */ }
+      }
+      if (agentId === 'decision') extraFields.status = 'done'
+      await supabase.from('venture_pipeline').update(extraFields).eq('id', pipeline.id)
+    }
+
     await supabase.from('agent_configs')
       .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: new Date().toISOString() })
-      .eq('user_id', user!.id)
-      .eq('agent_id', agentId)
+      .eq('user_id', user!.id).eq('agent_id', agentId)
 
     return NextResponse.json({ ok: true, content, durationMs, model })
   } catch (e) {
+    if (pipeline && agentId !== 'scout') {
+      await supabase.from('venture_pipeline')
+        .update({ current_agent: null, updated_at: new Date().toISOString() })
+        .eq('id', pipeline.id)
+    }
     const isTimeout = e instanceof Error && e.name === 'TimeoutError'
     return apiError(isTimeout ? 'Ollama timeout (30s)' : 'Ollama injoignable', 502)
   }
