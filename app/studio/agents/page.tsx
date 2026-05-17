@@ -10,6 +10,8 @@ import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick } from '@/lib/stud
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import type { PipelineRow } from '@/lib/pipeline-types'
+import { isAgentUnlocked, AGENT_CHAIN } from '@/lib/pipeline-types'
 
 interface AgentConfig {
   model: string
@@ -125,7 +127,126 @@ function StatBox({ label, value, color }: { label: string; value: string; color:
   )
 }
 
-function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity: number[]; queue: string[] }) {
+const AGENT_SIGIL_COLORS: Record<string, string> = {
+  scout: '#22d3ee', validation: '#a78bfa', builder: '#34d399',
+  payment: '#fbbf24', marketing: '#e879f9', decision: '#ff6a3d',
+}
+const AGENT_LABELS: Record<string, string> = {
+  scout: 'SCT', validation: 'VAL', builder: 'BLD',
+  payment: 'PAY', marketing: 'MKT', decision: 'DEC',
+}
+
+function PipelineStatusBar({ pipeline }: { pipeline: PipelineRow | null }) {
+  const outputByAgent: Record<string, string | null | undefined> = {
+    scout:      pipeline ? 'done' : null,
+    validation: pipeline?.validation_output,
+    builder:    pipeline?.builder_output,
+    payment:    pipeline?.payment_output,
+    marketing:  pipeline?.marketing_output,
+    decision:   pipeline?.decision_output,
+  }
+  return (
+    <div style={{
+      background: surface, border: `1px solid ${line}`, borderRadius: 12,
+      padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 0,
+    }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginRight: 14, flexShrink: 0 }}>Pipeline</span>
+      {AGENT_CHAIN.map((id, i) => {
+        const output = outputByAgent[id]
+        const isDone = output != null
+        const isRunning = pipeline?.current_agent === id
+        const isNext = !isDone && !isRunning && pipeline?.status === 'approved' && isAgentUnlocked(id, pipeline)
+        const agentColor = AGENT_SIGIL_COLORS[id] ?? muted2
+        const labelColor = isDone ? emerald : isRunning ? cyan : isNext ? accent : muted2
+        return (
+          <div key={id} style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 10px' }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: isDone ? `${agentColor}22` : surface2,
+                border: `1.5px solid ${isDone || isRunning || isNext ? agentColor : line}`,
+                display: 'grid', placeItems: 'center',
+                fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 800,
+                color: isDone || isRunning || isNext ? agentColor : muted2,
+              }}>
+                {isDone ? '✓' : isRunning ? '⟳' : AGENT_LABELS[id]}
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7.5, color: labelColor, letterSpacing: '.1em' }}>{AGENT_LABELS[id]}</span>
+            </div>
+            {i < AGENT_CHAIN.length - 1 && (
+              <div style={{ width: 20, height: 1, background: isDone ? agentColor : line, opacity: 0.5 }} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PipelineValidationCard({
+  pipeline, onApprove, onReject, loading,
+}: {
+  pipeline: PipelineRow
+  onApprove: () => void
+  onReject: () => void
+  loading: boolean
+}) {
+  return (
+    <div style={{
+      background: surface, border: `2px solid ${cyan}`, borderRadius: 14,
+      padding: 18, display: 'flex', flexDirection: 'column', gap: 12,
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{
+        position: 'absolute', right: -20, top: -20,
+        fontFamily: 'var(--font-display)', fontSize: 180, fontWeight: 800,
+        color: cyan, opacity: .04, lineHeight: 1, pointerEvents: 'none', userSelect: 'none',
+      }}>◬</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 8px', borderRadius: 4, background: `${cyan}22`, color: cyan, letterSpacing: 1.5, fontWeight: 800 }}>
+          SCOUT · VALIDATION REQUISE
+        </span>
+      </div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: text }}>
+        {pipeline.idea_title || 'Idée sans titre'}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {([
+          { label: 'Niche',    value: pipeline.idea_niche    },
+          { label: 'Marché',   value: pipeline.idea_market   },
+          { label: 'Problème', value: pipeline.idea_problem  },
+          { label: 'Solution', value: pipeline.idea_solution },
+        ] as { label: string; value: string }[]).map(({ label, value }) => (
+          <div key={label} style={{ padding: '8px 10px', borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
+            <div style={{ fontSize: 12, color: text, lineHeight: 1.4 }}>{value || '—'}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={onApprove} disabled={loading} style={{
+          flex: 1, padding: '11px 14px', borderRadius: 8,
+          background: loading ? `${emerald}55` : emerald,
+          color: '#0b0d12', border: 'none',
+          fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, letterSpacing: '.06em',
+          cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+        }}>{loading ? '…' : '✓ Valider cette idée'}</button>
+        <button onClick={onReject} disabled={loading} style={{
+          padding: '11px 14px', borderRadius: 8,
+          background: `${rose}18`, color: rose, border: `1px solid ${rose}44`,
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
+          cursor: loading ? 'not-allowed' : 'pointer',
+        }}>REJETER</button>
+      </div>
+    </div>
+  )
+}
+
+function AgentInspector({ agent, activity, queue, pipeline, setPipeline }: {
+  agent: AgentData; activity: number[]; queue: string[]
+  pipeline: PipelineRow | null
+  setPipeline: React.Dispatch<React.SetStateAction<PipelineRow | null>>
+}) {
   const { user } = useAuth()
   const t = useTick(2400)
   const [tuneOpen, setTuneOpen] = useState(false)
@@ -162,6 +283,9 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
       } else {
         toast.success(`${agent.name} — mission complète (${data.durationMs}ms)`)
         setDbState(s => ({ ...s, run_count: s.run_count + 1, last_run_at: new Date().toISOString() }))
+        if (agent.id === 'scout' && data.pipeline) {
+          setPipeline(data.pipeline as PipelineRow)
+        }
       }
     } catch {
       toast.error('Erreur réseau')
@@ -195,6 +319,11 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
     setLogs(data ?? [])
     setLogsOpen(true)
   }
+
+  const unlocked = isAgentUnlocked(agent.id, pipeline)
+  const lockReason = !unlocked
+    ? (pipeline?.status === 'pending_validation' ? "Validez l'idée Scout d'abord" : "Attendez l'agent précédent")
+    : ''
 
   return (
     <div style={{
@@ -317,14 +446,21 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
 
       {/* Controls */}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={handleRun} disabled={running || dbState.paused} style={{
-          flex: 1, padding: '10px 12px', borderRadius: 8,
-          background: running || dbState.paused ? `${agent.color}55` : agent.color,
-          color: '#0b0d12', border: 'none',
-          fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.05em',
-          cursor: running || dbState.paused ? 'not-allowed' : 'pointer',
-          opacity: running || dbState.paused ? 0.7 : 1,
-        }}>{running ? '⏳ Running…' : '▶ Run mission'}</button>
+        <button
+          onClick={handleRun}
+          disabled={running || dbState.paused || !unlocked}
+          title={lockReason}
+          style={{
+            flex: 1, padding: '10px 12px', borderRadius: 8,
+            background: running || dbState.paused || !unlocked ? `${agent.color}55` : agent.color,
+            color: '#0b0d12', border: 'none',
+            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.05em',
+            cursor: running || dbState.paused || !unlocked ? 'not-allowed' : 'pointer',
+            opacity: running || dbState.paused || !unlocked ? 0.7 : 1,
+          }}
+        >
+          {running ? '⏳ Running…' : !unlocked ? `🔒 ${lockReason}` : '▶ Run mission'}
+        </button>
         <button onClick={handlePause} style={{
           padding: '10px 12px', borderRadius: 8,
           background: dbState.paused ? '#fbbf2422' : surface2,
@@ -503,11 +639,64 @@ export default function AgentsPage() {
   const isMobile = useIsMobile()
   const [selectedId, setSelectedId] = useState('scout')
   const [logTick, setLogTick] = useState(0)
+  const [pipeline, setPipeline] = useState<PipelineRow | null>(null)
+  const [validating, setValidating] = useState(false)
 
   useEffect(() => {
     const i = setInterval(() => setLogTick(t => t + 1), 1600)
     return () => clearInterval(i)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadPipeline() {
+      try {
+        const res = await fetch('/api/studio/agents/pipeline')
+        if (res.ok) {
+          const data = await res.json() as { pipeline: PipelineRow | null }
+          if (!cancelled) setPipeline(data.pipeline)
+        }
+      } catch { /* silencieux */ }
+    }
+    loadPipeline()
+    return () => { cancelled = true }
+  }, [])
+
+  async function handleApprove() {
+    if (!pipeline) return
+    setValidating(true)
+    try {
+      const res = await fetch('/api/studio/agents/pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', pipelineId: pipeline.id }),
+      })
+      const data = await res.json() as { ok?: boolean; ventureId?: string; error?: string }
+      if (!res.ok) return toast.error(data.error || 'Erreur validation')
+      toast.success('Venture créée · les agents sont débloqués')
+      setPipeline(p => p ? { ...p, status: 'approved' } : p)
+    } finally {
+      setValidating(false)
+    }
+  }
+
+  async function handleReject() {
+    if (!pipeline) return
+    setValidating(true)
+    try {
+      const res = await fetch('/api/studio/agents/pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reject', pipelineId: pipeline.id }),
+      })
+      if (res.ok) {
+        toast.success('Idée rejetée · relancez Scout pour une nouvelle idée')
+        setPipeline(null)
+      }
+    } finally {
+      setValidating(false)
+    }
+  }
 
   const selected = AGENTS_DATA.find(a => a.id === selectedId) ?? AGENTS_DATA[0]
   const activity = useMemo(() => makeSpark(48, 50, 22, selectedId.length * 7), [selectedId])
@@ -541,11 +730,22 @@ export default function AgentsPage() {
     <CkShell breadcrumb="Studio / Agents" title="Fleet Command" subtitle="7 agents · missions autonomes" actions={headerActions}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+        <PipelineStatusBar pipeline={pipeline} />
+
+        {pipeline?.status === 'pending_validation' && (
+          <PipelineValidationCard
+            pipeline={pipeline}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            loading={validating}
+          />
+        )}
+
         {/* Main 2-col */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '480px 1fr', gap: 14, alignItems: 'start' }}>
 
           {/* Left: AgentInspector */}
-          <AgentInspector agent={selected} activity={activity} queue={queue} />
+          <AgentInspector agent={selected} activity={activity} queue={queue} pipeline={pipeline} setPipeline={setPipeline} />
 
           {/* Right: Roster + Throughput */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
