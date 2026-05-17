@@ -227,12 +227,33 @@ function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: He
   const statusLabel = isLive === null ? '—' : isLive ? 'ONLINE' : 'OFFLINE'
   const statusCol = statusColor(isLive)
 
+  // Résolution des métriques selon le type de service
+  const isProxmoxNode = svc.id === 'proxmox'
+  const pxNode = isProxmoxNode ? (proxmox?.nodes[0] ?? null) : null
+  const vm = svc.vmid != null ? (proxmox?.vms.find(v => v.vmid === svc.vmid) ?? null) : null
+  const hasMetrics = isProxmoxNode ? pxNode !== null : vm !== null
+
+  // Valeurs des jauges
+  const cpuPct    = isProxmoxNode ? (pxNode?.cpu_pct  ?? 0) : (vm?.cpu_pct  ?? 0)
+  const memPct    = isProxmoxNode ? (pxNode?.mem_pct  ?? 0) : (vm?.mem_pct  ?? 0)
+  const diskPct   = isProxmoxNode ? (pxNode?.disk_pct ?? 0) : (vm?.disk_pct ?? 0)
+  const uptimeFmt = isProxmoxNode ? (pxNode?.uptime_fmt ?? '—') : (vm?.uptime_fmt ?? '—')
+
+  // 4ème jauge : VMs actives pour le nœud, Net I/O (Mo) pour les VMs
+  const vmRunning = proxmox ? proxmox.vms.filter(v => v.status === 'running').length : 0
+  const vmTotal   = proxmox?.vms.length ?? 1
+  const netMo     = vm ? Math.round((vm.netin + vm.netout) / 1_048_576) : 0
+  const netMax    = 10_000
+
+  const isMonitored = hk ? true : hasMetrics
+
   return (
     <div style={{
       background: surface, border: `1px solid ${line}`, borderRadius: 14,
       padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
       borderLeft: `3px solid ${svc.color}`,
     }}>
+      {/* Header */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: svc.color, letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 700 }}>Service · {svc.short}</span>
@@ -243,32 +264,34 @@ function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: He
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', marginTop: 6 }}>→ {svc.endpoint}</div>
       </div>
 
-      {(() => {
-        const pxNode = svc.id === 'proxmox' ? (proxmox?.nodes[0] ?? null) : null
-        const vmRunning = proxmox ? proxmox.vms.filter(v => v.status === 'running').length : 0
-        const vmTotal = proxmox?.vms.length ?? 1
-        return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <ArcGauge label="CPU"  value={pxNode?.cpu_pct  ?? 0} max={100} color={cyan} />
-            <ArcGauge label="RAM"  value={pxNode?.mem_pct  ?? 0} max={100} color={emerald} />
-            <ArcGauge label="Disk" value={pxNode?.disk_pct ?? 0} max={100} color={violet} />
-            <ArcGauge label="VMs"  value={svc.id === 'proxmox' ? vmRunning : 0} max={Math.max(vmTotal, 1)} color={amber} unit="" />
-          </div>
-        )
-      })()}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-        <InfraStat label="Uptime"    value={svc.id === 'proxmox' ? (proxmox?.nodes[0]?.uptime_fmt ?? '—') : '—'} color={emerald} />
-        <InfraStat label="Latency"   value={latency !== null ? `${latency}ms` : '—'}                              color={cyan}    />
-        <InfraStat label="Monitored" value={hk ? 'oui' : svc.id === 'proxmox' && proxmox ? 'oui' : 'non'}        color={hk || (svc.id === 'proxmox' && proxmox) ? emerald : muted} />
-      </div>
-
-      {!hk && !(svc.id === 'proxmox' && proxmox) && (
-        <div style={{ padding: '10px 12px', borderRadius: 8, background: `${amber}12`, border: `1px solid ${amber}33`, fontSize: 11, color: amber, fontFamily: 'var(--font-mono)' }}>
-          ⚠ Métriques non disponibles · API Proxmox/Coolify non configurée
+      {/* Jauges — affichées uniquement si métriques disponibles */}
+      {hasMetrics && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <ArcGauge label="CPU"  value={cpuPct}  max={100} color={cyan} />
+          <ArcGauge label="RAM"  value={memPct}  max={100} color={emerald} />
+          <ArcGauge label="Disk" value={diskPct} max={100} color={violet} />
+          {isProxmoxNode
+            ? <ArcGauge label="VMs"  value={vmRunning} max={Math.max(vmTotal, 1)} color={amber} unit="" />
+            : <ArcGauge label="Net"  value={netMo}     max={netMax}              color={fuchsia} unit="Mo" />
+          }
         </div>
       )}
 
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+        <InfraStat label="Uptime"    value={hasMetrics ? uptimeFmt : '—'}             color={emerald} />
+        <InfraStat label="Latency"   value={latency !== null ? `${latency}ms` : '—'}  color={cyan}    />
+        <InfraStat label="Monitored" value={isMonitored ? 'oui' : 'non'}              color={isMonitored ? emerald : muted} />
+      </div>
+
+      {/* Warning si aucune métrique */}
+      {!hasMetrics && !hk && (
+        <div style={{ padding: '10px 12px', borderRadius: 8, background: `${amber}12`, border: `1px solid ${amber}33`, fontSize: 11, color: amber, fontFamily: 'var(--font-mono)' }}>
+          ⚠ Aucune métrique · service non hébergé sur Proxmox
+        </div>
+      )}
+
+      {/* Actions */}
       <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
         <button style={{
           flex: 1, padding: '9px 12px', borderRadius: 8,
