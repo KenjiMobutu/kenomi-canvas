@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { isRateLimited } from '@/lib/rate-limit'
-import { isAllowedOllamaUrl } from '@/lib/security'
 import { apiError } from '@/lib/api-response'
+import { llmChat } from '@/lib/llm-client'
 import { isAgentUnlocked, parsePipelineIdea, buildSystemPrompt, type PipelineRow } from '@/lib/pipeline-types'
 
 export async function POST(req: NextRequest) {
@@ -50,15 +50,6 @@ export async function POST(req: NextRequest) {
     return apiError("Cet agent attend la fin de l'étape précédente", 409)
   }
 
-  const { data: settings } = await supabase
-    .from('user_settings')
-    .select('ollama_base_url')
-    .eq('user_id', user!.id)
-    .maybeSingle()
-
-  const baseUrl = (settings?.ollama_base_url ?? 'http://192.168.0.14:11434').replace(/\/$/, '')
-  if (!isAllowedOllamaUrl(baseUrl)) return apiError('URL Ollama non autorisée', 400)
-
   const model = cfg?.model ?? 'qwen3:8b'
   const systemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
   const userPrompt = prompt || (agentId === 'scout'
@@ -74,33 +65,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const resp = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const llmResult = await llmChat(
+      [{ role: 'user', content: userPrompt }],
+      {
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        stream: false,
-        think: false,
-        options: {
-          temperature: cfg?.temperature ?? 0.7,
-          num_predict: cfg?.max_tokens ?? 512,
-        },
-      }),
-      signal: AbortSignal.timeout(30_000),
-    })
+        system: systemPrompt,
+        temperature: cfg?.temperature ?? 0.7,
+        max_tokens: cfg?.max_tokens ?? 512,
+      }
+    )
 
-    if (!resp.ok) return apiError(`Ollama ${resp.status}`, 502)
-
-    const json = await resp.json() as { message?: { content?: string } }
-    const content = json.message?.content ?? ''
+    const content = llmResult.content
     const durationMs = Date.now() - startMs
+    const usedModel = llmResult.model
 
     await supabase.from('agent_runs').insert({
-      user_id: user!.id, agent_id: agentId, model,
+      user_id: user!.id, agent_id: agentId, model: usedModel,
       prompt: userPrompt, response: content, duration_ms: durationMs,
     })
 
@@ -126,7 +106,7 @@ export async function POST(req: NextRequest) {
         .eq('user_id', user!.id).eq('agent_id', agentId)
 
       return NextResponse.json({
-        ok: true, content, durationMs, model,
+        ok: true, content, durationMs, model: usedModel,
         pipeline: { id: newPipeline?.id, ...parsed, status: 'pending_validation' },
       })
     }
@@ -159,7 +139,7 @@ export async function POST(req: NextRequest) {
       .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: new Date().toISOString() })
       .eq('user_id', user!.id).eq('agent_id', agentId)
 
-    return NextResponse.json({ ok: true, content, durationMs, model })
+    return NextResponse.json({ ok: true, content, durationMs, model: usedModel })
   } catch (e) {
     if (pipeline && agentId !== 'scout') {
       await supabase.from('venture_pipeline')
