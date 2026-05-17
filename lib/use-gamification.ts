@@ -26,7 +26,11 @@ export function useGamification(): GamificationResult & { loading: boolean; clai
   const refetch = useCallback(() => setTick(t => t + 1), [])
 
   useEffect(() => {
-    if (!user) { setLoading(false); return }
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false)
+      return
+    }
 
     let cancelled = false
     const supabase = createSupabaseBrowser()

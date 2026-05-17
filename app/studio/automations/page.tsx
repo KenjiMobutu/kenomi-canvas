@@ -70,6 +70,10 @@ function AuStatBox({ label, value, color }: { label: string; value: string; colo
   )
 }
 
+function minutesAgo(date: Date): string {
+  return `${Math.round((Date.now() - date.getTime()) / 60000)}m ago`
+}
+
 function WorkflowDAG({ workflow, runs }: { workflow: DbWorkflow | null; runs: AutoRun[] }) {
   const color = workflow?.enabled ? cyan : muted2
   const successCount = runs.filter(r => r.status === 'success').length
@@ -78,9 +82,7 @@ function WorkflowDAG({ workflow, runs }: { workflow: DbWorkflow | null; runs: Au
     ? Math.round(runs.filter(r => r.duration_ms !== null).reduce((s, r) => s + r.duration_ms!, 0) / runs.filter(r => r.duration_ms !== null).length)
     : null
   const lastRun = workflow?.last_run_at ? new Date(workflow.last_run_at) : null
-  const lastRunLabel = lastRun
-    ? `${Math.round((Date.now() - lastRun.getTime()) / 60000)}m ago`
-    : 'jamais'
+  const lastRunLabel = lastRun ? minutesAgo(lastRun) : 'jamais'
 
   // Nœuds générés depuis le trigger_type du workflow réel
   const W = 800, H = 160, NODE_W = 130, NODE_H = 50

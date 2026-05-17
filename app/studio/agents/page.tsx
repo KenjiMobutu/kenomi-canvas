@@ -112,6 +112,10 @@ type AgentData = typeof AGENTS_DATA[0]
 
 const QUEUE: Record<string, string[]> = {}
 
+function minutesAgo(isoDate: string): string {
+  return `${Math.round((Date.now() - new Date(isoDate).getTime()) / 60000)}m`
+}
+
 function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div style={{ padding: '10px 12px', borderRadius: 10, background: surface2, border: `1px solid ${line}` }}>
@@ -261,7 +265,7 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
         <StatBox label="Runs"   value={String(dbState.run_count)} color={agent.color} />
         <StatBox label="Status" value={dbState.paused ? 'PAUSÉ' : 'ACTIF'} color={dbState.paused ? '#fbbf24' : emerald} />
-        <StatBox label="Last"   value={dbState.last_run_at ? `${Math.round((Date.now() - new Date(dbState.last_run_at).getTime()) / 60000)}m` : '—'} color={cyan} />
+        <StatBox label="Last"   value={dbState.last_run_at ? minutesAgo(dbState.last_run_at) : '—'} color={cyan} />
         <StatBox label="LV"     value={String(agent.level)} color={violet} />
       </div>
 
