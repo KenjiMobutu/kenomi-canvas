@@ -1,55 +1,77 @@
-import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { requireAllowedUser } from '@/lib/auth-server'
-import { isAllowedOllamaUrl, isAllowedWebhookUrl } from '@/lib/security'
+/**
+ * app/api/studio/services/health/route.ts
+ * Remplace / étend le health check existant.
+ * Expose le statut Ollama + indicateur fallback actif.
+ */
 
-async function pingUrl(url: string, timeoutMs = 4000): Promise<{ ok: boolean; latencyMs: number }> {
-  const start = Date.now()
+import { NextResponse } from "next/server";
+import { checkOllamaHealth } from "@/lib/llm-client";
+
+type ServiceStatus = {
+  status: "ok" | "degraded" | "down";
+  latency_ms?: number;
+  detail?: string;
+};
+
+async function pingService(
+  url: string,
+  timeoutMs = 5000
+): Promise<ServiceStatus> {
+  const start = Date.now();
   try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
-    return { ok: resp.ok, latencyMs: Date.now() - start }
-  } catch {
-    return { ok: false, latencyMs: Date.now() - start }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    return {
+      status: res.ok ? "ok" : "degraded",
+      latency_ms: Date.now() - start,
+    };
+  } catch (e) {
+    return {
+      status: "down",
+      latency_ms: Date.now() - start,
+      detail: e instanceof Error ? e.message : "unreachable",
+    };
   }
 }
 
 export async function GET() {
-  const cookieStore = await cookies()
-  const { user, supabase, response } = await requireAllowedUser(cookieStore)
-  if (response) return response
+  const [ollama, n8n, supabase, coolify] = await Promise.all([
+    pingService(
+      `${process.env.OLLAMA_BASE_URL ?? "http://192.168.0.14:11434"}/api/tags`
+    ),
+    pingService(
+      `${process.env.N8N_BASE_URL ?? "https://n8n.kenomi.eu"}/healthz`
+    ),
+    pingService(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://supabase.kenomi.eu"}/rest/v1/`
+    ),
+    pingService(
+      `${process.env.COOLIFY_URL ?? "http://192.168.0.19:8000"}/api/v1/version`
+    ),
+  ]);
 
-  const { data: settings } = await supabase
-    .from('user_settings')
-    .select('ollama_base_url, n8n_base_url')
-    .eq('user_id', user!.id)
-    .maybeSingle()
+  const ollamaHealthy = await checkOllamaHealth();
+  const fallbackActive = !ollamaHealthy;
 
-  const ollamaBase = (settings?.ollama_base_url ?? 'http://192.168.0.14:11434').replace(/\/$/, '')
-  const n8nBase = settings?.n8n_base_url?.replace(/\/$/, '') ?? null
+  const allOk = [ollama, n8n, supabase, coolify].every(
+    (s) => s.status === "ok"
+  );
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-  const coolifyUrl = process.env.COOLIFY_URL ?? 'http://192.168.0.19:8000'
-
-  const [ollamaResult, n8nResult, supabaseResult, coolifyResult] = await Promise.all([
-    isAllowedOllamaUrl(ollamaBase)
-      ? pingUrl(`${ollamaBase}/api/tags`)
-      : Promise.resolve({ ok: false, latencyMs: 0, error: 'URL non autorisée' }),
-
-    n8nBase && isAllowedWebhookUrl(n8nBase)
-      ? pingUrl(`${n8nBase}/healthz`)
-      : Promise.resolve({ ok: false, latencyMs: 0, error: n8nBase ? 'URL non autorisée' : 'Non configuré' }),
-
-    supabaseUrl
-      ? pingUrl(`${supabaseUrl}/rest/v1/`)
-      : Promise.resolve({ ok: false, latencyMs: 0, error: 'URL non configurée' }),
-
-    pingUrl(`${coolifyUrl}/api/v1/version`),
-  ])
-
-  return NextResponse.json({
-    ollama: ollamaResult,
-    n8n: n8nResult,
-    supabase: supabaseResult,
-    coolify: coolifyResult,
-  })
+  return NextResponse.json(
+    {
+      status: allOk ? "ok" : "degraded",
+      llm: {
+        provider: fallbackActive ? "claude" : "ollama",
+        fallback_active: fallbackActive,
+        ollama: { ...ollama, url: process.env.OLLAMA_BASE_URL ?? "http://192.168.0.14:11434" },
+        claude_fallback_model:
+          process.env.CLAUDE_FALLBACK_MODEL ?? "claude-sonnet-4-5",
+      },
+      services: { ollama, n8n, supabase, coolify },
+      timestamp: new Date().toISOString(),
+    },
+    { status: allOk ? 200 : 207 }
+  );
 }
