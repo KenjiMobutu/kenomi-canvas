@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS public.venture_pipeline (
 
   -- Statut global de la chaîne
   -- 'pending_validation' | 'approved' | 'rejected' | 'running' | 'done'
-  status         text NOT NULL DEFAULT 'pending_validation',
+  status         text NOT NULL DEFAULT 'pending_validation'
+                 CHECK (status IN ('pending_validation', 'approved', 'rejected', 'running', 'done')),
 
   -- Outputs des agents suivants (null = pas encore exécuté)
   validation_output  text,
@@ -35,10 +36,13 @@ CREATE TABLE IF NOT EXISTS public.venture_pipeline (
 
 ALTER TABLE public.venture_pipeline ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "pipeline_own" ON public.venture_pipeline
-  FOR ALL
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "pipeline_own" ON public.venture_pipeline
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS pipeline_user_status_idx
   ON public.venture_pipeline(user_id, status);
