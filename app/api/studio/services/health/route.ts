@@ -58,18 +58,22 @@ export async function GET() {
   const ollamaHealthy = await checkOllamaHealth();
   const fallbackActive = !ollamaHealthy;
 
-  const allOk = [ollama, n8n, supabase, coolify].every(
-    (s) => s.status === "ok"
-  );
-
   const toHealthResult = (s: ServiceStatus) => ({
     ok: s.status === "ok",
     latencyMs: s.latency_ms ?? 0,
   });
 
+  // Ollama est sur le réseau local — en prod le container ne peut pas l'atteindre
+  // directement. On utilise checkOllamaHealth() comme source de vérité.
+  const ollamaResult = { ok: ollamaHealthy, latencyMs: ollama.latency_ms ?? 0 };
+
+  const allOk = ollamaHealthy && [n8n, supabase, coolify].every(
+    (s) => s.status === "ok"
+  );
+
   return NextResponse.json(
     {
-      ollama:   toHealthResult(ollama),
+      ollama:   ollamaResult,
       n8n:      toHealthResult(n8n),
       supabase: toHealthResult(supabase),
       coolify:  toHealthResult(coolify),
