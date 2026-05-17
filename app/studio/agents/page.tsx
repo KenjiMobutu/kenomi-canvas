@@ -130,7 +130,7 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
   const t = useTick(2400)
   const [tuneOpen, setTuneOpen] = useState(false)
   const [logsOpen, setLogsOpen] = useState(false)
-  const [logs, setLogs] = useState<{ role: string; content: string; created_at: string }[]>([])
+  const [logs, setLogs] = useState<{ prompt: string; response: string; duration_ms: number; created_at: string }[]>([])
   const [running, setRunning] = useState(false)
   const [dbState, setDbState] = useState<DbAgentState>({ run_count: 0, last_run_at: null, paused: false })
 
@@ -186,8 +186,8 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
     if (!user) return
     const supabase = createSupabaseBrowser()
     const { data } = await supabase
-      .from('messages')
-      .select('role, content, created_at')
+      .from('agent_runs')
+      .select('prompt, response, duration_ms, created_at')
       .eq('user_id', user.id)
       .eq('agent_id', agent.id)
       .order('created_at', { ascending: false })
@@ -360,12 +360,15 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
           {logs.length === 0 ? (
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted2 }}>Aucun log — déclenchez une mission d&apos;abord.</div>
           ) : logs.map((l, i) => (
-            <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: surface, border: `1px solid ${line}` }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: l.role === 'assistant' ? agent.color : muted, letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' }}>
-                {l.role} · {new Date(l.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+            <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: surface, border: `1px solid ${line}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: 1, textTransform: 'uppercase' }}>
+                {new Date(l.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · {l.duration_ms}ms
               </div>
-              <div style={{ fontSize: 12, color: text, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3 as React.CSSProperties['WebkitLineClamp'], WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'] }}>
-                {l.content}
+              <div style={{ fontSize: 11, color: muted, fontFamily: 'var(--font-mono)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2 as React.CSSProperties['WebkitLineClamp'], WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'] }}>
+                ▶ {l.prompt}
+              </div>
+              <div style={{ fontSize: 12, color: text, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3 as React.CSSProperties['WebkitLineClamp'], WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'], borderLeft: `2px solid ${agent.color}`, paddingLeft: 8 }}>
+                {l.response}
               </div>
             </div>
           ))}
@@ -498,7 +501,7 @@ function RunsTimeline({ tick }: { tick: number }) {
 
 export default function AgentsPage() {
   const isMobile = useIsMobile()
-  const [selectedId, setSelectedId] = useState('decision')
+  const [selectedId, setSelectedId] = useState('scout')
   const [logTick, setLogTick] = useState(0)
 
   useEffect(() => {

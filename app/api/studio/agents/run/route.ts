@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   const { data: cfg } = await supabase
     .from('agent_configs')
-    .select('model, system_prompt, temperature, max_tokens, paused')
+    .select('model, system_prompt, temperature, max_tokens, paused, run_count')
     .eq('user_id', user!.id)
     .eq('agent_id', agentId)
     .maybeSingle()
@@ -76,26 +76,21 @@ export async function POST(req: NextRequest) {
     const content = json.message?.content ?? ''
     const durationMs = Date.now() - startMs
 
-    await supabase.from('messages').insert({
+    // Persister le run dans agent_runs (table dédiée — messages du chat a des colonnes NOT NULL incompatibles)
+    await supabase.from('agent_runs').insert({
       user_id: user!.id,
-      role: 'assistant',
-      content,
       agent_id: agentId,
+      model,
+      prompt: userPrompt,
+      response: content,
+      duration_ms: durationMs,
     })
 
-    const { data: currentCfg } = await supabase
-      .from('agent_configs')
-      .select('run_count')
+    // UPDATE ciblé — ne touche que run_count et last_run_at, préserve system_prompt/temperature/max_tokens
+    await supabase.from('agent_configs')
+      .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: new Date().toISOString() })
       .eq('user_id', user!.id)
       .eq('agent_id', agentId)
-      .maybeSingle()
-
-    await supabase.from('agent_configs').upsert({
-      user_id: user!.id,
-      agent_id: agentId,
-      run_count: (currentCfg?.run_count ?? 0) + 1,
-      last_run_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,agent_id' })
 
     return NextResponse.json({ ok: true, content, durationMs, model })
   } catch (e) {
