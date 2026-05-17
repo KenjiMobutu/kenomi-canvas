@@ -24,6 +24,14 @@ interface AutoRun {
   triggered_at: string
 }
 
+interface N8nWorkflow {
+  id: string
+  name: string
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 
 const TYPE_META: Record<string, { color: string; label: string }> = {
   trigger: { color: '#22d3ee',   label: 'TRIG' },
@@ -387,6 +395,40 @@ function DbWorkflowsList({ workflows, selectedId, onSelect, onToggle, onDelete, 
   )
 }
 
+function N8nWorkflowsList({ workflows, loading, error }: { workflows: N8nWorkflow[]; loading: boolean; error: string | null }) {
+  if (error?.includes('Non configuré') || error?.includes('URL')) return null
+  return (
+    <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Workflows n8n</div>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em' }}>
+          {loading ? '…' : error ? '⚠ erreur' : `${workflows.length} total`}
+        </span>
+      </div>
+      {loading && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>Chargement…</div>}
+      {error && !error.includes('Non configuré') && (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#fb7185' }}>{error}</div>
+      )}
+      {!loading && !error && workflows.length === 0 && (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>Aucun workflow n8n. Configurez l&apos;URL n8n dans Settings.</div>
+      )}
+      {workflows.map(w => (
+        <div key={w.id} style={{
+          padding: 10, borderRadius: 10,
+          background: surface2, border: `1px solid ${line}`,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.active ? emerald : muted2, flexShrink: 0 }} />
+          <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3, background: w.active ? `${emerald}18` : `${muted2}18`, color: w.active ? emerald : muted2, letterSpacing: 1 }}>
+            {w.active ? 'ACTIF' : 'INACTIF'}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function AutomationsPage() {
   const { user } = useAuth()
   const isMobile = useIsMobile()
@@ -396,6 +438,9 @@ export default function AutomationsPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [runs, setRuns] = useState<AutoRun[]>([])
   const [runsLoading, setRunsLoading] = useState(false)
+  const [n8nWorkflows, setN8nWorkflows] = useState<N8nWorkflow[]>([])
+  const [n8nLoading, setN8nLoading] = useState(false)
+  const [n8nError, setN8nError] = useState<string | null>(null)
 
   const selectedWorkflow = dbWorkflows.find(w => w.id === dbSelectedId) ?? null
 
@@ -430,6 +475,18 @@ export default function AutomationsPage() {
     setDbWorkflows((data as DbWorkflow[]) || [])
   }
   useEffect(() => { if (user) loadWorkflows() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setN8nLoading(true)
+    fetch('/api/studio/n8n/workflows')
+      .then(r => {
+        if (!r.ok) return r.json().then((e: { error?: string }) => { throw new Error(e.error || 'Erreur n8n') })
+        return r.json()
+      })
+      .then((data: N8nWorkflow[]) => setN8nWorkflows(data))
+      .catch((e: Error) => setN8nError(e.message))
+      .finally(() => setN8nLoading(false))
+  }, [])
 
   async function toggleWorkflow(id: string, enabled: boolean) {
     if (!user) return
@@ -538,14 +595,17 @@ export default function AutomationsPage() {
         {/* DAG + workflows list */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 420px', gap: 14, alignItems: 'start' }}>
           <WorkflowDAG workflow={selectedWorkflow} runs={runs} />
-          <DbWorkflowsList
-            workflows={dbWorkflows}
-            selectedId={dbSelectedId}
-            onSelect={(id) => { setDbSelectedId(id); loadRuns(id) }}
-            onToggle={toggleWorkflow}
-            onDelete={setConfirmDelete}
-            onRun={runWorkflow}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <DbWorkflowsList
+              workflows={dbWorkflows}
+              selectedId={dbSelectedId}
+              onSelect={(id) => { setDbSelectedId(id); loadRuns(id) }}
+              onToggle={toggleWorkflow}
+              onDelete={setConfirmDelete}
+              onRun={runWorkflow}
+            />
+            <N8nWorkflowsList workflows={n8nWorkflows} loading={n8nLoading} error={n8nError} />
+          </div>
         </div>
 
         {/* Runs feed + service health */}
