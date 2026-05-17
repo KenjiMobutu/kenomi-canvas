@@ -29,7 +29,7 @@ export async function GET() {
         ...vm,
         mem_fmt: formatBytes(vm.mem),
         maxmem_fmt: formatBytes(vm.maxmem),
-        disk_fmt: formatBytes(vm.disk),
+        disk_used_fmt: formatBytes(vm.disk),
         maxdisk_fmt: formatBytes(vm.maxdisk),
         uptime_fmt: formatUptime(vm.uptime),
         cpu_pct: Math.round(vm.cpu * 100),
