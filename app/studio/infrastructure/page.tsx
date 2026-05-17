@@ -38,7 +38,8 @@ const TOPO_EDGES: [string, string][] = [
 ]
 
 type HealthResult = { ok: boolean; latencyMs: number }
-type HealthData = { ollama: HealthResult; n8n: HealthResult; supabase: HealthResult; coolify: HealthResult }
+type HealthServices = { ollama: HealthResult; n8n: HealthResult; supabase: HealthResult; coolify: HealthResult }
+type HealthData = HealthServices & { _meta?: { llm?: { fallback_active: boolean } } }
 
 type ProxmoxNode = {
   node: string
@@ -157,7 +158,7 @@ function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; o
           const f = POSITIONS[from], t = POSITIONS[to]
           const fSvc = SERVICES_IN.find(s => s.id === from)
           if (!f || !t || !fSvc) return null
-          const hk = fSvc.healthKey as keyof HealthData | null
+          const hk = fSvc.healthKey as keyof HealthServices | null
           const isLive = hk && health ? health[hk]?.ok : true
           const offset = (idx * 0.17) % 1
           return (
@@ -182,7 +183,7 @@ function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; o
           const isSel = svc.id === selectedId
           const isHost = pos.kind === 'host'
           const isExternal = pos.kind === 'external'
-          const hk = svc.healthKey as keyof HealthData | null
+          const hk = svc.healthKey as keyof HealthServices | null
           const isLive = hk && health ? health[hk]?.ok : null
           const dotColor = statusColor(isLive)
           const r = isHost ? 38 : 26
@@ -220,7 +221,7 @@ function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; o
 }
 
 function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: HealthData | null; proxmox: ProxmoxData | null }) {
-  const hk = svc.healthKey as keyof HealthData | null
+  const hk = svc.healthKey as keyof HealthServices | null
   const result = hk && health ? health[hk] : null
 
   // Résolution des métriques selon le type de service
@@ -229,8 +230,13 @@ function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: He
   const vm = svc.vmid != null ? (proxmox?.vms.find(v => v.vmid === svc.vmid) ?? null) : null
   const hasMetrics = isProxmoxNode ? pxNode !== null : vm !== null
 
-  // Statut : health check si disponible, sinon dérivé des métriques Proxmox
-  const isLiveFromHealth = result?.ok ?? null
+  // Statut : Ollama → _meta.llm.fallback_active (seule source fiable en prod)
+  // Autres avec healthKey → health check direct
+  // Sans healthKey → dérivé des métriques Proxmox
+  const isOllama = svc.id === 'ollama'
+  const isLiveFromHealth = isOllama
+    ? (health?._meta?.llm != null ? !health._meta.llm.fallback_active : null)
+    : (result?.ok ?? null)
   const isLiveFromProxmox = isProxmoxNode
     ? (pxNode ? pxNode.status === 'online' : null)
     : (vm ? vm.status === 'running' : null)
@@ -480,7 +486,7 @@ export default function InfrastructurePage() {
                 </div>
                 <div style={{ height: 4, borderRadius: 2, background: bg, border: `1px solid ${line}` }} />
                 {rack.svcs.map(svc => {
-                  const hk = svc.healthKey as keyof HealthData | null
+                  const hk = svc.healthKey as keyof HealthServices | null
                   const isLive = hk && health ? health[hk]?.ok : null
                   const dotCol = statusColor(isLive)
                   return (
