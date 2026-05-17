@@ -39,6 +39,31 @@ const TOPO_EDGES: [string, string][] = [
 
 type HealthResult = { ok: boolean; latencyMs: number }
 type HealthData = { ollama: HealthResult; n8n: HealthResult; supabase: HealthResult; coolify: HealthResult }
+
+type ProxmoxNode = {
+  node: string
+  cpu_pct: number
+  mem_pct: number
+  mem_used_fmt: string
+  mem_total_fmt: string
+  disk_pct: number
+  disk_used_fmt: string
+  disk_total_fmt: string
+  uptime_fmt: string
+  status: string
+}
+type ProxmoxVM = {
+  vmid: number
+  name: string
+  status: 'running' | 'stopped' | 'paused'
+  type: 'qemu' | 'lxc'
+  cpu_pct: number
+  mem_pct: number
+  mem_fmt: string
+  maxmem_fmt: string
+  uptime_fmt: string
+}
+type ProxmoxData = { nodes: ProxmoxNode[]; vms: ProxmoxVM[]; fetched_at: string }
 type ServiceIn = typeof SERVICES_IN[0]
 
 function statusColor(ok: boolean | null): string {
@@ -189,7 +214,7 @@ function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; o
   )
 }
 
-function ServiceInspector({ svc, health }: { svc: ServiceIn; health: HealthData | null }) {
+function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: HealthData | null; proxmox: ProxmoxData | null }) {
   const hk = svc.healthKey as keyof HealthData | null
   const result = hk && health ? health[hk] : null
   const isLive = result?.ok ?? null
@@ -213,17 +238,22 @@ function ServiceInspector({ svc, health }: { svc: ServiceIn; health: HealthData 
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', marginTop: 6 }}>→ {svc.endpoint}</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <ArcGauge label="CPU"  value={0} max={100} color={cyan} />
-        <ArcGauge label="RAM"  value={0} max={100} color={emerald} />
-        <ArcGauge label="Disk" value={0} max={100} color={violet} />
-        <ArcGauge label="Net"  value={0} max={500} color={amber} unit="Mb" />
-      </div>
+      {(() => {
+        const pxNode = svc.id === 'proxmox' && proxmox?.nodes[0] ? proxmox.nodes[0] : null
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <ArcGauge label="CPU"  value={pxNode ? pxNode.cpu_pct  : 0} max={100} color={cyan} />
+            <ArcGauge label="RAM"  value={pxNode ? pxNode.mem_pct  : 0} max={100} color={emerald} />
+            <ArcGauge label="Disk" value={pxNode ? pxNode.disk_pct : 0} max={100} color={violet} />
+            <ArcGauge label="VMs"  value={proxmox ? proxmox.vms.filter(v => v.status === 'running').length : 0} max={Math.max(proxmox?.vms.length ?? 1, 1)} color={amber} unit="" />
+          </div>
+        )
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-        <InfraStat label="Uptime"   value="—"                                            color={emerald} />
-        <InfraStat label="Latency"  value={latency !== null ? `${latency}ms` : '—'}      color={cyan}    />
-        <InfraStat label="Monitored" value={hk ? 'oui' : 'non'}                          color={hk ? emerald : muted} />
+        <InfraStat label="Uptime"    value={svc.id === 'proxmox' && proxmox?.nodes[0] ? proxmox.nodes[0].uptime_fmt : '—'}  color={emerald} />
+        <InfraStat label="Latency"   value={latency !== null ? `${latency}ms` : '—'}                                          color={cyan}    />
+        <InfraStat label="Monitored" value={hk ? 'oui' : 'non'}                                                               color={hk ? emerald : muted} />
       </div>
 
       {!hk && (
@@ -294,11 +324,12 @@ export default function InfrastructurePage() {
   const [selectedId, setSelectedId] = useState('coolify')
   const [health, setHealth] = useState<HealthData | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
+  const [proxmox, setProxmox] = useState<ProxmoxData | null>(null)
   const isMobile = useIsMobile()
 
   useEffect(() => {
     let cancelled = false
-    async function load() {
+    async function loadHealth() {
       setHealthLoading(true)
       try {
         const res = await fetch('/api/studio/services/health')
@@ -309,8 +340,17 @@ export default function InfrastructurePage() {
         if (!cancelled) setHealthLoading(false)
       }
     }
-    load()
-    const interval = setInterval(load, 30_000)
+    async function loadProxmox() {
+      try {
+        const res = await fetch('/api/studio/infra/proxmox')
+        if (!res.ok) return
+        const data = await res.json() as ProxmoxData
+        if (!cancelled) setProxmox(data)
+      } catch { /* Proxmox indisponible — silencieux */ }
+    }
+    loadHealth()
+    loadProxmox()
+    const interval = setInterval(() => { loadHealth(); loadProxmox() }, 30_000)
     return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
@@ -329,12 +369,15 @@ export default function InfrastructurePage() {
       )
     : null
 
+  const pxNode = proxmox?.nodes[0] ?? null
+  const runningVMs = proxmox?.vms.filter(v => v.status === 'running').length ?? null
+
   const kpiList = [
-    { label: 'Services live',  value: liveCount !== null ? `${liveCount}/4` : '—',              delta: healthLoading ? '…' : 'ping',   color: liveCount === 4 ? emerald : liveCount === null ? muted : rose   },
-    { label: 'Latency avg',    value: avgLatency !== null ? `${avgLatency}ms` : '—',             delta: 'p50',                          color: cyan    },
-    { label: 'CPU avg',        value: '—',                                                        delta: 'proxmox',                      color: violet  },
-    { label: 'RAM avg',        value: '—',                                                        delta: 'proxmox',                      color: emerald },
-    { label: 'Containers',     value: '—',                                                        delta: 'coolify',                      color: amber   },
+    { label: 'Services live',  value: liveCount !== null ? `${liveCount}/4` : '—',                                  delta: healthLoading ? '…' : 'ping',   color: liveCount === 4 ? emerald : liveCount === null ? muted : rose   },
+    { label: 'Latency avg',    value: avgLatency !== null ? `${avgLatency}ms` : '—',                                 delta: 'p50',                          color: cyan    },
+    { label: 'CPU node',       value: pxNode ? `${pxNode.cpu_pct}%` : '—',                                          delta: 'proxmox',                      color: pxNode && pxNode.cpu_pct >= 90 ? rose : pxNode && pxNode.cpu_pct >= 70 ? amber : violet  },
+    { label: 'RAM node',       value: pxNode ? `${pxNode.mem_pct}%` : '—',                                          delta: pxNode ? `${pxNode.mem_used_fmt}/${pxNode.mem_total_fmt}` : 'proxmox',  color: pxNode && pxNode.mem_pct >= 90 ? rose : pxNode && pxNode.mem_pct >= 70 ? amber : emerald },
+    { label: 'VMs actives',    value: runningVMs !== null ? `${runningVMs}/${proxmox!.vms.length}` : '—',           delta: 'proxmox',                      color: amber   },
   ]
 
   const headerActions = (
@@ -374,7 +417,7 @@ export default function InfrastructurePage() {
         {/* Topology + Service inspector */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', gap: 14, alignItems: 'start' }}>
           {!isMobile && <TopologyGraph selectedId={selectedId} onSelect={setSelectedId} health={health} />}
-          <ServiceInspector svc={selected} health={health} />
+          <ServiceInspector svc={selected} health={health} proxmox={proxmox} />
         </div>
 
         {/* Server rack */}
