@@ -397,7 +397,10 @@ function DbWorkflowsList({ workflows, selectedId, onSelect, onToggle, onDelete, 
   )
 }
 
-function N8nWorkflowsList({ workflows, loading, error }: { workflows: N8nWorkflow[]; loading: boolean; error: string | null }) {
+function N8nWorkflowsList({ workflows, loading, error, selectedId, onSelect }: {
+  workflows: N8nWorkflow[]; loading: boolean; error: string | null
+  selectedId: string | null; onSelect: (id: string) => void
+}) {
   if (error?.includes('Non configuré') || error?.includes('URL')) return null
   return (
     <div style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -414,19 +417,23 @@ function N8nWorkflowsList({ workflows, loading, error }: { workflows: N8nWorkflo
       {!loading && !error && workflows.length === 0 && (
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>Aucun workflow n8n. Configurez l&apos;URL n8n dans Settings.</div>
       )}
-      {workflows.map(w => (
-        <div key={w.id} style={{
-          padding: 10, borderRadius: 10,
-          background: surface2, border: `1px solid ${line}`,
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.active ? emerald : muted2, flexShrink: 0 }} />
-          <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3, background: w.active ? `${emerald}18` : `${muted2}18`, color: w.active ? emerald : muted2, letterSpacing: 1 }}>
-            {w.active ? 'ACTIF' : 'INACTIF'}
-          </span>
-        </div>
-      ))}
+      {workflows.map(w => {
+        const active = w.id === selectedId
+        return (
+          <div key={w.id} onClick={() => onSelect(w.id)} style={{
+            padding: 10, borderRadius: 10, cursor: 'pointer',
+            background: active ? `${cyan}18` : surface2,
+            border: `1px solid ${active ? cyan : line}`,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.active ? emerald : muted2, flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: active ? cyan : text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3, background: w.active ? `${emerald}18` : `${muted2}18`, color: w.active ? emerald : muted2, letterSpacing: 1 }}>
+              {w.active ? 'ACTIF' : 'INACTIF'}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -443,8 +450,20 @@ export default function AutomationsPage() {
   const [n8nWorkflows, setN8nWorkflows] = useState<N8nWorkflow[]>([])
   const [n8nLoading, setN8nLoading] = useState(false)
   const [n8nError, setN8nError] = useState<string | null>(null)
+  const [n8nSelectedId, setN8nSelectedId] = useState<string | null>(null)
 
-  const selectedWorkflow = dbWorkflows.find(w => w.id === dbSelectedId) ?? null
+  const selectedDbWorkflow = dbWorkflows.find(w => w.id === dbSelectedId) ?? null
+  const selectedN8nWorkflow = n8nWorkflows.find(w => w.id === n8nSelectedId) ?? null
+  const selectedWorkflow: DbWorkflow | null = selectedDbWorkflow ?? (selectedN8nWorkflow ? {
+    id: selectedN8nWorkflow.id,
+    name: selectedN8nWorkflow.name,
+    trigger_type: 'n8n',
+    webhook_url: '',
+    enabled: selectedN8nWorkflow.active,
+    run_count: 0,
+    last_run_at: null,
+    created_at: selectedN8nWorkflow.createdAt,
+  } : null)
 
   const loadRuns = useCallback(async (workflowId: string) => {
     setRunsLoading(true)
@@ -601,12 +620,16 @@ export default function AutomationsPage() {
             <DbWorkflowsList
               workflows={dbWorkflows}
               selectedId={dbSelectedId}
-              onSelect={(id) => { setDbSelectedId(id); loadRuns(id) }}
+              onSelect={(id) => { setDbSelectedId(id); setN8nSelectedId(null); loadRuns(id) }}
               onToggle={toggleWorkflow}
               onDelete={setConfirmDelete}
               onRun={runWorkflow}
             />
-            <N8nWorkflowsList workflows={n8nWorkflows} loading={n8nLoading} error={n8nError} />
+            <N8nWorkflowsList
+              workflows={n8nWorkflows} loading={n8nLoading} error={n8nError}
+              selectedId={n8nSelectedId}
+              onSelect={(id) => { setN8nSelectedId(id); setDbSelectedId(null); setRuns([]) }}
+            />
           </div>
         </div>
 
