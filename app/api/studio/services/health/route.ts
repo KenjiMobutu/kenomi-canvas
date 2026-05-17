@@ -59,18 +59,26 @@ export async function GET() {
     (s) => s.status === "ok"
   );
 
+  const toHealthResult = (s: ServiceStatus) => ({
+    ok: s.status === "ok",
+    latencyMs: s.latency_ms ?? 0,
+  });
+
   return NextResponse.json(
     {
-      status: allOk ? "ok" : "degraded",
-      llm: {
-        provider: fallbackActive ? "claude" : "ollama",
-        fallback_active: fallbackActive,
-        ollama: { ...ollama, url: process.env.OLLAMA_BASE_URL ?? "http://192.168.0.14:11434" },
-        claude_fallback_model:
-          process.env.CLAUDE_FALLBACK_MODEL ?? "claude-sonnet-4-5",
+      ollama:   toHealthResult(ollama),
+      n8n:      toHealthResult(n8n),
+      supabase: toHealthResult(supabase),
+      coolify:  toHealthResult(coolify),
+      _meta: {
+        status: allOk ? "ok" : "degraded",
+        llm: {
+          provider: fallbackActive ? "claude" : "ollama",
+          fallback_active: fallbackActive,
+          claude_fallback_model: process.env.CLAUDE_FALLBACK_MODEL ?? "claude-sonnet-4-5",
+        },
+        timestamp: new Date().toISOString(),
       },
-      services: { ollama, n8n, supabase, coolify },
-      timestamp: new Date().toISOString(),
     },
     { status: allOk ? 200 : 207 }
   );
