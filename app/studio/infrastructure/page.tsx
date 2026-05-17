@@ -222,16 +222,22 @@ function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; o
 function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: HealthData | null; proxmox: ProxmoxData | null }) {
   const hk = svc.healthKey as keyof HealthData | null
   const result = hk && health ? health[hk] : null
-  const isLive = result?.ok ?? null
-  const latency = result?.latencyMs ?? null
-  const statusLabel = isLive === null ? '—' : isLive ? 'ONLINE' : 'OFFLINE'
-  const statusCol = statusColor(isLive)
 
   // Résolution des métriques selon le type de service
   const isProxmoxNode = svc.id === 'proxmox'
   const pxNode = isProxmoxNode ? (proxmox?.nodes[0] ?? null) : null
   const vm = svc.vmid != null ? (proxmox?.vms.find(v => v.vmid === svc.vmid) ?? null) : null
   const hasMetrics = isProxmoxNode ? pxNode !== null : vm !== null
+
+  // Statut : health check si disponible, sinon dérivé des métriques Proxmox
+  const isLiveFromHealth = result?.ok ?? null
+  const isLiveFromProxmox = isProxmoxNode
+    ? (pxNode ? pxNode.status === 'online' : null)
+    : (vm ? vm.status === 'running' : null)
+  const isLive = isLiveFromHealth ?? isLiveFromProxmox
+  const latency = result?.latencyMs ?? null
+  const statusLabel = isLive === null ? '—' : isLive ? 'ONLINE' : 'OFFLINE'
+  const statusCol = statusColor(isLive)
 
   // Valeurs des jauges
   const cpuPct    = isProxmoxNode ? (pxNode?.cpu_pct  ?? 0) : (vm?.cpu_pct  ?? 0)

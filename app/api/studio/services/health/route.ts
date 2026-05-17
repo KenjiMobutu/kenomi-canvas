@@ -13,6 +13,9 @@ type ServiceStatus = {
   detail?: string;
 };
 
+// 401/403 = service up mais auth requise — on considère "ok"
+const REACHABLE_CODES = new Set([200, 201, 204, 301, 302, 401, 403, 404, 405]);
+
 async function pingService(
   url: string,
   timeoutMs = 5000
@@ -24,7 +27,7 @@ async function pingService(
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
     return {
-      status: res.ok ? "ok" : "degraded",
+      status: REACHABLE_CODES.has(res.status) ? "ok" : "degraded",
       latency_ms: Date.now() - start,
     };
   } catch (e) {
