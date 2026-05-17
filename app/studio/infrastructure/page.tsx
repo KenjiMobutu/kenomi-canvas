@@ -7,15 +7,16 @@ import {
 } from '@/lib/ck-vars'
 import { AGENTS_DATA, makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
 
+// Services de l'infra — statuts alimentés par /api/studio/services/health
 const SERVICES_IN = [
-  { id: 'proxmox',  label: 'Proxmox VE',  short: 'PROX', status: '—', color: '#34d399', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Compute · cluster local',   endpoint: 'proxmox.local' },
-  { id: 'coolify',  label: 'Coolify',     short: 'COOL', status: '—', color: '#34d399', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Deploy · landings + APIs',  endpoint: 'coolify.local' },
-  { id: 'nginx',    label: 'Nginx PM',    short: 'NPM',  status: '—', color: '#22d3ee', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Proxy · SSL · domains',     endpoint: 'npm.local' },
-  { id: 'uptime',   label: 'Uptime Kuma', short: 'UPT',  status: '—', color: '#a78bfa', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Monitor',                   endpoint: 'uptime.local' },
-  { id: 'vault',    label: 'Vaultwarden', short: 'VLT',  status: '—', color: '#fbbf24', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Secrets · creds · OAuth',   endpoint: 'vault.local' },
-  { id: 'supabase', label: 'Supabase',    short: 'SUP',  status: '—', color: '#34d399', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Auth · Postgres · Storage', endpoint: 'supabase.com' },
-  { id: 'n8n',      label: 'n8n',         short: 'N8N',  status: '—', color: '#e879f9', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Automation',                endpoint: 'n8n.local' },
-  { id: 'stripe',   label: 'Stripe',      short: 'STR',  status: '—', color: '#fbbf24', cpu: 0, ram: 0, disk: 0, net: 0, uptime: '—', role: 'Payments · checkout',       endpoint: 'api.stripe.com' },
+  { id: 'proxmox',  label: 'Proxmox VE',  short: 'PROX', color: '#34d399', role: 'Compute · cluster local',   endpoint: 'proxmox.local',    healthKey: null        },
+  { id: 'coolify',  label: 'Coolify',     short: 'COOL', color: '#34d399', role: 'Deploy · landings + APIs',  endpoint: '192.168.0.19:8000', healthKey: 'coolify'   },
+  { id: 'nginx',    label: 'Nginx PM',    short: 'NPM',  color: '#22d3ee', role: 'Proxy · SSL · domains',     endpoint: 'npm.local',         healthKey: null        },
+  { id: 'uptime',   label: 'Uptime Kuma', short: 'UPT',  color: '#a78bfa', role: 'Monitor',                   endpoint: 'uptime.local',      healthKey: null        },
+  { id: 'vault',    label: 'Vaultwarden', short: 'VLT',  color: '#fbbf24', role: 'Secrets · creds · OAuth',   endpoint: 'vault.local',       healthKey: null        },
+  { id: 'supabase', label: 'Supabase',    short: 'SUP',  color: '#34d399', role: 'Auth · Postgres · Storage', endpoint: 'supabase.kenomi.eu', healthKey: 'supabase' },
+  { id: 'n8n',      label: 'n8n',         short: 'N8N',  color: '#e879f9', role: 'Automation',                endpoint: 'n8n.kenomi.eu',     healthKey: 'n8n'       },
+  { id: 'ollama',   label: 'Ollama',      short: 'OLL',  color: '#fb923c', role: 'LLM · inference locale',    endpoint: '192.168.0.14:11434', healthKey: 'ollama'   },
 ]
 
 const POSITIONS: Record<string, { x: number; y: number; kind: string }> = {
@@ -26,18 +27,24 @@ const POSITIONS: Record<string, { x: number; y: number; kind: string }> = {
   vault:    { x: 380, y: 240, kind: 'service'  },
   n8n:      { x: 380, y: 380, kind: 'service'  },
   supabase: { x: 720, y: 320, kind: 'external' },
-  stripe:   { x: 880, y: 200, kind: 'external' },
+  ollama:   { x: 720, y: 160, kind: 'external' },
 }
 
 const TOPO_EDGES: [string, string][] = [
   ['proxmox','coolify'], ['proxmox','vault'], ['proxmox','n8n'],
   ['coolify','nginx'], ['uptime','coolify'], ['uptime','supabase'],
-  ['n8n','supabase'], ['n8n','stripe'], ['coolify','supabase'], ['nginx','supabase'],
+  ['n8n','supabase'], ['coolify','supabase'], ['nginx','supabase'],
+  ['coolify','ollama'], ['n8n','ollama'],
 ]
 
-const DEPLOYS: { name: string; sha: string; status: string; color: string; time: string; agent: string }[] = []
-
+type HealthResult = { ok: boolean; latencyMs: number }
+type HealthData = { ollama: HealthResult; n8n: HealthResult; supabase: HealthResult; coolify: HealthResult }
 type ServiceIn = typeof SERVICES_IN[0]
+
+function statusColor(ok: boolean | null): string {
+  if (ok === null) return amber
+  return ok ? emerald : rose
+}
 
 function InfraKpi({ label, value, delta, color }: { label: string; value: string; delta: string; color: string }) {
   const spark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
@@ -68,12 +75,14 @@ function ArcGauge({ label, value, max, color, unit }: { label: string; value: nu
             strokeDasharray={`${pct * c} ${c}`} />
         </svg>
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color }}>
-          {value}{unit ?? '%'}
+          {value === 0 ? '—' : `${value}${unit ?? '%'}`}
         </div>
       </div>
       <div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>{label}</div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.1em', marginTop: 2 }}>{Math.round(pct * 100)}% of {max}{unit ?? ''}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.1em', marginTop: 2 }}>
+          {value === 0 ? 'non disponible' : `${Math.round(pct * 100)}% of ${max}${unit ?? ''}`}
+        </div>
       </div>
     </div>
   )
@@ -88,7 +97,7 @@ function InfraStat({ label, value, color }: { label: string; value: string; colo
   )
 }
 
-function TopologyGraph({ selectedId, onSelect }: { selectedId: string; onSelect: (id: string) => void }) {
+function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; onSelect: (id: string) => void; health: HealthData | null }) {
   return (
     <div style={{
       background: surface, border: `1px solid ${line}`, borderRadius: 14,
@@ -118,14 +127,18 @@ function TopologyGraph({ selectedId, onSelect }: { selectedId: string; onSelect:
           const f = POSITIONS[from], t = POSITIONS[to]
           const fSvc = SERVICES_IN.find(s => s.id === from)
           if (!f || !t || !fSvc) return null
+          const hk = fSvc.healthKey as keyof HealthData | null
+          const isLive = hk && health ? health[hk]?.ok : true
           const offset = (idx * 0.17) % 1
           return (
             <g key={idx}>
-              <line x1={f.x} y1={f.y} x2={t.x} y2={t.y} stroke={fSvc.color} strokeOpacity=".25" strokeWidth="1.4" strokeDasharray="2 6" />
-              <circle r="3" fill={fSvc.color} filter="url(#inGlow)">
-                <animate attributeName="cx" from={f.x.toString()} to={t.x.toString()} dur={`${2 + idx % 3}s`} begin={`${-offset * 2}s`} repeatCount="indefinite" />
-                <animate attributeName="cy" from={f.y.toString()} to={t.y.toString()} dur={`${2 + idx % 3}s`} begin={`${-offset * 2}s`} repeatCount="indefinite" />
-              </circle>
+              <line x1={f.x} y1={f.y} x2={t.x} y2={t.y} stroke={isLive ? fSvc.color : rose} strokeOpacity=".25" strokeWidth="1.4" strokeDasharray="2 6" />
+              {isLive && (
+                <circle r="3" fill={fSvc.color} filter="url(#inGlow)">
+                  <animate attributeName="cx" from={f.x.toString()} to={t.x.toString()} dur={`${2 + idx % 3}s`} begin={`${-offset * 2}s`} repeatCount="indefinite" />
+                  <animate attributeName="cy" from={f.y.toString()} to={t.y.toString()} dur={`${2 + idx % 3}s`} begin={`${-offset * 2}s`} repeatCount="indefinite" />
+                </circle>
+              )}
             </g>
           )
         })}
@@ -133,12 +146,15 @@ function TopologyGraph({ selectedId, onSelect }: { selectedId: string; onSelect:
         <rect x="120" y="40" width="380" height="380" rx="14" fill="none" stroke={line} strokeWidth="1.5" strokeDasharray="6 6" />
         <text x="130" y="58" fontSize="10" fill={muted} fontFamily="var(--font-mono)" letterSpacing="2">SELF-HOST · PROXMOX CLUSTER</text>
 
-        {SERVICES_IN.map(svc => {
+        {SERVICES_IN.filter(s => POSITIONS[s.id]).map(svc => {
           const pos = POSITIONS[svc.id]
           if (!pos) return null
           const isSel = svc.id === selectedId
           const isHost = pos.kind === 'host'
           const isExternal = pos.kind === 'external'
+          const hk = svc.healthKey as keyof HealthData | null
+          const isLive = hk && health ? health[hk]?.ok : null
+          const dotColor = statusColor(isLive)
           const r = isHost ? 38 : 26
           return (
             <g key={svc.id} transform={`translate(${pos.x}, ${pos.y})`} style={{ cursor: 'pointer' }} onClick={() => onSelect(svc.id)}>
@@ -151,8 +167,9 @@ function TopologyGraph({ selectedId, onSelect }: { selectedId: string; onSelect:
               {isHost && <circle r={r - 6} fill="none" stroke={svc.color} strokeOpacity=".3" strokeDasharray="2 4" />}
               <text textAnchor="middle" y="-2" fontSize={isHost ? '10' : '9'} fill={svc.color} fontFamily="var(--font-mono)" letterSpacing="1.4" fontWeight="700">{svc.short}</text>
               <text textAnchor="middle" y={isHost ? 12 : 10} fontSize="9" fill={text} fontFamily="var(--font-display)" fontWeight="600">{svc.label}</text>
-              <circle cx={r * 0.7} cy={-r * 0.7} r="4" fill={svc.color}>
-                <animate attributeName="opacity" values=".5;1;.5" dur="2s" repeatCount="indefinite" />
+              {/* status dot */}
+              <circle cx={r * 0.7} cy={-r * 0.7} r="4" fill={dotColor}>
+                {isLive && <animate attributeName="opacity" values=".5;1;.5" dur="2s" repeatCount="indefinite" />}
               </circle>
             </g>
           )
@@ -162,14 +179,24 @@ function TopologyGraph({ selectedId, onSelect }: { selectedId: string; onSelect:
       <div style={{ position: 'absolute', left: 16, bottom: 12, display: 'flex', gap: 14, fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em' }}>
         <span>NODES <b style={{ color: text }}>{Object.keys(POSITIONS).length}</b></span>
         <span>EDGES <b style={{ color: text }}>{TOPO_EDGES.length}</b></span>
-        <span>LATENCY <b style={{ color: cyan }}>12ms p95</b></span>
-        <span>THROUGHPUT <b style={{ color: emerald }}>412 Mb/s</b></span>
+        {health && (
+          <span>SERVICES UP <b style={{ color: emerald }}>
+            {[health.ollama, health.n8n, health.supabase, health.coolify].filter(h => h?.ok).length}/4
+          </b></span>
+        )}
       </div>
     </div>
   )
 }
 
-function ServiceInspector({ svc }: { svc: ServiceIn }) {
+function ServiceInspector({ svc, health }: { svc: ServiceIn; health: HealthData | null }) {
+  const hk = svc.healthKey as keyof HealthData | null
+  const result = hk && health ? health[hk] : null
+  const isLive = result?.ok ?? null
+  const latency = result?.latencyMs ?? null
+  const statusLabel = isLive === null ? '—' : isLive ? 'ONLINE' : 'OFFLINE'
+  const statusCol = statusColor(isLive)
+
   return (
     <div style={{
       background: surface, border: `1px solid ${line}`, borderRadius: 14,
@@ -179,7 +206,7 @@ function ServiceInspector({ svc }: { svc: ServiceIn }) {
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: svc.color, letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 700 }}>Service · {svc.short}</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 8px', borderRadius: 4, background: `${svc.color}22`, color: svc.color, letterSpacing: 1.5, fontWeight: 800 }}>{svc.status.toUpperCase()}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 8px', borderRadius: 4, background: `${statusCol}22`, color: statusCol, letterSpacing: 1.5, fontWeight: 800 }}>{statusLabel}</span>
         </div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', marginTop: 4, color: text }}>{svc.label}</div>
         <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>{svc.role}</div>
@@ -187,108 +214,36 @@ function ServiceInspector({ svc }: { svc: ServiceIn }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <ArcGauge label="CPU"  value={svc.cpu}  max={100} color={cyan} />
-        <ArcGauge label="RAM"  value={svc.ram}  max={100} color={emerald} />
-        <ArcGauge label="Disk" value={svc.disk} max={100} color={violet} />
-        <ArcGauge label="Net"  value={svc.net}  max={500} color={amber} unit="Mb" />
+        <ArcGauge label="CPU"  value={0} max={100} color={cyan} />
+        <ArcGauge label="RAM"  value={0} max={100} color={emerald} />
+        <ArcGauge label="Disk" value={0} max={100} color={violet} />
+        <ArcGauge label="Net"  value={0} max={500} color={amber} unit="Mb" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-        <InfraStat label="Uptime"   value={svc.uptime} color={emerald} />
-        <InfraStat label="Latency"  value="12ms"       color={cyan} />
-        <InfraStat label="Restarts" value="0"          color={violet} />
+        <InfraStat label="Uptime"   value="—"                                            color={emerald} />
+        <InfraStat label="Latency"  value={latency !== null ? `${latency}ms` : '—'}      color={cyan}    />
+        <InfraStat label="Monitored" value={hk ? 'oui' : 'non'}                          color={hk ? emerald : muted} />
       </div>
 
-      <div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Derniers events</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {[
-            { t: '12:42', lvl: 'INFO', msg: 'Health check ok · 12ms' },
-            { t: '12:30', lvl: 'INFO', msg: 'Auto-renew SSL · 27d left' },
-            { t: '10:18', lvl: 'WARN', msg: 'Memory soft limit 80%' },
-            { t: '09:02', lvl: 'INFO', msg: 'Backup completed · 124MB' },
-          ].map((e, i) => (
-            <div key={i} style={{
-              display: 'grid', gridTemplateColumns: '44px 50px 1fr', gap: 6, alignItems: 'center',
-              padding: '3px 6px', borderRadius: 4, background: surface2, border: `1px solid ${line}`,
-            }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: 1 }}>{e.t}</span>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', borderRadius: 3, letterSpacing: 1, textAlign: 'center', fontWeight: 700,
-                background: e.lvl === 'WARN' ? `${amber}22` : `${emerald}22`,
-                color:      e.lvl === 'WARN' ? amber : emerald,
-              }}>{e.lvl}</span>
-              <span style={{ fontSize: 10.5, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.msg}</span>
-            </div>
-          ))}
+      {!hk && (
+        <div style={{ padding: '10px 12px', borderRadius: 8, background: `${amber}12`, border: `1px solid ${amber}33`, fontSize: 11, color: amber, fontFamily: 'var(--font-mono)' }}>
+          ⚠ Métriques non disponibles · API Proxmox/Coolify non configurée
         </div>
-      </div>
+      )}
 
       <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
         <button style={{
           flex: 1, padding: '9px 12px', borderRadius: 8,
           background: svc.color, color: '#0b0d12', border: 'none',
           fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11.5, letterSpacing: '.06em', cursor: 'pointer',
-        }}>↗ OUVRIR · {svc.endpoint}</button>
+        }}>↗ {svc.endpoint}</button>
         <button style={{
           padding: '9px 12px', borderRadius: 8,
           background: surface2, color: text, border: `1px solid ${line2}`,
           fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em', cursor: 'pointer',
         }}>RESTART</button>
       </div>
-    </div>
-  )
-}
-
-function RackSlot({ svc, active, onClick }: { svc: ServiceIn; active: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      textAlign: 'left', padding: '5px 8px', borderRadius: 4,
-      background: active ? `${svc.color}16` : bg,
-      border: active ? `1px solid ${svc.color}` : `1px solid ${line}`,
-      display: 'grid', gridTemplateColumns: 'auto auto 1fr auto auto auto', gap: 8, alignItems: 'center',
-      cursor: 'pointer', minHeight: 22,
-    }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: svc.color, boxShadow: `0 0 6px ${svc.color}` }} />
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: svc.color, letterSpacing: 1, fontWeight: 800 }}>{svc.short}</span>
-      <span style={{ fontSize: 10.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: text }}>{svc.label}</span>
-      <div style={{ width: 30, height: 4, borderRadius: 2, background: surface2, overflow: 'hidden' }}>
-        <div style={{ width: `${svc.cpu}%`, height: '100%', background: cyan }} />
-      </div>
-      <div style={{ width: 30, height: 4, borderRadius: 2, background: surface2, overflow: 'hidden' }}>
-        <div style={{ width: `${svc.ram}%`, height: '100%', background: emerald }} />
-      </div>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: 1 }}>1U</span>
-    </button>
-  )
-}
-
-function ServerRack({ selectedId, onSelect }: { selectedId: string; onSelect: (id: string) => void }) {
-  const racks = [
-    { label: 'RACK-01', host: 'lan-01', svcs: SERVICES_IN.slice(0, 3) },
-    { label: 'RACK-02', host: 'lan-02', svcs: SERVICES_IN.slice(3, 6) },
-    { label: 'RACK-03', host: 'cloud',  svcs: SERVICES_IN.slice(6)    },
-  ]
-  return (
-    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-      {racks.map(rack => (
-        <div key={rack.label} style={{
-          background: surface2, border: `1px solid ${line}`, borderRadius: 10,
-          padding: 8, display: 'flex', flexDirection: 'column', gap: 5,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.18em', textTransform: 'uppercase', fontWeight: 700 }}>{rack.label}</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: muted2, letterSpacing: '.14em' }}>{rack.host}</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 2, background: bg, border: `1px solid ${line}` }} />
-          {rack.svcs.map(svc => (
-            <RackSlot key={svc.id} svc={svc} active={svc.id === selectedId} onClick={() => onSelect(svc.id)} />
-          ))}
-          {Array.from({ length: 3 - rack.svcs.length + 1 }).map((_, i) => (
-            <div key={i} style={{ height: 16, borderRadius: 2, background: bg, border: `1px dashed ${line}` }} />
-          ))}
-        </div>
-      ))}
     </div>
   )
 }
@@ -327,64 +282,72 @@ function DeploysPanel() {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Recent deploys</div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>coolify · last 24h</div>
         </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: emerald, letterSpacing: '.14em' }}>3/4 ok</span>
       </div>
-      {DEPLOYS.length === 0 ? (
-        <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-          <p style={{ fontSize: 12, color: muted2 }}>Aucun déploiement enregistré</p>
-        </div>
-      ) : (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {DEPLOYS.map((d, i) => {
-          const a = AGENTS_DATA.find(ag => ag.id === d.agent) ?? AGENTS_DATA[0]
-          return (
-            <div key={i} style={{
-              padding: '8px 10px', borderRadius: 8, background: surface2, border: `1px solid ${line}`,
-              display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 8, alignItems: 'center',
-              borderLeft: `3px solid ${d.color}`,
-            }}>
-              <span style={{
-                width: 22, height: 22, borderRadius: 5, border: `1px solid ${a.color}`,
-                background: `${a.color}10`,
-                display: 'grid', placeItems: 'center',
-                fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, color: a.color, flexShrink: 0,
-              }}>{a.sigil}</span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: text }}>{d.name}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: 1, marginTop: 2 }}>{d.sha} · {d.time}</div>
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3, background: `${d.color}22`, color: d.color, letterSpacing: 1, fontWeight: 700, flexShrink: 0 }}>{d.status.toUpperCase()}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: 1, flexShrink: 0 }}>{a.code}</span>
-            </div>
-          )
-        })}
+      <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+        <p style={{ fontSize: 12, color: muted2 }}>Configurez <b style={{ color: text }}>COOLIFY_API_TOKEN</b> pour voir les déploiements</p>
       </div>
-      )}
     </div>
   )
 }
 
-const KPI_LIST = [
-  { label: 'CPU avg',     value: '—', delta: '—', color: cyan    },
-  { label: 'RAM avg',     value: '—', delta: '—', color: emerald },
-  { label: 'Network I/O', value: '—', delta: '—', color: violet  },
-  { label: 'Containers',  value: '—', delta: '—', color: amber   },
-  { label: 'Uptime',      value: '—', delta: '—', color: fuchsia },
-]
-
 export default function InfrastructurePage() {
-  const [selectedId, setSelectedId] = useState('proxmox')
+  const [selectedId, setSelectedId] = useState('coolify')
+  const [health, setHealth] = useState<HealthData | null>(null)
+  const [healthLoading, setHealthLoading] = useState(true)
   const isMobile = useIsMobile()
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setHealthLoading(true)
+      try {
+        const res = await fetch('/api/studio/services/health')
+        if (!res.ok) return
+        const data = await res.json() as HealthData
+        if (!cancelled) setHealth(data)
+      } finally {
+        if (!cancelled) setHealthLoading(false)
+      }
+    }
+    load()
+    const interval = setInterval(load, 30_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
 
   const selected = SERVICES_IN.find(s => s.id === selectedId) ?? SERVICES_IN[0]
 
+  const liveCount = health
+    ? [health.ollama, health.n8n, health.supabase, health.coolify].filter(h => h?.ok).length
+    : null
+
+  const avgLatency = health
+    ? Math.round(
+        [health.ollama, health.n8n, health.supabase, health.coolify]
+          .filter(h => h?.ok)
+          .reduce((sum, h) => sum + h!.latencyMs, 0) /
+        Math.max(1, [health.ollama, health.n8n, health.supabase, health.coolify].filter(h => h?.ok).length)
+      )
+    : null
+
+  const kpiList = [
+    { label: 'Services live',  value: liveCount !== null ? `${liveCount}/4` : '—',              delta: healthLoading ? '…' : 'ping',   color: liveCount === 4 ? emerald : liveCount === null ? muted : rose   },
+    { label: 'Latency avg',    value: avgLatency !== null ? `${avgLatency}ms` : '—',             delta: 'p50',                          color: cyan    },
+    { label: 'CPU avg',        value: '—',                                                        delta: 'proxmox',                      color: violet  },
+    { label: 'RAM avg',        value: '—',                                                        delta: 'proxmox',                      color: emerald },
+    { label: 'Containers',     value: '—',                                                        delta: 'coolify',                      color: amber   },
+  ]
+
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <button style={{
-        padding: '8px 14px', borderRadius: 999,
-        background: accent, color: '#0b0d12', border: 'none', cursor: 'pointer',
-        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.04em',
-      }}>+ Add service</button>
+      {liveCount !== null && (
+        <span style={{
+          padding: '4px 10px', borderRadius: 5,
+          background: liveCount === 4 ? `${emerald}18` : `${rose}18`,
+          color: liveCount === 4 ? emerald : rose,
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.1em', fontWeight: 700,
+          border: `1px solid ${liveCount === 4 ? emerald : rose}30`,
+        }}>{liveCount}/4 services live</span>
+      )}
       {[
         { label: `${SERVICES_IN.length} services`, color: muted },
         { label: 'self-host · Proxmox',            color: muted },
@@ -405,13 +368,13 @@ export default function InfrastructurePage() {
 
         {/* KPI strip */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 10 }}>
-          {KPI_LIST.map(k => <InfraKpi key={k.label} {...k} />)}
+          {kpiList.map(k => <InfraKpi key={k.label} {...k} />)}
         </div>
 
         {/* Topology + Service inspector */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', gap: 14, alignItems: 'start' }}>
-          {!isMobile && <TopologyGraph selectedId={selectedId} onSelect={setSelectedId} />}
-          <ServiceInspector svc={selected} />
+          {!isMobile && <TopologyGraph selectedId={selectedId} onSelect={setSelectedId} health={health} />}
+          <ServiceInspector svc={selected} health={health} />
         </div>
 
         {/* Server rack */}
@@ -419,21 +382,14 @@ export default function InfrastructurePage() {
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Server rack · self-host</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>proxmox cluster · 3 hosts · 8 services</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>proxmox cluster · 3 hosts · {SERVICES_IN.length} services</div>
             </div>
-            {!isMobile && (
-              <div style={{ display: 'flex', gap: 6 }}>
-                {[{ l: 'CPU 22%' }, { l: 'RAM 38%' }, { l: 'DISK 31%' }].map(({ l }) => (
-                  <span key={l} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 7px', borderRadius: 3, background: surface2, border: `1px solid ${line}`, color: muted, letterSpacing: '.14em' }}>{l}</span>
-                ))}
-              </div>
-            )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 14 }}>
             {[
               { label: 'RACK-01', host: 'lan-01', svcs: SERVICES_IN.slice(0, 3) },
               { label: 'RACK-02', host: 'lan-02', svcs: SERVICES_IN.slice(3, 6) },
-              { label: 'RACK-03', host: 'cloud',  svcs: SERVICES_IN.slice(6)    },
+              { label: 'RACK-03', host: 'ext',    svcs: SERVICES_IN.slice(6)    },
             ].map(rack => (
               <div key={rack.label} style={{
                 background: surface2, border: `1px solid ${line}`, borderRadius: 10,
@@ -444,27 +400,26 @@ export default function InfrastructurePage() {
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: muted2, letterSpacing: '.14em' }}>{rack.host}</span>
                 </div>
                 <div style={{ height: 4, borderRadius: 2, background: bg, border: `1px solid ${line}` }} />
-                {rack.svcs.map(svc => (
-                  <button key={svc.id} onClick={() => setSelectedId(svc.id)} style={{
-                    textAlign: 'left', padding: '5px 8px', borderRadius: 4,
-                    background: svc.id === selectedId ? `${svc.color}16` : bg,
-                    border: svc.id === selectedId ? `1px solid ${svc.color}` : `1px solid ${line}`,
-                    display: 'grid', gridTemplateColumns: 'auto auto 1fr auto auto auto', gap: 8, alignItems: 'center',
-                    cursor: 'pointer', minHeight: 22,
-                  }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: svc.color, boxShadow: `0 0 6px ${svc.color}` }} />
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: svc.color, letterSpacing: 1, fontWeight: 800 }}>{svc.short}</span>
-                    <span style={{ fontSize: 10.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: text }}>{svc.label}</span>
-                    <div style={{ width: 30, height: 4, borderRadius: 2, background: surface2, overflow: 'hidden' }}>
-                      <div style={{ width: `${svc.cpu}%`, height: '100%', background: cyan }} />
-                    </div>
-                    <div style={{ width: 30, height: 4, borderRadius: 2, background: surface2, overflow: 'hidden' }}>
-                      <div style={{ width: `${svc.ram}%`, height: '100%', background: emerald }} />
-                    </div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: 1 }}>1U</span>
-                  </button>
-                ))}
-                {Array.from({ length: 3 - rack.svcs.length + 1 }).map((_, i) => (
+                {rack.svcs.map(svc => {
+                  const hk = svc.healthKey as keyof HealthData | null
+                  const isLive = hk && health ? health[hk]?.ok : null
+                  const dotCol = statusColor(isLive)
+                  return (
+                    <button key={svc.id} onClick={() => setSelectedId(svc.id)} style={{
+                      textAlign: 'left', padding: '5px 8px', borderRadius: 4,
+                      background: svc.id === selectedId ? `${svc.color}16` : bg,
+                      border: svc.id === selectedId ? `1px solid ${svc.color}` : `1px solid ${line}`,
+                      display: 'grid', gridTemplateColumns: 'auto auto 1fr auto', gap: 8, alignItems: 'center',
+                      cursor: 'pointer', minHeight: 22,
+                    }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotCol, boxShadow: isLive ? `0 0 6px ${dotCol}` : 'none' }} />
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: svc.color, letterSpacing: 1, fontWeight: 800 }}>{svc.short}</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: text }}>{svc.label}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: 1 }}>1U</span>
+                    </button>
+                  )
+                })}
+                {Array.from({ length: Math.max(0, 3 - rack.svcs.length + 1) }).map((_, i) => (
                   <div key={i} style={{ height: 16, borderRadius: 2, background: bg, border: `1px dashed ${line}` }} />
                 ))}
               </div>
