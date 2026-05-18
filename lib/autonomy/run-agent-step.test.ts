@@ -13,6 +13,7 @@ type TableName =
   | 'human_approvals'
   | 'autonomy_jobs'
   | 'decisions'
+  | 'campaign_drafts'
 
 interface TableRow {
   id?: string
@@ -34,6 +35,7 @@ function createFakeSupabase(seed?: Partial<Record<TableName, TableRow[]>>): RunA
     human_approvals: seed?.human_approvals ?? [],
     autonomy_jobs: seed?.autonomy_jobs ?? [],
     decisions: seed?.decisions ?? [],
+    campaign_drafts: seed?.campaign_drafts ?? [],
   }
 
   return {
@@ -63,9 +65,17 @@ function createFakeSupabase(seed?: Partial<Record<TableName, TableRow[]>>): RunA
         },
         order: () => builder,
         limit: () => builder,
-        insert: (row: TableRow) => {
-          state.inserted = { id: `${tableName}-${tables[tableName].length + 1}`, ...row }
-          tables[tableName].push(state.inserted)
+        insert: (row: TableRow | TableRow[]) => {
+          if (Array.isArray(row)) {
+            row.forEach((r, i) => {
+              const stamped = { id: `${tableName}-${tables[tableName].length + 1 + i}`, ...r }
+              tables[tableName].push(stamped)
+            })
+            state.inserted = null
+          } else {
+            state.inserted = { id: `${tableName}-${tables[tableName].length + 1}`, ...row }
+            tables[tableName].push(state.inserted)
+          }
           return builder
         },
         update: (patch: TableRow) => {
@@ -469,6 +479,60 @@ describe('runAgentStep', () => {
       user_id: 'user-1',
       action_id: 'autonomy_actions-1',
       status: 'pending',
+    })
+  })
+
+  it('Marketing insère un campaign_draft par channel × message après le run', async () => {
+    const supabase = createFakeSupabase({
+      venture_pipeline: [{
+        id: 'pipeline-1',
+        user_id: 'user-1',
+        status: 'approved',
+        idea_title: 'InboxPulse',
+        idea_niche: 'agences B2B',
+        idea_problem: 'priorisation',
+        idea_solution: 'scoring',
+        idea_market: 'outbound',
+        validation_output: 'ok',
+        builder_output: 'ok',
+        payment_output: 'ok',
+        marketing_output: null,
+        decision_output: null,
+        venture_id: 'venture-1',
+      }],
+    })
+    const llm = async (): Promise<LLMResponse> => ({
+      content: JSON.stringify({
+        channels: ['email', 'twitter'],
+        messages: ['Lance ton SaaS', 'Try it free'],
+        day1: 'Setup landing',
+        day3: 'Drive traffic',
+        day7: 'Convert leads',
+      }),
+      provider: 'ollama',
+      model: 'qwen3:8b',
+      fallback_triggered: false,
+    })
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'marketing',
+      llm,
+      now: () => new Date('2026-05-18T10:00:00.000Z'),
+    })
+
+    expect(supabase.tables.campaign_drafts).toHaveLength(4)
+    expect(supabase.tables.campaign_drafts[0]).toMatchObject({
+      user_id: 'user-1',
+      venture_id: 'venture-1',
+      channel: 'email',
+      content: 'Lance ton SaaS',
+      status: 'draft',
+    })
+    expect(supabase.tables.campaign_drafts[3]).toMatchObject({
+      channel: 'twitter',
+      content: 'Try it free',
     })
   })
 })

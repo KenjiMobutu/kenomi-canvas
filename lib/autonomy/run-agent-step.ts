@@ -4,6 +4,7 @@ import { llmChat, type LLMMessage, type LLMResponse } from '@/lib/llm-client'
 import { aggregateVentureMetrics, buildDecisionMetricsContext, type VentureMetricSourceRow } from '@/lib/metrics/venture-metrics'
 import { buildSystemPrompt, isAgentUnlocked, parsePipelineIdea, type PipelineRow } from '@/lib/pipeline-types'
 import { materializeBuilderOutput } from '@/lib/venture-materializer'
+import { buildCampaignDrafts, type MarketingOutputShape } from '@/lib/marketing/campaign-drafts'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -11,7 +12,7 @@ interface QueryBuilder {
   not(field: string, operator: string, value: unknown): QueryBuilder
   order(field: string, options?: { ascending?: boolean }): QueryBuilder
   limit(count: number): QueryBuilder
-  insert(row: Record<string, unknown>): QueryBuilder
+  insert(row: Record<string, unknown> | Record<string, unknown>[]): QueryBuilder
   update(row: Record<string, unknown>): QueryBuilder
   maybeSingle(): Promise<{ data: unknown; error: { message: string } | null }>
   single(): Promise<{ data: unknown; error: { message: string } | null }>
@@ -405,6 +406,17 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           metrics: decisionBundle.metrics,
           nowIso: now().toISOString(),
         })
+      }
+
+      if (agentId === 'marketing' && parsedOutput && 'channels' in parsedOutput && 'messages' in parsedOutput) {
+        const drafts = buildCampaignDrafts({
+          userId,
+          ventureId: pipeline.venture_id ?? null,
+          output: parsedOutput as MarketingOutputShape,
+        })
+        if (drafts.length > 0) {
+          await supabase.from('campaign_drafts').insert(drafts as unknown as Record<string, unknown>[])
+        }
       }
     }
 
