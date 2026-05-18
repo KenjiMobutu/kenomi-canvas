@@ -91,6 +91,24 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- 2d. decisions
+-- Migration-order guard: this audit migration enables RLS and creates indexes
+-- before the autonomy-core migration is applied on clean environments.
+CREATE TABLE IF NOT EXISTS public.decisions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  venture_id uuid REFERENCES public.ventures(id) ON DELETE CASCADE,
+  decision text,
+  reason text,
+  metrics_snapshot jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.decisions
+  ADD COLUMN IF NOT EXISTS venture_id uuid REFERENCES public.ventures(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS decision text,
+  ADD COLUMN IF NOT EXISTS reason text,
+  ADD COLUMN IF NOT EXISTS metrics_snapshot jsonb,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+
 ALTER TABLE public.decisions ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN

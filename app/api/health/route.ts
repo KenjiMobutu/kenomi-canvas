@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { checkEnvVars } from '@/lib/health-check'
+import { buildHealthSummary, checkEnvVars, getHealthDependencyConfig } from '@/lib/health-check'
 
 interface Check {
   ok: boolean
@@ -10,6 +10,7 @@ interface Check {
 
 export async function GET() {
   const checks: Record<string, Check> = {}
+  const config = getHealthDependencyConfig()
 
   // 1. Variables d'env critiques
   checks.env = checkEnvVars()
@@ -55,11 +56,10 @@ export async function GET() {
     }
   }
 
-  const allOk = Object.values(checks).every(c => c.ok)
-  const status = allOk ? 200 : 503
+  const summary = buildHealthSummary({ checks, config })
 
   return Response.json(
-    { status: allOk ? 'ok' : 'degraded', checks, timestamp: new Date().toISOString() },
-    { status }
+    { status: summary.status, checks, timestamp: new Date().toISOString() },
+    { status: summary.statusCode }
   )
 }

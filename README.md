@@ -19,7 +19,7 @@ Studio OS pour entrepreneurs solo — gérez vos ventures, automatisez vos workf
 
 | Couche | Technologie |
 |--------|------------|
-| Framework | Next.js 15 (App Router, standalone output) |
+| Framework | Next.js 16 (App Router, proxy, standalone output) |
 | UI | React 19, Tailwind CSS v4, Lucide, Sonner |
 | Auth | Supabase Auth (@supabase/ssr, JWT cookies) |
 | Base de données | Supabase PostgreSQL 15 + Row Level Security |
@@ -33,6 +33,21 @@ Studio OS pour entrepreneurs solo — gérez vos ventures, automatisez vos workf
 Kenomi Canvas est le cockpit du Kenomi AI Venture Studio. Il fournit la gestion des ventures, l'exécution des agents, les triggers n8n, la capture waitlist, la santé de l'infrastructure et le routage LLM local-first.
 
 L'autonomie est intentionnellement supervisée : les actions risquées (paiement, déploiement, publication publique) requièrent une approbation humaine explicite.
+
+Statut actuel :
+
+- **Core studio** : cockpit, ventures, documents, marketing, automations, chat IA et API keys opérationnels.
+- **Agents** : pipeline séquentiel, runs manuels, audit events et orchestration due/ready/gated via `agent_schedules`.
+- **Infrastructure** : vue topology alimentée par `/api/studio/infra/services`, avec configuration extensible par variables d'environnement.
+- **Privacy** : export RGPD multi-tables et suppression confirmée avec token temporel.
+- **Sécurité** : RLS Supabase, allowlist email, proxy Next.js, protections SSRF et secrets côté serveur.
+
+À finaliser avant production autonome :
+
+- Webhooks déploiement/monétisation avec approbations humaines traçables.
+- Observabilité centralisée des agents, coûts LLM, n8n et services tailnet.
+- Backups/restores Supabase documentés et testés.
+- Runbooks Coolify/Tailscale/Proxmox pour incidents critiques.
 
 ## Architecture de sécurité
 
@@ -71,6 +86,24 @@ npm run dev
 | `DASHBOARD_PASSWORD` | Mot de passe du dashboard admin |
 | `DASHBOARD_TOKEN_SECRET` | Secret HMAC pour les tokens dashboard |
 | `APP_ORIGIN` | URL publique de l'application |
+| `STRIPE_SECRET_KEY` | Clé serveur Stripe, idéalement restricted key par environnement |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature du webhook Stripe `/api/stripe/webhook` |
+| `COOLIFY_URL` | URL API Coolify autorisée côté serveur |
+| `COOLIFY_TOKEN` | Token API Coolify côté serveur |
+| `TRUSTED_PRIVATE_HOSTS` | Hosts privés autorisés pour appels serveur, séparés par virgules |
+
+### Health check
+
+`GET /api/health` vérifie l'env, Prisma/PostgreSQL, Supabase REST et le bucket Storage `documents`.
+Par défaut, chaque dépendance est considérée requise et une panne retourne `503`.
+
+Pour un environnement local ou de preview où Prisma n'est pas censé joindre la base directe, définir :
+
+```bash
+HEALTH_DATABASE_REQUIRED=false
+```
+
+Les équivalents `HEALTH_SUPABASE_REQUIRED=false` et `HEALTH_STORAGE_REQUIRED=false` existent pour isoler un incident ou un environnement incomplet, mais ne doivent pas être utilisés en production autonome.
 
 ## Déploiement
 
@@ -120,7 +153,9 @@ app/
 └── [slug]/          # Pages waitlist publiques par venture
 
 lib/
+├── agent-orchestration.ts # Calcul des schedules agents
 ├── auth-server.ts   # Helper requireAllowedUser (routes API)
+├── privacy-export.ts # Export RGPD et redaction secrets
 ├── security.ts      # Validation SSRF des webhooks
 ├── dashboard-token.ts # Auth HMAC dashboard
 └── supabase*.ts     # Clients Supabase (browser / server)
