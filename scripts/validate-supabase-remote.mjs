@@ -160,6 +160,24 @@ for (const table of expectedTables) {
   if ((policyCounts.get(table) ?? 0) < 1) fail(`missing RLS policy on public.${table}`)
 }
 
+const tablesWithoutRls = await pgQuery(`
+  select tablename
+  from pg_tables
+  where schemaname = 'public'
+    and rowsecurity = false
+  order by tablename;
+`)
+
+if (Array.isArray(tablesWithoutRls) && tablesWithoutRls.length > 0) {
+  fail(
+    `tables sans RLS dans public: ${tablesWithoutRls
+      .map((row) => row.tablename)
+      .join(', ')}`
+  )
+} else {
+  process.stdout.write('ok all public tables have RLS enabled\n')
+}
+
 if (process.exitCode) {
   process.exit()
 }
