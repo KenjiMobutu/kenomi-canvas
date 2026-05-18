@@ -534,5 +534,16 @@ describe('runAgentStep', () => {
       channel: 'twitter',
       content: 'Try it free',
     })
+    // 4 actions publish_campaign blocked + 4 approvals pending
+    const publishActions = supabase.tables.autonomy_actions.filter(a => a.action_type === 'publish_campaign')
+    expect(publishActions).toHaveLength(4)
+    expect(publishActions.every(a => a.status === 'blocked' && a.risk_level === 'high')).toBe(true)
+    expect(publishActions[0]).toMatchObject({
+      venture_id: 'venture-1',
+      input: expect.objectContaining({ channel: 'email', pipeline_id: 'pipeline-1' }),
+    })
+    const approvals = supabase.tables.human_approvals.filter(h => h.reason && typeof h.reason === 'string' && (h.reason as string).startsWith('Publier sur'))
+    expect(approvals).toHaveLength(4)
+    expect(approvals.every(a => a.status === 'pending')).toBe(true)
   })
 })

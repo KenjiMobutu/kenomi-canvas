@@ -414,8 +414,40 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           ventureId: pipeline.venture_id ?? null,
           output: parsedOutput as MarketingOutputShape,
         })
-        if (drafts.length > 0) {
-          await supabase.from('campaign_drafts').insert(drafts as unknown as Record<string, unknown>[])
+        for (const draft of drafts) {
+          const inserted = await single<{ id?: string }>(
+            supabase.from('campaign_drafts')
+              .insert(draft as unknown as Record<string, unknown>)
+              .select('id')
+          )
+          if (!inserted?.id || !pipeline.venture_id) continue
+
+          const action = await single<{ id?: string }>(
+            supabase.from('autonomy_actions').insert({
+              user_id: userId,
+              venture_id: pipeline.venture_id,
+              action_type: 'publish_campaign',
+              risk_level: 'high',
+              status: 'blocked',
+              input: {
+                draft_id: inserted.id,
+                channel: draft.channel,
+                pipeline_id: pipeline.id,
+              },
+              created_at: now().toISOString(),
+              updated_at: now().toISOString(),
+            }).select('id')
+          )
+          if (!action?.id) continue
+
+          await supabase.from('human_approvals').insert({
+            user_id: userId,
+            action_id: action.id,
+            status: 'pending',
+            reason: `Publier sur ${draft.channel}`,
+            created_at: now().toISOString(),
+            updated_at: now().toISOString(),
+          })
         }
       }
     }
