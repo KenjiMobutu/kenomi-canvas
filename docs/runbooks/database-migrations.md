@@ -7,6 +7,18 @@ on an existing self-hosted environment. Every migration that alters, indexes, or
 adds RLS to a table must first guarantee that the table and referenced columns
 exist.
 
+## Prérequis pour la validation locale
+
+- **Supabase CLI ≥ 2.98** : `brew install supabase/tap/supabase`
+- **Docker Desktop opérationnel** : `docker info` doit répondre sans timeout
+- **Réseau Docker** : les extensions Little Snitch, AdGuard, NordVPN Threat
+  Protection peuvent bloquer les pulls `public.ecr.aws/supabase/*`. Si
+  `supabase start` échoue avec `failed to pull docker image: context deadline
+  exceeded`, autorisez Docker dans Little Snitch et désactivez le filtrage
+  AdGuard pour `*.ecr.aws` et `*.docker.io`.
+- **Ports libres** : 54321 (Studio), 54322 (Postgres), 54323 (Inbucket),
+  54324 (Edge runtime)
+
 ## Local Validation
 
 Run the full migration chain before merging schema changes:
@@ -22,6 +34,33 @@ Expected result:
 - migrations apply from a clean database;
 - `supabase db lint --local` returns no fatal errors;
 - RLS policies are present on user-owned and venture-owned tables.
+
+## Alternative : appliquer une migration sans environnement local
+
+Si Docker local est indisponible, appliquer la migration directement sur la
+base self-hosted via `/pg/query` (service-role) :
+
+```bash
+curl -sS -X POST "$NEXT_PUBLIC_SUPABASE_URL/pg/query" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  --data "$(jq -Rs '{query: .}' < supabase/migrations/<file>.sql)"
+```
+
+Réponse `[]` = succès. Pour les checks RLS, valider via une query de contrôle :
+
+```bash
+curl -sS -X POST "$NEXT_PUBLIC_SUPABASE_URL/pg/query" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  --data '{"query": "select tablename, rowsecurity from pg_tables where schemaname='public' and tablename in ('campaign_drafts', 'venture_events', 'autonomy_actions') order by tablename;"}'
+```
+
+Cette approche n'a PAS la couverture de `db lint --local` (pas de détection
+des migrations non-rejouables sur base vierge). Privilégier le setup local
+dès que possible.
 
 ## Ordering Rules
 
