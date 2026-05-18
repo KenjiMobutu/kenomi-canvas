@@ -1,11 +1,39 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import {
-  bg, surface, surface2, line, text, muted, muted2,
-  accent, emerald, amber, cyan, violet, fuchsia,
+  bg, surface, surface2, line, line2, text, muted, muted2,
+  accent, emerald, amber, cyan, violet, fuchsia, rose,
 } from '@/lib/ck-vars'
 import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick, useIsMobile } from '@/lib/studio-utils'
+import { CheckCircle2, Clock3, RefreshCw, Send, XCircle } from 'lucide-react'
+
+interface CampaignDraft {
+  id: string
+  venture_id: string | null
+  channel: string
+  content: string
+  status: 'draft' | 'blocked' | 'approved' | 'published' | 'failed' | 'rejected'
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+interface PublishApprovalRow {
+  approval: { id: string; action_id: string; status: string; created_at: string }
+  action: { id: string; action_type: string; status: string; input: Record<string, unknown> | null } | null
+  isPending: boolean
+}
+
+const DRAFT_STATUS_COLORS: Record<CampaignDraft['status'], string> = {
+  draft: '#94a3b8',
+  blocked: '#fbbf24',
+  approved: '#22d3ee',
+  published: '#34d399',
+  failed: '#f87171',
+  rejected: '#94a3b8',
+}
 
 const CHANNELS = [
   { id: 'linkedin', label: 'LinkedIn',   icon: 'in', color: '#22d3ee', reach: '—', ctr: '—', drafts: 0, status: 'Inactif', waveSeed: 7  },
@@ -349,6 +377,71 @@ export default function MarketingPage() {
   const agent = AGENTS_DATA.find(a => a.id === 'marketing')!
   const activeChannel = CHANNELS.find(c => c.id === selChannel)!
 
+  const [drafts, setDrafts] = useState<CampaignDraft[]>([])
+  const [publishApprovals, setPublishApprovals] = useState<PublishApprovalRow[]>([])
+  const [draftsLoading, setDraftsLoading] = useState(true)
+  const [resolvingKey, setResolvingKey] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    setDraftsLoading(true)
+    try {
+      const [draftsRes, jobsRes] = await Promise.all([
+        fetch('/api/studio/marketing/drafts'),
+        fetch('/api/studio/autonomy/jobs'),
+      ])
+      const draftsJson = await draftsRes.json().catch(() => ({}))
+      const jobsJson = await jobsRes.json().catch(() => ({}))
+      if (Array.isArray(draftsJson?.drafts)) setDrafts(draftsJson.drafts as CampaignDraft[])
+      const approvals = Array.isArray(jobsJson?.approvals) ? jobsJson.approvals : []
+      const actions = Array.isArray(jobsJson?.actions) ? jobsJson.actions : []
+      const actionsById = new Map(actions.map((a: { id: string }) => [a.id, a]))
+      const publishRows: PublishApprovalRow[] = approvals
+        .map((a: { id: string; action_id: string; status: string; created_at: string }) => ({
+          approval: a,
+          action: (actionsById.get(a.action_id) as PublishApprovalRow['action']) ?? null,
+          isPending: a.status === 'pending',
+        }))
+        .filter((row: PublishApprovalRow) => row.action?.action_type === 'publish_campaign')
+      setPublishApprovals(publishRows)
+    } catch {
+      toast.error('Impossible de charger les drafts marketing')
+    } finally {
+      setDraftsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  async function resolveApproval(approvalId: string, decision: 'approved' | 'rejected') {
+    const key = `${approvalId}:${decision}`
+    setResolvingKey(key)
+    try {
+      const res = await fetch('/api/studio/autonomy/jobs', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalId, decision }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'erreur inconnue' }))
+        toast.error(err.error ?? 'Échec de la résolution')
+        return
+      }
+      toast.success(decision === 'approved' ? 'Campagne approuvée et publiée' : 'Campagne rejetée')
+      await refresh()
+    } finally {
+      setResolvingKey(null)
+    }
+  }
+
+  const pendingPublishCount = publishApprovals.filter(r => r.isPending).length
+  const draftsByStatus = useMemo(() => {
+    const acc: Record<CampaignDraft['status'], CampaignDraft[]> = {
+      draft: [], blocked: [], approved: [], published: [], failed: [], rejected: [],
+    }
+    drafts.forEach(d => { acc[d.status]?.push(d) })
+    return acc
+  }, [drafts])
+
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
       <button style={{
@@ -372,6 +465,136 @@ export default function MarketingPage() {
   return (
     <CkShell breadcrumb="Studio / Marketing" title="Marketing Lab" subtitle="LinkedIn · TikTok · SEO · Newsletter" actions={headerActions}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+        {/* Drafts & Approvals depuis venture_pipeline (source de vérité) */}
+        <div style={{
+          background: surface, border: `1px solid ${pendingPublishCount > 0 ? `${amber}66` : line2}`,
+          borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Send size={16} color={agent.color} />
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: text, letterSpacing: '-.01em' }}>
+                Campagnes générées
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                {draftsLoading ? 'chargement…' : `${drafts.length} drafts · ${pendingPublishCount} en attente`}
+              </span>
+            </div>
+            <button
+              onClick={refresh}
+              disabled={draftsLoading}
+              style={{
+                width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center',
+                background: surface2, color: draftsLoading ? muted2 : text,
+                border: `1px solid ${line2}`, cursor: draftsLoading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          {pendingPublishCount > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: amber, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                Approbations à valider
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+                {publishApprovals.filter(r => r.isPending).map(row => {
+                  const channel = typeof row.action?.input?.channel === 'string' ? row.action.input.channel : '—'
+                  const draftId = typeof row.action?.input?.draft_id === 'string' ? row.action.input.draft_id : ''
+                  const draft = drafts.find(d => d.id === draftId)
+                  const approveKey = `${row.approval.id}:approved`
+                  const rejectKey = `${row.approval.id}:rejected`
+                  return (
+                    <div key={row.approval.id} style={{
+                      background: surface2, border: `1px solid ${amber}55`, borderRadius: 10,
+                      padding: 12, display: 'flex', flexDirection: 'column', gap: 8,
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 7px', borderRadius: 4,
+                          background: `${amber}22`, color: amber, border: `1px solid ${amber}40`,
+                          letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 800,
+                        }}>{channel}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2 }}>
+                          {new Date(row.approval.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {draft && (
+                        <div style={{ fontSize: 12, color: text, lineHeight: 1.45 }}>{draft.content}</div>
+                      )}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        <button
+                          onClick={() => resolveApproval(row.approval.id, 'approved')}
+                          disabled={resolvingKey !== null}
+                          style={{
+                            minHeight: 32, borderRadius: 7,
+                            background: emerald, color: '#0b0d12',
+                            border: `1px solid ${emerald}66`,
+                            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                            cursor: resolvingKey ? 'not-allowed' : 'pointer',
+                            opacity: resolvingKey ? 0.6 : 1,
+                          }}
+                        >
+                          <CheckCircle2 size={12} /> {resolvingKey === approveKey ? '...' : 'Publier'}
+                        </button>
+                        <button
+                          onClick={() => resolveApproval(row.approval.id, 'rejected')}
+                          disabled={resolvingKey !== null}
+                          style={{
+                            minHeight: 32, borderRadius: 7,
+                            background: `${rose}18`, color: rose,
+                            border: `1px solid ${rose}55`,
+                            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                            cursor: resolvingKey ? 'not-allowed' : 'pointer',
+                            opacity: resolvingKey ? 0.6 : 1,
+                          }}
+                        >
+                          <XCircle size={12} /> {resolvingKey === rejectKey ? '...' : 'Rejeter'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {drafts.length === 0 && !draftsLoading ? (
+            <div style={{
+              padding: '14px 16px', borderRadius: 10, background: surface2, border: `1px dashed ${line2}`,
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: muted, lineHeight: 1.6,
+            }}>
+              Aucun draft généré pour l&apos;instant. Lancez l&apos;agent Marketing depuis <span style={{ color: cyan }}>/studio/agents</span>.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {(['draft', 'blocked', 'approved', 'published', 'failed', 'rejected'] as const).map(status => {
+                const items = draftsByStatus[status]
+                if (items.length === 0) return null
+                const c = DRAFT_STATUS_COLORS[status]
+                return (
+                  <div key={status} style={{
+                    padding: '6px 10px', borderRadius: 7,
+                    background: `${c}14`, border: `1px solid ${c}40`,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 9, color: c,
+                      letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 800,
+                    }}>{status}</span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: c, fontWeight: 800 }}>
+                      {items.length}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         {/* KPI strip */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 10 }}>
