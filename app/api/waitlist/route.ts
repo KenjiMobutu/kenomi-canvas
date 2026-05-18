@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
 import { isValidEmail, isValidSlug } from '@/lib/validation'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
@@ -44,6 +46,15 @@ export async function POST(req: NextRequest) {
       where: { slug_email: { slug, email } },
       create: { slug, email, venture_id: venture?.id ?? null },
       update: {},
+    })
+
+    await recordVentureEventBySlugSafely(supabaseAdmin as unknown as VentureEventSupabase, {
+      slug,
+      eventType: 'waitlist_signup',
+      source: 'waitlist',
+      metadata: {
+        email_domain: email.split('@')[1] ?? '',
+      },
     })
 
     const rawOrigin = process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu'
