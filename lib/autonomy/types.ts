@@ -18,3 +18,23 @@ export interface AutonomyAction {
   estimatedCostEur: number
   budgetCapEur?: number
 }
+
+export type CampaignDraftStatus =
+  | 'draft'
+  | 'blocked'
+  | 'approved'
+  | 'published'
+  | 'failed'
+  | 'rejected'
+
+export interface CampaignDraft {
+  id: string
+  user_id: string
+  venture_id: string | null
+  channel: string
+  content: string
+  status: CampaignDraftStatus
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
