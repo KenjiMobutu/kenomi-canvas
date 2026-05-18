@@ -1,3 +1,5 @@
+import { logError } from './logger'
+
 const SENSITIVE_KEY = /(secret|password|token|api[_-]?key|authorization)/i
 
 export function sanitizeAuditMetadata(input: Record<string, unknown>): Record<string, unknown> {
@@ -31,5 +33,5 @@ export async function insertAuditEvent(
     metadata: sanitizeAuditMetadata(event.metadata ?? {}),
   })
 
-  if (error) console.error('[audit-log]', error.message)
+  if (error) logError('audit-log', error.message)
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { getProxmoxMetrics, formatBytes, formatUptime } from '@/lib/proxmox-client'
+import { logError } from '@/lib/logger'
 
 export async function GET() {
   const cookieStore = await cookies()
@@ -39,7 +40,7 @@ export async function GET() {
     return NextResponse.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erreur inconnue'
-    console.error('Proxmox metrics error:', message)
+    logError('proxmox.metrics', err)
     return NextResponse.json({ error: `Proxmox indisponible: ${message}` }, { status: 503 })
   }
 }

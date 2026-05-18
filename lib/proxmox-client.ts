@@ -3,6 +3,7 @@
  * Client API Proxmox REST — lecture seule (PVEAuditor)
  * Token : monitoring@pve!kenomi-canvas
  */
+import { logError } from './logger'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -140,11 +141,11 @@ export async function getProxmoxVMs(node = PROXMOX_NODE): Promise<ProxmoxVM[]> {
 export async function getProxmoxMetrics(): Promise<ProxmoxMetrics> {
   const [nodeStatus, vms] = await Promise.all([
     getProxmoxNodeStatus().catch((err) => {
-      console.error('Proxmox node status error:', err.message)
+      logError('proxmox.node-status', err)
       return null
     }),
     getProxmoxVMs().catch((err) => {
-      console.error('Proxmox VMs error:', err.message)
+      logError('proxmox.vms', err)
       return []
     }),
   ])

@@ -1,3 +1,5 @@
+import { logWarn } from './logger'
+
 export const VENTURE_EVENT_TYPES = [
   'page_view',
   'cta_click',
@@ -97,8 +99,8 @@ export async function recordVentureEventBySlugSafely(
 ): Promise<void> {
   try {
     const result = await recordVentureEventBySlug(supabase, input)
-    if (!result.ok) console.warn('[venture-events]', result.error)
+    if (!result.ok) logWarn('venture-events', result.error)
   } catch (error) {
-    console.warn('[venture-events]', error instanceof Error ? error.message : String(error))
+    logWarn('venture-events', error instanceof Error ? error.message : String(error))
   }
 }

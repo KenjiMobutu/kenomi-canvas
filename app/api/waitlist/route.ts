@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
 import { isValidEmail, isValidSlug } from '@/lib/validation'
+import { logError } from '@/lib/logger'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
 
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.redirect(`${BASE}/${encodeURIComponent(slug)}?waitlist=ok`, { status: 302 })
   } catch (err) {
-    console.error('[waitlist]', err)
+    logError('waitlist', err)
     return apiError('Erreur serveur', 500)
   }
 }

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { isAllowedWebhookUrl } from '@/lib/security'
 import { isRateLimited } from '@/lib/rate-limit'
+import { logError } from '@/lib/logger'
 import { apiError } from '@/lib/api-response'
 import { buildRunResult } from '@/lib/automation-run-status'
 import { insertAuditEvent } from '@/lib/audit-log'
@@ -84,8 +85,8 @@ export async function POST(req: NextRequest) {
     .eq('user_id', user!.id)
 
   const [runRes, wfRes] = await Promise.all([runInsert, wfUpdate])
-  if (runRes.error) console.error('[trigger] automation_runs insert failed:', runRes.error.message)
-  if (wfRes.error) console.error('[trigger] workflow update failed:', wfRes.error.message)
+  if (runRes.error) logError('automation.trigger.runs', runRes.error.message)
+  if (wfRes.error) logError('automation.trigger.workflow', wfRes.error.message)
 
   await insertAuditEvent(supabase, {
     user_id: user!.id,

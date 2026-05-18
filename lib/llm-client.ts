@@ -9,6 +9,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { logWarn } from './logger'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -194,16 +195,12 @@ export async function llmChat(
   } catch (ollamaError) {
     const reason = ollamaError instanceof Error ? ollamaError.message : String(ollamaError)
 
-    // Log structuré pour monitoring
-    console.warn(
-      JSON.stringify({
-        event: 'llm_fallback_triggered',
-        reason,
-        ollama_url: OLLAMA_BASE_URL,
-        fallback_model: CLAUDE_FALLBACK_MODEL,
-        timestamp: new Date().toISOString(),
-      })
-    )
+    logWarn('llm.fallback', 'Ollama unavailable, falling back to Claude', {
+      event: 'llm_fallback_triggered',
+      reason,
+      ollama_url: OLLAMA_BASE_URL,
+      fallback_model: CLAUDE_FALLBACK_MODEL,
+    })
 
     // Fallback Claude API
     try {
