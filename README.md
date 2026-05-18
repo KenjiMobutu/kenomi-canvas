@@ -28,6 +28,12 @@ Studio OS pour entrepreneurs solo — gérez vos ventures, automatisez vos workf
 | Automations | n8n (webhooks) |
 | Déploiement | Docker standalone, Coolify self-hosted |
 
+## Architecture Status
+
+Kenomi Canvas est le cockpit du Kenomi AI Venture Studio. Il fournit la gestion des ventures, l'exécution des agents, les triggers n8n, la capture waitlist, la santé de l'infrastructure et le routage LLM local-first.
+
+L'autonomie est intentionnellement supervisée : les actions risquées (paiement, déploiement, publication publique) requièrent une approbation humaine explicite.
+
 ## Architecture de sécurité
 
 - **Mono-utilisateur** : `ALLOWED_EMAIL` dans le middleware bloque tout autre compte
