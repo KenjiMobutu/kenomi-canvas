@@ -1,8 +1,9 @@
+import { timingSafeEqual } from 'crypto'
 import { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
-import { createClient } from '@supabase/supabase-js'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { apiError, apiOk } from '@/lib/api-response'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const USER_TABLES = [
   'venture_pipeline', 'agent_runs', 'agent_configs', 'agent_events',
@@ -51,8 +52,13 @@ export async function DELETE(req: NextRequest) {
     .eq('user_id', user!.id)
     .maybeSingle()
 
-  if (!settings?.deletion_token || settings.deletion_token !== token) {
-    return apiError('Token invalide ou expiré', 403)
+  function safeTokenEqual(a: string, b: string): boolean {
+    if (a.length !== b.length) return false
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+  }
+
+  if (!settings?.deletion_token || !safeTokenEqual(settings.deletion_token, token)) {
+    return apiError('Token invalide ou expiré', 400)
   }
 
   const requestedAt = settings.deletion_requested_at
@@ -60,22 +66,23 @@ export async function DELETE(req: NextRequest) {
     : null
   const expiredMs = 15 * 60 * 1000
   if (!requestedAt || Date.now() - requestedAt.getTime() > expiredMs) {
-    return apiError('Token expiré (15 min). Recommencez avec POST.', 410)
+    await supabaseAdmin.from('user_settings').update({ deletion_token: null, deletion_requested_at: null }).eq('user_id', user!.id)
+    return apiError('Token expiré (15 min). Recommencez avec POST.', 400)
   }
 
-  const adminClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
+  const tableErrors: string[] = []
   for (const table of USER_TABLES) {
-    await adminClient.from(table).delete().eq('user_id', user!.id)
+    const { error } = await supabaseAdmin.from(table).delete().eq('user_id', user!.id)
+    if (error) tableErrors.push(table)
+  }
+  if (tableErrors.length > 0) {
+    return apiError(`Erreur lors de la suppression des données (tables: ${tableErrors.join(', ')})`, 500)
   }
 
-  await adminClient.from('user_settings').delete().eq('user_id', user!.id)
+  await supabaseAdmin.from('user_settings').delete().eq('user_id', user!.id)
 
-  const { error: deleteError } = await adminClient.auth.admin.deleteUser(user!.id)
+  const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user!.id)
   if (deleteError) return apiError('Erreur lors de la suppression du compte', 500)
 
-  return apiOk({ deleted: true })
+  return apiOk({ ok: true })
 }
