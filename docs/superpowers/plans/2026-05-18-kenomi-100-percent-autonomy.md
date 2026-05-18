@@ -17,12 +17,13 @@
 - TypeScript: `npm run typecheck` passes.
 - Tests: `npm test` passes with 240 tests across 37 files.
 - Build: `npm run build` passes and generates 41 app routes.
-- Lint: `npm run lint` passes with 49 existing warnings and 0 errors.
+- Lint: `npm run lint` passes with 51 existing warnings and 0 errors.
 - Smoke HTTP: `npm run smoke` passes against local `next dev`; `/api/health` returns documented `503 degraded` because required dependencies are unavailable locally.
-- Known blocker: local Supabase validation (`supabase start`, `db reset`, `db lint --local`) is blocked because local Postgres/Supabase is not running or reachable in this environment.
-- Known quality gap: `npm run format:check` fails on 133 pre-existing/broad-format files after formatting the files touched by this implementation.
-- Working tree note: implementation/docs changes are uncommitted; local noise also remains (`tsconfig.tsbuildinfo`, `.claude/`, `.superpowers/`).
-- Current implementation status from this plan: 66/70 checklist items complete, about 94%.
+- Supabase validation target: Kenomi uses the self-hosted Supabase on the Coolify VM, not a local Supabase stack.
+- Known blocker: applying the corrected remote migration still needs to be run from an environment allowed to call `https://supabase.kenomi.eu/pg/query`.
+- Formatting baseline: `npm run format`, `npm run format:check`, `npm run typecheck`, `npm test`, `npm run lint`, and `npm run build` pass after the global Prettier pass.
+- Working tree note: only the updated plan, migration runbook formatting and Prettier-normalized `next-env.d.ts` remain uncommitted.
+- Current implementation status from this plan: 67/70 checklist items complete, about 96%.
 
 ## Definition Of Done For 100 Percent
 
@@ -114,9 +115,14 @@ supabase db lint --local
 
 Expected: migrations apply from a clean database and `db lint` returns no fatal errors.
 
-Status: blocked in the current sandbox because `supabase start` cannot access
-the Docker socket. Added `lib/migration-order.test.ts` as a static regression
-guard for the identified `decisions` ordering failure.
+Status: local Supabase is not the target architecture. Remote Coolify Supabase
+REST/Auth/`pg/query` were reachable, and the remote schema check showed
+`autonomy_jobs`, `autonomy_actions`, `human_approvals`, and `venture_events`
+missing. Applying `20260518_autonomy_core.sql` first failed because the existing
+remote `payments` table lacked `customer_email`; the migration now adds that
+column with `IF NOT EXISTS` before dropping `NOT NULL`. Added
+`scripts/validate-supabase-remote.mjs` and `npm run supabase:validate` for
+repeatable remote validation.
 
 ### Task 0.3: Formatting Baseline
 
@@ -130,7 +136,7 @@ guard for the identified `decisions` ordering failure.
 npm run format:check
 ```
 
-- [ ] If the team accepts a formatting-only change, run:
+- [x] If the team accepts a formatting-only change, run:
 
 ```bash
 npm run format
@@ -142,9 +148,9 @@ npm run build
 
 - [ ] Keep this as a dedicated commit with no behavioral code changes.
 
-Status: `npm run format:check` currently fails on 114 files. Formatting is
-intentionally left as a dedicated future change to avoid mixing broad Prettier
-churn with autonomy implementation work.
+Status: formatting baseline is now applied. `npm run format:check` passes; the
+remaining unchecked item is creating a dedicated formatting commit, which was
+not performed because this session has not been asked to commit.
 
 ---
 
@@ -400,6 +406,9 @@ export interface MarketingPublisher {
 Status: implementation is present in `supabase/migrations/20260518_marketing_drafts.sql`,
 `lib/marketing/*`, `lib/autonomy/run-agent-step.ts`, `lib/autonomy/approval-executor.ts`,
 `app/api/studio/marketing/drafts/route.ts`, and `app/studio/marketing/page.tsx`.
+Browser check attempted on `http://localhost:3000/studio/marketing`; the
+in-app browser redirects to `/login`, so no authenticated Studio session is
+available in this environment.
 
 ---
 

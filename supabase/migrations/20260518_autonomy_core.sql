@@ -76,7 +76,10 @@ CREATE INDEX IF NOT EXISTS human_approvals_action_idx
 ALTER TABLE public.payments
   ADD COLUMN IF NOT EXISTS checkout_url text,
   ADD COLUMN IF NOT EXISTS checkout_mode text,
-  ADD COLUMN IF NOT EXISTS autonomy_action_id uuid REFERENCES public.autonomy_actions(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS customer_email text,
+  ADD COLUMN IF NOT EXISTS autonomy_action_id uuid REFERENCES public.autonomy_actions(id) ON DELETE SET NULL;
+
+ALTER TABLE public.payments
   ALTER COLUMN customer_email DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS payments_autonomy_action_idx
