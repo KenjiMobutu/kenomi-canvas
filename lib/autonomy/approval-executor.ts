@@ -1,5 +1,6 @@
 import { createCoolifyClient, type CoolifyClient } from '@/lib/coolify/client'
 import { getAutonomyConfig, type AutonomyConfig } from './config'
+import { checkBudgetPolicy } from './policy'
 
 type QueryResponse = { data: unknown; error: { message: string } | null }
 
@@ -35,6 +36,39 @@ interface AutonomyActionRow {
   action_type: string
   status: string
   input?: Record<string, unknown> | null
+  estimated_cost_eur?: number | null
+  budget_cap_eur?: number | null
+}
+
+interface VentureSpendRow {
+  venture_id?: string | null
+  amount_eur?: number | null
+}
+
+const BUDGET_RELEVANT_ACTIONS = new Set(['publish_campaign', 'scale_budget'])
+
+async function sumVentureSpend(input: {
+  supabase: ApprovalExecutorSupabase
+  userId: string
+  ventureId?: string | null
+}): Promise<{ ventureSpentEur: number; globalSpentEur: number }> {
+  const { data, error } = await input.supabase
+    .from('venture_events')
+    .select('venture_id, amount_eur, event_type')
+    .eq('user_id', input.userId)
+    .eq('event_type', 'campaign_spend')
+
+  if (error) throw new ApprovalExecutionError(error.message, 500)
+
+  const rows = (data ?? []) as VentureSpendRow[]
+  const globalSpentEur = rows.reduce((sum, r) => sum + (Number(r.amount_eur) || 0), 0)
+  const ventureSpentEur = input.ventureId
+    ? rows
+        .filter((r) => r.venture_id === input.ventureId)
+        .reduce((sum, r) => sum + (Number(r.amount_eur) || 0), 0)
+    : 0
+
+  return { ventureSpentEur, globalSpentEur }
 }
 
 export interface ResolveHumanApprovalInput {
@@ -155,7 +189,7 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
 
   const action = await single<AutonomyActionRow>(
     input.supabase.from('autonomy_actions')
-      .select('id, user_id, venture_id, action_type, status, input')
+      .select('id, user_id, venture_id, action_type, status, input, estimated_cost_eur, budget_cap_eur')
       .eq('id', approval.action_id)
       .eq('user_id', input.userId),
     'Action autonome introuvable'
@@ -223,6 +257,49 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
       actionType: action.action_type,
       status: input.decision,
       executed: false,
+    }
+  }
+
+  if (BUDGET_RELEVANT_ACTIONS.has(action.action_type)) {
+    const { ventureSpentEur, globalSpentEur } = await sumVentureSpend({
+      supabase: input.supabase,
+      userId: input.userId,
+      ventureId: action.venture_id ?? null,
+    })
+
+    // venture-cap not stored yet — only action and global caps active
+    const budgetCheck = checkBudgetPolicy({
+      estimatedCostEur: Number(action.estimated_cost_eur ?? 0),
+      actionCapEur: action.budget_cap_eur ?? undefined,
+      ventureSpentEur,
+      ventureSpendCapEur: Number.POSITIVE_INFINITY,
+      globalSpentEur,
+      globalCapEur: config.globalBudgetCapEur,
+    })
+
+    if (!budgetCheck.ok) {
+      await update(
+        input.supabase.from('autonomy_actions')
+          .update({
+            status: 'blocked',
+            output: {
+              approved: true,
+              budget_breach: budgetCheck.reason,
+              detail: budgetCheck.detail,
+              action_type: action.action_type,
+            },
+            updated_at: nowIso,
+          })
+          .eq('id', action.id)
+          .eq('user_id', input.userId)
+      )
+      return {
+        approvalId: approval.id,
+        actionId: action.id,
+        actionType: action.action_type,
+        status: input.decision,
+        executed: false,
+      }
     }
   }
 

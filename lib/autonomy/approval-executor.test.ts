@@ -8,6 +8,7 @@ type TableName =
   | 'landing_pages'
   | 'budget_requests'
   | 'campaigns'
+  | 'venture_events'
 
 interface TableRow {
   id?: string
@@ -29,6 +30,7 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
     landing_pages: seed.landing_pages ?? [],
     budget_requests: seed.budget_requests ?? [],
     campaigns: seed.campaigns ?? [],
+    venture_events: seed.venture_events ?? [],
   }
 
   return {
@@ -282,5 +284,55 @@ describe('resolveHumanApproval — dry-run', () => {
     })
     expect(result.executed).toBe(true)
     expect(fakeSupabase.tables.ventures[0].statut).toBe('stopped')
+  })
+})
+
+describe('resolveHumanApproval — budget policy', () => {
+  it('bloque publish_campaign si global spend dépasse le cap', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-b1', user_id: 'u1', action_id: 'act-b1', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-b1', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
+        venture_id: 'v1',
+        estimated_cost_eur: 50,
+        budget_cap_eur: 100,
+      }],
+      venture_events: [
+        { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: 80 },
+      ],
+    })
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-b1',
+      decision: 'approved',
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100 },
+    })
+    expect(result.executed).toBe(false)
+    const action = fakeSupabase.tables.autonomy_actions[0]
+    expect(action.status).toBe('blocked')
+    expect((action.output as Record<string, unknown>).budget_breach).toBe('global_cap_exceeded')
+  })
+
+  it('bloque publish_campaign si cost > action cap', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-b2', user_id: 'u1', action_id: 'act-b2', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-b2', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
+        venture_id: 'v1',
+        estimated_cost_eur: 200,
+        budget_cap_eur: 100,
+      }],
+      venture_events: [],
+    })
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-b2',
+      decision: 'approved',
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+    })
+    expect(result.executed).toBe(false)
+    expect((fakeSupabase.tables.autonomy_actions[0].output as Record<string, unknown>).budget_breach).toBe('action_cap_exceeded')
   })
 })

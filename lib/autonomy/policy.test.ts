@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { requiresApproval } from './policy'
+import { checkBudgetPolicy, requiresApproval } from './policy'
 import type { AutonomyAction } from './types'
 
 function action(overrides: Partial<AutonomyAction>): AutonomyAction {
@@ -36,5 +36,77 @@ describe('requiresApproval', () => {
 
   it('bloque toute action au-dessus du budget autorisé', () => {
     expect(requiresApproval(action({ estimatedCostEur: 75, budgetCapEur: 50 }))).toBe(true)
+  })
+})
+
+describe('checkBudgetPolicy', () => {
+  it('pass quand tout est sous les caps', () => {
+    expect(checkBudgetPolicy({
+      estimatedCostEur: 10,
+      actionCapEur: 50,
+      ventureSpentEur: 20,
+      ventureSpendCapEur: 100,
+      globalSpentEur: 50,
+      globalCapEur: 500,
+    })).toEqual({ ok: true })
+  })
+
+  it('fail si cost > actionCap', () => {
+    const result = checkBudgetPolicy({
+      estimatedCostEur: 100,
+      actionCapEur: 50,
+      ventureSpentEur: 0,
+      ventureSpendCapEur: 1000,
+      globalSpentEur: 0,
+      globalCapEur: 1000,
+    })
+    expect(result).toMatchObject({ ok: false, reason: 'action_cap_exceeded' })
+  })
+
+  it('fail si venture spend + cost > ventureCap', () => {
+    const result = checkBudgetPolicy({
+      estimatedCostEur: 60,
+      actionCapEur: 100,
+      ventureSpentEur: 950,
+      ventureSpendCapEur: 1000,
+      globalSpentEur: 0,
+      globalCapEur: 10000,
+    })
+    expect(result).toMatchObject({ ok: false, reason: 'venture_cap_exceeded' })
+  })
+
+  it('fail si global spend + cost > globalCap', () => {
+    const result = checkBudgetPolicy({
+      estimatedCostEur: 60,
+      actionCapEur: 100,
+      ventureSpentEur: 0,
+      ventureSpendCapEur: 10000,
+      globalSpentEur: 950,
+      globalCapEur: 1000,
+    })
+    expect(result).toMatchObject({ ok: false, reason: 'global_cap_exceeded' })
+  })
+
+  it('actionCap undefined => pas de plafond action', () => {
+    const result = checkBudgetPolicy({
+      estimatedCostEur: 9999,
+      ventureSpentEur: 0,
+      ventureSpendCapEur: 100000,
+      globalSpentEur: 0,
+      globalCapEur: 100000,
+    })
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('priorité: action_cap vérifié avant venture_cap avant global_cap', () => {
+    const result = checkBudgetPolicy({
+      estimatedCostEur: 100,
+      actionCapEur: 50,
+      ventureSpentEur: 0,
+      ventureSpendCapEur: 0,
+      globalSpentEur: 0,
+      globalCapEur: 0,
+    })
+    expect(result).toMatchObject({ ok: false, reason: 'action_cap_exceeded' })
   })
 })
