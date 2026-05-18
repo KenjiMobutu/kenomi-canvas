@@ -108,6 +108,32 @@ HEALTH_DATABASE_REQUIRED=false
 
 Les équivalents `HEALTH_SUPABASE_REQUIRED=false` et `HEALTH_STORAGE_REQUIRED=false` existent pour isoler un incident ou un environnement incomplet, mais ne doivent pas être utilisés en production autonome.
 
+### Métriques Prometheus
+
+`GET /api/metrics` expose un endpoint au format Prometheus avec :
+
+- `kenomi_process_*` — CPU, mémoire, event loop (defaults `prom-client`)
+- `kenomi_nodejs_*` — version, GC, heap
+- `kenomi_agent_runs_total{agent_id, provider, fallback}` — compteur par run
+- `kenomi_agent_run_cost_usd_total{agent_id, model}` — coût cumulé en USD
+- `kenomi_http_requests_total{method, route, status}` — compteur HTTP
+- `kenomi_http_request_duration_ms{method, route, status}` — histogramme
+
+Protection optionnelle via `METRICS_TOKEN` : si défini, l'endpoint exige `Authorization: Bearer <token>`. Sinon ouvert.
+
+Scrape config Prometheus exemple :
+
+```yaml
+scrape_configs:
+  - job_name: kenomi-canvas
+    metrics_path: /api/metrics
+    static_configs:
+      - targets: ['lab.kenomi.eu:443']
+    scheme: https
+    authorization:
+      credentials: <METRICS_TOKEN>
+```
+
 ### Runbooks opérationnels
 
 - [Incident autonomie](docs/runbooks/autonomy-incident.md)

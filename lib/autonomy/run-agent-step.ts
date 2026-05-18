@@ -14,6 +14,7 @@ import {
 } from '@/lib/pipeline-types'
 import { materializeBuilderOutput } from '@/lib/venture-materializer'
 import { buildCampaignDrafts, type MarketingOutputShape } from '@/lib/marketing/campaign-drafts'
+import { agentRunsTotal, agentRunCostUsdTotal } from '@/lib/metrics/prometheus'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -356,6 +357,15 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         })
         .select('id')
     )
+
+    agentRunsTotal.inc({
+      agent_id: agentId,
+      provider: llmResult.provider,
+      fallback: llmResult.fallback_triggered ? 'true' : 'false',
+    })
+    if (costUsd !== null && costUsd > 0) {
+      agentRunCostUsdTotal.inc({ agent_id: agentId, model: usedModel }, costUsd)
+    }
 
     await insertAuditEvent(supabase, {
       user_id: userId,
