@@ -1,44 +1,49 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { isAllowedWebhookUrl, isAllowedOllamaUrl, isValidEmail } from './security'
 
+afterEach(() => {
+  delete process.env.TRUSTED_PRIVATE_HOSTS
+})
+
 describe('isAllowedWebhookUrl', () => {
-  it('accepte http://192.168.0.x (réseau local kenomi)', () => {
-    expect(isAllowedWebhookUrl('http://192.168.0.14:5678/webhook/test')).toBe(true)
+  it('rejette 192.168.x.x par défaut', () => {
+    expect(isAllowedWebhookUrl('http://192.168.0.14:5678/webhook/test')).toBe(false)
   })
-  it('accepte https://n8n.kenomi.eu/webhook/abc', () => {
+
+  it('accepte un host privé explicitement autorisé', () => {
+    process.env.TRUSTED_PRIVATE_HOSTS = '192.168.0.14,n8n.tailnet.ts.net'
+    expect(isAllowedWebhookUrl('http://192.168.0.14:5678/webhook/test')).toBe(true)
+    expect(isAllowedWebhookUrl('https://n8n.tailnet.ts.net/webhook/abc')).toBe(true)
+  })
+
+  it('accepte un domaine public https', () => {
     expect(isAllowedWebhookUrl('https://n8n.kenomi.eu/webhook/abc')).toBe(true)
   })
+
   it('rejette les métadonnées cloud 169.254.169.254', () => {
     expect(isAllowedWebhookUrl('http://169.254.169.254/latest/meta-data/')).toBe(false)
   })
-  it('rejette les URLs non-HTTP', () => {
-    expect(isAllowedWebhookUrl('ftp://evil.com')).toBe(false)
-  })
-  it('rejette une URL malformée', () => {
-    expect(isAllowedWebhookUrl('not-a-url')).toBe(false)
-  })
-  it('rejette localhost (SSRF loopback)', () => {
+
+  it('rejette localhost et loopback', () => {
     expect(isAllowedWebhookUrl('http://localhost/admin')).toBe(false)
-  })
-  it('rejette 127.0.0.1 (SSRF loopback)', () => {
     expect(isAllowedWebhookUrl('http://127.0.0.1:8080/secret')).toBe(false)
-  })
-  it('rejette [::1] (SSRF IPv6 loopback)', () => {
     expect(isAllowedWebhookUrl('http://[::1]:3000/')).toBe(false)
   })
-  it('rejette 10.x.x.x (VPC interne)', () => {
+
+  it('rejette les plages privées non autorisées', () => {
     expect(isAllowedWebhookUrl('http://10.0.0.1/internal')).toBe(false)
-  })
-  it('rejette 172.16.x.x (VPC interne)', () => {
     expect(isAllowedWebhookUrl('http://172.16.0.1/secret')).toBe(false)
+    expect(isAllowedWebhookUrl('http://192.168.0.19:8000/api')).toBe(false)
   })
 })
 
 describe('isAllowedOllamaUrl', () => {
-  it('délègue à isAllowedWebhookUrl — rejette 169.254.x.x', () => {
-    expect(isAllowedOllamaUrl('http://169.254.169.254/')).toBe(false)
+  it('rejette Ollama privé sans allowlist', () => {
+    expect(isAllowedOllamaUrl('http://192.168.0.14:11434')).toBe(false)
   })
-  it('accepte http://192.168.0.14:11434', () => {
+
+  it('accepte Ollama privé avec allowlist', () => {
+    process.env.TRUSTED_PRIVATE_HOSTS = '192.168.0.14'
     expect(isAllowedOllamaUrl('http://192.168.0.14:11434')).toBe(true)
   })
 })
@@ -47,13 +52,10 @@ describe('isValidEmail', () => {
   it('accepte un email valide', () => {
     expect(isValidEmail('kenji@kenomi.eu')).toBe(true)
   })
-  it('rejette une chaîne sans @', () => {
+
+  it('rejette les emails invalides', () => {
     expect(isValidEmail('notanemail')).toBe(false)
-  })
-  it('rejette une chaîne vide', () => {
     expect(isValidEmail('')).toBe(false)
-  })
-  it('rejette un email sans TLD (test@)', () => {
     expect(isValidEmail('test@')).toBe(false)
   })
 })

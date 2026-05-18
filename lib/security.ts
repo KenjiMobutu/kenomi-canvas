@@ -12,7 +12,7 @@ export function isAllowedWebhookUrl(url: string): boolean {
 
     if (getTrustedHosts().has(hostname.toLowerCase())) return true
 
-    const SSRF_BLOCKED = /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
+    const SSRF_BLOCKED = /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
     if (SSRF_BLOCKED.test(hostname)) return false
     if (/^\d+$/.test(hostname)) return false
     return true
@@ -28,7 +28,7 @@ export function isAllowedOllamaUrl(url: string): boolean {
 
     if (getTrustedHosts().has(hostname.toLowerCase())) return true
 
-    const SSRF_BLOCKED = /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
+    const SSRF_BLOCKED = /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
     if (SSRF_BLOCKED.test(hostname)) return false
     if (/^\d+$/.test(hostname)) return false
     return true
