@@ -25,11 +25,35 @@ export type LLMConfig = {
   timeout_ms?: number
 }
 
+export type LLMUsage = {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
 export type LLMResponse = {
   content: string
   provider: 'ollama' | 'claude'
   model: string
   fallback_triggered: boolean
+  usage?: LLMUsage
+}
+
+const PRICING_PER_1K_TOKENS_USD: Record<string, { input: number; output: number }> = {
+  'claude-sonnet-4-5': { input: 0.003, output: 0.015 },
+  'claude-sonnet-4-6': { input: 0.003, output: 0.015 },
+  'claude-haiku-4-5-20251001': { input: 0.0008, output: 0.004 },
+  'qwen3:8b': { input: 0, output: 0 },
+  'qwen3:14b': { input: 0, output: 0 },
+  'llama3.1:8b': { input: 0, output: 0 },
+  'mistral:7b': { input: 0, output: 0 },
+  'codestral:latest': { input: 0, output: 0 },
+}
+
+export function computeCostUsd(model: string, usage: LLMUsage): number {
+  const p = PRICING_PER_1K_TOKENS_USD[model]
+  if (!p) return 0
+  return (usage.prompt_tokens * p.input + usage.completion_tokens * p.output) / 1000
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -46,7 +70,10 @@ function buildOllamaMessages(messages: LLMMessage[], system?: string): LLMMessag
   return [{ role: 'user', content: `[System: ${system}]` }, ...messages]
 }
 
-async function callOllama(messages: LLMMessage[], config: LLMConfig): Promise<string> {
+async function callOllama(
+  messages: LLMMessage[],
+  config: LLMConfig
+): Promise<{ content: string; usage?: LLMUsage }> {
   const model = config.model ?? OLLAMA_DEFAULT_MODEL
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), config.timeout_ms ?? OLLAMA_TIMEOUT_MS)
@@ -79,13 +106,29 @@ async function callOllama(messages: LLMMessage[], config: LLMConfig): Promise<st
       throw new Error('Ollama: réponse vide ou malformée')
     }
 
-    return content
+    const promptTokens =
+      typeof data?.prompt_eval_count === 'number' ? data.prompt_eval_count : undefined
+    const completionTokens =
+      typeof data?.eval_count === 'number' ? data.eval_count : undefined
+    const usage =
+      promptTokens !== undefined && completionTokens !== undefined
+        ? {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: promptTokens + completionTokens,
+          }
+        : undefined
+
+    return { content, usage }
   } finally {
     clearTimeout(timer)
   }
 }
 
-async function callClaude(messages: LLMMessage[], config: LLMConfig): Promise<string> {
+async function callClaude(
+  messages: LLMMessage[],
+  config: LLMConfig
+): Promise<{ content: string; usage?: LLMUsage }> {
   const client = new Anthropic()
 
   const response = await client.messages.create({
@@ -103,7 +146,15 @@ async function callClaude(messages: LLMMessage[], config: LLMConfig): Promise<st
     throw new Error('Claude: bloc de contenu inattendu')
   }
 
-  return block.text
+  const usage = response.usage
+    ? {
+        prompt_tokens: response.usage.input_tokens,
+        completion_tokens: response.usage.output_tokens,
+        total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+      }
+    : undefined
+
+  return { content: block.text, usage }
 }
 
 // ─── Vérification santé Ollama ────────────────────────────────────────────────
@@ -132,12 +183,13 @@ export async function llmChat(
 
   // Tentative Ollama
   try {
-    const content = await callOllama(messages, config)
+    const result = await callOllama(messages, config)
     return {
-      content,
+      content: result.content,
       provider: 'ollama',
       model,
       fallback_triggered: false,
+      usage: result.usage,
     }
   } catch (ollamaError) {
     const reason = ollamaError instanceof Error ? ollamaError.message : String(ollamaError)
@@ -155,12 +207,13 @@ export async function llmChat(
 
     // Fallback Claude API
     try {
-      const content = await callClaude(messages, config)
+      const result = await callClaude(messages, config)
       return {
-        content,
+        content: result.content,
         provider: 'claude',
         model: CLAUDE_FALLBACK_MODEL,
         fallback_triggered: true,
+        usage: result.usage,
       }
     } catch (claudeError) {
       const claudeReason = claudeError instanceof Error ? claudeError.message : String(claudeError)

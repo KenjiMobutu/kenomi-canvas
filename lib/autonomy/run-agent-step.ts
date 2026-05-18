@@ -1,6 +1,6 @@
 import { insertAuditEvent } from '@/lib/audit-log'
 import { parseAgentOutput, type AgentOutput } from '@/lib/agent-output-schemas'
-import { llmChat, type LLMMessage, type LLMResponse } from '@/lib/llm-client'
+import { llmChat, computeCostUsd, type LLMMessage, type LLMResponse } from '@/lib/llm-client'
 import {
   aggregateVentureMetrics,
   buildDecisionMetricsContext,
@@ -336,6 +336,8 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     const content = llmResult.content
     const durationMs = Math.max(0, now().getTime() - startMs)
     const usedModel = llmResult.model
+    const usage = llmResult.usage
+    const costUsd = usage ? computeCostUsd(usedModel, usage) : null
 
     const agentRun = await single<{ id?: string }>(
       supabase
@@ -347,6 +349,10 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           prompt: userPrompt,
           response: content,
           duration_ms: durationMs,
+          prompt_tokens: usage?.prompt_tokens ?? null,
+          completion_tokens: usage?.completion_tokens ?? null,
+          total_tokens: usage?.total_tokens ?? null,
+          cost_usd: costUsd,
         })
         .select('id')
     )

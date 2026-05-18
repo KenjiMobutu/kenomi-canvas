@@ -765,6 +765,11 @@ export default function AnalyticsPage() {
   const [mrrSparkSeries, setMrrSparkSeries] = useState<number[]>([])
   const [liveSnapshots, setLiveSnapshots] = useState<LiveVentureMetrics[]>([])
   const [liveLoading, setLiveLoading] = useState(true)
+  const [llmCost, setLlmCost] = useState<{
+    totalUsd: number
+    totalTokens: number
+    runCount: number
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -781,6 +786,28 @@ export default function AnalyticsPage() {
       })
       .finally(() => {
         if (!cancelled) setLiveLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/studio/analytics/llm-cost')
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return
+        if (data?.ok) {
+          setLlmCost({
+            totalUsd: Number(data.totalUsd) || 0,
+            totalTokens: Number(data.totalTokens) || 0,
+            runCount: Number(data.runCount) || 0,
+          })
+        }
+      })
+      .catch(() => {
+        /* silencieux */
       })
     return () => {
       cancelled = true
@@ -1095,7 +1122,7 @@ export default function AnalyticsPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(7, 1fr)',
+                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(8, 1fr)',
                 gap: 10,
               }}
             >
@@ -1131,6 +1158,11 @@ export default function AnalyticsPage() {
                   value:
                     live_metrics.spendEur > 0 ? `${(live_metrics.roi * 100).toFixed(0)}%` : '—',
                   color: live_metrics.roi >= 0 ? emerald : rose,
+                },
+                {
+                  label: 'Coût LLM',
+                  value: llmCost ? `$${llmCost.totalUsd.toFixed(2)}` : '—',
+                  color: fuchsia,
                 },
               ].map((kpi) => (
                 <div
