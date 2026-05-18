@@ -12,7 +12,7 @@ export function sanitizeAuditMetadata(input: Record<string, unknown>): Record<st
 export async function insertAuditEvent(
   supabase: {
     from: (table: string) => {
-      insert: (row: unknown) => Promise<{ error: { message: string } | null }>
+      insert: (row: Record<string, unknown>) => PromiseLike<{ error: { message: string } | null }>
     }
   },
   event: {

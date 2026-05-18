@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       prompt: userPrompt, response: content, duration_ms: durationMs,
     })
 
-    await insertAuditEvent(supabase as unknown as Parameters<typeof insertAuditEvent>[0], {
+    await insertAuditEvent(supabase, {
       user_id: user!.id,
       agent_id: agentId,
       event_type: 'agent.run.completed',
