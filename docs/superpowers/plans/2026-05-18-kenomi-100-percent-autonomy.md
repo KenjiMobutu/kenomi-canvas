@@ -12,14 +12,17 @@
 
 ## Current Verified Baseline
 
+- Branch: `codex-finalisation-alignement-kenomi`.
+- Git delta versus `main`: 22 commits ahead, plus the current uncommitted implementation/docs delta.
 - TypeScript: `npm run typecheck` passes.
-- Tests: `npm test` passes with 161 tests.
-- Build: `npm run build` passes.
-- Lint: `npm run lint` passes with 47 existing warnings.
-- Smoke HTTP: protected Studio pages redirect to `/login`; protected Studio APIs return `401` without auth.
-- Known blocker: `/api/health` returns `503` because Prisma cannot reach the configured database host in the current environment.
-- Known quality gap: `npm run format:check` fails on 111 files.
-- Existing autonomy plan completion: 58/103 checklist items, about 56%.
+- Tests: `npm test` passes with 240 tests across 37 files.
+- Build: `npm run build` passes and generates 41 app routes.
+- Lint: `npm run lint` passes with 49 existing warnings and 0 errors.
+- Smoke HTTP: `npm run smoke` passes against local `next dev`; `/api/health` returns documented `503 degraded` because required dependencies are unavailable locally.
+- Known blocker: local Supabase validation (`supabase start`, `db reset`, `db lint --local`) is blocked because local Postgres/Supabase is not running or reachable in this environment.
+- Known quality gap: `npm run format:check` fails on 133 pre-existing/broad-format files after formatting the files touched by this implementation.
+- Working tree note: implementation/docs changes are uncommitted; local noise also remains (`tsconfig.tsbuildinfo`, `.claude/`, `.superpowers/`).
+- Current implementation status from this plan: 66/70 checklist items complete, about 94%.
 
 ## Definition Of Done For 100 Percent
 
@@ -45,6 +48,7 @@ Kenomi is considered 100% autonomous when the system can perform this full loop 
 ### Task 0.1: Fix Health And Database Readiness
 
 **Files:**
+
 - Modify: `app/api/health/route.ts`
 - Modify: `lib/health-check.ts`
 - Test: `lib/health-check.test.ts`
@@ -92,6 +96,7 @@ npm run build
 ### Task 0.2: Validate And Repair Migration Ordering
 
 **Files:**
+
 - Modify: `supabase/migrations/20260516_audit_db_fixes2.sql`
 - Modify: `supabase/migrations/20260518_autonomy_core.sql`
 - Create: `docs/runbooks/database-migrations.md`
@@ -116,6 +121,7 @@ guard for the identified `decisions` ordering failure.
 ### Task 0.3: Formatting Baseline
 
 **Files:**
+
 - Modify: all files changed by Prettier
 
 - [x] Run:
@@ -147,6 +153,7 @@ churn with autonomy implementation work.
 ### Task 1.1: Add Stripe Server Adapter
 
 **Files:**
+
 - Modify: `package.json`
 - Create: `lib/stripe/server.ts`
 - Create: `lib/stripe/server.test.ts`
@@ -187,6 +194,7 @@ npm run typecheck
 ### Task 1.2: Create Checkout Action Behind Approval
 
 **Files:**
+
 - Create: `lib/stripe/checkout-action.ts`
 - Create: `lib/stripe/checkout-action.test.ts`
 - Create: `app/api/studio/stripe/checkout/route.ts`
@@ -219,20 +227,23 @@ export function buildCheckoutSessionParams(input: {
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
     metadata: { venture_id: input.ventureId },
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: input.payment.price_currency.toLowerCase(),
-        unit_amount: input.payment.price_amount,
-        product_data: {
-          name: input.payment.product_name,
-          description: input.payment.checkout_description,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: input.payment.price_currency.toLowerCase(),
+          unit_amount: input.payment.price_amount,
+          product_data: {
+            name: input.payment.product_name,
+            description: input.payment.checkout_description,
+          },
+          recurring:
+            input.payment.billing === 'one_time'
+              ? undefined
+              : { interval: input.payment.billing === 'yearly' ? 'year' : 'month' },
         },
-        recurring: input.payment.billing === 'one_time'
-          ? undefined
-          : { interval: input.payment.billing === 'yearly' ? 'year' : 'month' },
       },
-    }],
+    ],
   }
 }
 ```
@@ -254,6 +265,7 @@ npm run build
 ### Task 1.3: Stripe Webhook
 
 **Files:**
+
 - Create: `app/api/stripe/webhook/route.ts`
 - Create: `lib/stripe/webhook-handler.ts`
 - Create: `lib/stripe/webhook-handler.test.ts`
@@ -277,6 +289,7 @@ npm run build
 ### Task 2.1: Coolify Client
 
 **Files:**
+
 - Create: `lib/coolify/client.ts`
 - Create: `lib/coolify/client.test.ts`
 - Modify: `app/studio/settings/page.tsx`
@@ -296,6 +309,7 @@ export interface CoolifyClient {
 ### Task 2.2: Deployment Action And Route
 
 **Files:**
+
 - Create: `app/api/studio/deployments/route.ts`
 - Create: `lib/deployments/deploy-action.ts`
 - Create: `lib/deployments/deploy-action.test.ts`
@@ -315,12 +329,13 @@ export interface CoolifyClient {
 ### Task 3.1: Campaign Draft Schema
 
 **Files:**
+
 - Modify: `supabase/migrations/20260518_autonomy_core.sql`
 - Create: `lib/marketing/campaign-drafts.ts`
 - Create: `lib/marketing/campaign-drafts.test.ts`
 - Modify: `lib/autonomy/run-agent-step.ts`
 
-- [ ] Add `campaign_drafts`:
+- [x] Add `campaign_drafts`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS public.campaign_drafts (
@@ -337,20 +352,21 @@ CREATE TABLE IF NOT EXISTS public.campaign_drafts (
 );
 ```
 
-- [ ] After Marketing output, create one draft per channel/message pair.
-- [ ] For publishable channels, create `autonomy_actions` `publish_campaign` and approval.
-- [ ] Tests verify drafts are created from Marketing output.
+- [x] After Marketing output, create one draft per channel/message pair.
+- [x] For publishable channels, create `autonomy_actions` `publish_campaign` and approval.
+- [x] Tests verify drafts are created from Marketing output.
 
 ### Task 3.2: Publishing Adapters
 
 **Files:**
+
 - Create: `lib/marketing/adapters/types.ts`
 - Create: `lib/marketing/adapters/mock.ts`
 - Create: `lib/marketing/publish-action.ts`
 - Create: `lib/marketing/publish-action.test.ts`
 - Modify: `lib/autonomy/approval-executor.ts`
 
-- [ ] Define adapter interface:
+- [x] Define adapter interface:
 
 ```ts
 export interface MarketingPublisher {
@@ -362,23 +378,28 @@ export interface MarketingPublisher {
 }
 ```
 
-- [ ] Approved `publish_campaign` executes adapter.
-- [ ] Insert `venture_events` type `campaign_published`.
-- [ ] Insert `venture_events` type `campaign_spend` when budget is present.
-- [ ] Tests cover approved, rejected, adapter failure and retry-safe output.
+- [x] Approved `publish_campaign` executes adapter.
+- [x] Insert `venture_events` type `campaign_published`.
+- [x] Insert `venture_events` type `campaign_spend` when budget is present.
+- [x] Tests cover approved, rejected, adapter failure and retry-safe output.
 
 ### Task 3.3: Marketing Approval UI
 
 **Files:**
+
 - Modify: `app/studio/marketing/page.tsx`
 - Reuse: `app/api/studio/autonomy/jobs/route.ts`
 - Reuse: `lib/autonomy/approval-view-model.ts`
 
-- [ ] Show campaign drafts by status.
-- [ ] Show pending publish approvals.
-- [ ] Add Approve/Reject buttons calling existing autonomy PATCH.
-- [ ] Add refresh state and error toast.
+- [x] Show campaign drafts by status.
+- [x] Show pending publish approvals.
+- [x] Add Approve/Reject buttons calling existing autonomy PATCH.
+- [x] Add refresh state and error toast.
 - [ ] Run browser smoke test for `/studio/marketing` authenticated when a test session is available.
+
+Status: implementation is present in `supabase/migrations/20260518_marketing_drafts.sql`,
+`lib/marketing/*`, `lib/autonomy/run-agent-step.ts`, `lib/autonomy/approval-executor.ts`,
+`app/api/studio/marketing/drafts/route.ts`, and `app/studio/marketing/page.tsx`.
 
 ---
 
@@ -387,13 +408,14 @@ export interface MarketingPublisher {
 ### Task 4.1: Replace Decorative Analytics
 
 **Files:**
+
 - Modify: `app/studio/analytics/page.tsx`
 - Modify: `app/api/studio/analytics/ventures/route.ts`
 - Reuse: `lib/metrics/venture-metrics.ts`
 - Test: `lib/metrics/venture-metrics.test.ts`
 
-- [ ] Replace hardcoded KPIs with `/api/studio/analytics/ventures`.
-- [ ] Show:
+- [x] Replace hardcoded KPIs with `/api/studio/analytics/ventures`.
+- [x] Show:
   - visits
   - waitlist signups
   - signup rate
@@ -401,18 +423,23 @@ export interface MarketingPublisher {
   - campaign spend
   - profit
   - ROI
-- [ ] Empty state says no events captured yet.
-- [ ] Tests verify aggregation with zero revenue, positive ROI, negative ROI.
+- [x] Empty state says no events captured yet.
+- [x] Tests verify aggregation with zero revenue, positive ROI, negative ROI.
 
 ### Task 4.2: Decision Metrics Snapshot
 
 **Files:**
+
 - Modify: `lib/autonomy/run-agent-step.ts`
 - Modify: `lib/autonomy/run-agent-step.test.ts`
 - Modify: `lib/metrics/venture-metrics.ts`
 
-- [ ] Store full metrics snapshot in `decisions.metrics_snapshot`, not only confidence and next step.
-- [ ] Tests verify Decision output includes visits/revenue/spend/profit/roi snapshot.
+- [x] Store full metrics snapshot in `decisions.metrics_snapshot`, not only confidence and next step.
+- [x] Tests verify Decision output includes visits/revenue/spend/profit/roi snapshot.
+
+Status: implementation is present in `app/api/studio/analytics/ventures/route.ts`,
+`app/studio/analytics/page.tsx`, `lib/metrics/venture-metrics.ts`, and
+`lib/autonomy/run-agent-step.ts`.
 
 ---
 
@@ -421,13 +448,14 @@ export interface MarketingPublisher {
 ### Task 5.1: Global Autonomy Config
 
 **Files:**
+
 - Create: `lib/autonomy/config.ts`
 - Create: `lib/autonomy/config.test.ts`
 - Modify: `lib/autonomy/run-agent-step.ts`
 - Modify: `lib/autonomy/approval-executor.ts`
 - Modify: `app/api/studio/agents/orchestrate/route.ts`
 
-- [ ] Implement:
+- [x] Implement:
 
 ```ts
 export interface AutonomyConfig {
@@ -445,24 +473,29 @@ export function getAutonomyConfig(env: NodeJS.ProcessEnv = process.env): Autonom
 }
 ```
 
-- [ ] If disabled, orchestrator returns no executions and logs blocked reason.
-- [ ] If dry-run, approved external actions mark output `{ dry_run: true }` and do not call Stripe/Coolify/marketing adapters.
-- [ ] Tests cover disabled, dry-run and enabled.
+- [x] If disabled, orchestrator returns no executions and logs blocked reason.
+- [x] If dry-run, approved external actions mark output `{ dry_run: true }` and do not call Stripe/Coolify/marketing adapters.
+- [x] Tests cover disabled, dry-run and enabled.
 
 ### Task 5.2: Budget Policy
 
 **Files:**
+
 - Modify: `lib/autonomy/policy.ts`
 - Modify: `lib/autonomy/policy.test.ts`
 - Modify: `lib/autonomy/approval-executor.ts`
 - Modify: `app/studio/agents/page.tsx`
 
-- [ ] Add budget checks for:
+- [x] Add budget checks for:
   - `estimatedCostEur > action.budgetCapEur`
   - total venture spend over cap
   - global spend over cap
-- [ ] UI displays budget breach reason in Approval Gates.
-- [ ] Tests cover budget pass, action cap fail, venture cap fail, global cap fail.
+- [x] UI displays budget breach reason in Approval Gates.
+- [x] Tests cover budget pass, action cap fail, venture cap fail, global cap fail.
+
+Status: implementation is present in `lib/autonomy/config.ts`,
+`lib/autonomy/policy.ts`, `lib/autonomy/approval-executor.ts`,
+`app/api/studio/agents/orchestrate/route.ts`, and `app/studio/agents/page.tsx`.
 
 ---
 
@@ -471,13 +504,14 @@ export function getAutonomyConfig(env: NodeJS.ProcessEnv = process.env): Autonom
 ### Task 6.1: E2E Test Harness With Fakes
 
 **Files:**
+
 - Create: `lib/autonomy/full-loop.test.ts`
 - Reuse: `lib/autonomy/run-agent-step.ts`
 - Reuse: `lib/autonomy/approval-executor.ts`
 - Reuse: `lib/venture-events.ts`
 - Reuse: `lib/metrics/venture-metrics.ts`
 
-- [ ] Build fake Supabase tables covering:
+- [x] Build fake Supabase tables covering:
   - `agent_configs`
   - `agent_runs`
   - `venture_pipeline`
@@ -490,7 +524,7 @@ export function getAutonomyConfig(env: NodeJS.ProcessEnv = process.env): Autonom
   - `autonomy_jobs`
   - `autonomy_actions`
   - `human_approvals`
-- [ ] Test full loop:
+- [x] Test full loop:
   - Scout creates idea
   - approve idea creates venture
   - Validation stores score
@@ -509,13 +543,19 @@ Expected command:
 npm test lib/autonomy/full-loop.test.ts
 ```
 
+Status: implemented in `lib/autonomy/full-loop.test.ts`. The test exercises the
+supervised full loop from scout to decision, including fake approvals,
+checkout/payment, marketing publish, event aggregation, ROI snapshot and dry-run
+scale approval.
+
 ### Task 6.2: HTTP Smoke Script
 
 **Files:**
+
 - Create: `scripts/smoke-app.mjs`
 - Modify: `package.json`
 
-- [ ] Add script:
+- [x] Add script:
 
 ```json
 {
@@ -525,7 +565,7 @@ npm test lib/autonomy/full-loop.test.ts
 }
 ```
 
-- [ ] Script checks:
+- [x] Script checks:
   - `/login` returns `200`
   - `/dashboard/login` returns `200`
   - `/studio/agents` redirects unauthenticated to `/login`
@@ -534,6 +574,11 @@ npm test lib/autonomy/full-loop.test.ts
   - `/api/waitlist` invalid payload returns `400`
   - `/api/health` status is `200` or documented `503 degraded` with explicit dependency reason
 
+Status: implemented in `scripts/smoke-app.mjs` and exposed as
+`npm run smoke`. The script covers unauthenticated/public HTTP gates and accepts
+a documented degraded `/api/health` response when dependency reasons are
+explicit.
+
 ---
 
 ## Phase 7 — Production Observability And Runbooks
@@ -541,21 +586,27 @@ npm test lib/autonomy/full-loop.test.ts
 ### Task 7.1: Studio Jobs Dashboard
 
 **Files:**
+
 - Modify: `app/studio/agents/page.tsx`
 - Modify: `lib/autonomy/approval-view-model.ts`
 - Create: `lib/autonomy/action-view-model.ts`
 - Create: `lib/autonomy/action-view-model.test.ts`
 
-- [ ] Show jobs, actions and approvals in separate compact tabs:
+- [x] Show jobs, actions and approvals in separate compact tabs:
   - Jobs: queued/running/failed/completed
   - Actions: blocked/running/completed/failed
   - Approvals: pending/approved/rejected
-- [ ] Show duration, provider, model, retry count and last error where available.
-- [ ] Keep Approve/Reject only on pending approvals.
+- [x] Show duration, provider, model, retry count and last error where available.
+- [x] Keep Approve/Reject only on pending approvals.
+
+Status: implemented in `/studio/agents` with compact jobs/actions/approvals
+tabs and `lib/autonomy/action-view-model.ts`. Pending approvals keep the only
+Approve/Reject controls through the existing approval gate panel.
 
 ### Task 7.2: Incident Runbooks
 
 **Files:**
+
 - Create: `docs/runbooks/autonomy-incident.md`
 - Create: `docs/runbooks/stripe-webhook.md`
 - Create: `docs/runbooks/coolify-deploy.md`
@@ -563,7 +614,7 @@ npm test lib/autonomy/full-loop.test.ts
 - Modify: `docs/agents.md`
 - Modify: `README.md`
 
-- [ ] Document:
+- [x] Document:
   - kill switch `AUTONOMY_ENABLED=false`
   - dry-run `AUTONOMY_DRY_RUN=true`
   - how to reject stuck approvals
@@ -571,6 +622,10 @@ npm test lib/autonomy/full-loop.test.ts
   - how to verify Stripe webhook signatures
   - how to rollback a Coolify deployment
   - which actions require human approval
+
+Status: implemented. Dedicated incident runbooks now exist for autonomy,
+Stripe webhook handling and Coolify deploy recovery, and README/security/agents
+docs reference the operational controls.
 
 ---
 
