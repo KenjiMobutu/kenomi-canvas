@@ -439,6 +439,31 @@ function ApprovalGatesPanel({
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {item.budgetBreach && (
+                    <div style={{
+                      padding: '8px 10px',
+                      borderRadius: 7,
+                      background: `${rose}14`,
+                      border: `1px solid ${rose}40`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: rose,
+                      letterSpacing: '.06em',
+                    }}>
+                      <ShieldAlert size={12} />
+                      <span style={{ fontWeight: 800, textTransform: 'uppercase' }}>
+                        Budget cap : {item.budgetBreach.reason.replace(/_/g, ' ')}
+                      </span>
+                      {item.budgetBreach.detail && (
+                        <span style={{ color: muted, fontWeight: 600 }}>
+                          ({item.budgetBreach.detail})
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {nextStep && (
                     <div style={{ fontSize: 12, color: text, lineHeight: 1.45 }}>
                       {nextStep}

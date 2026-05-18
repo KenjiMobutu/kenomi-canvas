@@ -22,11 +22,39 @@ export interface AutonomyActionView {
   updated_at?: string | null
 }
 
+export type BudgetBreachReason =
+  | 'action_cap_exceeded'
+  | 'venture_cap_exceeded'
+  | 'global_cap_exceeded'
+
+export interface BudgetBreach {
+  reason: BudgetBreachReason
+  detail: string | null
+}
+
 export interface ApprovalQueueItem {
   approval: AutonomyApprovalView
   action: AutonomyActionView | null
   confidence: number | null
   isPending: boolean
+  budgetBreach: BudgetBreach | null
+}
+
+const BUDGET_BREACH_REASONS: ReadonlySet<BudgetBreachReason> = new Set([
+  'action_cap_exceeded',
+  'venture_cap_exceeded',
+  'global_cap_exceeded',
+])
+
+export function extractBudgetBreach(action: AutonomyActionView | null): BudgetBreach | null {
+  if (!action) return null
+  if (action.status !== 'blocked') return null
+  const output = action.output ?? {}
+  const reason = output.budget_breach
+  if (typeof reason !== 'string') return null
+  if (!BUDGET_BREACH_REASONS.has(reason as BudgetBreachReason)) return null
+  const detail = typeof output.detail === 'string' ? output.detail : null
+  return { reason: reason as BudgetBreachReason, detail }
 }
 
 export function buildApprovalQueue(input: {
@@ -47,6 +75,7 @@ export function buildApprovalQueue(input: {
         action,
         confidence,
         isPending: approval.status === 'pending',
+        budgetBreach: extractBudgetBreach(action),
       }
     })
     .sort((a, b) => {
