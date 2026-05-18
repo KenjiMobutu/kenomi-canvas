@@ -4,8 +4,19 @@ import { Check, CheckCircle2, Clock3, RefreshCw, ShieldAlert, X, XCircle } from 
 import { CkShell } from '@/components/CkShell'
 import { useIsMobile } from '@/lib/studio-utils'
 import {
-  surface, surface2, line, line2, text, muted, muted2,
-  accent, emerald, amber, rose, cyan, violet,
+  surface,
+  surface2,
+  line,
+  line2,
+  text,
+  muted,
+  muted2,
+  accent,
+  emerald,
+  amber,
+  rose,
+  cyan,
+  violet,
 } from '@/lib/ck-vars'
 import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
@@ -19,6 +30,11 @@ import {
   type AutonomyApprovalView,
   type ApprovalQueueItem,
 } from '@/lib/autonomy/approval-view-model'
+import {
+  buildActionList,
+  buildJobList,
+  type AutonomyJobView,
+} from '@/lib/autonomy/action-view-model'
 
 interface AgentConfig {
   model: string
@@ -27,7 +43,12 @@ interface AgentConfig {
   max_tokens: number
 }
 
-const DEFAULT_CONFIG: AgentConfig = { model: 'qwen3:8b', system_prompt: '', temperature: 0.7, max_tokens: 2048 }
+const DEFAULT_CONFIG: AgentConfig = {
+  model: 'qwen3:8b',
+  system_prompt: '',
+  temperature: 0.7,
+  max_tokens: 2048,
+}
 const MODELS = ['qwen3:8b', 'qwen3:14b', 'claude-sonnet-4-6', 'gpt-4o-mini']
 
 interface DbAgentState {
@@ -45,13 +66,21 @@ interface OrchestrationStatus {
 
 interface AutonomyJobsPayload {
   ok: boolean
-  jobs: unknown[]
+  jobs: AutonomyJobView[]
   actions: AutonomyActionView[]
   approvals: AutonomyApprovalView[]
   errors?: { section: string; message: string }[]
 }
 
-function TunePanel({ agentId, agentColor, onClose }: { agentId: string; agentColor: string; onClose: () => void }) {
+function TunePanel({
+  agentId,
+  agentColor,
+  onClose,
+}: {
+  agentId: string
+  agentColor: string
+  onClose: () => void
+}) {
   const { user } = useAuth()
   const [cfg, setCfg] = useState<AgentConfig>(DEFAULT_CONFIG)
   const [saving, setSaving] = useState(false)
@@ -59,17 +88,35 @@ function TunePanel({ agentId, agentColor, onClose }: { agentId: string; agentCol
   useEffect(() => {
     if (!user) return
     const supabase = createSupabaseBrowser()
-    supabase.from('agent_configs').select('*').eq('user_id', user.id).eq('agent_id', agentId).maybeSingle()
-      .then(({ data }) => { if (data) setCfg({ model: data.model, system_prompt: data.system_prompt, temperature: data.temperature, max_tokens: data.max_tokens }) })
+    supabase
+      .from('agent_configs')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('agent_id', agentId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data)
+          setCfg({
+            model: data.model,
+            system_prompt: data.system_prompt,
+            temperature: data.temperature,
+            max_tokens: data.max_tokens,
+          })
+      })
   }, [agentId, user])
 
   async function save() {
     if (!user) return
     setSaving(true)
     const supabase = createSupabaseBrowser()
-    const { error } = await supabase.from('agent_configs').upsert({
-      user_id: user.id, agent_id: agentId, ...cfg,
-    }, { onConflict: 'user_id,agent_id' })
+    const { error } = await supabase.from('agent_configs').upsert(
+      {
+        user_id: user.id,
+        agent_id: agentId,
+        ...cfg,
+      },
+      { onConflict: 'user_id,agent_id' }
+    )
     setSaving(false)
     if (error) return toast.error(error.message)
     toast.success('Config sauvegardée')
@@ -77,62 +124,193 @@ function TunePanel({ agentId, agentColor, onClose }: { agentId: string; agentCol
   }
 
   return (
-    <div style={{
-      background: surface, border: `1px solid ${line2}`, borderRadius: 12,
-      padding: 20, display: 'flex', flexDirection: 'column', gap: 14,
-      borderTop: `2px solid ${agentColor}`,
-    }}>
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line2}`,
+        borderRadius: 12,
+        padding: 20,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        borderTop: `2px solid ${agentColor}`,
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: text }}>Configuration agent</div>
-        <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: muted, cursor: 'pointer', fontSize: 16 }}>✕</button>
+        <div
+          style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: text }}
+        >
+          Configuration agent
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: muted,
+            cursor: 'pointer',
+            fontSize: 16,
+          }}
+        >
+          ✕
+        </button>
       </div>
 
       <div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Modèle</div>
-        <select value={cfg.model} onChange={e => setCfg(p => ({ ...p, model: e.target.value }))} className="ck-select" style={{ width: '100%' }}>
-          {MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: muted,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
+          Modèle
+        </div>
+        <select
+          value={cfg.model}
+          onChange={(e) => setCfg((p) => ({ ...p, model: e.target.value }))}
+          className="ck-select"
+          style={{ width: '100%' }}
+        >
+          {MODELS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
         </select>
       </div>
 
       <div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>System prompt</div>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: muted,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
+          System prompt
+        </div>
         <textarea
           value={cfg.system_prompt}
-          onChange={e => setCfg(p => ({ ...p, system_prompt: e.target.value }))}
-          rows={5} className="ck-input"
+          onChange={(e) => setCfg((p) => ({ ...p, system_prompt: e.target.value }))}
+          rows={5}
+          className="ck-input"
           placeholder="Tu es un agent spécialisé dans…"
-          style={{ width: '100%', resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: 11 }}
+          style={{
+            width: '100%',
+            resize: 'vertical',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+          }}
         />
       </div>
 
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Température</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: agentColor, fontWeight: 700 }}>{cfg.temperature.toFixed(2)}</span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Température
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: agentColor,
+              fontWeight: 700,
+            }}
+          >
+            {cfg.temperature.toFixed(2)}
+          </span>
         </div>
-        <input type="range" min={0} max={1} step={0.01} value={cfg.temperature}
-          onChange={e => setCfg(p => ({ ...p, temperature: parseFloat(e.target.value) }))}
-          style={{ width: '100%', accentColor: agentColor }} />
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={cfg.temperature}
+          onChange={(e) => setCfg((p) => ({ ...p, temperature: parseFloat(e.target.value) }))}
+          style={{ width: '100%', accentColor: agentColor }}
+        />
       </div>
 
       <div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Max tokens</div>
-        <input type="number" value={cfg.max_tokens} min={128} max={32768} step={128}
-          onChange={e => setCfg(p => ({ ...p, max_tokens: parseInt(e.target.value) || 2048 }))}
-          className="ck-input" style={{ width: '100%' }} />
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: muted,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
+          Max tokens
+        </div>
+        <input
+          type="number"
+          value={cfg.max_tokens}
+          min={128}
+          max={32768}
+          step={128}
+          onChange={(e) => setCfg((p) => ({ ...p, max_tokens: parseInt(e.target.value) || 2048 }))}
+          className="ck-input"
+          style={{ width: '100%' }}
+        />
       </div>
 
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={save} disabled={saving} style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: agentColor, color: '#0b0d12', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+        <button
+          onClick={save}
+          disabled={saving}
+          style={{
+            flex: 1,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: agentColor,
+            color: '#0b0d12',
+            border: 'none',
+            fontFamily: 'var(--font-display)',
+            fontWeight: 800,
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
           {saving ? '…' : 'Sauvegarder'}
         </button>
-        <button onClick={onClose} style={{ padding: '10px 12px', borderRadius: 8, background: 'transparent', color: muted, border: `1px solid ${line}`, cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Annuler</button>
+        <button
+          onClick={onClose}
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'transparent',
+            color: muted,
+            border: `1px solid ${line}`,
+            cursor: 'pointer',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+          }}
+        >
+          Annuler
+        </button>
       </div>
     </div>
   )
 }
 
-type AgentData = typeof AGENTS_DATA[0]
+type AgentData = (typeof AGENTS_DATA)[0]
 
 const QUEUE: Record<string, string[]> = {}
 
@@ -142,61 +320,148 @@ function minutesAgo(isoDate: string): string {
 
 function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div style={{ padding: '10px 12px', borderRadius: 10, background: surface2, border: `1px solid ${line}` }}>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color, marginTop: 2, letterSpacing: '-.02em' }}>{value}</div>
+    <div
+      style={{
+        padding: '10px 12px',
+        borderRadius: 10,
+        background: surface2,
+        border: `1px solid ${line}`,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          color: muted2,
+          letterSpacing: '.14em',
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 18,
+          fontWeight: 800,
+          color,
+          marginTop: 2,
+          letterSpacing: '-.02em',
+        }}
+      >
+        {value}
+      </div>
     </div>
   )
 }
 
 const AGENT_SIGIL_COLORS: Record<string, string> = {
-  scout: '#22d3ee', validation: '#a78bfa', builder: '#34d399',
-  payment: '#fbbf24', marketing: '#e879f9', decision: '#ff6a3d',
+  scout: '#22d3ee',
+  validation: '#a78bfa',
+  builder: '#34d399',
+  payment: '#fbbf24',
+  marketing: '#e879f9',
+  decision: '#ff6a3d',
 }
 const AGENT_LABELS: Record<string, string> = {
-  scout: 'SCT', validation: 'VAL', builder: 'BLD',
-  payment: 'PAY', marketing: 'MKT', decision: 'DEC',
+  scout: 'SCT',
+  validation: 'VAL',
+  builder: 'BLD',
+  payment: 'PAY',
+  marketing: 'MKT',
+  decision: 'DEC',
 }
 
 function PipelineStatusBar({ pipeline }: { pipeline: PipelineRow | null }) {
   const outputByAgent: Record<string, string | null | undefined> = {
-    scout:      pipeline ? 'done' : null,
+    scout: pipeline ? 'done' : null,
     validation: pipeline?.validation_output,
-    builder:    pipeline?.builder_output,
-    payment:    pipeline?.payment_output,
-    marketing:  pipeline?.marketing_output,
-    decision:   pipeline?.decision_output,
+    builder: pipeline?.builder_output,
+    payment: pipeline?.payment_output,
+    marketing: pipeline?.marketing_output,
+    decision: pipeline?.decision_output,
   }
   return (
-    <div style={{
-      background: surface, border: `1px solid ${line}`, borderRadius: 12,
-      padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 0,
-    }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginRight: 14, flexShrink: 0 }}>Pipeline</span>
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 12,
+        padding: '10px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0,
+      }}
+    >
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          color: muted,
+          letterSpacing: '.14em',
+          textTransform: 'uppercase',
+          marginRight: 14,
+          flexShrink: 0,
+        }}
+      >
+        Pipeline
+      </span>
       {AGENT_CHAIN.map((id, i) => {
         const output = outputByAgent[id]
         const isDone = output != null
         const isRunning = pipeline?.current_agent === id
-        const isNext = !isDone && !isRunning && pipeline?.status === 'approved' && isAgentUnlocked(id, pipeline)
+        const isNext =
+          !isDone && !isRunning && pipeline?.status === 'approved' && isAgentUnlocked(id, pipeline)
         const agentColor = AGENT_SIGIL_COLORS[id] ?? muted2
         const labelColor = isDone ? emerald : isRunning ? cyan : isNext ? accent : muted2
         return (
           <div key={id} style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 10px' }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%',
-                background: isDone ? `${agentColor}22` : surface2,
-                border: `1.5px solid ${isDone || isRunning || isNext ? agentColor : line}`,
-                display: 'grid', placeItems: 'center',
-                fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 800,
-                color: isDone || isRunning || isNext ? agentColor : muted2,
-              }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 10px',
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  background: isDone ? `${agentColor}22` : surface2,
+                  border: `1.5px solid ${isDone || isRunning || isNext ? agentColor : line}`,
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 8,
+                  fontWeight: 800,
+                  color: isDone || isRunning || isNext ? agentColor : muted2,
+                }}
+              >
                 {isDone ? '✓' : isRunning ? '⟳' : AGENT_LABELS[id]}
               </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7.5, color: labelColor, letterSpacing: '.1em' }}>{AGENT_LABELS[id]}</span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 7.5,
+                  color: labelColor,
+                  letterSpacing: '.1em',
+                }}
+              >
+                {AGENT_LABELS[id]}
+              </span>
             </div>
             {i < AGENT_CHAIN.length - 1 && (
-              <div style={{ width: 20, height: 1, background: isDone ? agentColor : line, opacity: 0.5 }} />
+              <div
+                style={{
+                  width: 20,
+                  height: 1,
+                  background: isDone ? agentColor : line,
+                  opacity: 0.5,
+                }}
+              />
             )}
           </div>
         )
@@ -206,7 +471,10 @@ function PipelineStatusBar({ pipeline }: { pipeline: PipelineRow | null }) {
 }
 
 function PipelineValidationCard({
-  pipeline, onApprove, onReject, loading,
+  pipeline,
+  onApprove,
+  onReject,
+  loading,
 }: {
   pipeline: PipelineRow
   onApprove: () => void
@@ -214,51 +482,136 @@ function PipelineValidationCard({
   loading: boolean
 }) {
   return (
-    <div style={{
-      background: surface, border: `2px solid ${cyan}`, borderRadius: 14,
-      padding: 18, display: 'flex', flexDirection: 'column', gap: 12,
-      position: 'relative', overflow: 'hidden',
-    }}>
-      <div style={{
-        position: 'absolute', right: -20, top: -20,
-        fontFamily: 'var(--font-display)', fontSize: 180, fontWeight: 800,
-        color: cyan, opacity: .04, lineHeight: 1, pointerEvents: 'none', userSelect: 'none',
-      }}>◬</div>
+    <div
+      style={{
+        background: surface,
+        border: `2px solid ${cyan}`,
+        borderRadius: 14,
+        padding: 18,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          right: -20,
+          top: -20,
+          fontFamily: 'var(--font-display)',
+          fontSize: 180,
+          fontWeight: 800,
+          color: cyan,
+          opacity: 0.04,
+          lineHeight: 1,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        ◬
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 8px', borderRadius: 4, background: `${cyan}22`, color: cyan, letterSpacing: 1.5, fontWeight: 800 }}>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            padding: '3px 8px',
+            borderRadius: 4,
+            background: `${cyan}22`,
+            color: cyan,
+            letterSpacing: 1.5,
+            fontWeight: 800,
+          }}
+        >
           SCOUT · VALIDATION REQUISE
         </span>
       </div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: text }}>
+      <div
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 22,
+          fontWeight: 800,
+          letterSpacing: '-.02em',
+          color: text,
+        }}
+      >
         {pipeline.idea_title || 'Idée sans titre'}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {([
-          { label: 'Niche',    value: pipeline.idea_niche    },
-          { label: 'Marché',   value: pipeline.idea_market   },
-          { label: 'Problème', value: pipeline.idea_problem  },
-          { label: 'Solution', value: pipeline.idea_solution },
-        ] as { label: string; value: string }[]).map(({ label, value }) => (
-          <div key={label} style={{ padding: '8px 10px', borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
+        {(
+          [
+            { label: 'Niche', value: pipeline.idea_niche },
+            { label: 'Marché', value: pipeline.idea_market },
+            { label: 'Problème', value: pipeline.idea_problem },
+            { label: 'Solution', value: pipeline.idea_solution },
+          ] as { label: string; value: string }[]
+        ).map(({ label, value }) => (
+          <div
+            key={label}
+            style={{
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: surface2,
+              border: `1px solid ${line}`,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 8.5,
+                color: muted,
+                letterSpacing: '.14em',
+                textTransform: 'uppercase',
+                marginBottom: 3,
+              }}
+            >
+              {label}
+            </div>
             <div style={{ fontSize: 12, color: text, lineHeight: 1.4 }}>{value || '—'}</div>
           </div>
         ))}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={onApprove} disabled={loading} style={{
-          flex: 1, padding: '11px 14px', borderRadius: 8,
-          background: loading ? `${emerald}55` : emerald,
-          color: '#0b0d12', border: 'none',
-          fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, letterSpacing: '.06em',
-          cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
-        }}>{loading ? '…' : '✓ Valider cette idée'}</button>
-        <button onClick={onReject} disabled={loading} style={{
-          padding: '11px 14px', borderRadius: 8,
-          background: `${rose}18`, color: rose, border: `1px solid ${rose}44`,
-          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
-          cursor: loading ? 'not-allowed' : 'pointer',
-        }}>REJETER</button>
+        <button
+          onClick={onApprove}
+          disabled={loading}
+          style={{
+            flex: 1,
+            padding: '11px 14px',
+            borderRadius: 8,
+            background: loading ? `${emerald}55` : emerald,
+            color: '#0b0d12',
+            border: 'none',
+            fontFamily: 'var(--font-display)',
+            fontWeight: 800,
+            fontSize: 13,
+            letterSpacing: '.06em',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? '…' : '✓ Valider cette idée'}
+        </button>
+        <button
+          onClick={onReject}
+          disabled={loading}
+          style={{
+            padding: '11px 14px',
+            borderRadius: 8,
+            background: `${rose}18`,
+            color: rose,
+            border: `1px solid ${rose}44`,
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 700,
+            fontSize: 10,
+            letterSpacing: '.14em',
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          REJETER
+        </button>
       </div>
     </div>
   )
@@ -288,7 +641,12 @@ function getActionLabel(actionType?: string): string {
 
 function compactDate(isoDate?: string | null): string {
   if (!isoDate) return '—'
-  return new Date(isoDate).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return new Date(isoDate).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function ApprovalStatusIcon({ status }: { status: string }) {
@@ -310,38 +668,61 @@ function ApprovalGatesPanel({
   onResolve: (approvalId: string, decision: 'approved' | 'rejected') => void
   onRefresh: () => void
 }) {
-  const pendingCount = queue.filter(item => item.isPending).length
+  const pendingCount = queue.filter((item) => item.isPending).length
 
   return (
-    <div style={{
-      background: surface,
-      border: `1px solid ${pendingCount > 0 ? `${amber}66` : line}`,
-      borderRadius: 14,
-      padding: 16,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 12,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${pendingCount > 0 ? `${amber}66` : line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <div style={{
-            width: 34,
-            height: 34,
-            borderRadius: 9,
-            background: `${amber}16`,
-            border: `1px solid ${amber}55`,
-            color: amber,
-            display: 'grid',
-            placeItems: 'center',
-            flexShrink: 0,
-          }}>
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 9,
+              background: `${amber}16`,
+              border: `1px solid ${amber}55`,
+              color: amber,
+              display: 'grid',
+              placeItems: 'center',
+              flexShrink: 0,
+            }}
+          >
             <ShieldAlert size={17} />
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: text, letterSpacing: '-.01em' }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 14,
+                fontWeight: 800,
+                color: text,
+                letterSpacing: '-.01em',
+              }}
+            >
               Approval Gates
             </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.12em', textTransform: 'uppercase', marginTop: 2 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                color: muted2,
+                letterSpacing: '.12em',
+                textTransform: 'uppercase',
+                marginTop: 2,
+              }}
+            >
               {pendingCount} pending · {queue.length} total
             </div>
           </div>
@@ -367,92 +748,155 @@ function ApprovalGatesPanel({
       </div>
 
       {queue.length === 0 ? (
-        <div style={{
-          padding: '14px 12px',
-          borderRadius: 10,
-          background: surface2,
-          border: `1px dashed ${line2}`,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: muted,
-          letterSpacing: '.08em',
-          textTransform: 'uppercase',
-        }}>
+        <div
+          style={{
+            padding: '14px 12px',
+            borderRadius: 10,
+            background: surface2,
+            border: `1px dashed ${line2}`,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: muted,
+            letterSpacing: '.08em',
+            textTransform: 'uppercase',
+          }}
+        >
           Aucun gate en attente
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: 10,
+          }}
+        >
           {queue.map((item) => {
             const statusColor = APPROVAL_COLORS[item.approval.status] ?? muted2
             const actionInput = item.action?.input ?? {}
-            const nextStep = typeof actionInput.next_step === 'string' ? actionInput.next_step : item.approval.reason
-            const rationale = typeof actionInput.rationale === 'string' ? actionInput.rationale : null
+            const nextStep =
+              typeof actionInput.next_step === 'string'
+                ? actionInput.next_step
+                : item.approval.reason
+            const rationale =
+              typeof actionInput.rationale === 'string' ? actionInput.rationale : null
             const approveKey = `${item.approval.id}:approved`
             const rejectKey = `${item.approval.id}:rejected`
 
             return (
-              <div key={item.approval.id} style={{
-                background: surface2,
-                border: `1px solid ${item.isPending ? `${statusColor}55` : line}`,
-                borderRadius: 10,
-                padding: 12,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-                minWidth: 0,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+              <div
+                key={item.approval.id}
+                style={{
+                  background: surface2,
+                  border: `1px solid ${item.isPending ? `${statusColor}55` : line}`,
+                  borderRadius: 10,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    alignItems: 'flex-start',
+                  }}
+                >
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                      <span style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 8.5,
-                        padding: '3px 7px',
-                        borderRadius: 4,
-                        background: `${statusColor}18`,
-                        color: statusColor,
-                        border: `1px solid ${statusColor}30`,
-                        letterSpacing: '.14em',
-                        textTransform: 'uppercase',
-                        fontWeight: 800,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                      }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 8.5,
+                          padding: '3px 7px',
+                          borderRadius: 4,
+                          background: `${statusColor}18`,
+                          color: statusColor,
+                          border: `1px solid ${statusColor}30`,
+                          letterSpacing: '.14em',
+                          textTransform: 'uppercase',
+                          fontWeight: 800,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                        }}
+                      >
                         <ApprovalStatusIcon status={item.approval.status} />
                         {item.approval.status}
                       </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.08em' }}>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          color: muted2,
+                          letterSpacing: '.08em',
+                        }}
+                      >
                         {compactDate(item.approval.created_at)}
                       </span>
                     </div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: text, fontWeight: 800, marginTop: 8, letterSpacing: '-.01em' }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: 16,
+                        color: text,
+                        fontWeight: 800,
+                        marginTop: 8,
+                        letterSpacing: '-.01em',
+                      }}
+                    >
                       {getActionLabel(item.action?.action_type)}
                     </div>
                   </div>
                   {item.confidence !== null && (
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: muted2, letterSpacing: '.12em', textTransform: 'uppercase' }}>conf</div>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: cyan, fontWeight: 800 }}>{item.confidence}</div>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 8.5,
+                          color: muted2,
+                          letterSpacing: '.12em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        conf
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 18,
+                          color: cyan,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {item.confidence}
+                      </div>
                     </div>
                   )}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {item.budgetBreach && (
-                    <div style={{
-                      padding: '8px 10px',
-                      borderRadius: 7,
-                      background: `${rose}14`,
-                      border: `1px solid ${rose}40`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10,
-                      color: rose,
-                      letterSpacing: '.06em',
-                    }}>
+                    <div
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: 7,
+                        background: `${rose}14`,
+                        border: `1px solid ${rose}40`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10,
+                        color: rose,
+                        letterSpacing: '.06em',
+                      }}
+                    >
                       <ShieldAlert size={12} />
                       <span style={{ fontWeight: 800, textTransform: 'uppercase' }}>
                         Budget cap : {item.budgetBreach.reason.replace(/_/g, ' ')}
@@ -465,18 +909,30 @@ function ApprovalGatesPanel({
                     </div>
                   )}
                   {nextStep && (
-                    <div style={{ fontSize: 12, color: text, lineHeight: 1.45 }}>
-                      {nextStep}
-                    </div>
+                    <div style={{ fontSize: 12, color: text, lineHeight: 1.45 }}>{nextStep}</div>
                   )}
                   {rationale && (
-                    <div style={{ fontSize: 11, color: muted, lineHeight: 1.45, borderLeft: `2px solid ${statusColor}`, paddingLeft: 8 }}>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: muted,
+                        lineHeight: 1.45,
+                        borderLeft: `2px solid ${statusColor}`,
+                        paddingLeft: 8,
+                      }}
+                    >
                       {rationale}
                     </div>
                   )}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: item.isPending ? '1fr 1fr' : '1fr', gap: 8 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: item.isPending ? '1fr 1fr' : '1fr',
+                    gap: 8,
+                  }}
+                >
                   {item.isPending ? (
                     <>
                       <button
@@ -527,19 +983,21 @@ function ApprovalGatesPanel({
                       </button>
                     </>
                   ) : (
-                    <div style={{
-                      minHeight: 34,
-                      borderRadius: 8,
-                      border: `1px solid ${line}`,
-                      color: muted,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9,
-                      letterSpacing: '.14em',
-                      textTransform: 'uppercase',
-                    }}>
+                    <div
+                      style={{
+                        minHeight: 34,
+                        borderRadius: 8,
+                        border: `1px solid ${line}`,
+                        color: muted,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        letterSpacing: '.14em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
                       action {item.action?.status ?? 'unknown'}
                     </div>
                   )}
@@ -553,8 +1011,265 @@ function ApprovalGatesPanel({
   )
 }
 
-function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunComplete }: {
-  agent: AgentData; activity: number[]; queue: string[]
+type ObservabilityTab = 'jobs' | 'actions' | 'approvals'
+
+function StatusPill({ status }: { status: string }) {
+  const color =
+    status === 'completed' || status === 'approved' || status === 'published'
+      ? emerald
+      : status === 'failed' || status === 'rejected'
+        ? rose
+        : status === 'blocked' || status === 'pending'
+          ? amber
+          : muted
+
+  return (
+    <span
+      style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 8.5,
+        padding: '3px 7px',
+        borderRadius: 4,
+        background: `${color}18`,
+        border: `1px solid ${color}35`,
+        color,
+        letterSpacing: '.12em',
+        textTransform: 'uppercase',
+        fontWeight: 800,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {status}
+    </span>
+  )
+}
+
+function AutonomyObservabilityPanel({
+  jobs,
+  actions,
+  approvals,
+  approvalQueue,
+}: {
+  jobs: AutonomyJobView[]
+  actions: AutonomyActionView[]
+  approvals: AutonomyApprovalView[]
+  approvalQueue: ApprovalQueueItem[]
+}) {
+  const [tab, setTab] = useState<ObservabilityTab>('jobs')
+  const jobItems = useMemo(() => buildJobList(jobs), [jobs])
+  const actionItems = useMemo(() => buildActionList(actions), [actions])
+
+  const tabs: Array<{ id: ObservabilityTab; label: string; count: number }> = [
+    { id: 'jobs', label: 'Jobs', count: jobItems.length },
+    { id: 'actions', label: 'Actions', count: actionItems.length },
+    { id: 'approvals', label: 'Approvals', count: approvals.length },
+  ]
+
+  return (
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 14,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 14,
+              fontWeight: 800,
+              color: text,
+            }}
+          >
+            Autonomy Ops
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted2,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+              marginTop: 2,
+            }}
+          >
+            jobs · actions · approvals
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setTab(item.id)}
+              style={{
+                minHeight: 30,
+                padding: '5px 9px',
+                borderRadius: 7,
+                border: `1px solid ${tab === item.id ? line2 : line}`,
+                background: tab === item.id ? surface2 : 'transparent',
+                color: tab === item.id ? text : muted,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                letterSpacing: '.12em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              {item.label}
+              <span style={{ color: item.count > 0 ? cyan : muted2 }}>{item.count}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'jobs' && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {jobItems.length === 0 ? (
+            <EmptyOpsRow label="Aucun job enregistré" />
+          ) : (
+            jobItems.slice(0, 8).map((job) => (
+              <div key={job.id} style={opsRowStyle}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={opsTitleStyle}>{job.label}</div>
+                  <div style={opsMetaStyle}>
+                    retry {job.retryCount} · next {compactDate(job.nextRunAt)} ·{' '}
+                    {job.lastError ?? 'no error'}
+                  </div>
+                </div>
+                <StatusPill status={job.status} />
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {tab === 'actions' && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {actionItems.length === 0 ? (
+            <EmptyOpsRow label="Aucune action enregistrée" />
+          ) : (
+            actionItems.slice(0, 8).map((action) => (
+              <div key={action.id} style={opsRowStyle}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={opsTitleStyle}>{action.label}</div>
+                  <div style={opsMetaStyle}>
+                    risk {action.riskLevel} · {action.provider ?? 'provider —'} ·{' '}
+                    {action.model ?? 'model —'} · {action.durationMs ?? '—'}ms
+                    {action.lastError ? ` · ${action.lastError}` : ''}
+                  </div>
+                </div>
+                <StatusPill status={action.status} />
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {tab === 'approvals' && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {approvalQueue.length === 0 ? (
+            <EmptyOpsRow label="Aucune approbation enregistrée" />
+          ) : (
+            approvalQueue.slice(0, 8).map((item) => (
+              <div key={item.approval.id} style={opsRowStyle}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={opsTitleStyle}>{getActionLabel(item.action?.action_type)}</div>
+                  <div style={opsMetaStyle}>
+                    {compactDate(item.approval.created_at)} ·{' '}
+                    {item.budgetBreach?.reason ?? item.approval.reason ?? 'no reason'}
+                  </div>
+                </div>
+                <StatusPill status={item.approval.status} />
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const opsRowStyle: React.CSSProperties = {
+  minHeight: 48,
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 12,
+  padding: '9px 10px',
+  borderRadius: 9,
+  background: surface2,
+  border: `1px solid ${line}`,
+}
+
+const opsTitleStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-display)',
+  fontSize: 12,
+  fontWeight: 800,
+  color: text,
+  textTransform: 'capitalize',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+const opsMetaStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: 9,
+  color: muted,
+  marginTop: 3,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+function EmptyOpsRow({ label }: { label: string }) {
+  return (
+    <div
+      style={{
+        padding: '14px 12px',
+        borderRadius: 9,
+        background: surface2,
+        border: `1px dashed ${line2}`,
+        color: muted,
+        fontFamily: 'var(--font-mono)',
+        fontSize: 9.5,
+        letterSpacing: '.12em',
+        textTransform: 'uppercase',
+      }}
+    >
+      {label}
+    </div>
+  )
+}
+
+function AgentInspector({
+  agent,
+  activity,
+  queue,
+  pipeline,
+  setPipeline,
+  onRunComplete,
+}: {
+  agent: AgentData
+  activity: number[]
+  queue: string[]
   pipeline: PipelineRow | null
   setPipeline: React.Dispatch<React.SetStateAction<PipelineRow | null>>
   onRunComplete?: () => void
@@ -563,20 +1278,32 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunCo
   const t = useTick(2400)
   const [tuneOpen, setTuneOpen] = useState(false)
   const [logsOpen, setLogsOpen] = useState(false)
-  const [logs, setLogs] = useState<{ prompt: string; response: string; duration_ms: number; created_at: string }[]>([])
+  const [logs, setLogs] = useState<
+    { prompt: string; response: string; duration_ms: number; created_at: string }[]
+  >([])
   const [running, setRunning] = useState(false)
-  const [dbState, setDbState] = useState<DbAgentState>({ run_count: 0, last_run_at: null, paused: false })
+  const [dbState, setDbState] = useState<DbAgentState>({
+    run_count: 0,
+    last_run_at: null,
+    paused: false,
+  })
 
   useEffect(() => {
     if (!user) return
     const supabase = createSupabaseBrowser()
-    supabase.from('agent_configs')
+    supabase
+      .from('agent_configs')
       .select('run_count, last_run_at, paused')
       .eq('user_id', user.id)
       .eq('agent_id', agent.id)
       .maybeSingle()
       .then(({ data }) => {
-        if (data) setDbState({ run_count: data.run_count ?? 0, last_run_at: data.last_run_at, paused: data.paused ?? false })
+        if (data)
+          setDbState({
+            run_count: data.run_count ?? 0,
+            last_run_at: data.last_run_at,
+            paused: data.paused ?? false,
+          })
         else setDbState({ run_count: 0, last_run_at: null, paused: false })
       })
   }, [agent.id, user])
@@ -594,7 +1321,11 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunCo
         toast.error(data.error || 'Erreur run agent')
       } else {
         toast.success(`${agent.name} — mission complète (${data.durationMs}ms)`)
-        setDbState(s => ({ ...s, run_count: s.run_count + 1, last_run_at: new Date().toISOString() }))
+        setDbState((s) => ({
+          ...s,
+          run_count: s.run_count + 1,
+          last_run_at: new Date().toISOString(),
+        }))
         if (agent.id === 'scout' && data.pipeline) {
           setPipeline(data.pipeline as PipelineRow)
         }
@@ -611,11 +1342,16 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunCo
     if (!user) return
     const supabase = createSupabaseBrowser()
     const newPaused = !dbState.paused
-    const { error } = await supabase.from('agent_configs').upsert({
-      user_id: user.id, agent_id: agent.id, paused: newPaused,
-    }, { onConflict: 'user_id,agent_id' })
+    const { error } = await supabase.from('agent_configs').upsert(
+      {
+        user_id: user.id,
+        agent_id: agent.id,
+        paused: newPaused,
+      },
+      { onConflict: 'user_id,agent_id' }
+    )
     if (error) return toast.error(error.message)
-    setDbState(s => ({ ...s, paused: newPaused }))
+    setDbState((s) => ({ ...s, paused: newPaused }))
     toast.success(newPaused ? `${agent.name} mis en pause` : `${agent.name} réactivé`)
   }
 
@@ -635,89 +1371,212 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunCo
 
   const unlocked = isAgentUnlocked(agent.id, pipeline)
   const lockReason = !unlocked
-    ? (pipeline?.status === 'pending_validation' ? "Validez l'idée Scout d'abord" : "Attendez l'agent précédent")
+    ? pipeline?.status === 'pending_validation'
+      ? "Validez l'idée Scout d'abord"
+      : "Attendez l'agent précédent"
     : ''
 
   return (
-    <div style={{
-      background: surface, border: `1px solid ${line}`, borderRadius: 14,
-      padding: 18, display: 'flex', flexDirection: 'column', gap: 14,
-      borderTop: `3px solid ${agent.color}`,
-      position: 'relative', overflow: 'hidden',
-    }}>
-      <div style={{
-        position: 'absolute', right: -30, bottom: -50,
-        fontFamily: 'var(--font-display)', fontSize: 280, fontWeight: 800,
-        color: agent.color, opacity: .05, lineHeight: 1, pointerEvents: 'none', userSelect: 'none',
-      }}>{agent.sigil}</div>
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 18,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        borderTop: `3px solid ${agent.color}`,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          right: -30,
+          bottom: -50,
+          fontFamily: 'var(--font-display)',
+          fontSize: 280,
+          fontWeight: 800,
+          color: agent.color,
+          opacity: 0.05,
+          lineHeight: 1,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        {agent.sigil}
+      </div>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
         <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
-          <div style={{
-            position: 'absolute', inset: 0, borderRadius: 14,
-            background: `conic-gradient(from ${t * 360}deg, ${agent.color}, transparent 60%, ${agent.color})`,
-            opacity: .7,
-          }} />
-          <div style={{
-            position: 'absolute', inset: 3, borderRadius: 11, background: surface2,
-            border: `1px solid ${agent.color}55`,
-            display: 'grid', placeItems: 'center',
-            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 36, color: agent.color,
-          }}>{agent.sigil}</div>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: 14,
+              background: `conic-gradient(from ${t * 360}deg, ${agent.color}, transparent 60%, ${agent.color})`,
+              opacity: 0.7,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 3,
+              borderRadius: 11,
+              background: surface2,
+              border: `1px solid ${agent.color}55`,
+              display: 'grid',
+              placeItems: 'center',
+              fontFamily: 'var(--font-display)',
+              fontWeight: 800,
+              fontSize: 36,
+              color: agent.color,
+            }}
+          >
+            {agent.sigil}
+          </div>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: muted,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+            }}
+          >
             {agent.code} · {agent.role}
           </div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 800, letterSpacing: '-.02em', marginTop: 2, color: text }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 26,
+              fontWeight: 800,
+              letterSpacing: '-.02em',
+              marginTop: 2,
+              color: text,
+            }}
+          >
             {agent.name} Agent
           </div>
           <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{agent.tagline}</div>
         </div>
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 11, padding: '5px 10px', borderRadius: 4, flexShrink: 0,
-          background: `${agent.color}1f`, color: agent.color, letterSpacing: 1.5, fontWeight: 800,
-        }}>LV {agent.level}</span>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            padding: '5px 10px',
+            borderRadius: 4,
+            flexShrink: 0,
+            background: `${agent.color}1f`,
+            color: agent.color,
+            letterSpacing: 1.5,
+            fontWeight: 800,
+          }}
+        >
+          LV {agent.level}
+        </span>
       </div>
 
       {/* XP bar */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Experience</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2, letterSpacing: '.1em' }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: muted,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Experience
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: muted2,
+              letterSpacing: '.1em',
+            }}
+          >
             {Math.round(agent.xp * 1000)} / 1000 · next: LV {agent.level + 1}
           </span>
         </div>
-        <div style={{ height: 8, borderRadius: 4, background: surface2, border: `1px solid ${line}`, overflow: 'hidden', position: 'relative' }}>
-          <div style={{
-            width: `${agent.xp * 100}%`, height: '100%',
-            background: `linear-gradient(90deg, ${agent.color}, var(--ck-accent-2))`,
-            boxShadow: `0 0 10px ${agent.color}`,
-          }} />
-          <div style={{
-            position: 'absolute', inset: 0,
-            backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,.1) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.1) 50%, rgba(255,255,255,.1) 75%, transparent 75%)',
-            backgroundSize: '10px 10px', opacity: .35,
-          }} />
+        <div
+          style={{
+            height: 8,
+            borderRadius: 4,
+            background: surface2,
+            border: `1px solid ${line}`,
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
+          <div
+            style={{
+              width: `${agent.xp * 100}%`,
+              height: '100%',
+              background: `linear-gradient(90deg, ${agent.color}, var(--ck-accent-2))`,
+              boxShadow: `0 0 10px ${agent.color}`,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage:
+                'linear-gradient(45deg, rgba(255,255,255,.1) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.1) 50%, rgba(255,255,255,.1) 75%, transparent 75%)',
+              backgroundSize: '10px 10px',
+              opacity: 0.35,
+            }}
+          />
         </div>
       </div>
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-        <StatBox label="Runs"   value={String(dbState.run_count)} color={agent.color} />
-        <StatBox label="Status" value={dbState.paused ? 'PAUSÉ' : 'ACTIF'} color={dbState.paused ? '#fbbf24' : emerald} />
-        <StatBox label="Last"   value={dbState.last_run_at ? minutesAgo(dbState.last_run_at) : '—'} color={cyan} />
-        <StatBox label="LV"     value={String(agent.level)} color={violet} />
+        <StatBox label="Runs" value={String(dbState.run_count)} color={agent.color} />
+        <StatBox
+          label="Status"
+          value={dbState.paused ? 'PAUSÉ' : 'ACTIF'}
+          color={dbState.paused ? '#fbbf24' : emerald}
+        />
+        <StatBox
+          label="Last"
+          value={dbState.last_run_at ? minutesAgo(dbState.last_run_at) : '—'}
+          color={cyan}
+        />
+        <StatBox label="LV" value={String(agent.level)} color={violet} />
       </div>
 
       {/* Activity sparkline */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Activity · 48h</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: agent.color }}>+{Math.round(agent.xp * 60)} runs</span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: muted,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Activity · 48h
+          </span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: agent.color }}>
+            +{Math.round(agent.xp * 60)} runs
+          </span>
         </div>
-        <svg viewBox="0 0 240 60" preserveAspectRatio="none" style={{ width: '100%', height: 64, display: 'block' }}>
+        <svg
+          viewBox="0 0 240 60"
+          preserveAspectRatio="none"
+          style={{ width: '100%', height: 64, display: 'block' }}
+        >
           <defs>
             <linearGradient id={`ag-${agent.id}`} x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor={agent.color} stopOpacity=".45" />
@@ -725,13 +1584,27 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunCo
             </linearGradient>
           </defs>
           <path d={areaPath(activity, 240, 60, 2)} fill={`url(#ag-${agent.id})`} />
-          <path d={sparkPath(activity, 240, 60, 2)} fill="none" stroke={agent.color} strokeWidth="1.6" />
+          <path
+            d={sparkPath(activity, 240, 60, 2)}
+            fill="none"
+            stroke={agent.color}
+            strokeWidth="1.6"
+          />
         </svg>
       </div>
 
       {/* Mission queue */}
       <div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: muted,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
           Mission queue · 3 prochaines
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -739,21 +1612,51 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunCo
             <div style={{ padding: '16px 10px', textAlign: 'center' }}>
               <p style={{ fontSize: 12, color: muted2 }}>Aucune mission en queue</p>
             </div>
-          ) : queue.map((q, i) => (
-            <div key={i} style={{
-              padding: '8px 10px', borderRadius: 8, background: surface2,
-              border: `1px dashed ${line2}`,
-              display: 'flex', alignItems: 'center', gap: 10,
-            }}>
-              <span style={{
-                width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${agent.color}`,
-                display: 'grid', placeItems: 'center', flexShrink: 0,
-                fontFamily: 'var(--font-mono)', fontSize: 9.5, color: agent.color, fontWeight: 700,
-              }}>{i + 1}</span>
-              <span style={{ fontSize: 12, color: text, flex: 1 }}>{q}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, flexShrink: 0 }}>ETA {(i + 1) * 4}m</span>
-            </div>
-          ))}
+          ) : (
+            queue.map((q, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  background: surface2,
+                  border: `1px dashed ${line2}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <span
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    border: `1.5px solid ${agent.color}`,
+                    display: 'grid',
+                    placeItems: 'center',
+                    flexShrink: 0,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    color: agent.color,
+                    fontWeight: 700,
+                  }}
+                >
+                  {i + 1}
+                </span>
+                <span style={{ fontSize: 12, color: text, flex: 1 }}>{q}</span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    flexShrink: 0,
+                  }}
+                >
+                  ETA {(i + 1) * 4}m
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -764,112 +1667,319 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunCo
           disabled={running || dbState.paused || !unlocked}
           title={lockReason}
           style={{
-            flex: 1, padding: '10px 12px', borderRadius: 8,
+            flex: 1,
+            padding: '10px 12px',
+            borderRadius: 8,
             background: running || dbState.paused || !unlocked ? `${agent.color}55` : agent.color,
-            color: '#0b0d12', border: 'none',
-            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.05em',
+            color: '#0b0d12',
+            border: 'none',
+            fontFamily: 'var(--font-display)',
+            fontWeight: 800,
+            fontSize: 12,
+            letterSpacing: '.05em',
             cursor: running || dbState.paused || !unlocked ? 'not-allowed' : 'pointer',
             opacity: running || dbState.paused || !unlocked ? 0.7 : 1,
           }}
         >
           {running ? '⏳ Running…' : !unlocked ? `🔒 ${lockReason}` : '▶ Run mission'}
         </button>
-        <button onClick={handlePause} style={{
-          padding: '10px 12px', borderRadius: 8,
-          background: dbState.paused ? '#fbbf2422' : surface2,
-          color: dbState.paused ? '#fbbf24' : text,
-          border: `1px solid ${dbState.paused ? '#fbbf2455' : line2}`,
-          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
-          cursor: 'pointer',
-        }}>{dbState.paused ? 'RESUME' : 'PAUSE'}</button>
-        <button onClick={handleLogs} style={{
-          padding: '10px 12px', borderRadius: 8,
-          background: logsOpen ? `${agent.color}22` : surface2,
-          color: logsOpen ? agent.color : text,
-          border: `1px solid ${logsOpen ? `${agent.color}55` : line2}`,
-          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
-          cursor: 'pointer',
-        }}>LOGS</button>
-        <button onClick={() => setTuneOpen(o => !o)} style={{
-          padding: '10px 12px', borderRadius: 8,
-          background: tuneOpen ? agent.color + '22' : surface2,
-          color: tuneOpen ? agent.color : text,
-          border: `1px solid ${tuneOpen ? agent.color + '55' : line2}`,
-          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
-          cursor: 'pointer',
-        }}>TUNE</button>
+        <button
+          onClick={handlePause}
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: dbState.paused ? '#fbbf2422' : surface2,
+            color: dbState.paused ? '#fbbf24' : text,
+            border: `1px solid ${dbState.paused ? '#fbbf2455' : line2}`,
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 700,
+            fontSize: 10,
+            letterSpacing: '.14em',
+            cursor: 'pointer',
+          }}
+        >
+          {dbState.paused ? 'RESUME' : 'PAUSE'}
+        </button>
+        <button
+          onClick={handleLogs}
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: logsOpen ? `${agent.color}22` : surface2,
+            color: logsOpen ? agent.color : text,
+            border: `1px solid ${logsOpen ? `${agent.color}55` : line2}`,
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 700,
+            fontSize: 10,
+            letterSpacing: '.14em',
+            cursor: 'pointer',
+          }}
+        >
+          LOGS
+        </button>
+        <button
+          onClick={() => setTuneOpen((o) => !o)}
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: tuneOpen ? agent.color + '22' : surface2,
+            color: tuneOpen ? agent.color : text,
+            border: `1px solid ${tuneOpen ? agent.color + '55' : line2}`,
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 700,
+            fontSize: 10,
+            letterSpacing: '.14em',
+            cursor: 'pointer',
+          }}
+        >
+          TUNE
+        </button>
       </div>
 
       {logsOpen && (
-        <div style={{ background: surface2, border: `1px solid ${line}`, borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div
+          style={{
+            background: surface2,
+            border: `1px solid ${line}`,
+            borderRadius: 10,
+            padding: 14,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Derniers logs · {agent.name}</span>
-            <button onClick={() => setLogsOpen(false)} style={{ background: 'transparent', border: 'none', color: muted, cursor: 'pointer' }}>✕</button>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: muted,
+                letterSpacing: '.14em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Derniers logs · {agent.name}
+            </span>
+            <button
+              onClick={() => setLogsOpen(false)}
+              style={{ background: 'transparent', border: 'none', color: muted, cursor: 'pointer' }}
+            >
+              ✕
+            </button>
           </div>
           {logs.length === 0 ? (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted2 }}>Aucun log — déclenchez une mission d&apos;abord.</div>
-          ) : logs.map((l, i) => (
-            <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: surface, border: `1px solid ${line}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: 1, textTransform: 'uppercase' }}>
-                {new Date(l.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · {l.duration_ms}ms
-              </div>
-              <div style={{ fontSize: 11, color: muted, fontFamily: 'var(--font-mono)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2 as React.CSSProperties['WebkitLineClamp'], WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'] }}>
-                ▶ {l.prompt}
-              </div>
-              <div style={{ fontSize: 12, color: text, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3 as React.CSSProperties['WebkitLineClamp'], WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'], borderLeft: `2px solid ${agent.color}`, paddingLeft: 8 }}>
-                {l.response}
-              </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted2 }}>
+              Aucun log — déclenchez une mission d&apos;abord.
             </div>
-          ))}
+          ) : (
+            logs.map((l, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  background: surface,
+                  border: `1px solid ${line}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {new Date(l.created_at).toLocaleString('fr-FR', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  })}{' '}
+                  · {l.duration_ms}ms
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: muted,
+                    fontFamily: 'var(--font-mono)',
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2 as React.CSSProperties['WebkitLineClamp'],
+                    WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'],
+                  }}
+                >
+                  ▶ {l.prompt}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: text,
+                    lineHeight: 1.5,
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3 as React.CSSProperties['WebkitLineClamp'],
+                    WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'],
+                    borderLeft: `2px solid ${agent.color}`,
+                    paddingLeft: 8,
+                  }}
+                >
+                  {l.response}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 
-      {tuneOpen && <TunePanel agentId={agent.id} agentColor={agent.color} onClose={() => setTuneOpen(false)} />}
+      {tuneOpen && (
+        <TunePanel agentId={agent.id} agentColor={agent.color} onClose={() => setTuneOpen(false)} />
+      )}
     </div>
   )
 }
 
-function RosterTile({ agent, idx, active, onClick }: { agent: AgentData; idx: number; active: boolean; onClick: () => void }) {
+function RosterTile({
+  agent,
+  idx,
+  active,
+  onClick,
+}: {
+  agent: AgentData
+  idx: number
+  active: boolean
+  onClick: () => void
+}) {
   const t = useTick(2200 + idx * 350)
   const pulse = 0.3 + Math.abs(Math.sin(t * Math.PI * 2)) * 0.7
   return (
-    <button onClick={onClick} style={{
-      position: 'relative',
-      background: surface,
-      border: active ? `1.5px solid ${agent.color}` : `1px solid ${line}`,
-      borderRadius: 12, padding: 12,
-      overflow: 'hidden', textAlign: 'left',
-      cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 8,
-      boxShadow: active ? `0 0 0 4px ${agent.color}1c` : 'none',
-      transition: 'border-color .15s, box-shadow .15s',
-    }}>
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 2, background: agent.color, opacity: active ? 1 : .6 }} />
-      <div style={{
-        position: 'absolute', right: -8, bottom: -16,
-        fontFamily: 'var(--font-display)', fontSize: 100, fontWeight: 800,
-        color: agent.color, opacity: .07, lineHeight: 1, pointerEvents: 'none', userSelect: 'none',
-      }}>{agent.sigil}</div>
+    <button
+      onClick={onClick}
+      style={{
+        position: 'relative',
+        background: surface,
+        border: active ? `1.5px solid ${agent.color}` : `1px solid ${line}`,
+        borderRadius: 12,
+        padding: 12,
+        overflow: 'hidden',
+        textAlign: 'left',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        boxShadow: active ? `0 0 0 4px ${agent.color}1c` : 'none',
+        transition: 'border-color .15s, box-shadow .15s',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          height: 2,
+          background: agent.color,
+          opacity: active ? 1 : 0.6,
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          right: -8,
+          bottom: -16,
+          fontFamily: 'var(--font-display)',
+          fontSize: 100,
+          fontWeight: 800,
+          color: agent.color,
+          opacity: 0.07,
+          lineHeight: 1,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        {agent.sigil}
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
         <div style={{ position: 'relative', width: 34, height: 34, flexShrink: 0 }}>
-          <div style={{
-            position: 'absolute', inset: 0, borderRadius: 8,
-            background: `conic-gradient(from 0deg, ${agent.color}, transparent 60%, ${agent.color})`,
-            opacity: 0.7 * pulse,
-          }} />
-          <div style={{
-            position: 'absolute', inset: 2, borderRadius: 6, background: surface,
-            border: `1px solid ${agent.color}55`,
-            display: 'grid', placeItems: 'center',
-            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16, color: agent.color,
-          }}>{agent.sigil}</div>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: 8,
+              background: `conic-gradient(from 0deg, ${agent.color}, transparent 60%, ${agent.color})`,
+              opacity: 0.7 * pulse,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 2,
+              borderRadius: 6,
+              background: surface,
+              border: `1px solid ${agent.color}55`,
+              display: 'grid',
+              placeItems: 'center',
+              fontFamily: 'var(--font-display)',
+              fontWeight: 800,
+              fontSize: 16,
+              color: agent.color,
+            }}
+          >
+            {agent.sigil}
+          </div>
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '-.01em', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.name}</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', borderRadius: 3, background: `${agent.color}22`, color: agent.color, fontWeight: 700, flexShrink: 0 }}>LV{agent.level}</span>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: '-.01em',
+                color: text,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {agent.name}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                padding: '1px 5px',
+                borderRadius: 3,
+                background: `${agent.color}22`,
+                color: agent.color,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              LV{agent.level}
+            </span>
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted, letterSpacing: 1, marginTop: 2 }}>{agent.code} · {agent.model}</div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: muted,
+              letterSpacing: 1,
+              marginTop: 2,
+            }}
+          >
+            {agent.code} · {agent.model}
+          </div>
         </div>
       </div>
 
@@ -877,9 +1987,34 @@ function RosterTile({ agent, idx, active, onClick }: { agent: AgentData; idx: nu
         <div style={{ width: `${agent.xp * 100}%`, height: '100%', background: agent.color }} />
       </div>
 
-      <div style={{ padding: '6px 8px', borderRadius: 6, background: surface2, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: agent.color, flexShrink: 0 }} />
-        <span style={{ fontSize: 11, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div
+        style={{
+          padding: '6px 8px',
+          borderRadius: 6,
+          background: surface2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: agent.color,
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 11,
+            color: text,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
           {agent.role}
         </span>
       </div>
@@ -889,21 +2024,54 @@ function RosterTile({ agent, idx, active, onClick }: { agent: AgentData; idx: nu
 
 function AddAgentTile() {
   return (
-    <button style={{
-      background: 'transparent',
-      border: `1.5px dashed ${line2}`,
-      borderRadius: 12, padding: 12,
-      color: muted,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      cursor: 'pointer', gap: 8, minHeight: 140,
-    }}>
-      <div style={{ width: 32, height: 32, borderRadius: '50%', border: `1.5px dashed ${line2}`, display: 'grid', placeItems: 'center' }}>
+    <button
+      style={{
+        background: 'transparent',
+        border: `1.5px dashed ${line2}`,
+        borderRadius: 12,
+        padding: 12,
+        color: muted,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        gap: 8,
+        minHeight: 140,
+      }}
+    >
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          border: `1.5px dashed ${line2}`,
+          display: 'grid',
+          placeItems: 'center',
+        }}
+      >
         <svg width="14" height="14" viewBox="0 0 14 14">
-          <path d="M7 1 V13 M1 7 H13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <path
+            d="M7 1 V13 M1 7 H13"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
         </svg>
       </div>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase' }}>Recruter agent</span>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2 }}>+1 slot dispo</span>
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          letterSpacing: '.14em',
+          textTransform: 'uppercase',
+        }}
+      >
+        Recruter agent
+      </span>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2 }}>
+        +1 slot dispo
+      </span>
     </button>
   )
 }
@@ -921,25 +2089,58 @@ function RunsTimeline({ tick }: { tick: number }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {rows.slice(0, 6).map(row => (
-        <div key={row.agent.id} style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 10, alignItems: 'center' }}>
+      {rows.slice(0, 6).map((row) => (
+        <div
+          key={row.agent.id}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '100px 1fr',
+            gap: 10,
+            alignItems: 'center',
+          }}
+        >
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{
-              width: 16, height: 16, borderRadius: 4, border: `1px solid ${row.agent.color}`,
-              display: 'grid', placeItems: 'center', flexShrink: 0,
-              fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 10, color: row.agent.color,
-              background: `${row.agent.color}10`,
-            }}>{row.agent.sigil}</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: row.agent.color, letterSpacing: 1, fontWeight: 700 }}>{row.agent.code}</span>
+            <span
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                border: `1px solid ${row.agent.color}`,
+                display: 'grid',
+                placeItems: 'center',
+                flexShrink: 0,
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: 10,
+                color: row.agent.color,
+                background: `${row.agent.color}10`,
+              }}
+            >
+              {row.agent.sigil}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: row.agent.color,
+                letterSpacing: 1,
+                fontWeight: 700,
+              }}
+            >
+              {row.agent.code}
+            </span>
           </span>
           <div style={{ height: 12, display: 'flex', gap: 3, alignItems: 'stretch' }}>
             {row.items.map((it, j) => (
-              <div key={j} style={{
-                flex: it.w,
-                background: it.ok ? row.agent.color : rose,
-                opacity: it.ok ? (0.4 + (it.w / 22) * 0.6) : 0.6,
-                borderRadius: 2,
-              }} />
+              <div
+                key={j}
+                style={{
+                  flex: it.w,
+                  background: it.ok ? row.agent.color : rose,
+                  opacity: it.ok ? 0.4 + (it.w / 22) * 0.6 : 0.6,
+                  borderRadius: 2,
+                }}
+              />
             ))}
           </div>
         </div>
@@ -955,6 +2156,7 @@ export default function AgentsPage() {
   const [logTick, setLogTick] = useState(0)
   const [pipeline, setPipeline] = useState<PipelineRow | null>(null)
   const [orchestration, setOrchestration] = useState<OrchestrationStatus | null>(null)
+  const [autonomyJobs, setAutonomyJobs] = useState<AutonomyJobView[]>([])
   const [autonomyActions, setAutonomyActions] = useState<AutonomyActionView[]>([])
   const [autonomyApprovals, setAutonomyApprovals] = useState<AutonomyApprovalView[]>([])
   const [autonomyLoading, setAutonomyLoading] = useState(false)
@@ -962,7 +2164,7 @@ export default function AgentsPage() {
   const [validating, setValidating] = useState(false)
 
   useEffect(() => {
-    const i = setInterval(() => setLogTick(t => t + 1), 1600)
+    const i = setInterval(() => setLogTick((t) => t + 1), 1600)
     return () => clearInterval(i)
   }, [])
 
@@ -972,19 +2174,23 @@ export default function AgentsPage() {
       try {
         const res = await fetch('/api/studio/agents/pipeline')
         if (res.ok) {
-          const data = await res.json() as { pipeline: PipelineRow | null }
+          const data = (await res.json()) as { pipeline: PipelineRow | null }
           if (!cancelled) setPipeline(data.pipeline)
         }
-      } catch { /* silencieux */ }
+      } catch {
+        /* silencieux */
+      }
     }
     loadPipeline()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const loadOrchestration = useCallback(async () => {
     const res = await fetch('/api/studio/agents/orchestrate', { method: 'POST' })
     if (!res.ok) return
-    const data = await res.json() as OrchestrationStatus
+    const data = (await res.json()) as OrchestrationStatus
     setOrchestration(data)
   }, [])
 
@@ -992,11 +2198,12 @@ export default function AgentsPage() {
     setAutonomyLoading(true)
     try {
       const res = await fetch('/api/studio/autonomy/jobs')
-      const data = await res.json() as AutonomyJobsPayload
+      const data = (await res.json()) as AutonomyJobsPayload
       if (!res.ok && res.status !== 207) {
         toast.error(data.errors?.[0]?.message || 'Erreur chargement autonomy')
         return
       }
+      setAutonomyJobs(data.jobs ?? [])
       setAutonomyActions(data.actions ?? [])
       setAutonomyApprovals(data.approvals ?? [])
     } catch {
@@ -1007,10 +2214,7 @@ export default function AgentsPage() {
   }, [])
 
   const refreshCommandState = useCallback(async () => {
-    await Promise.all([
-      loadOrchestration(),
-      loadAutonomyState(),
-    ])
+    await Promise.all([loadOrchestration(), loadAutonomyState()])
   }, [loadAutonomyState, loadOrchestration])
 
   useEffect(() => {
@@ -1030,14 +2234,19 @@ export default function AgentsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approvalId, decision }),
       })
-      const data = await res.json().catch(() => ({})) as { error?: string; result?: { actionType?: string; executed?: boolean } }
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        result?: { actionType?: string; executed?: boolean }
+      }
       if (!res.ok) {
         toast.error(data.error || 'Erreur approval')
         return
       }
-      toast.success(decision === 'approved'
-        ? `Approval validée · ${data.result?.actionType ?? 'action'}`
-        : 'Approval rejetée')
+      toast.success(
+        decision === 'approved'
+          ? `Approval validée · ${data.result?.actionType ?? 'action'}`
+          : 'Approval rejetée'
+      )
       await loadAutonomyState()
     } catch {
       toast.error('Erreur réseau approval')
@@ -1055,10 +2264,10 @@ export default function AgentsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'approve', pipelineId: pipeline.id }),
       })
-      const data = await res.json() as { ok?: boolean; ventureId?: string; error?: string }
+      const data = (await res.json()) as { ok?: boolean; ventureId?: string; error?: string }
       if (!res.ok) return toast.error(data.error || 'Erreur validation')
       toast.success('Venture créée · les agents sont débloqués')
-      setPipeline(p => p ? { ...p, status: 'approved' } : p)
+      setPipeline((p) => (p ? { ...p, status: 'approved' } : p))
     } finally {
       setValidating(false)
     }
@@ -1082,49 +2291,72 @@ export default function AgentsPage() {
     }
   }
 
-  const selected = AGENTS_DATA.find(a => a.id === selectedId) ?? AGENTS_DATA[0]
+  const selected = AGENTS_DATA.find((a) => a.id === selectedId) ?? AGENTS_DATA[0]
   const activity = useMemo(() => makeSpark(48, 50, 22, selectedId.length * 7), [selectedId])
   const queue = QUEUE[selectedId] ?? []
-  const approvalQueue = useMemo(() => buildApprovalQueue({
-    approvals: autonomyApprovals,
-    actions: autonomyActions,
-  }), [autonomyApprovals, autonomyActions])
-  const pendingApprovalCount = approvalQueue.filter(item => item.isPending).length
+  const approvalQueue = useMemo(
+    () =>
+      buildApprovalQueue({
+        approvals: autonomyApprovals,
+        actions: autonomyActions,
+      }),
+    [autonomyApprovals, autonomyActions]
+  )
+  const pendingApprovalCount = approvalQueue.filter((item) => item.isPending).length
 
-  const throughput = AGENTS_DATA.map(a => ({
+  const throughput = AGENTS_DATA.map((a) => ({
     ...a,
     runs: 0,
     win: 0,
     avg: '—',
   }))
-  const maxRuns = Math.max(...throughput.map(t => t.runs))
+  const maxRuns = Math.max(...throughput.map((t) => t.runs))
 
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {[
         { label: `${AGENTS_DATA.length} agents`, color: muted },
         { label: `${AGENTS_DATA.length - 1} live`, color: emerald },
-        ...(orchestration ? [
-          { label: `DUE ${orchestration.due.length}`, color: muted },
-          { label: `READY ${orchestration.executable.length}`, color: cyan },
-          { label: `GATED ${orchestration.blocked.length}`, color: rose },
-        ] : []),
-        { label: `APPROVALS ${pendingApprovalCount}`, color: pendingApprovalCount > 0 ? amber : muted },
+        ...(orchestration
+          ? [
+              { label: `DUE ${orchestration.due.length}`, color: muted },
+              { label: `READY ${orchestration.executable.length}`, color: cyan },
+              { label: `GATED ${orchestration.blocked.length}`, color: rose },
+            ]
+          : []),
+        {
+          label: `APPROVALS ${pendingApprovalCount}`,
+          color: pendingApprovalCount > 0 ? amber : muted,
+        },
       ].map(({ label, color }) => (
-        <span key={label} style={{
-          padding: '4px 10px', borderRadius: 5,
-          background: `${color}18`, color,
-          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.1em', fontWeight: 700,
-          border: `1px solid ${color}30`,
-        }}>{label}</span>
+        <span
+          key={label}
+          style={{
+            padding: '4px 10px',
+            borderRadius: 5,
+            background: `${color}18`,
+            color,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.1em',
+            fontWeight: 700,
+            border: `1px solid ${color}30`,
+          }}
+        >
+          {label}
+        </span>
       ))}
     </div>
   )
 
   return (
-    <CkShell breadcrumb="Studio / Agents" title="Fleet Command" subtitle="7 agents · missions autonomes" actions={headerActions}>
+    <CkShell
+      breadcrumb="Studio / Agents"
+      title="Fleet Command"
+      subtitle="7 agents · missions autonomes"
+      actions={headerActions}
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
         <PipelineStatusBar pipeline={pipeline} />
 
         {pipeline?.status === 'pending_validation' && (
@@ -1144,74 +2376,254 @@ export default function AgentsPage() {
           onRefresh={loadAutonomyState}
         />
 
-        {/* Main 2-col */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '480px 1fr', gap: 14, alignItems: 'start' }}>
+        <AutonomyObservabilityPanel
+          jobs={autonomyJobs}
+          actions={autonomyActions}
+          approvals={autonomyApprovals}
+          approvalQueue={approvalQueue}
+        />
 
+        {/* Main 2-col */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : '480px 1fr',
+            gap: 14,
+            alignItems: 'start',
+          }}
+        >
           {/* Left: AgentInspector */}
-          <AgentInspector agent={selected} activity={activity} queue={queue} pipeline={pipeline} setPipeline={setPipeline} onRunComplete={refreshCommandState} />
+          <AgentInspector
+            agent={selected}
+            activity={activity}
+            queue={queue}
+            pipeline={pipeline}
+            setPipeline={setPipeline}
+            onRunComplete={refreshCommandState}
+          />
 
           {/* Right: Roster + Throughput */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
             {/* Roster */}
             <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Roster</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>click pour inspecter</span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  marginBottom: 8,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    letterSpacing: '-.01em',
+                    color: text,
+                  }}
+                >
+                  Roster
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  click pour inspecter
+                </span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+                  gap: 10,
+                }}
+              >
                 {AGENTS_DATA.map((a, i) => (
-                  <RosterTile key={a.id} agent={a} idx={i} active={a.id === selectedId} onClick={() => setSelectedId(a.id)} />
+                  <RosterTile
+                    key={a.id}
+                    agent={a}
+                    idx={i}
+                    active={a.id === selectedId}
+                    onClick={() => setSelectedId(a.id)}
+                  />
                 ))}
                 <AddAgentTile />
               </div>
             </div>
 
             {/* Throughput chart */}
-            <div style={{
-              background: surface, border: `1px solid ${line}`, borderRadius: 14,
-              padding: 16, display: 'flex', flexDirection: 'column',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div
+              style={{
+                background: surface,
+                border: `1px solid ${line}`,
+                borderRadius: 14,
+                padding: 16,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  marginBottom: 14,
+                }}
+              >
                 <div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Throughput · 24h</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>runs · win rate · latency</div>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      letterSpacing: '-.01em',
+                      color: text,
+                    }}
+                  >
+                    Throughput · 24h
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      color: muted2,
+                      letterSpacing: '.14em',
+                      textTransform: 'uppercase',
+                      marginTop: 2,
+                    }}
+                  >
+                    runs · win rate · latency
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {['24h', '7j', '30j'].map((label, i) => (
-                    <button key={label} style={{
-                      padding: '4px 8px', borderRadius: 4,
-                      fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.14em',
-                      border: `1px solid ${line}`,
-                      background: i === 0 ? accent : surface2,
-                      color: i === 0 ? '#0b0d12' : muted,
-                      fontWeight: 700, cursor: 'pointer',
-                    }}>{label}</button>
+                    <button
+                      key={label}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: 4,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        letterSpacing: '.14em',
+                        border: `1px solid ${line}`,
+                        background: i === 0 ? accent : surface2,
+                        color: i === 0 ? '#0b0d12' : muted,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {label}
+                    </button>
                   ))}
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {throughput.map((row, i) => (
-                  <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 60px 60px 50px', gap: 12, alignItems: 'center' }}>
+                  <div
+                    key={row.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '110px 1fr 60px 60px 50px',
+                      gap: 12,
+                      alignItems: 'center',
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                      <span style={{
-                        width: 22, height: 22, borderRadius: 5, border: `1px solid ${row.color}`,
-                        display: 'grid', placeItems: 'center', flexShrink: 0,
-                        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, color: row.color,
-                        background: `${row.color}10`,
-                      }}>{AGENTS_DATA[i].sigil}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+                      <span
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 5,
+                          border: `1px solid ${row.color}`,
+                          display: 'grid',
+                          placeItems: 'center',
+                          flexShrink: 0,
+                          fontFamily: 'var(--font-display)',
+                          fontWeight: 800,
+                          fontSize: 13,
+                          color: row.color,
+                          background: `${row.color}10`,
+                        }}
+                      >
+                        {AGENTS_DATA[i].sigil}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: text,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.name}
+                      </span>
                     </div>
-                    <div style={{ height: 12, background: surface2, borderRadius: 3, position: 'relative', overflow: 'hidden', border: `1px solid ${line}` }}>
-                      <div style={{
-                        width: `${(row.runs / maxRuns) * 100}%`, height: '100%',
-                        background: `linear-gradient(90deg, ${row.color}, ${row.color}aa)`,
-                      }} />
-                      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px)', backgroundSize: '20px 100%' }} />
+                    <div
+                      style={{
+                        height: 12,
+                        background: surface2,
+                        borderRadius: 3,
+                        position: 'relative',
+                        overflow: 'hidden',
+                        border: `1px solid ${line}`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${(row.runs / maxRuns) * 100}%`,
+                          height: '100%',
+                          background: `linear-gradient(90deg, ${row.color}, ${row.color}aa)`,
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          backgroundImage:
+                            'linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px)',
+                          backgroundSize: '20px 100%',
+                        }}
+                      />
                     </div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: row.color, fontWeight: 700, textAlign: 'right' }}>{row.runs}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: emerald, textAlign: 'right' }}>{row.win}%</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted, textAlign: 'right' }}>{row.avg}s</span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11,
+                        color: row.color,
+                        fontWeight: 700,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {row.runs}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11,
+                        color: emerald,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {row.win}%
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11,
+                        color: muted,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {row.avg}s
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1220,20 +2632,47 @@ export default function AgentsPage() {
         </div>
 
         {/* Bottom: Runs timeline */}
-        <div style={{
-          background: surface, border: `1px solid ${line}`, borderRadius: 14,
-          padding: 14, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 168,
-        }}>
+        <div
+          style={{
+            background: surface,
+            border: `1px solid ${line}`,
+            borderRadius: 14,
+            padding: 14,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            minHeight: 168,
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Recent runs · agent timeline</div>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: '-.01em',
+                color: text,
+              }}
+            >
+              Recent runs · agent timeline
+            </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              {['all', ...AGENTS_DATA.slice(0, 5).map(a => a.code)].map((label, i) => (
-                <span key={label} style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 7px', borderRadius: 4, letterSpacing: '.14em',
-                  border: `1px solid ${line}`,
-                  background: i === 0 ? surface2 : 'transparent',
-                  color: i === 0 ? text : muted,
-                }}>{label}</span>
+              {['all', ...AGENTS_DATA.slice(0, 5).map((a) => a.code)].map((label, i) => (
+                <span
+                  key={label}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    padding: '3px 7px',
+                    borderRadius: 4,
+                    letterSpacing: '.14em',
+                    border: `1px solid ${line}`,
+                    background: i === 0 ? surface2 : 'transparent',
+                    color: i === 0 ? text : muted,
+                  }}
+                >
+                  {label}
+                </span>
               ))}
             </div>
           </div>

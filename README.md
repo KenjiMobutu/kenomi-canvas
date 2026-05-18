@@ -17,16 +17,16 @@ Studio OS pour entrepreneurs solo — gérez vos ventures, automatisez vos workf
 
 ## Stack technique
 
-| Couche | Technologie |
-|--------|------------|
-| Framework | Next.js 16 (App Router, proxy, standalone output) |
-| UI | React 19, Tailwind CSS v4, Lucide, Sonner |
-| Auth | Supabase Auth (@supabase/ssr, JWT cookies) |
-| Base de données | Supabase PostgreSQL 15 + Row Level Security |
-| ORM | Prisma 6 (schéma ventures legacy) |
-| LLM | Ollama (local, streaming SSE) |
-| Automations | n8n (webhooks) |
-| Déploiement | Docker standalone, Coolify self-hosted |
+| Couche          | Technologie                                       |
+| --------------- | ------------------------------------------------- |
+| Framework       | Next.js 16 (App Router, proxy, standalone output) |
+| UI              | React 19, Tailwind CSS v4, Lucide, Sonner         |
+| Auth            | Supabase Auth (@supabase/ssr, JWT cookies)        |
+| Base de données | Supabase PostgreSQL 15 + Row Level Security       |
+| ORM             | Prisma 6 (schéma ventures legacy)                 |
+| LLM             | Ollama (local, streaming SSE)                     |
+| Automations     | n8n (webhooks)                                    |
+| Déploiement     | Docker standalone, Coolify self-hosted            |
 
 ## Architecture Status
 
@@ -38,16 +38,19 @@ Statut actuel :
 
 - **Core studio** : cockpit, ventures, documents, marketing, automations, chat IA et API keys opérationnels.
 - **Agents** : pipeline séquentiel, runs manuels, audit events et orchestration due/ready/gated via `agent_schedules`.
+- **Autonomie** : jobs, actions, approvals, budget gates, kill switch et dry-run sont exposés dans `/studio/agents`.
+- **Monétisation** : création Stripe Checkout et webhook `checkout.session.completed` intégrés derrière approbation humaine.
+- **Déploiement** : action Coolify déclenchable derrière approbation humaine, avec mode dry-run.
 - **Infrastructure** : vue topology alimentée par `/api/studio/infra/services`, avec configuration extensible par variables d'environnement.
 - **Privacy** : export RGPD multi-tables et suppression confirmée avec token temporel.
 - **Sécurité** : RLS Supabase, allowlist email, proxy Next.js, protections SSRF et secrets côté serveur.
 
-À finaliser avant production autonome :
+Limites connues avant exploitation autonome continue :
 
-- Webhooks déploiement/monétisation avec approbations humaines traçables.
-- Observabilité centralisée des agents, coûts LLM, n8n et services tailnet.
 - Backups/restores Supabase documentés et testés.
-- Runbooks Coolify/Tailscale/Proxmox pour incidents critiques.
+- Validation locale Supabase complète requiert un accès Docker fonctionnel.
+- Authenticated browser smoke test à rejouer avec une session Studio réelle.
+- Baseline Prettier à traiter dans un commit dédié.
 
 ## Architecture de sécurité
 
@@ -76,21 +79,21 @@ npm run dev
 
 ## Variables d'environnement requises
 
-| Variable | Description |
-|----------|------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL de l'instance Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé anon Supabase (publique) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Clé service role Supabase (serveur uniquement) |
-| `DATABASE_URL` | URL PostgreSQL pour Prisma |
-| `ALLOWED_EMAIL` | Seul email autorisé à accéder au studio |
-| `DASHBOARD_PASSWORD` | Mot de passe du dashboard admin |
-| `DASHBOARD_TOKEN_SECRET` | Secret HMAC pour les tokens dashboard |
-| `APP_ORIGIN` | URL publique de l'application |
-| `STRIPE_SECRET_KEY` | Clé serveur Stripe, idéalement restricted key par environnement |
-| `STRIPE_WEBHOOK_SECRET` | Secret de signature du webhook Stripe `/api/stripe/webhook` |
-| `COOLIFY_URL` | URL API Coolify autorisée côté serveur |
-| `COOLIFY_TOKEN` | Token API Coolify côté serveur |
-| `TRUSTED_PRIVATE_HOSTS` | Hosts privés autorisés pour appels serveur, séparés par virgules |
+| Variable                        | Description                                                      |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | URL de l'instance Supabase                                       |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé anon Supabase (publique)                                     |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Clé service role Supabase (serveur uniquement)                   |
+| `DATABASE_URL`                  | URL PostgreSQL pour Prisma                                       |
+| `ALLOWED_EMAIL`                 | Seul email autorisé à accéder au studio                          |
+| `DASHBOARD_PASSWORD`            | Mot de passe du dashboard admin                                  |
+| `DASHBOARD_TOKEN_SECRET`        | Secret HMAC pour les tokens dashboard                            |
+| `APP_ORIGIN`                    | URL publique de l'application                                    |
+| `STRIPE_SECRET_KEY`             | Clé serveur Stripe, idéalement restricted key par environnement  |
+| `STRIPE_WEBHOOK_SECRET`         | Secret de signature du webhook Stripe `/api/stripe/webhook`      |
+| `COOLIFY_URL`                   | URL API Coolify autorisée côté serveur                           |
+| `COOLIFY_TOKEN`                 | Token API Coolify côté serveur                                   |
+| `TRUSTED_PRIVATE_HOSTS`         | Hosts privés autorisés pour appels serveur, séparés par virgules |
 
 ### Health check
 
@@ -104,6 +107,13 @@ HEALTH_DATABASE_REQUIRED=false
 ```
 
 Les équivalents `HEALTH_SUPABASE_REQUIRED=false` et `HEALTH_STORAGE_REQUIRED=false` existent pour isoler un incident ou un environnement incomplet, mais ne doivent pas être utilisés en production autonome.
+
+### Runbooks opérationnels
+
+- [Incident autonomie](docs/runbooks/autonomy-incident.md)
+- [Webhook Stripe](docs/runbooks/stripe-webhook.md)
+- [Déploiement Coolify](docs/runbooks/coolify-deploy.md)
+- [Migrations Supabase](docs/runbooks/database-migrations.md)
 
 ## Déploiement
 

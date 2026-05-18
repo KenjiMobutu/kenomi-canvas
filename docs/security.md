@@ -9,6 +9,8 @@ Kenomi Canvas considère toutes les surfaces admin et studio comme privées par 
 - Waitlist — rate-limitée et validée en entrée.
 - Secrets — jamais retournés bruts au browser ; uniquement des flags de présence.
 - Actions agents et automations — loggées dans `agent_events`.
+- Actions autonomes risquées — passent par `autonomy_actions` et `human_approvals` avant tout appel Stripe, Coolify, publication marketing ou augmentation de budget.
+- Mode arrêt — `AUTONOMY_ENABLED=false` bloque l'orchestration autonome ; `AUTONOMY_DRY_RUN=true` neutralise les effets externes approuvés.
 - Export RGPD — `GET /api/studio/privacy/export` retourne les données sanitisées (pas de secrets en clair).
 
 ## Privacy Controls
@@ -18,3 +20,9 @@ Kenomi Canvas considère toutes les surfaces admin et studio comme privées par 
 - Robustesse : les erreurs de lecture partielles sont retournées dans `export_errors` au lieu de faire disparaître silencieusement une section.
 - Suppression : `POST /api/studio/privacy/delete` exige un token temporel comparé en temps constant et journalise `privacy.delete.confirmed` avant purge.
 - Portée : la suppression cible les tables studio liées au `user_id`; les surfaces admin restent protégées par le modèle HMAC séparé.
+
+## Incident References
+
+- Autonomie : `docs/runbooks/autonomy-incident.md`
+- Stripe : `docs/runbooks/stripe-webhook.md`
+- Coolify : `docs/runbooks/coolify-deploy.md`
