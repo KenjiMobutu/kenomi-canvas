@@ -5,6 +5,7 @@ import { executeDueAgentRuns, partitionDueRuns, selectDueAgentRuns } from '@/lib
 import { insertAuditEvent } from '@/lib/audit-log'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { runAgentStep, type RunAgentStepSupabase } from '@/lib/autonomy/run-agent-step'
+import { getAutonomyConfig } from '@/lib/autonomy/config'
 
 function isCronAuthorized(req: NextRequest): boolean {
   const secret = process.env.AGENT_ORCHESTRATOR_SECRET
@@ -27,6 +28,24 @@ export async function POST(req: NextRequest) {
 
   const { user, supabase, response } = context
   if (response) return response
+
+  const autonomyConfig = getAutonomyConfig()
+  if (!autonomyConfig.enabled) {
+    await insertAuditEvent(supabase, {
+      user_id: user!.id,
+      event_type: 'agent.orchestration.disabled',
+      severity: 'warn',
+      metadata: { config: autonomyConfig },
+    })
+    return NextResponse.json({
+      ok: true,
+      blocked: 'autonomy_disabled',
+      config: autonomyConfig,
+      due: [],
+      executable: [],
+      executed: [],
+    })
+  }
 
   const { data, error } = await supabase
     .from('agent_schedules')
