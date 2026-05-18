@@ -5,6 +5,7 @@ import { isAllowedWebhookUrl } from '@/lib/security'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
 import { buildRunResult } from '@/lib/automation-run-status'
+import { insertAuditEvent } from '@/lib/audit-log'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -81,6 +82,18 @@ export async function POST(req: NextRequest) {
   const [runRes, wfRes] = await Promise.all([runInsert, wfUpdate])
   if (runRes.error) console.error('[trigger] automation_runs insert failed:', runRes.error.message)
   if (wfRes.error) console.error('[trigger] workflow update failed:', wfRes.error.message)
+
+  await insertAuditEvent(supabase, {
+    user_id: user!.id,
+    event_type: 'automation.trigger.completed',
+    severity: status === 'success' ? 'info' : 'warn',
+    metadata: {
+      workflow_id: id,
+      status,
+      http_status: httpStatus,
+      duration_ms: durationMs,
+    },
+  })
 
   if (status !== 'success') {
     return NextResponse.json(
