@@ -1,6 +1,9 @@
 import { getLandingPage } from '@/lib/queries'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +27,18 @@ export default async function LandingPage({ params, searchParams }: Props) {
   const { waitlist, payment } = await searchParams
   const data = await getLandingPage(slug)
   if (!data) notFound()
+
+  const headerStore = await headers()
+  await recordVentureEventBySlugSafely(supabaseAdmin as unknown as VentureEventSupabase, {
+    slug,
+    eventType: 'page_view',
+    source: 'landing',
+    metadata: {
+      path: `/${slug}`,
+      referer: headerStore.get('referer') ?? '',
+      user_agent: headerStore.get('user-agent') ?? '',
+    },
+  })
 
   const { hero, features, faq } = data.copywriting
 

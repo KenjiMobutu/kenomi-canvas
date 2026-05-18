@@ -1,10 +1,11 @@
 'use client'
-import React, { useMemo, useEffect, useState } from 'react'
+import React, { useMemo, useEffect, useState, useCallback } from 'react'
+import { Check, CheckCircle2, Clock3, RefreshCw, ShieldAlert, X, XCircle } from 'lucide-react'
 import { CkShell } from '@/components/CkShell'
 import { useIsMobile } from '@/lib/studio-utils'
 import {
   surface, surface2, line, line2, text, muted, muted2,
-  accent, emerald, rose, cyan, violet,
+  accent, emerald, amber, rose, cyan, violet,
 } from '@/lib/ck-vars'
 import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
@@ -12,6 +13,12 @@ import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import type { PipelineRow } from '@/lib/pipeline-types'
 import { isAgentUnlocked, AGENT_CHAIN } from '@/lib/pipeline-types'
+import {
+  buildApprovalQueue,
+  type AutonomyActionView,
+  type AutonomyApprovalView,
+  type ApprovalQueueItem,
+} from '@/lib/autonomy/approval-view-model'
 
 interface AgentConfig {
   model: string
@@ -27,6 +34,21 @@ interface DbAgentState {
   run_count: number
   last_run_at: string | null
   paused: boolean
+}
+
+interface OrchestrationStatus {
+  due: { scheduleId: string; agentId: string; blockedByApproval: boolean }[]
+  executable: { scheduleId: string; agentId: string; blockedByApproval: boolean }[]
+  blocked: { scheduleId: string; agentId: string; blockedByApproval: boolean }[]
+  update_errors: { scheduleId: string; agentId: string; message: string }[]
+}
+
+interface AutonomyJobsPayload {
+  ok: boolean
+  jobs: unknown[]
+  actions: AutonomyActionView[]
+  approvals: AutonomyApprovalView[]
+  errors?: { section: string; message: string }[]
 }
 
 function TunePanel({ agentId, agentColor, onClose }: { agentId: string; agentColor: string; onClose: () => void }) {
@@ -242,10 +264,275 @@ function PipelineValidationCard({
   )
 }
 
-function AgentInspector({ agent, activity, queue, pipeline, setPipeline }: {
+const ACTION_LABELS: Record<string, string> = {
+  scale_budget: 'Scale budget',
+  stop_venture: 'Stop venture',
+  publish_campaign: 'Publish campaign',
+  create_checkout: 'Create checkout',
+  deploy: 'Deploy',
+  run_agent: 'Run agent',
+  create_landing: 'Create landing',
+}
+
+const APPROVAL_COLORS: Record<string, string> = {
+  pending: amber,
+  approved: emerald,
+  rejected: rose,
+  expired: muted2,
+}
+
+function getActionLabel(actionType?: string): string {
+  if (!actionType) return 'Action inconnue'
+  return ACTION_LABELS[actionType] ?? actionType.replaceAll('_', ' ')
+}
+
+function compactDate(isoDate?: string | null): string {
+  if (!isoDate) return '—'
+  return new Date(isoDate).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function ApprovalStatusIcon({ status }: { status: string }) {
+  if (status === 'approved') return <CheckCircle2 size={14} />
+  if (status === 'rejected') return <XCircle size={14} />
+  return <Clock3 size={14} />
+}
+
+function ApprovalGatesPanel({
+  queue,
+  loading,
+  resolvingKey,
+  onResolve,
+  onRefresh,
+}: {
+  queue: ApprovalQueueItem[]
+  loading: boolean
+  resolvingKey: string | null
+  onResolve: (approvalId: string, decision: 'approved' | 'rejected') => void
+  onRefresh: () => void
+}) {
+  const pendingCount = queue.filter(item => item.isPending).length
+
+  return (
+    <div style={{
+      background: surface,
+      border: `1px solid ${pendingCount > 0 ? `${amber}66` : line}`,
+      borderRadius: 14,
+      padding: 16,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <div style={{
+            width: 34,
+            height: 34,
+            borderRadius: 9,
+            background: `${amber}16`,
+            border: `1px solid ${amber}55`,
+            color: amber,
+            display: 'grid',
+            placeItems: 'center',
+            flexShrink: 0,
+          }}>
+            <ShieldAlert size={17} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: text, letterSpacing: '-.01em' }}>
+              Approval Gates
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.12em', textTransform: 'uppercase', marginTop: 2 }}>
+              {pendingCount} pending · {queue.length} total
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          title="Rafraîchir"
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 8,
+            display: 'grid',
+            placeItems: 'center',
+            background: surface2,
+            color: loading ? muted2 : text,
+            border: `1px solid ${line2}`,
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <RefreshCw size={14} />
+        </button>
+      </div>
+
+      {queue.length === 0 ? (
+        <div style={{
+          padding: '14px 12px',
+          borderRadius: 10,
+          background: surface2,
+          border: `1px dashed ${line2}`,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: muted,
+          letterSpacing: '.08em',
+          textTransform: 'uppercase',
+        }}>
+          Aucun gate en attente
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+          {queue.map((item) => {
+            const statusColor = APPROVAL_COLORS[item.approval.status] ?? muted2
+            const actionInput = item.action?.input ?? {}
+            const nextStep = typeof actionInput.next_step === 'string' ? actionInput.next_step : item.approval.reason
+            const rationale = typeof actionInput.rationale === 'string' ? actionInput.rationale : null
+            const approveKey = `${item.approval.id}:approved`
+            const rejectKey = `${item.approval.id}:rejected`
+
+            return (
+              <div key={item.approval.id} style={{
+                background: surface2,
+                border: `1px solid ${item.isPending ? `${statusColor}55` : line}`,
+                borderRadius: 10,
+                padding: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                minWidth: 0,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 8.5,
+                        padding: '3px 7px',
+                        borderRadius: 4,
+                        background: `${statusColor}18`,
+                        color: statusColor,
+                        border: `1px solid ${statusColor}30`,
+                        letterSpacing: '.14em',
+                        textTransform: 'uppercase',
+                        fontWeight: 800,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}>
+                        <ApprovalStatusIcon status={item.approval.status} />
+                        {item.approval.status}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.08em' }}>
+                        {compactDate(item.approval.created_at)}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: text, fontWeight: 800, marginTop: 8, letterSpacing: '-.01em' }}>
+                      {getActionLabel(item.action?.action_type)}
+                    </div>
+                  </div>
+                  {item.confidence !== null && (
+                    <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: muted2, letterSpacing: '.12em', textTransform: 'uppercase' }}>conf</div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: cyan, fontWeight: 800 }}>{item.confidence}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {nextStep && (
+                    <div style={{ fontSize: 12, color: text, lineHeight: 1.45 }}>
+                      {nextStep}
+                    </div>
+                  )}
+                  {rationale && (
+                    <div style={{ fontSize: 11, color: muted, lineHeight: 1.45, borderLeft: `2px solid ${statusColor}`, paddingLeft: 8 }}>
+                      {rationale}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: item.isPending ? '1fr 1fr' : '1fr', gap: 8 }}>
+                  {item.isPending ? (
+                    <>
+                      <button
+                        onClick={() => onResolve(item.approval.id, 'approved')}
+                        disabled={resolvingKey !== null}
+                        style={{
+                          minHeight: 34,
+                          borderRadius: 8,
+                          border: `1px solid ${emerald}55`,
+                          background: emerald,
+                          color: '#0b0d12',
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: resolvingKey ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          opacity: resolvingKey ? 0.65 : 1,
+                        }}
+                      >
+                        <Check size={14} />
+                        {resolvingKey === approveKey ? '...' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => onResolve(item.approval.id, 'rejected')}
+                        disabled={resolvingKey !== null}
+                        style={{
+                          minHeight: 34,
+                          borderRadius: 8,
+                          border: `1px solid ${rose}55`,
+                          background: `${rose}16`,
+                          color: rose,
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: resolvingKey ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          opacity: resolvingKey ? 0.65 : 1,
+                        }}
+                      >
+                        <X size={14} />
+                        {resolvingKey === rejectKey ? '...' : 'Reject'}
+                      </button>
+                    </>
+                  ) : (
+                    <div style={{
+                      minHeight: 34,
+                      borderRadius: 8,
+                      border: `1px solid ${line}`,
+                      color: muted,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      letterSpacing: '.14em',
+                      textTransform: 'uppercase',
+                    }}>
+                      action {item.action?.status ?? 'unknown'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AgentInspector({ agent, activity, queue, pipeline, setPipeline, onRunComplete }: {
   agent: AgentData; activity: number[]; queue: string[]
   pipeline: PipelineRow | null
   setPipeline: React.Dispatch<React.SetStateAction<PipelineRow | null>>
+  onRunComplete?: () => void
 }) {
   const { user } = useAuth()
   const t = useTick(2400)
@@ -286,6 +573,7 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline }: {
         if (agent.id === 'scout' && data.pipeline) {
           setPipeline(data.pipeline as PipelineRow)
         }
+        onRunComplete?.()
       }
     } catch {
       toast.error('Erreur réseau')
@@ -636,10 +924,16 @@ function RunsTimeline({ tick }: { tick: number }) {
 }
 
 export default function AgentsPage() {
+  const { user } = useAuth()
   const isMobile = useIsMobile()
   const [selectedId, setSelectedId] = useState('scout')
   const [logTick, setLogTick] = useState(0)
   const [pipeline, setPipeline] = useState<PipelineRow | null>(null)
+  const [orchestration, setOrchestration] = useState<OrchestrationStatus | null>(null)
+  const [autonomyActions, setAutonomyActions] = useState<AutonomyActionView[]>([])
+  const [autonomyApprovals, setAutonomyApprovals] = useState<AutonomyApprovalView[]>([])
+  const [autonomyLoading, setAutonomyLoading] = useState(false)
+  const [resolvingApprovalKey, setResolvingApprovalKey] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
 
   useEffect(() => {
@@ -661,6 +955,71 @@ export default function AgentsPage() {
     loadPipeline()
     return () => { cancelled = true }
   }, [])
+
+  const loadOrchestration = useCallback(async () => {
+    const res = await fetch('/api/studio/agents/orchestrate', { method: 'POST' })
+    if (!res.ok) return
+    const data = await res.json() as OrchestrationStatus
+    setOrchestration(data)
+  }, [])
+
+  const loadAutonomyState = useCallback(async () => {
+    setAutonomyLoading(true)
+    try {
+      const res = await fetch('/api/studio/autonomy/jobs')
+      const data = await res.json() as AutonomyJobsPayload
+      if (!res.ok && res.status !== 207) {
+        toast.error(data.errors?.[0]?.message || 'Erreur chargement autonomy')
+        return
+      }
+      setAutonomyActions(data.actions ?? [])
+      setAutonomyApprovals(data.approvals ?? [])
+    } catch {
+      toast.error('Erreur réseau autonomy')
+    } finally {
+      setAutonomyLoading(false)
+    }
+  }, [])
+
+  const refreshCommandState = useCallback(async () => {
+    await Promise.all([
+      loadOrchestration(),
+      loadAutonomyState(),
+    ])
+  }, [loadAutonomyState, loadOrchestration])
+
+  useEffect(() => {
+    if (!user) return
+    const timeout = window.setTimeout(() => {
+      void refreshCommandState()
+    }, 0)
+    return () => window.clearTimeout(timeout)
+  }, [refreshCommandState, user])
+
+  async function handleApprovalResolution(approvalId: string, decision: 'approved' | 'rejected') {
+    const key = `${approvalId}:${decision}`
+    setResolvingApprovalKey(key)
+    try {
+      const res = await fetch('/api/studio/autonomy/jobs', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalId, decision }),
+      })
+      const data = await res.json().catch(() => ({})) as { error?: string; result?: { actionType?: string; executed?: boolean } }
+      if (!res.ok) {
+        toast.error(data.error || 'Erreur approval')
+        return
+      }
+      toast.success(decision === 'approved'
+        ? `Approval validée · ${data.result?.actionType ?? 'action'}`
+        : 'Approval rejetée')
+      await loadAutonomyState()
+    } catch {
+      toast.error('Erreur réseau approval')
+    } finally {
+      setResolvingApprovalKey(null)
+    }
+  }
 
   async function handleApprove() {
     if (!pipeline) return
@@ -701,6 +1060,11 @@ export default function AgentsPage() {
   const selected = AGENTS_DATA.find(a => a.id === selectedId) ?? AGENTS_DATA[0]
   const activity = useMemo(() => makeSpark(48, 50, 22, selectedId.length * 7), [selectedId])
   const queue = QUEUE[selectedId] ?? []
+  const approvalQueue = useMemo(() => buildApprovalQueue({
+    approvals: autonomyApprovals,
+    actions: autonomyActions,
+  }), [autonomyApprovals, autonomyActions])
+  const pendingApprovalCount = approvalQueue.filter(item => item.isPending).length
 
   const throughput = AGENTS_DATA.map(a => ({
     ...a,
@@ -711,10 +1075,16 @@ export default function AgentsPage() {
   const maxRuns = Math.max(...throughput.map(t => t.runs))
 
   const headerActions = (
-    <div style={{ display: 'flex', gap: 8 }}>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {[
         { label: `${AGENTS_DATA.length} agents`, color: muted },
         { label: `${AGENTS_DATA.length - 1} live`, color: emerald },
+        ...(orchestration ? [
+          { label: `DUE ${orchestration.due.length}`, color: muted },
+          { label: `READY ${orchestration.executable.length}`, color: cyan },
+          { label: `GATED ${orchestration.blocked.length}`, color: rose },
+        ] : []),
+        { label: `APPROVALS ${pendingApprovalCount}`, color: pendingApprovalCount > 0 ? amber : muted },
       ].map(({ label, color }) => (
         <span key={label} style={{
           padding: '4px 10px', borderRadius: 5,
@@ -741,11 +1111,19 @@ export default function AgentsPage() {
           />
         )}
 
+        <ApprovalGatesPanel
+          queue={approvalQueue}
+          loading={autonomyLoading}
+          resolvingKey={resolvingApprovalKey}
+          onResolve={handleApprovalResolution}
+          onRefresh={loadAutonomyState}
+        />
+
         {/* Main 2-col */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '480px 1fr', gap: 14, alignItems: 'start' }}>
 
           {/* Left: AgentInspector */}
-          <AgentInspector agent={selected} activity={activity} queue={queue} pipeline={pipeline} setPipeline={setPipeline} />
+          <AgentInspector agent={selected} activity={activity} queue={queue} pipeline={pipeline} setPipeline={setPipeline} onRunComplete={refreshCommandState} />
 
           {/* Right: Roster + Throughput */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

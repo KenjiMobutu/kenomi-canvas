@@ -4,7 +4,7 @@ import { CkShell } from '@/components/CkShell'
 import { useIsMobile } from '@/lib/studio-utils'
 import {
   surface, surface2, line, line2, text, muted, muted2,
-  accent, accent2, emerald, amber, rose, cyan, violet, fuchsia,
+  accent, emerald, amber, rose, cyan, violet, fuchsia,
 } from '@/lib/ck-vars'
 import { AGENTS_DATA, makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
@@ -108,25 +108,30 @@ function AgentContributionChart({ totalMrr }: { totalMrr: string }) {
   const contrib = AGENTS_DATA.map(a => ({ agent: a, pct: equal }))
   const total = contrib.reduce((s, i) => s + i.pct, 0)
   const r = 60, c = 2 * Math.PI * r
-  let acc = 0
+  const segments = contrib.reduce<Array<(typeof contrib)[number] & { offset: number; length: number }>>((items, item) => {
+    const previous = items.reduce((sum, segment) => sum + segment.pct, 0)
+    return [
+      ...items,
+      {
+        ...item,
+        offset: (previous / total) * c,
+        length: (item.pct / total) * c,
+      },
+    ]
+  }, [])
   const maxPct = Math.max(...contrib.map(x => x.pct))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10, flex: 1 }}>
       <div style={{ display: 'grid', placeItems: 'center', position: 'relative', height: 160 }}>
         <svg width="160" height="160" viewBox="0 0 160 160">
-          {contrib.map(it => {
-            const off = (acc / total) * c
-            const len = (it.pct / total) * c
-            acc += it.pct
-            return (
-              <circle key={it.agent.id}
-                cx="80" cy="80" r={r}
-                fill="none" stroke={it.agent.color} strokeWidth="14"
-                strokeDasharray={`${len - 2} ${c - len + 2}`}
-                strokeDashoffset={-off}
-                transform="rotate(-90 80 80)" />
-            )
-          })}
+          {segments.map(it => (
+            <circle key={it.agent.id}
+              cx="80" cy="80" r={r}
+              fill="none" stroke={it.agent.color} strokeWidth="14"
+              strokeDasharray={`${it.length - 2} ${c - it.length + 2}`}
+              strokeDashoffset={-it.offset}
+              transform="rotate(-90 80 80)" />
+          ))}
           <circle cx="80" cy="80" r={r - 14} fill={surface} />
         </svg>
         <div style={{ position: 'absolute', textAlign: 'center' }}>
@@ -344,7 +349,7 @@ export default function AnalyticsPage() {
           setMrrSparkSeries(data.map(d => typeof d.mrr === 'number' ? d.mrr : parseFloat(String(d.mrr ?? '0')) || 0))
         }
       })
-  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user])
 
   useEffect(() => {
     if (!user) return

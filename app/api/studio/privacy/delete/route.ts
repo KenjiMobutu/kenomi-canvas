@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { apiError, apiOk } from '@/lib/api-response'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { insertAuditEvent } from '@/lib/audit-log'
 
 const USER_TABLES = [
   'venture_pipeline', 'agent_runs', 'agent_configs', 'agent_events',
@@ -70,13 +71,22 @@ export async function DELETE(req: NextRequest) {
     return apiError('Token expiré (15 min). Recommencez avec POST.', 400)
   }
 
-  const tableErrors: string[] = []
+  await insertAuditEvent(supabase, {
+    user_id: user!.id,
+    event_type: 'privacy.delete.confirmed',
+    severity: 'warn',
+    metadata: {
+      requested_at: settings.deletion_requested_at,
+    },
+  })
+
+  const tableErrors: { table: string; message: string }[] = []
   for (const table of USER_TABLES) {
     const { error } = await supabaseAdmin.from(table).delete().eq('user_id', user!.id)
-    if (error) tableErrors.push(table)
+    if (error) tableErrors.push({ table, message: error.message })
   }
   if (tableErrors.length > 0) {
-    return apiError(`Erreur lors de la suppression des données (tables: ${tableErrors.join(', ')})`, 500)
+    return apiError(`Erreur lors de la suppression des données (tables: ${tableErrors.map((failure) => failure.table).join(', ')})`, 500)
   }
 
   await supabaseAdmin.from('user_settings').delete().eq('user_id', user!.id)

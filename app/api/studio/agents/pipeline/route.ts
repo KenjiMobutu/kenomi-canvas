@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { apiError, apiOk } from '@/lib/api-response'
 import { isRateLimited } from '@/lib/rate-limit'
+import { buildVentureInsertFromPipeline, findAvailableSlug } from '@/lib/venture-materializer'
 
 export async function GET() {
   const cookieStore = await cookies()
@@ -60,18 +61,23 @@ export async function POST(req: NextRequest) {
   }
 
   // approve → créer la venture en DB puis passer status à 'approved'
+  const slug = await findAvailableSlug(async (candidate) => {
+    const { data } = await supabase
+      .from('ventures')
+      .select('id')
+      .eq('slug', candidate)
+      .maybeSingle()
+    return !!data
+  }, existing.idea_title)
+
   const { data: venture, error: ventureErr } = await supabase
     .from('ventures')
-    .insert({
-      user_id: user!.id,
-      name: existing.idea_title,
-      niche: existing.idea_niche,
-      stage: 'Validation',
-      score: 50,
-      mrr: '0', cac: '0', conversion: '0',
-      next_action: 'Lancer agent Validation',
-      insight: 'Idée générée par Scout',
-    })
+    .insert(buildVentureInsertFromPipeline({
+      userId: user!.id,
+      ideaTitle: existing.idea_title,
+      ideaNiche: existing.idea_niche,
+      slug,
+    }))
     .select('id')
     .single()
 

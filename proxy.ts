@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // ── Dashboard admin (cookie maison, pas Supabase) ─────────────────────────
@@ -38,7 +38,7 @@ export async function middleware(request: NextRequest) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError) {
     // Supabase injoignable — traiter comme non connecté (fail-open)
-    console.error('[middleware] getUser error:', authError.message)
+    console.error('[proxy] getUser error:', authError.message)
   }
   const loggedIn = !!user
 
@@ -86,4 +86,3 @@ export const config = {
     '/studio/:path*',
   ],
 }
-

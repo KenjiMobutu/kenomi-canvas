@@ -13,6 +13,18 @@
 
 Les agents peuvent être lancés manuellement depuis le Studio. Les schedules autonomes sont représentés par `agent_schedules`, mais les gates d'approbation humaine restent obligatoires pour les actions risquées (payment, decision).
 
+## Orchestration Status
+
+`POST /api/studio/agents/orchestrate` évalue les schedules actifs et classe les agents en trois états :
+
+- `due` : schedules arrivés à échéance.
+- `executable` : schedules dus sans approbation humaine requise.
+- `blocked` : schedules dus mais gardés derrière un gate humain.
+
+Pour les schedules exécutables, la route met à jour `last_run_at`, calcule `next_run_at` depuis `interval_minutes`, puis journalise `agent.orchestration.evaluated` dans `agent_events`.
+
+Le Studio affiche ces compteurs dans l'écran Agents afin de rendre l'autonomie observable sans masquer les décisions qui restent humaines.
+
 ## Unlock séquentiel
 
 Un agent est débloqué uniquement si la sortie de l'étape précédente est présente dans `venture_pipeline`. Scout est toujours débloqué.

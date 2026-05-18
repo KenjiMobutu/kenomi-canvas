@@ -3,20 +3,29 @@ import { useMemo, useEffect, useState } from 'react'
 import { CkShell } from '@/components/CkShell'
 import {
   bg, surface, surface2, line, line2, text, muted, muted2,
-  accent, emerald, amber, rose, cyan, violet, fuchsia,
+  emerald, amber, rose, cyan, violet, fuchsia,
 } from '@/lib/ck-vars'
-import { AGENTS_DATA, makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
+import { makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
 
 // Services de l'infra — statuts alimentés par /api/studio/services/health
-const SERVICES_IN = [
-  { id: 'proxmox',  vmid: null, label: 'Proxmox VE',  short: 'PROX', color: '#34d399', role: 'Compute · cluster local',   endpointLabel: 'proxmox.local', healthKey: null       },
-  { id: 'coolify',  vmid: 102,  label: 'Coolify',     short: 'COOL', color: '#34d399', role: 'Deploy · landings + APIs',  endpointLabel: 'private',      healthKey: 'coolify'  },
-  { id: 'nginx',    vmid: 101,  label: 'Nginx PM',    short: 'NPM',  color: '#22d3ee', role: 'Proxy · SSL · domains',     endpointLabel: 'npm.local',    healthKey: null       },
-  { id: 'uptime',   vmid: null, label: 'Uptime Kuma', short: 'UPT',  color: '#a78bfa', role: 'Monitor',                   endpointLabel: 'uptime.local', healthKey: null       },
-  { id: 'vault',    vmid: 100,  label: 'Vaultwarden', short: 'VLT',  color: '#fbbf24', role: 'Secrets · creds · OAuth',   endpointLabel: 'vault.local',  healthKey: null       },
-  { id: 'supabase', vmid: null, label: 'Supabase',    short: 'SUP',  color: '#34d399', role: 'Auth · Postgres · Storage', endpointLabel: 'supabase.kenomi.eu', healthKey: 'supabase'},
-  { id: 'n8n',      vmid: null, label: 'n8n',         short: 'N8N',  color: '#e879f9', role: 'Automation',                endpointLabel: 'n8n.kenomi.eu', healthKey: 'n8n'      },
-  { id: 'ollama',   vmid: null, label: 'Ollama',      short: 'OLL',  color: '#fb923c', role: 'LLM · inference locale',    endpointLabel: 'private',      healthKey: 'ollama'  },
+type InfraService = {
+  id: string
+  vmid: number | null
+  label: string
+  short: string
+  color: string
+  role: string
+  endpointLabel: string
+  healthKey: keyof HealthServices | null
+  kind: 'host' | 'service' | 'edge' | 'external'
+}
+
+const FALLBACK_SERVICES: InfraService[] = [
+  { id: 'proxmox',  vmid: null, label: 'Proxmox VE',  short: 'PROX', color: '#34d399', role: 'Compute cluster',    endpointLabel: 'private',  healthKey: null,       kind: 'host'     },
+  { id: 'coolify',  vmid: 102,  label: 'Coolify',     short: 'COOL', color: '#34d399', role: 'Deployments',        endpointLabel: 'private',  healthKey: 'coolify',  kind: 'service'  },
+  { id: 'n8n',      vmid: null, label: 'n8n',         short: 'N8N',  color: '#e879f9', role: 'Automation',         endpointLabel: 'private',  healthKey: 'n8n',      kind: 'service'  },
+  { id: 'supabase', vmid: null, label: 'Supabase',    short: 'SUP',  color: '#34d399', role: 'Auth and database',  endpointLabel: 'supabase', healthKey: 'supabase', kind: 'external' },
+  { id: 'ollama',   vmid: null, label: 'Ollama',      short: 'OLL',  color: '#fb923c', role: 'Local inference',    endpointLabel: 'private',  healthKey: 'ollama',   kind: 'external' },
 ]
 
 const POSITIONS: Record<string, { x: number; y: number; kind: string }> = {
@@ -70,7 +79,6 @@ type ProxmoxVM = {
   netout: number
 }
 type ProxmoxData = { nodes: ProxmoxNode[]; vms: ProxmoxVM[]; fetched_at: string }
-type ServiceIn = typeof SERVICES_IN[0]
 
 function statusColor(ok: boolean | null): string {
   if (ok === null) return amber
@@ -128,7 +136,12 @@ function InfraStat({ label, value, color }: { label: string; value: string; colo
   )
 }
 
-function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; onSelect: (id: string) => void; health: HealthData | null }) {
+function TopologyGraph({ selectedId, onSelect, health, services }: {
+  selectedId: string
+  onSelect: (id: string) => void
+  health: HealthData | null
+  services: InfraService[]
+}) {
   return (
     <div style={{
       background: surface, border: `1px solid ${line}`, borderRadius: 14,
@@ -156,7 +169,7 @@ function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; o
 
         {TOPO_EDGES.map(([from, to], idx) => {
           const f = POSITIONS[from], t = POSITIONS[to]
-          const fSvc = SERVICES_IN.find(s => s.id === from)
+          const fSvc = services.find(s => s.id === from)
           if (!f || !t || !fSvc) return null
           const hk = fSvc.healthKey as keyof HealthServices | null
           const isLive = hk && health ? health[hk]?.ok : true
@@ -177,7 +190,7 @@ function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; o
         <rect x="120" y="40" width="380" height="380" rx="14" fill="none" stroke={line} strokeWidth="1.5" strokeDasharray="6 6" />
         <text x="130" y="58" fontSize="10" fill={muted} fontFamily="var(--font-mono)" letterSpacing="2">SELF-HOST · PROXMOX CLUSTER</text>
 
-        {SERVICES_IN.filter(s => POSITIONS[s.id]).map(svc => {
+        {services.filter(s => POSITIONS[s.id]).map(svc => {
           const pos = POSITIONS[svc.id]
           if (!pos) return null
           const isSel = svc.id === selectedId
@@ -220,7 +233,7 @@ function TopologyGraph({ selectedId, onSelect, health }: { selectedId: string; o
   )
 }
 
-function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: HealthData | null; proxmox: ProxmoxData | null }) {
+function ServiceInspector({ svc, health, proxmox }: { svc: InfraService; health: HealthData | null; proxmox: ProxmoxData | null }) {
   const hk = svc.healthKey as keyof HealthServices | null
   const result = hk && health ? health[hk] : null
 
@@ -367,6 +380,7 @@ export default function InfrastructurePage() {
   const [health, setHealth] = useState<HealthData | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
   const [proxmox, setProxmox] = useState<ProxmoxData | null>(null)
+  const [services, setServices] = useState<InfraService[]>(FALLBACK_SERVICES)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -390,13 +404,24 @@ export default function InfrastructurePage() {
         if (!cancelled) setProxmox(data)
       } catch { /* Proxmox indisponible — silencieux */ }
     }
+    async function loadServices() {
+      try {
+        const res = await fetch('/api/studio/infra/services')
+        if (!res.ok) return
+        const data = await res.json() as { services?: InfraService[] }
+        if (!cancelled && data.services?.length) setServices(data.services)
+      } catch {
+        if (!cancelled) setServices(FALLBACK_SERVICES)
+      }
+    }
+    loadServices()
     loadHealth()
     loadProxmox()
     const interval = setInterval(() => { loadHealth(); loadProxmox() }, 30_000)
     return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
-  const selected = SERVICES_IN.find(s => s.id === selectedId) ?? SERVICES_IN[0]
+  const selected = services.find(s => s.id === selectedId) ?? services[0] ?? FALLBACK_SERVICES[0]
 
   const liveCount = health
     ? [health.ollama, health.n8n, health.supabase, health.coolify].filter(h => h?.ok).length
@@ -434,7 +459,7 @@ export default function InfrastructurePage() {
         }}>{liveCount}/4 services live</span>
       )}
       {[
-        { label: `${SERVICES_IN.length} services`, color: muted },
+        { label: `${services.length} services`, color: muted },
         { label: 'self-host · Proxmox',            color: muted },
       ].map(({ label, color }) => (
         <span key={label} style={{
@@ -458,7 +483,7 @@ export default function InfrastructurePage() {
 
         {/* Topology + Service inspector */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', gap: 14, alignItems: 'start' }}>
-          {!isMobile && <TopologyGraph selectedId={selectedId} onSelect={setSelectedId} health={health} />}
+          {!isMobile && <TopologyGraph selectedId={selectedId} onSelect={setSelectedId} health={health} services={services} />}
           <ServiceInspector svc={selected} health={health} proxmox={proxmox} />
         </div>
 
@@ -467,14 +492,14 @@ export default function InfrastructurePage() {
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', color: text }}>Server rack · self-host</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>proxmox cluster · 3 hosts · {SERVICES_IN.length} services</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 2 }}>proxmox cluster · 3 hosts · {services.length} services</div>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 14 }}>
             {[
-              { label: 'RACK-01', host: 'lan-01', svcs: SERVICES_IN.slice(0, 3) },
-              { label: 'RACK-02', host: 'lan-02', svcs: SERVICES_IN.slice(3, 6) },
-              { label: 'RACK-03', host: 'ext',    svcs: SERVICES_IN.slice(6)    },
+              { label: 'RACK-01', host: 'lan-01', svcs: services.slice(0, 3) },
+              { label: 'RACK-02', host: 'lan-02', svcs: services.slice(3, 6) },
+              { label: 'RACK-03', host: 'ext',    svcs: services.slice(6)    },
             ].map(rack => (
               <div key={rack.label} style={{
                 background: surface2, border: `1px solid ${line}`, borderRadius: 10,

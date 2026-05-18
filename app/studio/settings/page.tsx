@@ -393,7 +393,7 @@ export default function SettingsPage() {
                 fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2, letterSpacing: '.04em',
                 lineHeight: 1.6,
               }}>
-                Endpoint webhook : <span style={{ color: accent }}>lab.kenomi.eu/api/webhooks/stripe</span>
+                Endpoint webhook : <span style={{ color: accent }}>lab.kenomi.eu/api/stripe/webhook</span>
               </div>
             </SectionCard>
           </>

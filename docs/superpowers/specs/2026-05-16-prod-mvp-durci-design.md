@@ -9,7 +9,7 @@ Rendre Kenomi Canvas réellement exploitable en production Coolify avec Supabase
 - L'application Next.js 15 compile et les tests existants passent.
 - Les migrations Supabase couvrent déjà une partie importante du schéma, de la RLS et des index.
 - `/api/health` retourne seulement `ok`, donc il ne valide pas encore la prod.
-- `.env.example` contient une valeur qui ressemble à une vraie clé `SUPABASE_SERVICE_ROLE_KEY`. Avant toute exposition prod, cette clé doit être considérée comme compromise, retirée du fichier exemple et régénérée côté Supabase.
+
 - Le schéma Prisma legacy ne reflète pas entièrement les colonnes ajoutées par les migrations Supabase, notamment `ventures.user_id`. Pour la prod, Supabase direct reste le chemin principal du studio ; Prisma doit être limité aux vues legacy ou réaligné.
 
 ## Périmètre MVP Prod

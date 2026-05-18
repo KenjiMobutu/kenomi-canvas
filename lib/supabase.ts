@@ -22,6 +22,14 @@ export interface LandingPageData {
   copywriting: Copywriting
 }
 
+interface VentureWithLandingPages {
+  id: string
+  nom: string
+  slug: string
+  type_produit: string
+  landing_pages: { headline: string; copywriting: Copywriting }[] | null
+}
+
 export async function getLandingPage(slug: string): Promise<LandingPageData | null> {
   const { data, error } = await supabase
     .from('ventures')
@@ -40,16 +48,17 @@ export async function getLandingPage(slug: string): Promise<LandingPageData | nu
     .single()
 
   if (error || !data) return null
-  const lp = (data.landing_pages as any[])?.[0]
+  const typedData = data as VentureWithLandingPages
+  const lp = typedData.landing_pages?.[0]
   if (!lp) return null
 
   return {
-    venture_id: data.id,
-    nom: data.nom,
-    slug: data.slug,
-    type_produit: data.type_produit,
+    venture_id: typedData.id,
+    nom: typedData.nom,
+    slug: typedData.slug,
+    type_produit: typedData.type_produit,
     headline: lp.headline,
-    copywriting: lp.copywriting as Copywriting,
+    copywriting: lp.copywriting,
   }
 }
 
