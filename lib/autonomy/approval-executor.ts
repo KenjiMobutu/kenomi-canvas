@@ -1,6 +1,15 @@
 import { createCoolifyClient, type CoolifyClient } from '@/lib/coolify/client'
 import { getAutonomyConfig, type AutonomyConfig } from './config'
 import { checkBudgetPolicy } from './policy'
+import {
+  executePublishCampaign,
+  type ExecutePublishResult,
+  type PublishActionSupabase,
+} from '@/lib/marketing/publish-action'
+import {
+  getMarketingPublisher,
+  type MarketingPublisher,
+} from '@/lib/marketing/adapters'
 
 type QueryResponse = { data: unknown; error: { message: string } | null }
 
@@ -84,6 +93,7 @@ export interface ResolveHumanApprovalInput {
   approvalId: string
   decision: ApprovalResolution
   coolifyClient?: CoolifyClient
+  marketingPublisher?: MarketingPublisher
   now?: () => Date
   config?: AutonomyConfig
 }
@@ -345,6 +355,42 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
         executed: false,
         handler: 'deploy',
         error: error instanceof Error ? error.message : 'Coolify deploy failed',
+      }
+    }
+  }
+
+  if (action.action_type === 'publish_campaign') {
+    const draftId = action.input?.draft_id
+    if (typeof draftId !== 'string' || draftId.length === 0) {
+      throw new ApprovalExecutionError('draft_id manquant pour publish_campaign', 422)
+    }
+    const channel = typeof action.input?.channel === 'string' ? action.input.channel : ''
+    const publisher = input.marketingPublisher ?? getMarketingPublisher(channel)
+    const publishResult: ExecutePublishResult = await executePublishCampaign({
+      supabase: input.supabase as unknown as PublishActionSupabase,
+      publisher,
+      draftId,
+      userId: input.userId,
+      now: input.now,
+    })
+    if (publishResult.success) {
+      executed = true
+      actionStatus = 'completed'
+      output = {
+        executed: true,
+        handler: 'publish_campaign',
+        draft_id: draftId,
+        external_id: publishResult.externalId,
+        url: publishResult.url ?? null,
+        spend_eur: publishResult.spendEur,
+      }
+    } else {
+      actionStatus = 'failed'
+      output = {
+        executed: false,
+        handler: 'publish_campaign',
+        draft_id: draftId,
+        error: publishResult.error,
       }
     }
   }

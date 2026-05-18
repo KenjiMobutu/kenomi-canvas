@@ -9,6 +9,7 @@ type TableName =
   | 'budget_requests'
   | 'campaigns'
   | 'venture_events'
+  | 'campaign_drafts'
 
 interface TableRow {
   id?: string
@@ -31,6 +32,7 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
     budget_requests: seed.budget_requests ?? [],
     campaigns: seed.campaigns ?? [],
     venture_events: seed.venture_events ?? [],
+    campaign_drafts: seed.campaign_drafts ?? [],
   }
 
   return {
@@ -52,7 +54,12 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
           state.patch = patch
           return builder
         },
+        insert: (row: TableRow) => {
+          tables[tableName].push({ ...row })
+          return builder
+        },
         single: async () => ({ data: tables[tableName].find(matches) ?? null, error: null }),
+        maybeSingle: async () => ({ data: tables[tableName].find(matches) ?? null, error: null }),
         then: <TResult1 = QueryResponse, TResult2 = never>(
           resolve?: ((value: QueryResponse) => TResult1 | PromiseLike<TResult1>) | null,
           reject?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
@@ -367,5 +374,88 @@ describe('resolveHumanApproval — budget policy', () => {
     expect(result.executed).toBe(false)
     expect(fakeSupabase.tables.autonomy_actions[0].status).toBe('blocked')
     expect((fakeSupabase.tables.autonomy_actions[0].output as Record<string, unknown>).budget_breach).toBe('global_cap_exceeded')
+  })
+})
+
+describe('resolveHumanApproval — publish_campaign', () => {
+  it('approuve une action publish_campaign, appelle le publisher et marque action completed', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-p1', user_id: 'u1', action_id: 'act-p1', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-p1', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
+        venture_id: 'v1',
+        input: { draft_id: 'draft-1', channel: 'email' },
+      }],
+      campaign_drafts: [{
+        id: 'draft-1', user_id: 'u1', venture_id: 'v1',
+        channel: 'email', content: 'Hi', metadata: {},
+      }],
+    })
+    const publisher = {
+      publish: vi.fn().mockResolvedValue({
+        externalId: 'ext-1',
+        url: 'https://mock.local/v1/email',
+      }),
+    }
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-p1',
+      decision: 'approved',
+      marketingPublisher: publisher,
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+    })
+
+    expect(result.executed).toBe(true)
+    expect(publisher.publish).toHaveBeenCalledOnce()
+    const action = fakeSupabase.tables.autonomy_actions[0]
+    expect(action.status).toBe('completed')
+    expect((action.output as Record<string, unknown>).external_id).toBe('ext-1')
+    expect(fakeSupabase.tables.venture_events.find((e) => e.event_type === 'campaign_published')).toBeTruthy()
+    expect(fakeSupabase.tables.campaign_drafts[0]).toMatchObject({ status: 'published' })
+  })
+
+  it('marque action failed si publisher rejette', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-p2', user_id: 'u1', action_id: 'act-p2', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-p2', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
+        venture_id: 'v1',
+        input: { draft_id: 'draft-2', channel: 'email' },
+      }],
+      campaign_drafts: [{ id: 'draft-2', user_id: 'u1', venture_id: 'v1', channel: 'email', content: 'x', metadata: {} }],
+    })
+    const publisher = { publish: vi.fn().mockRejectedValue(new Error('boom')) }
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-p2',
+      decision: 'approved',
+      marketingPublisher: publisher,
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+    })
+
+    expect(result.executed).toBe(false)
+    expect(fakeSupabase.tables.autonomy_actions[0].status).toBe('failed')
+    expect(fakeSupabase.tables.campaign_drafts[0]).toMatchObject({ status: 'failed' })
+  })
+
+  it('throw si draft_id manquant', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-p3', user_id: 'u1', action_id: 'act-p3', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-p3', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
+        venture_id: 'v1',
+        input: {},
+      }],
+    })
+    await expect(resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-p3',
+      decision: 'approved',
+      marketingPublisher: { publish: vi.fn() },
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+    })).rejects.toThrow(/draft_id manquant/)
   })
 })
