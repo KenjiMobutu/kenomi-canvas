@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState, Fragment } from 'react'
 import { CkShell } from '@/components/CkShell'
+import { KpiCard } from '@/components/studio/KpiCard'
 import { useIsMobile } from '@/lib/studio-utils'
 import {
   surface,
@@ -1165,41 +1166,7 @@ export default function AnalyticsPage() {
                   color: fuchsia,
                 },
               ].map((kpi) => (
-                <div
-                  key={kpi.label}
-                  style={{
-                    background: surface2,
-                    border: `1px solid ${line}`,
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 4,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9,
-                      color: muted2,
-                      letterSpacing: '.14em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {kpi.label}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: 18,
-                      fontWeight: 800,
-                      color: kpi.color,
-                      letterSpacing: '-.01em',
-                    }}
-                  >
-                    {kpi.value}
-                  </span>
-                </div>
+                <KpiCard key={kpi.label} compact label={kpi.label} value={kpi.value} color={kpi.color} />
               ))}
             </div>
           )}

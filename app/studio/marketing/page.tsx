@@ -28,6 +28,8 @@ import {
   useIsMobile,
 } from '@/lib/studio-utils'
 import { CheckCircle2, RefreshCw, Send, XCircle } from 'lucide-react'
+import { getStatusColor } from '@/components/studio/StatusBadge'
+import { EmptyState } from '@/components/studio/EmptyState'
 
 interface CampaignDraft {
   id: string
@@ -51,14 +53,8 @@ interface PublishApprovalRow {
   isPending: boolean
 }
 
-const DRAFT_STATUS_COLORS: Record<CampaignDraft['status'], string> = {
-  draft: '#94a3b8',
-  blocked: '#fbbf24',
-  approved: '#22d3ee',
-  published: '#34d399',
-  failed: '#f87171',
-  rejected: '#94a3b8',
-}
+// Note: les couleurs des statuts viennent désormais de components/studio/StatusBadge
+// (getStatusColor) pour éviter la duplication.
 
 const CHANNELS = [
   {
@@ -1279,28 +1275,17 @@ export default function MarketingPage() {
           )}
 
           {drafts.length === 0 && !draftsLoading ? (
-            <div
-              style={{
-                padding: '14px 16px',
-                borderRadius: 10,
-                background: surface2,
-                border: `1px dashed ${line2}`,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: muted,
-                lineHeight: 1.6,
-              }}
-            >
+            <EmptyState>
               Aucun draft généré pour l&apos;instant. Lancez l&apos;agent Marketing depuis{' '}
               <span style={{ color: cyan }}>/studio/agents</span>.
-            </div>
+            </EmptyState>
           ) : (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {(['draft', 'blocked', 'approved', 'published', 'failed', 'rejected'] as const).map(
                 (status) => {
                   const items = draftsByStatus[status]
                   if (items.length === 0) return null
-                  const c = DRAFT_STATUS_COLORS[status]
+                  const c = getStatusColor(status)
                   return (
                     <div
                       key={status}
