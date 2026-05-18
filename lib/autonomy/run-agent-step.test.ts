@@ -297,6 +297,68 @@ describe('runAgentStep', () => {
     })
   })
 
+  it('Decision stocke un metrics_snapshot complet (visits/revenue/spend/profit/ROI) depuis venture_events', async () => {
+    const supabase = createFakeSupabase({
+      venture_pipeline: [{
+        id: 'pipeline-1',
+        user_id: 'user-1',
+        status: 'approved',
+        idea_title: 'InboxPulse',
+        idea_niche: 'agences B2B',
+        idea_problem: 'priorisation',
+        idea_solution: 'scoring',
+        idea_market: 'outbound',
+        validation_output: 'ok',
+        builder_output: 'ok',
+        payment_output: 'ok',
+        marketing_output: 'ok',
+        decision_output: null,
+        venture_id: 'venture-1',
+      }],
+      venture_events: [
+        { venture_id: 'venture-1', event_type: 'page_view', value: null },
+        { venture_id: 'venture-1', event_type: 'page_view', value: null },
+        { venture_id: 'venture-1', event_type: 'page_view', value: null },
+        { venture_id: 'venture-1', event_type: 'waitlist_signup', value: null },
+        { venture_id: 'venture-1', event_type: 'payment_succeeded', value: 10000 },
+        { venture_id: 'venture-1', event_type: 'campaign_spend', value: 3000 },
+      ],
+    })
+    const llm = async (): Promise<LLMResponse> => ({
+      content: JSON.stringify({
+        verdict: 'continue',
+        confidence: 90,
+        rationale: 'ROI positif.',
+        next_step: 'Scale.',
+      }),
+      provider: 'ollama',
+      model: 'qwen3:8b',
+      fallback_triggered: false,
+    })
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'decision',
+      llm,
+      now: () => new Date('2026-05-18T10:00:00.000Z'),
+    })
+
+    expect(supabase.tables.decisions[0].metrics_snapshot).toMatchObject({
+      confidence: 90,
+      next_step: 'Scale.',
+      pipeline_id: 'pipeline-1',
+      visits: 3,
+      signups: 1,
+      revenue_cents: 10000,
+      spend_cents: 3000,
+      profit_cents: 7000,
+    })
+    const snapshot = supabase.tables.decisions[0].metrics_snapshot as Record<string, number>
+    expect(snapshot.signup_rate).toBeCloseTo(1 / 3, 4)
+    expect(snapshot.roi).toBeCloseTo(7000 / 3000, 4)
+  })
+
   it('transforme un verdict Decision pivot en nouvelle tâche Scout contextualisée', async () => {
     const supabase = createFakeSupabase({
       venture_pipeline: [{

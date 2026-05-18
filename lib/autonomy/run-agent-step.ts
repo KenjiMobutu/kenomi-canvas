@@ -158,6 +158,7 @@ async function materializeDecisionFollowup(input: {
   userId: string
   pipeline: PipelineRow
   decision: DecisionOutput
+  metrics: ReturnType<typeof aggregateVentureMetrics> | null
   nowIso: string
 }) {
   if (!input.pipeline.venture_id) return
@@ -170,6 +171,13 @@ async function materializeDecisionFollowup(input: {
       confidence: input.decision.confidence,
       next_step: input.decision.next_step,
       pipeline_id: input.pipeline.id,
+      visits: input.metrics?.visits ?? 0,
+      signups: input.metrics?.signups ?? 0,
+      signup_rate: input.metrics?.signupRate ?? 0,
+      revenue_cents: input.metrics?.revenueCents ?? 0,
+      spend_cents: input.metrics?.spendCents ?? 0,
+      profit_cents: input.metrics?.profitCents ?? 0,
+      roi: input.metrics?.roi ?? 0,
     },
     created_at: input.nowIso,
   })
@@ -215,19 +223,24 @@ async function materializeDecisionFollowup(input: {
   })
 }
 
-async function getDecisionMetricsContext(supabase: RunAgentStepSupabase, pipeline: PipelineRow | null): Promise<string> {
-  if (!pipeline?.venture_id) return ''
+interface DecisionMetricsBundle {
+  context: string
+  metrics: ReturnType<typeof aggregateVentureMetrics> | null
+}
+
+async function getDecisionMetricsBundle(supabase: RunAgentStepSupabase, pipeline: PipelineRow | null): Promise<DecisionMetricsBundle> {
+  if (!pipeline?.venture_id) return { context: '', metrics: null }
   try {
     const { data, error } = await supabase
       .from('venture_events')
       .select('venture_id, event_type, value')
       .eq('venture_id', pipeline.venture_id)
 
-    if (error) return ''
+    if (error) return { context: '', metrics: null }
     const metrics = aggregateVentureMetrics((data ?? []) as VentureMetricSourceRow[])
-    return `\n${buildDecisionMetricsContext(metrics)}`
+    return { context: `\n${buildDecisionMetricsContext(metrics)}`, metrics }
   } catch {
-    return ''
+    return { context: '', metrics: null }
   }
 }
 
@@ -265,10 +278,10 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
 
   const model = cfg?.model ?? 'qwen3:8b'
   const baseSystemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
-  const metricsContext = agentId === 'decision'
-    ? await getDecisionMetricsContext(supabase, pipeline)
-    : ''
-  const systemPrompt = `${baseSystemPrompt}${metricsContext}`
+  const decisionBundle = agentId === 'decision'
+    ? await getDecisionMetricsBundle(supabase, pipeline)
+    : { context: '', metrics: null }
+  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}`
   const userPrompt = input.prompt || (agentId === 'scout'
     ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
     : 'Exécute ta mission.')
@@ -389,6 +402,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           userId,
           pipeline,
           decision: parsedOutput,
+          metrics: decisionBundle.metrics,
           nowIso: now().toISOString(),
         })
       }
