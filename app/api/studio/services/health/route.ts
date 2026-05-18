@@ -5,7 +5,9 @@
  */
 
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { checkOllamaHealth } from "@/lib/llm-client";
+import { requireAllowedUser } from "@/lib/auth-server";
 
 type ServiceStatus = {
   status: "ok" | "degraded" | "down";
@@ -40,6 +42,10 @@ async function pingService(
 }
 
 export async function GET() {
+  const cookieStore = await cookies();
+  const { response } = await requireAllowedUser(cookieStore);
+  if (response) return response;
+
   const [ollama, n8n, supabase, coolify] = await Promise.all([
     pingService(
       `${process.env.OLLAMA_BASE_URL ?? "http://192.168.0.14:11434"}/api/tags`
