@@ -1,4 +1,5 @@
 import { createCoolifyClient, type CoolifyClient } from '@/lib/coolify/client'
+import { getAutonomyConfig, type AutonomyConfig } from './config'
 
 type QueryResponse = { data: unknown; error: { message: string } | null }
 
@@ -43,6 +44,7 @@ export interface ResolveHumanApprovalInput {
   decision: ApprovalResolution
   coolifyClient?: CoolifyClient
   now?: () => Date
+  config?: AutonomyConfig
 }
 
 export interface ResolveHumanApprovalResult {
@@ -109,6 +111,15 @@ async function executeStopVenture(input: {
   )
 }
 
+function isExternalAction(actionType: string): boolean {
+  return (
+    actionType === 'deploy' ||
+    actionType === 'create_checkout' ||
+    actionType === 'publish_campaign' ||
+    actionType === 'scale_budget'
+  )
+}
+
 function readDeployInput(action: AutonomyActionRow): {
   projectId: string
   serviceId: string
@@ -129,6 +140,7 @@ function readDeployInput(action: AutonomyActionRow): {
 
 export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Promise<ResolveHumanApprovalResult> {
   const nowIso = (input.now ?? (() => new Date()))().toISOString()
+  const config = input.config ?? getAutonomyConfig()
   const approval = await single<HumanApprovalRow>(
     input.supabase.from('human_approvals')
       .select('id, user_id, action_id, status')
@@ -193,6 +205,26 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
       .eq('id', approval.id)
       .eq('user_id', input.userId)
   )
+
+  if (config.dryRun && isExternalAction(action.action_type)) {
+    await update(
+      input.supabase.from('autonomy_actions')
+        .update({
+          status: 'completed',
+          output: { dry_run: true, action_type: action.action_type, approved: true },
+          updated_at: nowIso,
+        })
+        .eq('id', action.id)
+        .eq('user_id', input.userId)
+    )
+    return {
+      approvalId: approval.id,
+      actionId: action.id,
+      actionType: action.action_type,
+      status: input.decision,
+      executed: false,
+    }
+  }
 
   let executed = false
   let actionStatus = 'planned'

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { resolveHumanApproval, type ApprovalExecutorSupabase } from './approval-executor'
 
 type TableName =
@@ -209,5 +209,78 @@ describe('resolveHumanApproval', () => {
         error: 'Coolify down',
       },
     })
+  })
+})
+
+describe('resolveHumanApproval — dry-run', () => {
+  it('dry-run: action deploy approuvée marque completed avec output.dry_run sans appeler Coolify', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-1', user_id: 'u1', action_id: 'act-1', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-1', user_id: 'u1', action_type: 'deploy', status: 'pending',
+        input: { projectId: 'p1', serviceId: 's1' },
+      }],
+    })
+    const coolifyMock = {
+      triggerDeploy: vi.fn().mockResolvedValue({ deploymentId: 'd-x' }),
+      getDeployment: vi.fn(),
+    }
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-1',
+      decision: 'approved',
+      coolifyClient: coolifyMock,
+      config: { enabled: true, dryRun: true, globalBudgetCapEur: 100 },
+    })
+    expect(coolifyMock.triggerDeploy).not.toHaveBeenCalled()
+    expect(result.executed).toBe(false)
+    const action = fakeSupabase.tables.autonomy_actions[0]
+    expect(action.status).toBe('completed')
+    expect(action.output).toMatchObject({ dry_run: true, action_type: 'deploy' })
+  })
+
+  it('dry-run désactivé: action deploy approuvée appelle Coolify normalement', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-2', user_id: 'u1', action_id: 'act-2', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-2', user_id: 'u1', action_type: 'deploy', status: 'pending',
+        input: { projectId: 'p1', serviceId: 's1' },
+      }],
+    })
+    const coolifyMock = {
+      triggerDeploy: vi.fn().mockResolvedValue({ deploymentId: 'd-y' }),
+      getDeployment: vi.fn(),
+    }
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-2',
+      decision: 'approved',
+      coolifyClient: coolifyMock,
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100 },
+    })
+    expect(coolifyMock.triggerDeploy).toHaveBeenCalledOnce()
+    expect(result.executed).toBe(true)
+  })
+
+  it('dry-run: stop_venture (interne) s\'exécute normalement', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-3', user_id: 'u1', action_id: 'act-3', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-3', user_id: 'u1', action_type: 'stop_venture', status: 'pending',
+        venture_id: 'v1',
+      }],
+      ventures: [{ id: 'v1', user_id: 'u1', statut: 'running' }],
+    })
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-3',
+      decision: 'approved',
+      config: { enabled: true, dryRun: true, globalBudgetCapEur: 100 },
+    })
+    expect(result.executed).toBe(true)
+    expect(fakeSupabase.tables.ventures[0].statut).toBe('stopped')
   })
 })
