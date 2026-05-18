@@ -61,11 +61,18 @@ async function sumVentureSpend(input: {
   if (error) throw new ApprovalExecutionError(error.message, 500)
 
   const rows = (data ?? []) as VentureSpendRow[]
-  const globalSpentEur = rows.reduce((sum, r) => sum + (Number(r.amount_eur) || 0), 0)
+
+  function safeAmount(value: unknown): number {
+    const n = Number(value)
+    if (!Number.isFinite(n)) return 0
+    return n > 0 ? n : 0
+  }
+
+  const globalSpentEur = rows.reduce((sum, r) => sum + safeAmount(r.amount_eur), 0)
   const ventureSpentEur = input.ventureId
     ? rows
         .filter((r) => r.venture_id === input.ventureId)
-        .reduce((sum, r) => sum + (Number(r.amount_eur) || 0), 0)
+        .reduce((sum, r) => sum + safeAmount(r.amount_eur), 0)
     : 0
 
   return { ventureSpentEur, globalSpentEur }

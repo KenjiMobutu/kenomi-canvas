@@ -335,4 +335,37 @@ describe('resolveHumanApproval — budget policy', () => {
     expect(result.executed).toBe(false)
     expect((fakeSupabase.tables.autonomy_actions[0].output as Record<string, unknown>).budget_breach).toBe('action_cap_exceeded')
   })
+
+  it('ignore les amount_eur négatifs/null/NaN: la somme reste correcte et déclenche le breach uniquement sur les vraies dépenses', async () => {
+    // 3 dépenses légitimes de 40 chacune = 120, + bruit (négatif, null, string) qui doit être ignoré.
+    // Cost 10 + venture_spent 120 = 130 > cap 100 → global_cap_exceeded.
+    // Si le bruit était compté (-500 ou NaN), la somme serait < 100 et le test passerait par erreur.
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-b3', user_id: 'u1', action_id: 'act-b3', status: 'pending' }],
+      autonomy_actions: [{
+        id: 'act-b3', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
+        venture_id: 'v1',
+        estimated_cost_eur: 10,
+        budget_cap_eur: 1000,
+      }],
+      venture_events: [
+        { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: 40 },
+        { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: 40 },
+        { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: 40 },
+        { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: -500 },
+        { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: null },
+        { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: 'abc' },
+      ],
+    })
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-b3',
+      decision: 'approved',
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100 },
+    })
+    expect(result.executed).toBe(false)
+    expect(fakeSupabase.tables.autonomy_actions[0].status).toBe('blocked')
+    expect((fakeSupabase.tables.autonomy_actions[0].output as Record<string, unknown>).budget_breach).toBe('global_cap_exceeded')
+  })
 })
