@@ -5,6 +5,7 @@ import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
 import { llmChat } from '@/lib/llm-client'
 import { isAgentUnlocked, parsePipelineIdea, buildSystemPrompt, type PipelineRow } from '@/lib/pipeline-types'
+import { insertAuditEvent } from '@/lib/audit-log'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -82,6 +83,17 @@ export async function POST(req: NextRequest) {
     await supabase.from('agent_runs').insert({
       user_id: user!.id, agent_id: agentId, model: usedModel,
       prompt: userPrompt, response: content, duration_ms: durationMs,
+    })
+
+    await insertAuditEvent(supabase as unknown as Parameters<typeof insertAuditEvent>[0], {
+      user_id: user!.id,
+      agent_id: agentId,
+      event_type: 'agent.run.completed',
+      metadata: {
+        model: usedModel,
+        duration_ms: durationMs,
+        fallback_triggered: llmResult.fallback_triggered,
+      },
     })
 
     if (agentId === 'scout') {
