@@ -7,8 +7,6 @@ import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { AGENTS_DATA, useIsMobile } from '@/lib/studio-utils'
 import {
-  CK_DARK,
-  CK_LIGHT,
   bg,
   surface,
   surface2,
@@ -19,9 +17,7 @@ import {
   muted2,
   accent,
   accent2,
-  emerald,
   rose,
-  cyan,
 } from '@/lib/ck-vars'
 import { Plus, Trash2, Send, ChevronDown, Menu, X } from 'lucide-react'
 

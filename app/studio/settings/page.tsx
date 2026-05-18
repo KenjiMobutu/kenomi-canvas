@@ -14,12 +14,10 @@ import {
   muted,
   muted2,
   accent,
-  accent2,
   emerald,
   amber,
   rose,
   cyan,
-  violet,
 } from '@/lib/ck-vars'
 import { Bot, CreditCard, Database, Download, Save, Server, Trash2, User, Zap } from 'lucide-react'
 import { useIsMobile } from '@/lib/studio-utils'

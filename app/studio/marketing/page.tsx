@@ -27,7 +27,7 @@ import {
   useTick,
   useIsMobile,
 } from '@/lib/studio-utils'
-import { CheckCircle2, Clock3, RefreshCw, Send, XCircle } from 'lucide-react'
+import { CheckCircle2, RefreshCw, Send, XCircle } from 'lucide-react'
 
 interface CampaignDraft {
   id: string

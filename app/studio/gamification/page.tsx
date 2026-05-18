@@ -13,8 +13,6 @@ import {
 import { ACHIEVEMENTS_META, type Achievement, type AgentLevel } from '@/lib/gamification'
 import { useGamification } from '@/lib/use-gamification'
 import {
-  CK_DARK,
-  CK_LIGHT,
   bg,
   surface,
   surface2,
@@ -285,7 +283,7 @@ function ConfettiField({ color }: { color: string }) {
         }
       }),
     [color]
-  ) // eslint-disable-line react-hooks/exhaustive-deps
+  )  
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
       {pieces.map((p, i) => (

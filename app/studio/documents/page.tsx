@@ -9,12 +9,10 @@ import {
   surface,
   surface2,
   line,
-  line2,
   text,
   muted,
   muted2,
   accent,
-  emerald,
   rose,
   amber,
 } from '@/lib/ck-vars'

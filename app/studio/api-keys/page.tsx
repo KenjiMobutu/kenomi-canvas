@@ -20,7 +20,7 @@ import {
   rose,
   amber,
 } from '@/lib/ck-vars'
-import { Copy, Eye, EyeOff, KeyRound, Plus, Trash2 } from 'lucide-react'
+import { Copy, KeyRound, Plus, Trash2 } from 'lucide-react'
 
 interface ApiKey {
   id: string
