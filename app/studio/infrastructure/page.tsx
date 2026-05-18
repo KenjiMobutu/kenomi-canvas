@@ -9,14 +9,14 @@ import { AGENTS_DATA, makeSpark, sparkPath, useIsMobile } from '@/lib/studio-uti
 
 // Services de l'infra — statuts alimentés par /api/studio/services/health
 const SERVICES_IN = [
-  { id: 'proxmox',  vmid: null, label: 'Proxmox VE',  short: 'PROX', color: '#34d399', role: 'Compute · cluster local',   endpoint: 'proxmox.local',     healthKey: null       },
-  { id: 'coolify',  vmid: 102,  label: 'Coolify',     short: 'COOL', color: '#34d399', role: 'Deploy · landings + APIs',  endpoint: '192.168.0.19:8000', healthKey: 'coolify'  },
-  { id: 'nginx',    vmid: 101,  label: 'Nginx PM',    short: 'NPM',  color: '#22d3ee', role: 'Proxy · SSL · domains',     endpoint: 'npm.local',         healthKey: null       },
-  { id: 'uptime',   vmid: null, label: 'Uptime Kuma', short: 'UPT',  color: '#a78bfa', role: 'Monitor',                   endpoint: 'uptime.local',      healthKey: null       },
-  { id: 'vault',    vmid: 100,  label: 'Vaultwarden', short: 'VLT',  color: '#fbbf24', role: 'Secrets · creds · OAuth',   endpoint: 'vault.local',       healthKey: null       },
-  { id: 'supabase', vmid: null, label: 'Supabase',    short: 'SUP',  color: '#34d399', role: 'Auth · Postgres · Storage', endpoint: 'supabase.kenomi.eu', healthKey: 'supabase'},
-  { id: 'n8n',      vmid: null, label: 'n8n',         short: 'N8N',  color: '#e879f9', role: 'Automation',                endpoint: 'n8n.kenomi.eu',     healthKey: 'n8n'      },
-  { id: 'ollama',   vmid: null, label: 'Ollama',      short: 'OLL',  color: '#fb923c', role: 'LLM · inference locale',    endpoint: '192.168.0.14:11434', healthKey: 'ollama'  },
+  { id: 'proxmox',  vmid: null, label: 'Proxmox VE',  short: 'PROX', color: '#34d399', role: 'Compute · cluster local',   endpointLabel: 'proxmox.local', healthKey: null       },
+  { id: 'coolify',  vmid: 102,  label: 'Coolify',     short: 'COOL', color: '#34d399', role: 'Deploy · landings + APIs',  endpointLabel: 'private',      healthKey: 'coolify'  },
+  { id: 'nginx',    vmid: 101,  label: 'Nginx PM',    short: 'NPM',  color: '#22d3ee', role: 'Proxy · SSL · domains',     endpointLabel: 'npm.local',    healthKey: null       },
+  { id: 'uptime',   vmid: null, label: 'Uptime Kuma', short: 'UPT',  color: '#a78bfa', role: 'Monitor',                   endpointLabel: 'uptime.local', healthKey: null       },
+  { id: 'vault',    vmid: 100,  label: 'Vaultwarden', short: 'VLT',  color: '#fbbf24', role: 'Secrets · creds · OAuth',   endpointLabel: 'vault.local',  healthKey: null       },
+  { id: 'supabase', vmid: null, label: 'Supabase',    short: 'SUP',  color: '#34d399', role: 'Auth · Postgres · Storage', endpointLabel: 'supabase.kenomi.eu', healthKey: 'supabase'},
+  { id: 'n8n',      vmid: null, label: 'n8n',         short: 'N8N',  color: '#e879f9', role: 'Automation',                endpointLabel: 'n8n.kenomi.eu', healthKey: 'n8n'      },
+  { id: 'ollama',   vmid: null, label: 'Ollama',      short: 'OLL',  color: '#fb923c', role: 'LLM · inference locale',    endpointLabel: 'private',      healthKey: 'ollama'  },
 ]
 
 const POSITIONS: Record<string, { x: number; y: number; kind: string }> = {
@@ -273,7 +273,7 @@ function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: He
         </div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', marginTop: 4, color: text }}>{svc.label}</div>
         <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>{svc.role}</div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', marginTop: 6 }}>→ {svc.endpoint}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.14em', marginTop: 6 }}>→ {svc.endpointLabel}</div>
       </div>
 
       {/* Jauges — affichées uniquement si métriques disponibles */}
@@ -309,7 +309,7 @@ function ServiceInspector({ svc, health, proxmox }: { svc: ServiceIn; health: He
           flex: 1, padding: '9px 12px', borderRadius: 8,
           background: svc.color, color: '#0b0d12', border: 'none',
           fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11.5, letterSpacing: '.06em', cursor: 'pointer',
-        }}>↗ {svc.endpoint}</button>
+        }}>↗ {svc.endpointLabel}</button>
         <button style={{
           padding: '9px 12px', borderRadius: 8,
           background: surface2, color: text, border: `1px solid ${line2}`,
