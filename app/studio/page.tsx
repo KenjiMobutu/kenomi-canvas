@@ -2164,7 +2164,7 @@ export default function CockpitPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [showCmdk, ventures, selectedIdx, toggleTheme]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const queue = useMemo(() => ventures.map(ventureToDecision), [ventures])
+  const queue = ventures.map(ventureToDecision)
   const current = queue[selectedIdx] ?? queue[0]
   const isCold = !loading && ventures.length === 0
   const ckState = loading ? 'loading' : isCold ? 'cold' : 'normal'

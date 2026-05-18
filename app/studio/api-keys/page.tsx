@@ -452,7 +452,7 @@ export default function ApiKeysPage() {
               Aucune clé API
             </p>
             <p style={{ fontSize: 12, color: muted2 }}>
-              Créez une clé pour accéder à l'API Kenomi depuis vos outils externes.
+              Créez une clé pour accéder à l&apos;API Kenomi depuis vos outils externes.
             </p>
           </div>
         )}
@@ -492,7 +492,7 @@ export default function ApiKeysPage() {
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: text }}>Utilisation des clés API</div>
           <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>
-            Ajoutez l'en-tête{' '}
+            Ajoutez l&apos;en-tête{' '}
             <code
               style={{
                 fontFamily: 'var(--font-mono)',

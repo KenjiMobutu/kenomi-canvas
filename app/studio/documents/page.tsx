@@ -5,17 +5,7 @@ import { useAuth } from '@/lib/auth-context'
 import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
-import {
-  surface,
-  surface2,
-  line,
-  text,
-  muted,
-  muted2,
-  accent,
-  rose,
-  amber,
-} from '@/lib/ck-vars'
+import { surface, surface2, line, text, muted, muted2, accent, rose, amber } from '@/lib/ck-vars'
 import {
   isAllowedMimeType,
   isAllowedFileSize,

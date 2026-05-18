@@ -1166,7 +1166,13 @@ export default function AnalyticsPage() {
                   color: fuchsia,
                 },
               ].map((kpi) => (
-                <KpiCard key={kpi.label} compact label={kpi.label} value={kpi.value} color={kpi.color} />
+                <KpiCard
+                  key={kpi.label}
+                  compact
+                  label={kpi.label}
+                  value={kpi.value}
+                  color={kpi.color}
+                />
               ))}
             </div>
           )}

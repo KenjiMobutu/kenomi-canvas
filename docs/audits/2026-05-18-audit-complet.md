@@ -17,19 +17,19 @@
 
 ## 1. État qualité technique
 
-| Indicateur | Valeur | Verdict |
-|------------|--------|---------|
-| Tests Vitest | 240/240 | ✅ |
-| Typecheck strict | 0 erreur | ✅ |
-| Build production | succès | ✅ |
-| Lint | **0 errors, 51 warnings** | ⚠️ |
-| `format:check` | ✅ vert | ✅ |
-| Smoke HTTP | 7/7 ok | ✅ |
-| `supabase:validate` | toutes tables, RLS, policies présentes | ✅ |
-| Dependencies outdated | 4 (Supabase, framer-motion, TS 6, @types/node) | 🟡 |
-| Security audit | 2 moderate (postcss via Next 16) | 🟡 |
-| Console.log/error résiduels | 11 occurrences en prod code | 🟡 |
-| Casts `as unknown as` | 10 (frontière Supabase types) | 🟡 |
+| Indicateur                  | Valeur                                         | Verdict |
+| --------------------------- | ---------------------------------------------- | ------- |
+| Tests Vitest                | 240/240                                        | ✅      |
+| Typecheck strict            | 0 erreur                                       | ✅      |
+| Build production            | succès                                         | ✅      |
+| Lint                        | **0 errors, 51 warnings**                      | ⚠️      |
+| `format:check`              | ✅ vert                                        | ✅      |
+| Smoke HTTP                  | 7/7 ok                                         | ✅      |
+| `supabase:validate`         | toutes tables, RLS, policies présentes         | ✅      |
+| Dependencies outdated       | 4 (Supabase, framer-motion, TS 6, @types/node) | 🟡      |
+| Security audit              | 2 moderate (postcss via Next 16)               | 🟡      |
+| Console.log/error résiduels | 11 occurrences en prod code                    | 🟡      |
+| Casts `as unknown as`       | 10 (frontière Supabase types)                  | 🟡      |
 
 **Volume** : 31 299 LOC `.ts/.tsx` hors `node_modules` et `lib/generated/`. 24 routes API, 21 tables SQL.
 
@@ -49,6 +49,7 @@ Ces tables ne sont **pas référencées** dans le code applicatif actuel ni dans
 **Risque** : exposition via API REST Supabase publique avec n'importe quelle anon key, si quelqu'un découvre leur existence.
 
 **Action** :
+
 - soit `DROP TABLE` si confirmé inutilisé,
 - soit `ENABLE ROW LEVEL SECURITY` + policy `DENY ALL` au minimum.
 
@@ -75,24 +76,26 @@ Toutes sauf `health` ont une protection adaptée. `/api/health` expose le statut
 
 ### 🔴 Pages monolithiques (>500 lignes)
 
-| Page | Lignes |
-|------|--------|
-| `app/studio/gamification/page.tsx` | **3 073** |
-| `app/studio/agents/page.tsx` | **2 684** |
-| `app/studio/page.tsx` | 2 261 |
-| `app/studio/marketing/page.tsx` | 1 533 |
-| `app/studio/ventures/page.tsx` | 1 479 |
-| `app/studio/analytics/page.tsx` | 1 449 |
-| `app/studio/automations/page.tsx` | 1 405 |
-| `app/studio/infrastructure/page.tsx` | 1 381 |
-| `app/studio/chat/page.tsx` | 1 007 |
+| Page                                 | Lignes    |
+| ------------------------------------ | --------- |
+| `app/studio/gamification/page.tsx`   | **3 073** |
+| `app/studio/agents/page.tsx`         | **2 684** |
+| `app/studio/page.tsx`                | 2 261     |
+| `app/studio/marketing/page.tsx`      | 1 533     |
+| `app/studio/ventures/page.tsx`       | 1 479     |
+| `app/studio/analytics/page.tsx`      | 1 449     |
+| `app/studio/automations/page.tsx`    | 1 405     |
+| `app/studio/infrastructure/page.tsx` | 1 381     |
+| `app/studio/chat/page.tsx`           | 1 007     |
 
 Toutes mélangent JSX, state hooks, fetch et helpers de visualisation. Conséquences observées :
+
 - HMR lent (~1-2s par modification),
 - difficile à tester en isolation,
 - duplication de patterns (KPI card, panel border, status badges).
 
 **Action** : extraire systématiquement
+
 - les sous-composants visuels (`KpiCard`, `StatusBadge`, `Sparkline`) dans `components/studio/`,
 - les hooks de fetch (`useAutonomyJobs`, `useCampaignDrafts`) dans `lib/hooks/`,
 - les chartings SVG (`StackedArea`, `CohortHeatmap`) dans `components/charts/`.
@@ -105,6 +108,7 @@ Toutes mélangent JSX, state hooks, fetch et helpers de visualisation. Conséque
 Risque actuel : confusion développeur, divergences de schéma possibles, double maintenance.
 
 **Action** : décider stratégie long terme.
+
 - Option A : tout migrer vers Supabase JS (plus simple, RLS natif, mais perte des types Prisma)
 - Option B : régénérer Prisma périodiquement et garder pour les ventures core (séparation claire)
 
@@ -118,13 +122,13 @@ Documenter le choix dans CLAUDE.md et ajouter un README dans `lib/`.
 
 Classés par type :
 
-| Catégorie | Count | Impact |
-|-----------|-------|--------|
-| `Calling setState synchronously within an effect can trigger cascading renders` | ~10 | Bugs subtils + lag UI |
-| `unused-vars` (imports / constantes) | ~25 | Cosmétique |
-| `react/no-unescaped-entities` | ~10 | Cosmétique (apostrophes) |
-| `react-hooks/exhaustive-deps` | ~5 | Bugs potentiels (deps oubliées) |
-| `no-html-link-for-pages` (utiliser `<Link>`) | ~3 | SEO/SPA perf |
+| Catégorie                                                                       | Count | Impact                          |
+| ------------------------------------------------------------------------------- | ----- | ------------------------------- |
+| `Calling setState synchronously within an effect can trigger cascading renders` | ~10   | Bugs subtils + lag UI           |
+| `unused-vars` (imports / constantes)                                            | ~25   | Cosmétique                      |
+| `react/no-unescaped-entities`                                                   | ~10   | Cosmétique (apostrophes)        |
+| `react-hooks/exhaustive-deps`                                                   | ~5    | Bugs potentiels (deps oubliées) |
+| `no-html-link-for-pages` (utiliser `<Link>`)                                    | ~3    | SEO/SPA perf                    |
 
 Les **`setState in effect`** sont les seuls réellement problématiques. À auditer un par un.
 
@@ -149,14 +153,14 @@ Acceptables pour debug d'erreurs serveur, mais à terme remplacer par un logger 
 
 ### ✅ Couverture par module
 
-| Module | Modules | Tests | Couverture |
-|--------|---------|-------|------------|
-| `lib/` racine | 30 | 19 | 63% |
-| `lib/autonomy/` | 8 | 8 | 100% |
-| `lib/marketing/` | 2 | 2 | 100% |
-| `lib/stripe/` | 3 | 3 | 100% |
-| `lib/coolify/` | 1 | 1 | 100% |
-| `lib/metrics/` | 1 | 1 | 100% |
+| Module           | Modules | Tests | Couverture |
+| ---------------- | ------- | ----- | ---------- |
+| `lib/` racine    | 30      | 19    | 63%        |
+| `lib/autonomy/`  | 8       | 8     | 100%       |
+| `lib/marketing/` | 2       | 2     | 100%       |
+| `lib/stripe/`    | 3       | 3     | 100%       |
+| `lib/coolify/`   | 1       | 1     | 100%       |
+| `lib/metrics/`   | 1       | 1     | 100%       |
 
 **Excellent** sur les chemins critiques de l'autonomie. Les 11 modules `lib/` sans test direct sont essentiellement des helpers UI (ck-vars, studio-utils) ou des wrappers DB simples — moins critiques.
 
@@ -211,6 +215,7 @@ Le build produit du Next 16 standalone. Les pages > 1 500 lignes pèsent lourd a
 - **Pas de pages d'erreur custom** (`app/error.tsx`, `app/not-found.tsx`) sinon Next.js défauts
 
 **Action** : ajouter au moins
+
 - compteur tokens dans `agent_runs` (déjà partiellement présent dans `llmResult.usage`)
 - export Prometheus simple `/api/metrics` (counters par route, histogramme durée)
 - `app/error.tsx` + `app/not-found.tsx` aux couleurs Kenomi

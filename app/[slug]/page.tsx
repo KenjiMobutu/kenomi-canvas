@@ -2,6 +2,7 @@ import { getLandingPage } from '@/lib/queries'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
+import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
 
@@ -66,9 +67,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
 
       {/* NAV */}
       <nav className="px-6 py-4 flex items-center justify-between max-w-5xl mx-auto">
-        <a href="/" className="text-gray-500 text-sm hover:text-white transition-colors">
+        <Link href="/" className="text-gray-500 text-sm hover:text-white transition-colors">
           ← Kenomi
-        </a>
+        </Link>
       </nav>
 
       {/* HERO */}
@@ -155,9 +156,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
       {/* FOOTER */}
       <footer className="border-t border-gray-900 py-8 text-center text-gray-600 text-sm">
         Propulsé par{' '}
-        <a href="/" className="text-gray-400 hover:text-white">
+        <Link href="/" className="text-gray-400 hover:text-white">
           Kenomi
-        </a>
+        </Link>
       </footer>
     </main>
   )

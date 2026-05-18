@@ -156,7 +156,7 @@ export default function ChatPage() {
       }
       const reader = res.body.getReader()
       const dec = new TextDecoder()
-      let full = ''
+      const streamState = { full: '' }
       const assistantId = crypto.randomUUID()
       setMessages((prev) => [
         ...prev,
@@ -173,9 +173,10 @@ export default function ChatPage() {
           if (raw === '[DONE]') break
           try {
             const token = JSON.parse(raw) as string
-            full += token
+            const nextContent = streamState.full + token
+            streamState.full = nextContent
             setMessages((prev) =>
-              prev.map((m) => (m.id === assistantId ? { ...m, content: full } : m))
+              prev.map((m) => (m.id === assistantId ? { ...m, content: nextContent } : m))
             )
           } catch {}
         }

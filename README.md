@@ -137,6 +137,7 @@ scrape_configs:
 ### Runbooks opérationnels
 
 - [Incident autonomie](docs/runbooks/autonomy-incident.md)
+- [Exploitation quotidienne](docs/runbooks/daily-operations.md)
 - [Webhook Stripe](docs/runbooks/stripe-webhook.md)
 - [Déploiement Coolify](docs/runbooks/coolify-deploy.md)
 - [Migrations Supabase](docs/runbooks/database-migrations.md)

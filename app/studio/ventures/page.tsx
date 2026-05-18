@@ -341,8 +341,8 @@ function VentureInspector({
   }, [v?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stage = v ? STAGES.find((s) => s.id === v.stage) || STAGES[2] : STAGES[2]
-  const sparkA = useMemo(() => (v ? makeSpark(28, 40, 14, (v.id?.length ?? 1) + 3) : []), [v?.id])
-  const sparkB = useMemo(() => (v ? makeSpark(28, 50, 16, (v.id?.length ?? 1) + 11) : []), [v?.id])
+  const sparkA = useMemo(() => (v ? makeSpark(28, 40, 14, (v.id?.length ?? 1) + 3) : []), [v])
+  const sparkB = useMemo(() => (v ? makeSpark(28, 50, 16, (v.id?.length ?? 1) + 11) : []), [v])
 
   if (!v)
     return (

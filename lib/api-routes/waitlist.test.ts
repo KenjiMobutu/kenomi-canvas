@@ -12,9 +12,8 @@ vi.mock('@/lib/supabase-admin', () => ({
 }))
 
 vi.mock('@/lib/venture-events', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/venture-events')>(
-    '@/lib/venture-events'
-  )
+  const actual =
+    await vi.importActual<typeof import('@/lib/venture-events')>('@/lib/venture-events')
   return {
     ...actual,
     recordVentureEventBySlugSafely: vi.fn().mockResolvedValue(undefined),
@@ -59,16 +58,12 @@ describe('POST /api/waitlist', () => {
   })
 
   it('400 si email invalide', async () => {
-    const res = await POST(
-      makeJsonRequest({ slug: 'my-venture', email: 'pas-un-email' }) as never
-    )
+    const res = await POST(makeJsonRequest({ slug: 'my-venture', email: 'pas-un-email' }) as never)
     expect(res.status).toBe(400)
   })
 
   it('400 si slug invalide', async () => {
-    const res = await POST(
-      makeJsonRequest({ slug: '../etc/passwd', email: 'a@b.com' }) as never
-    )
+    const res = await POST(makeJsonRequest({ slug: '../etc/passwd', email: 'a@b.com' }) as never)
     expect(res.status).toBe(400)
   })
 

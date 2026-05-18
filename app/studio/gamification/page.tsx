@@ -264,26 +264,24 @@ function AchievementCard({
 }
 
 function ConfettiField({ color }: { color: string }) {
-  const palette = [color, accent, accent2, cyan, emerald, fuchsia, violet]
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: 28 }).map((_, i) => {
-        const seed = (i + 1) * 13
-        return {
-          x: (seed * 37) % 1600,
-          dx: ((seed * 17) % 200) - 100,
-          r0: (seed * 41) % 360,
-          r1: ((seed * 41) % 360) + 540,
-          w: 6 + ((seed * 7) % 8),
-          h: 10 + ((seed * 11) % 14),
-          shape: i % 3,
-          color: palette[i % palette.length],
-          delay: (i * 0.27) % 4,
-          dur: 3.5 + ((seed * 3) % 30) / 10,
-        }
-      }),
-    [color]
-  )  
+  const pieces = useMemo(() => {
+    const palette = [color, accent, accent2, cyan, emerald, fuchsia, violet]
+    return Array.from({ length: 28 }).map((_, i) => {
+      const seed = (i + 1) * 13
+      return {
+        x: (seed * 37) % 1600,
+        dx: ((seed * 17) % 200) - 100,
+        r0: (seed * 41) % 360,
+        r1: ((seed * 41) % 360) + 540,
+        w: 6 + ((seed * 7) % 8),
+        h: 10 + ((seed * 11) % 14),
+        shape: i % 3,
+        color: palette[i % palette.length],
+        delay: (i * 0.27) % 4,
+        dur: 3.5 + ((seed * 3) % 30) / 10,
+      }
+    })
+  }, [color])
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
       {pieces.map((p, i) => (
@@ -493,17 +491,14 @@ function LevelUpTab({
   const isMobile = useIsMobile()
   const fromLevel = lastLevelUp?.fromLevel ?? agentLevels.find((a) => a.id === agentId)?.level ?? 1
   const toLevel = lastLevelUp?.toLevel ?? fromLevel + 1
-  const [lvl, setLvl] = useState(toLevel)
   const [phase, setPhase] = useState<'locked' | 'burst'>('locked')
 
   useEffect(() => {
     let idA: ReturnType<typeof setTimeout>, idB: ReturnType<typeof setTimeout>
     function loop() {
-      setLvl(fromLevel)
       setPhase('locked')
       idA = setTimeout(() => {
         setPhase('burst')
-        setLvl(toLevel)
       }, 500)
       idB = setTimeout(loop, 5200)
     }

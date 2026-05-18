@@ -5,9 +5,8 @@ vi.mock('@/lib/supabase-admin', () => ({
 }))
 
 vi.mock('@/lib/venture-events', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/venture-events')>(
-    '@/lib/venture-events'
-  )
+  const actual =
+    await vi.importActual<typeof import('@/lib/venture-events')>('@/lib/venture-events')
   return {
     ...actual,
     recordVentureEventBySlug: vi.fn(),
@@ -24,7 +23,8 @@ function makeRequest(body: unknown, headers: Record<string, string> = {}): Reque
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-forwarded-for': headers['x-forwarded-for'] ?? `127.0.0.${Math.floor(Math.random() * 254) + 1}`,
+      'x-forwarded-for':
+        headers['x-forwarded-for'] ?? `127.0.0.${Math.floor(Math.random() * 254) + 1}`,
       ...headers,
     },
     body: typeof body === 'string' ? body : JSON.stringify(body),
@@ -67,9 +67,7 @@ describe('POST /api/events', () => {
   })
 
   it('200 si payload valide et venture existe', async () => {
-    const res = await POST(
-      makeRequest({ slug: 'my-venture', event_type: 'page_view' }) as never
-    )
+    const res = await POST(makeRequest({ slug: 'my-venture', event_type: 'page_view' }) as never)
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.ok).toBe(true)
@@ -104,7 +102,11 @@ describe('POST /api/events', () => {
   })
 
   it('413 si payload > 10 KB', async () => {
-    const big = { slug: 'my-venture', event_type: 'page_view', metadata: { huge: 'x'.repeat(15000) } }
+    const big = {
+      slug: 'my-venture',
+      event_type: 'page_view',
+      metadata: { huge: 'x'.repeat(15000) },
+    }
     const body = JSON.stringify(big)
     const req = new Request('http://localhost/api/events', {
       method: 'POST',

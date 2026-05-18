@@ -109,8 +109,7 @@ async function callOllama(
 
     const promptTokens =
       typeof data?.prompt_eval_count === 'number' ? data.prompt_eval_count : undefined
-    const completionTokens =
-      typeof data?.eval_count === 'number' ? data.eval_count : undefined
+    const completionTokens = typeof data?.eval_count === 'number' ? data.eval_count : undefined
     const usage =
       promptTokens !== undefined && completionTokens !== undefined
         ? {

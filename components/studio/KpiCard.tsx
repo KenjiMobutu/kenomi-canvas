@@ -15,14 +15,7 @@ export interface KpiCardProps {
   compact?: boolean
 }
 
-export function KpiCard({
-  label,
-  value,
-  color,
-  delta,
-  sparkPath,
-  compact = false,
-}: KpiCardProps) {
+export function KpiCard({ label, value, color, delta, sparkPath, compact = false }: KpiCardProps) {
   return (
     <div
       style={{

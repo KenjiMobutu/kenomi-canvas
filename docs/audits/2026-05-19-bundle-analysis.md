@@ -8,21 +8,21 @@ Build production Next.js 16 + Turbopack (`npm run build`). Mesure des chunks JS 
 
 ## Bundle global
 
-| Métrique | Valeur |
-|----------|--------|
-| Total JS (chunks) | **1.42 MB** |
-| Nombre de chunks | 34 |
+| Métrique          | Valeur                                          |
+| ----------------- | ----------------------------------------------- |
+| Total JS (chunks) | **1.42 MB**                                     |
+| Nombre de chunks  | 34                                              |
 | Cible recommandée | < 2 MB (acceptable pour une app Studio interne) |
 
 ## Top 5 chunks par taille
 
-| Rang | Taille | Hash | Cause probable |
-|------|--------|------|----------------|
-| 1 | **233 KB** | `0yvz9i9ft_2_k.js` | React + ReactDOM + framework |
-| 2 | **227 KB** | `0ut6kalbqvi0i.js` | Prisma client legacy (lib/generated/) |
-| 3 | **172 KB** | `0wnzh9y82ldnj.js` | Page lourde (gamification ou studio root) |
-| 4 | **135 KB** | `162j3mggdeajj.js` | framer-motion + radix-ui |
-| 5 | **110 KB** | `03~yq9q893hmn.js` | Lucide icons + helpers |
+| Rang | Taille     | Hash               | Cause probable                            |
+| ---- | ---------- | ------------------ | ----------------------------------------- |
+| 1    | **233 KB** | `0yvz9i9ft_2_k.js` | React + ReactDOM + framework              |
+| 2    | **227 KB** | `0ut6kalbqvi0i.js` | Prisma client legacy (lib/generated/)     |
+| 3    | **172 KB** | `0wnzh9y82ldnj.js` | Page lourde (gamification ou studio root) |
+| 4    | **135 KB** | `162j3mggdeajj.js` | framer-motion + radix-ui                  |
+| 5    | **110 KB** | `03~yq9q893hmn.js` | Lucide icons + helpers                    |
 
 (L'identification exacte par hash nécessiterait `experimental-analyze` complet ou lecture des sourcemaps.)
 
@@ -47,6 +47,7 @@ Le client Prisma généré dans `lib/generated/prisma/` représente ~17 000 lign
 Dépendances dynamiques de la lib `@radix-ui/*` + animations. Utilisées dans 2-3 composants seulement.
 
 **Action future :**
+
 - Audit usage : combien de composants utilisent réellement `framer-motion` ?
 - Si peu : remplacer par CSS transitions / `@keyframes` natifs.
 - Si nécessaire : code split via `next/dynamic`.
@@ -56,6 +57,7 @@ Dépendances dynamiques de la lib `@radix-ui/*` + animations. Utilisées dans 2-
 Import nominatif `import { Check, X, ... } from 'lucide-react'`. Turbopack tree-shake correctement, mais 50+ icônes différentes utilisées dans le studio = bundle non négligeable.
 
 **Action future :**
+
 - Audit des icônes (combien d'imports uniques sur tout le projet ?)
 - Substituer les icônes peu utilisées par SVG inline si <5 occurrences.
 

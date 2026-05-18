@@ -47,14 +47,14 @@ Les migrations Supabase sont dans `supabase/migrations/` (fichiers SQL).
 
 **Status : stack hybride documentée, migration progressive.**
 
-| Cas | Client à utiliser |
-| --- | ----------------- |
-| **Nouveau code** | Supabase JS exclusivement |
-| **Modèles legacy ventures** | Prisma — regen `lib/generated/prisma/` après tout changement de schéma |
-| **Tables récentes** (autonomy, marketing, agent_runs, venture_events, campaign_drafts...) | Supabase JS |
-| **Server Actions** | `supabase-admin.ts` (service role) |
-| **Routes API authentifiées** | `requireAllowedUser` → `supabase` scopé user |
-| **Routes API publiques** (waitlist, events, stripe webhook) | `supabase-admin.ts` |
+| Cas                                                                                       | Client à utiliser                                                      |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Nouveau code**                                                                          | Supabase JS exclusivement                                              |
+| **Modèles legacy ventures**                                                               | Prisma — regen `lib/generated/prisma/` après tout changement de schéma |
+| **Tables récentes** (autonomy, marketing, agent_runs, venture_events, campaign_drafts...) | Supabase JS                                                            |
+| **Server Actions**                                                                        | `supabase-admin.ts` (service role)                                     |
+| **Routes API authentifiées**                                                              | `requireAllowedUser` → `supabase` scopé user                           |
+| **Routes API publiques** (waitlist, events, stripe webhook)                               | `supabase-admin.ts`                                                    |
 
 **Migration future :** Prisma sera retiré une fois les routes ventures core (Idea/Venture/LandingPage/Payment/Campaign/Decision/Metric/BudgetRequest) migrées vers Supabase JS. Le client généré pèse ~17k lignes — un gain de bundle non négligeable. Pas urgent tant que Prisma fonctionne et que les tests E2E passent.
 

@@ -36,7 +36,6 @@ export function useGamification(): GamificationResult & {
 
   useEffect(() => {
     if (!user) {
-       
       setLoading(false)
       return
     }

@@ -24,6 +24,7 @@ npm run supabase:validate
 ```
 
 Expected:
+
 - branche `codex-finalisation-alignement-kenomi` propre et synchro
 - typecheck 0 erreur
 - ~51 warnings ESLint
@@ -41,6 +42,7 @@ Pas requis — toute la validation passe par les tests locaux et `supabase:valid
 ### Task P1.1: DROP tables legacy sans RLS
 
 **Files:**
+
 - Create: `supabase/migrations/20260518_drop_legacy_tables.sql`
 - Modify: `scripts/validate-supabase-remote.mjs`
 
@@ -87,8 +89,8 @@ Expected: `[]`
 const rlsResp = await fetch(`${supabaseUrl}/pg/query`, {
   method: 'POST',
   headers: {
-    'apikey': serviceRoleKey,
-    'Authorization': `Bearer ${serviceRoleKey}`,
+    apikey: serviceRoleKey,
+    Authorization: `Bearer ${serviceRoleKey}`,
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
@@ -97,7 +99,7 @@ const rlsResp = await fetch(`${supabaseUrl}/pg/query`, {
 })
 const tablesWithoutRls = await rlsResp.json()
 if (Array.isArray(tablesWithoutRls) && tablesWithoutRls.length > 0) {
-  console.error('tables sans RLS:', tablesWithoutRls.map(t => t.tablename).join(', '))
+  console.error('tables sans RLS:', tablesWithoutRls.map((t) => t.tablename).join(', '))
   process.exit(1)
 }
 console.log('ok all tables have RLS enabled')
@@ -123,6 +125,7 @@ ni colonne user_id. Validation distante étendue pour empêcher la régression."
 ### Task P2.1: Corriger les setState in effect
 
 **Files:**
+
 - Modify: `app/studio/api-keys/page.tsx` (1 occurrence)
 - Modify: `app/studio/automations/page.tsx` (2 occurrences ligne 1179, 1183)
 - Modify: `app/studio/chat/page.tsx` (3 occurrences lignes 67, 98, 103)
@@ -154,6 +157,7 @@ Identifier le pattern (init, sync, fetch) et choisir la stratégie.
 - [ ] **Step 2: Pattern type — init depuis ext**
 
 Avant :
+
 ```tsx
 const [tab, setTab] = useState<string>('jobs')
 useEffect(() => {
@@ -162,12 +166,14 @@ useEffect(() => {
 ```
 
 Après (init lazy + sync via key/route) :
+
 ```tsx
 const tab = searchParams.get('tab') ?? 'jobs'
 // supprimer le useState + useEffect
 ```
 
 OU (si vraiment besoin de state) :
+
 ```tsx
 const initialTab = useMemo(() => searchParams.get('tab') ?? 'jobs', [])
 const [tab, setTab] = useState(initialTab)
@@ -176,21 +182,24 @@ const [tab, setTab] = useState(initialTab)
 - [ ] **Step 3: Pattern type — sync dérivé**
 
 Avant :
+
 ```tsx
 const [filtered, setFiltered] = useState<Item[]>([])
 useEffect(() => {
-  setFiltered(items.filter(i => i.status === status))
+  setFiltered(items.filter((i) => i.status === status))
 }, [items, status])
 ```
 
 Après :
+
 ```tsx
-const filtered = useMemo(() => items.filter(i => i.status === status), [items, status])
+const filtered = useMemo(() => items.filter((i) => i.status === status), [items, status])
 ```
 
 - [ ] **Step 4: Appliquer un fichier à la fois**
 
 Ordre suggéré (du moins risqué au plus complexe) :
+
 1. `components/CkShell.tsx`
 2. `components/StudioSidebar.tsx`
 3. `components/studio/infra/ProxmoxDashboard.tsx`
@@ -204,6 +213,7 @@ Ordre suggéré (du moins risqué au plus complexe) :
 11. `app/studio/page.tsx`
 
 Pour chaque fichier :
+
 ```bash
 # Avant
 npm run lint 2>&1 | grep "setState synchronously" | grep <file> | wc -l
@@ -247,6 +257,7 @@ Impact: élimine les cascading renders détectés par react-hooks/set-state-in-e
 ### Task P2.2: Tests d'intégration routes publiques
 
 **Files:**
+
 - Create: `lib/api-routes/waitlist.test.ts`
 - Create: `lib/api-routes/events.test.ts`
 - Create: `lib/api-routes/health.test.ts`
@@ -288,21 +299,32 @@ describe('POST /api/waitlist', () => {
   it('rate-limit après 5 requêtes identiques', async () => {
     // Mock supabaseAdmin pour bypass insert réel
     vi.mock('@/lib/supabase-admin', () => ({
-      supabaseAdmin: { from: () => ({ insert: () => Promise.resolve({ error: null }), select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'v1' }, error: null }) }) }) }) }
+      supabaseAdmin: {
+        from: () => ({
+          insert: () => Promise.resolve({ error: null }),
+          select: () => ({
+            eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'v1' }, error: null }) }),
+          }),
+        }),
+      },
     }))
     const body = JSON.stringify({ email: 'test@kenomi.eu', slug: 'venture-1' })
     for (let i = 0; i < 5; i++) {
-      await POST(new Request('http://localhost/api/waitlist', {
+      await POST(
+        new Request('http://localhost/api/waitlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '1.2.3.4' },
+          body,
+        })
+      )
+    }
+    const res = await POST(
+      new Request('http://localhost/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '1.2.3.4' },
         body,
-      }))
-    }
-    const res = await POST(new Request('http://localhost/api/waitlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '1.2.3.4' },
-      body,
-    }))
+      })
+    )
     expect(res.status).toBe(429)
   })
 })
@@ -355,8 +377,13 @@ describe('POST /api/events', () => {
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 describe('GET /api/health', () => {
-  beforeEach(() => { vi.resetModules() })
-  afterEach(() => { vi.restoreAllMocks(); delete process.env.HEALTH_DATABASE_REQUIRED })
+  beforeEach(() => {
+    vi.resetModules()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    delete process.env.HEALTH_DATABASE_REQUIRED
+  })
 
   it('200 si toutes les dépendances OK', async () => {
     // Mock prisma + supabase pour renvoyer success
@@ -396,6 +423,7 @@ git commit -m "test: tests intégration routes publiques (waitlist, events, heal
 ### Task P3.1: Extraire composants UI réutilisables
 
 **Files:**
+
 - Create: `components/studio/KpiCard.tsx`
 - Create: `components/studio/StatusBadge.tsx`
 - Create: `components/studio/Sparkline.tsx`
@@ -426,29 +454,74 @@ export interface KpiCardProps {
 
 export function KpiCard({ label, value, delta, color, trend, sparkPath }: KpiCardProps) {
   return (
-    <div style={{
-      background: surface, border: `1px solid ${line}`, borderRadius: 12,
-      padding: 12, position: 'relative', overflow: 'hidden',
-    }}>
-      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: color, opacity: 0.7 }} />
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 12,
+        padding: 12,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 3,
+          background: color,
+          opacity: 0.7,
+        }}
+      />
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: muted,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+          }}
+        >
           {label}
         </span>
         {delta && (
-          <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: 9.5, padding: '2px 6px', borderRadius: 3,
-            background: `${color}1a`, color, letterSpacing: 1, fontWeight: 700,
-          }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              padding: '2px 6px',
+              borderRadius: 3,
+              background: `${color}1a`,
+              color,
+              letterSpacing: 1,
+              fontWeight: 700,
+            }}
+          >
             {delta}
           </span>
         )}
       </div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 800, letterSpacing: '-.02em', marginTop: 6, color: text }}>
+      <div
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 26,
+          fontWeight: 800,
+          letterSpacing: '-.02em',
+          marginTop: 6,
+          color: text,
+        }}
+      >
         {value}
       </div>
       {sparkPath && (
-        <svg viewBox="0 0 100 24" preserveAspectRatio="none" style={{ width: '100%', height: 22, marginTop: 4, display: 'block' }}>
+        <svg
+          viewBox="0 0 100 24"
+          preserveAspectRatio="none"
+          style={{ width: '100%', height: 22, marginTop: 4, display: 'block' }}
+        >
           <path d={sparkPath} fill="none" stroke={color} strokeWidth="1.4" />
         </svg>
       )}
@@ -482,12 +555,23 @@ export function StatusBadge({ status, size = 'sm' }: { status: string; size?: 's
   const padding = size === 'md' ? '4px 10px' : '3px 7px'
   const fontSize = size === 'md' ? 10 : 9
   return (
-    <span style={{
-      fontFamily: 'var(--font-mono)', fontSize, padding, borderRadius: 4,
-      background: `${color}22`, color, border: `1px solid ${color}40`,
-      letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 800,
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-    }}>
+    <span
+      style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize,
+        padding,
+        borderRadius: 4,
+        background: `${color}22`,
+        color,
+        border: `1px solid ${color}40`,
+        letterSpacing: '.14em',
+        textTransform: 'uppercase',
+        fontWeight: 800,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+      }}
+    >
       {status}
     </span>
   )
@@ -501,6 +585,7 @@ Pattern similaire, factoriser depuis les pages existantes.
 - [ ] **Step 4: Migrer une page à la fois**
 
 Pour chaque page modifiée :
+
 ```bash
 # Avant
 wc -l app/studio/<page>/page.tsx
@@ -516,6 +601,7 @@ Cible : -150 à -250 lignes par page.
 - [ ] **Step 5: Tests visuels**
 
 Pas de tests unitaires pour ces composants (UI pur). Vérifier dans `npm run dev` :
+
 - `/studio/analytics` : Live KPIs + bandes de KPI legacy s'affichent identiques
 - `/studio/marketing` : badges status drafts identiques
 - `/studio/agents` : tabs Autonomy Ops + badge budget breach identiques
@@ -532,6 +618,7 @@ git commit -m "refactor(ui): extrait KpiCard, StatusBadge, Sparkline, SectionPan
 ### Task P3.2: Logger structuré (Pino)
 
 **Files:**
+
 - Modify: `package.json` (deps: `pino`, `pino-pretty`)
 - Create: `lib/logger.ts`
 - Modify: `app/studio/documents/page.tsx` (console.error → logger)
@@ -559,7 +646,9 @@ const isDev = process.env.NODE_ENV !== 'production'
 
 export const logger = pino({
   level: process.env.LOG_LEVEL ?? (isDev ? 'debug' : 'info'),
-  transport: isDev ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss' } } : undefined,
+  transport: isDev
+    ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss' } }
+    : undefined,
   base: { service: 'kenomi-canvas' },
 })
 
@@ -580,6 +669,7 @@ export function logInfo(scope: string, message: string, context?: Record<string,
 - [ ] **Step 3: Remplacer console partout**
 
 Pattern :
+
 ```diff
 - console.error('[waitlist]', err)
 + logError('waitlist', err)
@@ -604,6 +694,7 @@ git commit -m "refactor(logs): logger Pino structuré remplace console.* (11 occ
 ### Task P3.3: Documenter la stratégie Prisma vs Supabase JS
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 - Create: `lib/README.md`
 
@@ -617,10 +708,12 @@ Ajouter dans la section "Architecture générale" :
 **Status: stack hybride documentée**
 
 L'app utilise deux clients DB :
+
 1. **Prisma** (`lib/db.ts`) — pour les modèles legacy ventures (Idea, Venture, LandingPage, Payment, Campaign, Decision, Metric, Waitlist, BudgetRequest)
 2. **Supabase JS** (`lib/supabase-*.ts`) — pour tout le reste (autonomy, conversations, automations, agent runs, venture_events, campaign_drafts...)
 
 **Règle:**
+
 - Nouveau code → Supabase JS exclusivement.
 - Modifications de modèles legacy → garder Prisma (regen le client après changement schéma).
 - À terme, Prisma sera retiré (ticket #TBD) une fois toutes les routes ventures migrées.
@@ -635,12 +728,14 @@ Pour les routes API authentifiées : `requireAllowedUser` retourne `supabase` cl
 # lib/ — Conventions
 
 ## DB
+
 - `db.ts` : Prisma client (legacy ventures)
 - `supabase-admin.ts` : service role (server-side)
 - `supabase-browser.ts` : anon key + cookies (client-side)
 - `auth-server.ts` : `requireAllowedUser()` pour routes API
 
 ## Modules métier
+
 - `autonomy/` : moteur d'autonomie (config, policy, executor)
 - `marketing/` : drafts + adapters publication
 - `stripe/` : checkout + webhook
@@ -649,7 +744,8 @@ Pour les routes API authentifiées : `requireAllowedUser` retourne `supabase` cl
 - `agent-output-schemas.ts` : schémas Zod par agent
 
 ## Helpers
-- `logger.ts` : Pino structuré (remplace console.*)
+
+- `logger.ts` : Pino structuré (remplace console.\*)
 - `security.ts` : SSRF guard (isAllowedWebhookUrl, isAllowedOllamaUrl)
 - `audit-log.ts` : insertAuditEvent vers agent_events
 - `rate-limit.ts` : in-memory rate-limit (mono-instance)
@@ -671,6 +767,7 @@ git commit -m "docs: stratégie Prisma vs Supabase JS + lib/README"
 ### Task P4.1: Tracking coût LLM par run
 
 **Files:**
+
 - Create: `supabase/migrations/20260518_agent_runs_tokens.sql`
 - Modify: `lib/llm-client.ts`
 - Modify: `lib/autonomy/run-agent-step.ts`
@@ -694,6 +791,7 @@ CREATE INDEX IF NOT EXISTS agent_runs_user_cost_idx
 ```
 
 Appliquer en prod :
+
 ```bash
 curl -sS -X POST "$NEXT_PUBLIC_SUPABASE_URL/pg/query" \
   -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
@@ -750,19 +848,31 @@ export function computeCostUsd(model: string, usage: LLMUsage): number {
 // lib/llm-client.test.ts (étendre)
 describe('computeCostUsd', () => {
   it('calcule le coût pour Claude Sonnet', () => {
-    expect(computeCostUsd('claude-sonnet-4-6', {
-      prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500,
-    })).toBeCloseTo(0.003 * 1 + 0.015 * 0.5, 6)
+    expect(
+      computeCostUsd('claude-sonnet-4-6', {
+        prompt_tokens: 1000,
+        completion_tokens: 500,
+        total_tokens: 1500,
+      })
+    ).toBeCloseTo(0.003 * 1 + 0.015 * 0.5, 6)
   })
   it('retourne 0 pour Ollama local', () => {
-    expect(computeCostUsd('qwen3:8b', {
-      prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500,
-    })).toBe(0)
+    expect(
+      computeCostUsd('qwen3:8b', {
+        prompt_tokens: 1000,
+        completion_tokens: 500,
+        total_tokens: 1500,
+      })
+    ).toBe(0)
   })
   it('retourne 0 pour un modèle inconnu', () => {
-    expect(computeCostUsd('inconnu', {
-      prompt_tokens: 100, completion_tokens: 100, total_tokens: 200,
-    })).toBe(0)
+    expect(
+      computeCostUsd('inconnu', {
+        prompt_tokens: 100,
+        completion_tokens: 100,
+        total_tokens: 200,
+      })
+    ).toBe(0)
   })
 })
 ```
@@ -776,18 +886,21 @@ const usage = llmResult.usage
 const costUsd = usage ? computeCostUsd(usedModel, usage) : null
 
 const agentRun = await single<{ id?: string }>(
-  supabase.from('agent_runs').insert({
-    user_id: userId,
-    agent_id: agentId,
-    model: usedModel,
-    prompt: userPrompt,
-    response: content,
-    duration_ms: durationMs,
-    prompt_tokens: usage?.prompt_tokens ?? null,
-    completion_tokens: usage?.completion_tokens ?? null,
-    total_tokens: usage?.total_tokens ?? null,
-    cost_usd: costUsd,
-  }).select('id')
+  supabase
+    .from('agent_runs')
+    .insert({
+      user_id: userId,
+      agent_id: agentId,
+      model: usedModel,
+      prompt: userPrompt,
+      response: content,
+      duration_ms: durationMs,
+      prompt_tokens: usage?.prompt_tokens ?? null,
+      completion_tokens: usage?.completion_tokens ?? null,
+      total_tokens: usage?.total_tokens ?? null,
+      cost_usd: costUsd,
+    })
+    .select('id')
 )
 ```
 
@@ -796,6 +909,7 @@ const agentRun = await single<{ id?: string }>(
 Ajouter une 8ème case dans le grid Live KPIs : "Coût LLM (30j)" qui somme `agent_runs.cost_usd` du user.
 
 Nouvelle route :
+
 ```ts
 // app/api/studio/analytics/llm-cost/route.ts
 // GET retourne { totalUsd: number, byAgent: { agent_id, cost_usd }[] }
@@ -814,6 +928,7 @@ git commit -m "feat(observability): tracking tokens + coût USD par agent_run + 
 ### Task P4.2: Pages d'erreur custom
 
 **Files:**
+
 - Create: `app/error.tsx`
 - Create: `app/not-found.tsx`
 - Create: `app/global-error.tsx`
@@ -826,17 +941,39 @@ import { useEffect } from 'react'
 import { bg, surface, text, muted, accent } from '@/lib/ck-vars'
 import { logError } from '@/lib/logger'
 
-export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  useEffect(() => { logError('app.error', error, { digest: error.digest }) }, [error])
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  useEffect(() => {
+    logError('app.error', error, { digest: error.digest })
+  }, [error])
 
   return (
-    <div style={{
-      minHeight: '100vh', background: bg, display: 'grid', placeItems: 'center', padding: 24,
-    }}>
-      <div style={{
-        background: surface, padding: 32, borderRadius: 14, maxWidth: 480,
-        textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 16,
-      }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: bg,
+        display: 'grid',
+        placeItems: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          background: surface,
+          padding: 32,
+          borderRadius: 14,
+          maxWidth: 480,
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}
+      >
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: text, margin: 0 }}>
           Erreur interne
         </h1>
@@ -848,10 +985,20 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
             digest: {error.digest}
           </code>
         )}
-        <button onClick={reset} style={{
-          padding: '10px 20px', borderRadius: 8, background: accent, color: '#0b0d12',
-          border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13,
-        }}>
+        <button
+          onClick={reset}
+          style={{
+            padding: '10px 20px',
+            borderRadius: 8,
+            background: accent,
+            color: '#0b0d12',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-display)',
+            fontWeight: 800,
+            fontSize: 13,
+          }}
+        >
           Réessayer
         </button>
       </div>
@@ -886,6 +1033,7 @@ git commit -m "feat(ui): pages d'erreur custom (error, not-found, global-error)"
 ### Task P4.3: Endpoint /api/metrics (Prometheus)
 
 **Files:**
+
 - Modify: `package.json` (deps: `prom-client`)
 - Create: `lib/metrics/prometheus.ts`
 - Create: `app/api/metrics/route.ts`
@@ -995,6 +1143,7 @@ git commit -m "feat(observability): endpoint /api/metrics Prometheus + compteurs
 ### Task P5.1: Bundle analyzer
 
 **Files:**
+
 - Modify: `package.json` (devDep: `@next/bundle-analyzer`)
 - Modify: `next.config.ts`
 

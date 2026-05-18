@@ -636,7 +636,7 @@ function LinkedInMock() {
         </div>
       </div>
       <div style={{ fontSize: 11, marginTop: 8, lineHeight: 1.4, color: text }}>
-        <b>3 signaux qui disent qu'une niche est prête à payer pour de l'IA.</b>
+        <b>3 signaux qui disent qu&apos;une niche est prête à payer pour de l&apos;IA.</b>
         <br />
         On a testé 12 ventures. Voici la grille que Validation Agent applique.
       </div>
@@ -716,7 +716,7 @@ function TikTokMock() {
         HOOK · 0-3s
       </div>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>
-        "J'ai posé 1 question à 12 founders"
+        &quot;J&apos;ai posé 1 question à 12 founders&quot;
       </div>
       <div
         style={{

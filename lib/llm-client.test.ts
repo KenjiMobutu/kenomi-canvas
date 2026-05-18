@@ -42,7 +42,7 @@ describe('computeCostUsd', () => {
     ).toBe(0)
   })
 
-  it("accepte zéro tokens sans diviser par zéro", () => {
+  it('accepte zéro tokens sans diviser par zéro', () => {
     expect(
       computeCostUsd('claude-sonnet-4-6', {
         prompt_tokens: 0,
