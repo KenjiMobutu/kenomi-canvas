@@ -114,6 +114,7 @@ Les équivalents `HEALTH_SUPABASE_REQUIRED=false` et `HEALTH_STORAGE_REQUIRED=fa
 - [Webhook Stripe](docs/runbooks/stripe-webhook.md)
 - [Déploiement Coolify](docs/runbooks/coolify-deploy.md)
 - [Migrations Supabase](docs/runbooks/database-migrations.md)
+- [Smoke tests (HTTP + browser auth)](docs/runbooks/smoke-tests.md)
 
 ## Déploiement
 
