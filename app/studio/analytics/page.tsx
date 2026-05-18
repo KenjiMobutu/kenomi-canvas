@@ -325,6 +325,52 @@ function KpiEditPanel({ kpi, onSave, onClose }: {
 
 const DEFAULT_KPI: KpiSnapshot = { revenue: '€0', revenue_delta: '+0%', ctr: '0%', ctr_delta: '+0 pts', conversion: '0%', conversion_delta: '+0 pts', retention: '0%', retention_delta: '+0 pts', churn: '—', churn_delta: '—', runway: '—', runway_delta: '—' }
 
+interface LiveVentureMetrics {
+  ventureId: string
+  name: string
+  slug: string
+  metrics: {
+    visits: number
+    signups: number
+    signupRate: number
+    revenueCents: number
+    spendCents: number
+    profitCents: number
+    roi: number
+  }
+}
+
+interface LiveAggregate {
+  totalVisits: number
+  totalSignups: number
+  signupRate: number
+  revenueEur: number
+  spendEur: number
+  profitEur: number
+  roi: number
+  ventureCount: number
+  hasData: boolean
+}
+
+function aggregateLive(snapshots: LiveVentureMetrics[]): LiveAggregate {
+  const totalVisits = snapshots.reduce((s, v) => s + v.metrics.visits, 0)
+  const totalSignups = snapshots.reduce((s, v) => s + v.metrics.signups, 0)
+  const revenueCents = snapshots.reduce((s, v) => s + v.metrics.revenueCents, 0)
+  const spendCents = snapshots.reduce((s, v) => s + v.metrics.spendCents, 0)
+  const profitCents = revenueCents - spendCents
+  return {
+    totalVisits,
+    totalSignups,
+    signupRate: totalVisits > 0 ? totalSignups / totalVisits : 0,
+    revenueEur: revenueCents / 100,
+    spendEur: spendCents / 100,
+    profitEur: profitCents / 100,
+    roi: spendCents > 0 ? profitCents / spendCents : 0,
+    ventureCount: snapshots.length,
+    hasData: totalVisits + totalSignups + revenueCents + spendCents > 0,
+  }
+}
+
 export default function AnalyticsPage() {
   const { user } = useAuth()
   const isMobile = useIsMobile()
@@ -334,6 +380,25 @@ export default function AnalyticsPage() {
   const [ventures, setVentures] = useState<VentureAN[]>([])
   const [editOpen, setEditOpen] = useState(false)
   const [mrrSparkSeries, setMrrSparkSeries] = useState<number[]>([])
+  const [liveSnapshots, setLiveSnapshots] = useState<LiveVentureMetrics[]>([])
+  const [liveLoading, setLiveLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/studio/analytics/ventures')
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return
+        if (data?.ok && Array.isArray(data.ventures)) {
+          setLiveSnapshots(data.ventures as LiveVentureMetrics[])
+        }
+      })
+      .catch(() => { /* silencieux: la page reste utilisable avec les KPI manuels */ })
+      .finally(() => { if (!cancelled) setLiveLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  const live_metrics = useMemo(() => aggregateLive(liveSnapshots), [liveSnapshots])
 
   useEffect(() => {
     if (!user) return
@@ -446,7 +511,68 @@ export default function AnalyticsPage() {
       {editOpen && <KpiEditPanel kpi={live} onSave={saveKpi} onClose={() => setEditOpen(false)} />}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* KPI strip */}
+        {/* Live KPIs depuis venture_events (source de vérité) */}
+        <div style={{
+          background: surface, border: `1px solid ${line2}`, borderRadius: 14,
+          padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: live_metrics.hasData ? emerald : muted2,
+                boxShadow: live_metrics.hasData ? `0 0 8px ${emerald}` : 'none',
+              }} />
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: text, letterSpacing: '-.01em' }}>
+                Live KPIs · venture_events
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                {liveLoading ? 'chargement…' : `${live_metrics.ventureCount} venture${live_metrics.ventureCount !== 1 ? 's' : ''}`}
+              </span>
+            </div>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.1em' }}>
+              page_view · waitlist_signup · payment_succeeded · campaign_spend
+            </span>
+          </div>
+
+          {!live_metrics.hasData && !liveLoading ? (
+            <div style={{
+              padding: '14px 16px', borderRadius: 10,
+              background: surface2, border: `1px dashed ${line2}`,
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: muted, lineHeight: 1.6,
+            }}>
+              Aucun événement capturé pour l&apos;instant. Lancez l&apos;agent Marketing ou publiez une landing pour
+              commencer à collecter des <span style={{ color: cyan }}>page_view</span> et{' '}
+              <span style={{ color: emerald }}>payment_succeeded</span>.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(7, 1fr)', gap: 10 }}>
+              {[
+                { label: 'Visites',     value: live_metrics.totalVisits.toLocaleString('fr-FR'), color: cyan },
+                { label: 'Signups',     value: live_metrics.totalSignups.toLocaleString('fr-FR'), color: violet },
+                { label: 'Taux signup', value: `${(live_metrics.signupRate * 100).toFixed(1)}%`,   color: violet },
+                { label: 'Revenu',      value: `€${live_metrics.revenueEur.toFixed(2)}`,           color: emerald },
+                { label: 'Spend',       value: `€${live_metrics.spendEur.toFixed(2)}`,             color: amber },
+                { label: 'Profit',      value: `€${live_metrics.profitEur.toFixed(2)}`,            color: live_metrics.profitEur >= 0 ? emerald : rose },
+                { label: 'ROI',         value: live_metrics.spendEur > 0 ? `${(live_metrics.roi * 100).toFixed(0)}%` : '—', color: live_metrics.roi >= 0 ? emerald : rose },
+              ].map((kpi) => (
+                <div key={kpi.label} style={{
+                  background: surface2, border: `1px solid ${line}`, borderRadius: 10,
+                  padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4,
+                }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                    {kpi.label}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: kpi.color, letterSpacing: '-.01em' }}>
+                    {kpi.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* KPI strip (snapshots manuels - legacy, à supprimer une fois live_metrics complètes) */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 10 }}>
           {KPI_LIST.map(k => <BigKPI key={k.label} {...k} />)}
         </div>
