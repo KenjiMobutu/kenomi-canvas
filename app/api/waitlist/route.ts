@@ -20,13 +20,16 @@ export async function POST(req: NextRequest) {
 
     const contentType = req.headers.get('content-type') ?? ''
 
-    if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+    if (
+      contentType.includes('application/x-www-form-urlencoded') ||
+      contentType.includes('multipart/form-data')
+    ) {
       const form = await req.formData()
-      slug  = (form.get('slug')  as string) ?? ''
+      slug = (form.get('slug') as string) ?? ''
       email = (form.get('email') as string) ?? ''
     } else {
       const body = await req.json()
-      slug  = body.slug  ?? ''
+      slug = body.slug ?? ''
       email = body.email ?? ''
     }
 

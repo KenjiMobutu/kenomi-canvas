@@ -14,19 +14,20 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
+| Fichier                                               | Action                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------- |
 | `supabase/migrations/20260517_plan_o_agent_state.sql` | Créer — colonne paused + run_count + last_run_at dans agent_configs |
-| `app/api/studio/agents/run/route.ts` | Créer — POST déclenche une mission Ollama |
-| `app/api/studio/services/health/route.ts` | Créer — GET ping n8n + Ollama + Supabase |
-| `app/studio/agents/page.tsx` | Modifier — Run/Pause/Logs fonctionnels + charger depuis DB |
-| `app/studio/automations/page.tsx` | Modifier — ServiceHealth utilise la vraie route |
+| `app/api/studio/agents/run/route.ts`                  | Créer — POST déclenche une mission Ollama                           |
+| `app/api/studio/services/health/route.ts`             | Créer — GET ping n8n + Ollama + Supabase                            |
+| `app/studio/agents/page.tsx`                          | Modifier — Run/Pause/Logs fonctionnels + charger depuis DB          |
+| `app/studio/automations/page.tsx`                     | Modifier — ServiceHealth utilise la vraie route                     |
 
 ---
 
 ### Task 1 : Migration — état agent dans `agent_configs`
 
 **Files:**
+
 - Create: `supabase/migrations/20260517_plan_o_agent_state.sql`
 
 **Contexte :** `agent_configs` stocke la config mais pas l'état d'exécution. On ajoute `paused` (booléen), `run_count` (entier), `last_run_at` (timestamptz) pour que l'UI puisse afficher un état réel.
@@ -68,6 +69,7 @@ git commit -m "feat(database): paused + run_count + last_run_at dans agent_confi
 ### Task 2 : Route `POST /api/studio/agents/run`
 
 **Files:**
+
 - Create: `app/api/studio/agents/run/route.ts`
 
 **Contexte :** Quand l'utilisateur clique "▶ Run mission", on appelle cette route avec `{ agentId, prompt }`. La route lit la config de l'agent depuis `agent_configs` (model, system_prompt, temperature, max_tokens), appelle Ollama en mode non-streaming (timeout 30s), sauvegarde la réponse dans `messages` (table existante, `role: 'assistant'`, `agent_id`), incrémente `run_count` et met à jour `last_run_at`.
@@ -126,7 +128,9 @@ export async function POST(req: NextRequest) {
   if (!isAllowedOllamaUrl(baseUrl)) return apiError('URL Ollama non autorisée', 400)
 
   const model = cfg?.model ?? 'qwen3:8b'
-  const systemPrompt = cfg?.system_prompt ?? `Tu es l'agent ${agentId}. Tu es opérationnel et prêt à exécuter des missions.`
+  const systemPrompt =
+    cfg?.system_prompt ??
+    `Tu es l'agent ${agentId}. Tu es opérationnel et prêt à exécuter des missions.`
   const userPrompt = prompt || 'Confirme que tu es opérationnel et décris ta mission en 1 phrase.'
 
   const startMs = Date.now()
@@ -155,7 +159,7 @@ export async function POST(req: NextRequest) {
       return apiError(`Ollama ${resp.status}`, 502)
     }
 
-    const json = await resp.json() as { message?: { content?: string } }
+    const json = (await resp.json()) as { message?: { content?: string } }
     const content = json.message?.content ?? ''
     const durationMs = Date.now() - startMs
 
@@ -175,12 +179,15 @@ export async function POST(req: NextRequest) {
       .eq('agent_id', agentId)
       .maybeSingle()
 
-    await supabase.from('agent_configs').upsert({
-      user_id: user!.id,
-      agent_id: agentId,
-      run_count: (currentCfg?.run_count ?? 0) + 1,
-      last_run_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,agent_id' })
+    await supabase.from('agent_configs').upsert(
+      {
+        user_id: user!.id,
+        agent_id: agentId,
+        run_count: (currentCfg?.run_count ?? 0) + 1,
+        last_run_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,agent_id' }
+    )
 
     return NextResponse.json({ ok: true, content, durationMs, model })
   } catch (e) {
@@ -232,6 +239,7 @@ git commit -m "feat(agents): route POST /api/studio/agents/run — déclenche mi
 ### Task 3 : Route `GET /api/studio/services/health`
 
 **Files:**
+
 - Create: `app/api/studio/services/health/route.ts`
 
 **Contexte :** Le `ServiceHealth` dans la page automations affiche des statuts hardcodés. On crée une route qui ping en parallèle : Ollama (`/api/tags`), n8n (`/healthz`), et Supabase (déjà vérifié dans `/api/health`). Retourne un objet `{ ollama: bool, n8n: bool, latencies: {...} }`.
@@ -270,7 +278,8 @@ export async function GET() {
   const ollamaBase = (settings?.ollama_base_url ?? 'http://192.168.0.14:11434').replace(/\/$/, '')
   const n8nBase = settings?.n8n_base_url?.replace(/\/$/, '') ?? null
 
-  const checks: Record<string, { ok: boolean; latencyMs: number } | { ok: false; error: string }> = {}
+  const checks: Record<string, { ok: boolean; latencyMs: number } | { ok: false; error: string }> =
+    {}
 
   // Ping Ollama
   if (isAllowedOllamaUrl(ollamaBase)) {
@@ -312,9 +321,11 @@ git commit -m "feat(services): route GET /api/studio/services/health — ping Ol
 ### Task 4 : Page agents — Run/Pause/Logs fonctionnels + données DB
 
 **Files:**
+
 - Modify: `app/studio/agents/page.tsx`
 
 **Contexte :** Les boutons Run/Pause/Logs n'ont pas d'`onClick`. Les stats (runs, win%, avg) sont calculées à partir de `agent.xp` hardcodé. On ajoute :
+
 1. `onClick` sur Run → `POST /api/studio/agents/run`
 2. `onClick` sur Pause → `supabase.from('agent_configs').upsert({ paused: !current })`
 3. `onClick` sur LOGS → modal avec les 10 derniers messages de l'agent depuis `messages`
@@ -415,12 +426,26 @@ function AgentInspector({ agent, activity, queue }: { agent: AgentData; activity
 Remplacer le bloc `{/* Stats */}` dans `AgentInspector` :
 
 ```tsx
-{/* Stats */}
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-  <StatBox label="Runs"   value={String(dbState.run_count)} color={agent.color} />
-  <StatBox label="Status" value={dbState.paused ? 'PAUSÉ' : 'ACTIF'} color={dbState.paused ? '#fbbf24' : emerald} />
-  <StatBox label="Last"   value={dbState.last_run_at ? `${Math.round((Date.now() - new Date(dbState.last_run_at).getTime()) / 60000)}m` : '—'} color={cyan} />
-  <StatBox label="LV"     value={String(agent.level)} color={violet} />
+{
+  /* Stats */
+}
+;<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+  <StatBox label="Runs" value={String(dbState.run_count)} color={agent.color} />
+  <StatBox
+    label="Status"
+    value={dbState.paused ? 'PAUSÉ' : 'ACTIF'}
+    color={dbState.paused ? '#fbbf24' : emerald}
+  />
+  <StatBox
+    label="Last"
+    value={
+      dbState.last_run_at
+        ? `${Math.round((Date.now() - new Date(dbState.last_run_at).getTime()) / 60000)}m`
+        : '—'
+    }
+    color={cyan}
+  />
+  <StatBox label="LV" value={String(agent.level)} color={violet} />
 </div>
 ```
 
@@ -429,47 +454,83 @@ Remplacer le bloc `{/* Stats */}` dans `AgentInspector` :
 Remplacer le bloc `{/* Controls */}` dans `AgentInspector` :
 
 ```tsx
-{/* Controls */}
-<div style={{ display: 'flex', gap: 8 }}>
+{
+  /* Controls */
+}
+;<div style={{ display: 'flex', gap: 8 }}>
   <button
     onClick={handleRun}
     disabled={running || dbState.paused}
     style={{
-      flex: 1, padding: '10px 12px', borderRadius: 8,
+      flex: 1,
+      padding: '10px 12px',
+      borderRadius: 8,
       background: running || dbState.paused ? surface2 : agent.color,
       color: running || dbState.paused ? muted : '#0b0d12',
       border: 'none',
-      fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, letterSpacing: '.05em',
+      fontFamily: 'var(--font-display)',
+      fontWeight: 800,
+      fontSize: 12,
+      letterSpacing: '.05em',
       cursor: running || dbState.paused ? 'not-allowed' : 'pointer',
     }}
-  >{running ? '⏳ Running…' : '▶ Run mission'}</button>
+  >
+    {running ? '⏳ Running…' : '▶ Run mission'}
+  </button>
 
-  <button onClick={handlePause} style={{
-    padding: '10px 12px', borderRadius: 8,
-    background: dbState.paused ? emerald + '22' : surface2,
-    color: dbState.paused ? emerald : '#fbbf24',
-    border: `1px solid ${dbState.paused ? emerald + '55' : line2}`,
-    fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
-    cursor: 'pointer',
-  }}>{dbState.paused ? 'RESUME' : 'PAUSE'}</button>
+  <button
+    onClick={handlePause}
+    style={{
+      padding: '10px 12px',
+      borderRadius: 8,
+      background: dbState.paused ? emerald + '22' : surface2,
+      color: dbState.paused ? emerald : '#fbbf24',
+      border: `1px solid ${dbState.paused ? emerald + '55' : line2}`,
+      fontFamily: 'var(--font-mono)',
+      fontWeight: 700,
+      fontSize: 10,
+      letterSpacing: '.14em',
+      cursor: 'pointer',
+    }}
+  >
+    {dbState.paused ? 'RESUME' : 'PAUSE'}
+  </button>
 
-  <button onClick={handleLogs} style={{
-    padding: '10px 12px', borderRadius: 8,
-    background: logsOpen ? agent.color + '22' : surface2,
-    color: logsOpen ? agent.color : text,
-    border: `1px solid ${logsOpen ? agent.color + '55' : line2}`,
-    fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
-    cursor: 'pointer',
-  }}>LOGS</button>
+  <button
+    onClick={handleLogs}
+    style={{
+      padding: '10px 12px',
+      borderRadius: 8,
+      background: logsOpen ? agent.color + '22' : surface2,
+      color: logsOpen ? agent.color : text,
+      border: `1px solid ${logsOpen ? agent.color + '55' : line2}`,
+      fontFamily: 'var(--font-mono)',
+      fontWeight: 700,
+      fontSize: 10,
+      letterSpacing: '.14em',
+      cursor: 'pointer',
+    }}
+  >
+    LOGS
+  </button>
 
-  <button onClick={() => setTuneOpen(o => !o)} style={{
-    padding: '10px 12px', borderRadius: 8,
-    background: tuneOpen ? agent.color + '22' : surface2,
-    color: tuneOpen ? agent.color : text,
-    border: `1px solid ${tuneOpen ? agent.color + '55' : line2}`,
-    fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, letterSpacing: '.14em',
-    cursor: 'pointer',
-  }}>TUNE</button>
+  <button
+    onClick={() => setTuneOpen((o) => !o)}
+    style={{
+      padding: '10px 12px',
+      borderRadius: 8,
+      background: tuneOpen ? agent.color + '22' : surface2,
+      color: tuneOpen ? agent.color : text,
+      border: `1px solid ${tuneOpen ? agent.color + '55' : line2}`,
+      fontFamily: 'var(--font-mono)',
+      fontWeight: 700,
+      fontSize: 10,
+      letterSpacing: '.14em',
+      cursor: 'pointer',
+    }}
+  >
+    TUNE
+  </button>
 </div>
 ```
 
@@ -478,26 +539,88 @@ Remplacer le bloc `{/* Controls */}` dans `AgentInspector` :
 Juste avant `{tuneOpen && <TunePanel .../>}`, ajouter :
 
 ```tsx
-{logsOpen && (
-  <div style={{ background: surface2, border: `1px solid ${line}`, borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Derniers logs · {agent.name}</span>
-      <button onClick={() => setLogsOpen(false)} style={{ background: 'transparent', border: 'none', color: muted, cursor: 'pointer' }}>✕</button>
-    </div>
-    {logs.length === 0 ? (
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted2 }}>Aucun log — déclenchez une mission d&apos;abord.</div>
-    ) : logs.map((l, i) => (
-      <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: surface, border: `1px solid ${line}` }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: l.role === 'assistant' ? agent.color : muted, letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' }}>
-          {l.role} · {new Date(l.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
-        </div>
-        <div style={{ fontSize: 12, color: text, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-          {l.content}
-        </div>
+{
+  logsOpen && (
+    <div
+      style={{
+        background: surface2,
+        border: `1px solid ${line}`,
+        borderRadius: 10,
+        padding: 14,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: muted,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Derniers logs · {agent.name}
+        </span>
+        <button
+          onClick={() => setLogsOpen(false)}
+          style={{ background: 'transparent', border: 'none', color: muted, cursor: 'pointer' }}
+        >
+          ✕
+        </button>
       </div>
-    ))}
-  </div>
-)}
+      {logs.length === 0 ? (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted2 }}>
+          Aucun log — déclenchez une mission d&apos;abord.
+        </div>
+      ) : (
+        logs.map((l, i) => (
+          <div
+            key={i}
+            style={{
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: surface,
+              border: `1px solid ${line}`,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                color: l.role === 'assistant' ? agent.color : muted,
+                letterSpacing: 1,
+                marginBottom: 4,
+                textTransform: 'uppercase',
+              }}
+            >
+              {l.role} ·{' '}
+              {new Date(l.created_at).toLocaleString('fr-FR', {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              })}
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                color: text,
+                lineHeight: 1.5,
+                overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+              }}
+            >
+              {l.content}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
 ```
 
 - [ ] **Step 6 : Compiler**
@@ -525,6 +648,7 @@ git commit -m "feat(agents): Run/Pause/Logs fonctionnels — état depuis agent_
 ### Task 5 : ServiceHealth dans automations — données réelles
 
 **Files:**
+
 - Modify: `app/studio/automations/page.tsx`
 
 **Contexte :** `ServiceHealth` affiche 6 services avec statuts hardcodés. On le remplace par un fetch vers `/api/studio/services/health` au montage, qui retourne l'état réel de Ollama et n8n. Supabase, Coolify, Nginx, Stripe restent affichés mais sans ping réel (ce sont des services infra hors scope — on les marque "Non vérifié").

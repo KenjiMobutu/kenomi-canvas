@@ -12,17 +12,18 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `middleware.ts` | Modifier — remplacer `getSession` par `getUser` |
+| Fichier                                             | Action                                           |
+| --------------------------------------------------- | ------------------------------------------------ |
+| `middleware.ts`                                     | Modifier — remplacer `getSession` par `getUser`  |
 | `supabase/migrations/20260516_plan_g_ideas_rls.sql` | Créer — ajouter `user_id` à `ideas` + policy RLS |
-| `.env.example` | Modifier — ajouter `DASHBOARD_TOKEN_SECRET` |
+| `.env.example`                                      | Modifier — ajouter `DASHBOARD_TOKEN_SECRET`      |
 
 ---
 
 ### Task 1 : Remplacer `getSession` par `getUser` dans le middleware
 
 **Files:**
+
 - Modify: `middleware.ts:38`
 
 **Contexte :** `getSession()` lit le JWT depuis le cookie sans le valider côté serveur — un cookie forgé peut passer. `getUser()` fait une requête au serveur Supabase pour valider le token. C'est le changement recommandé par Supabase dans leur guide de sécurité SSR.
@@ -30,8 +31,11 @@
 - [ ] **Step 1 : Modifier middleware.ts**
 
 Ouvrir `middleware.ts`. Remplacer le bloc :
+
 ```typescript
-const { data: { session } } = await supabase.auth.getSession()
+const {
+  data: { session },
+} = await supabase.auth.getSession()
 const loggedIn = !!session
 
 // ── Whitelist : seul l'email autorisé peut accéder au studio ──────────────
@@ -43,8 +47,11 @@ if (loggedIn && ALLOWED_EMAIL && session.user.email !== ALLOWED_EMAIL) {
 ```
 
 Par :
+
 ```typescript
-const { data: { user } } = await supabase.auth.getUser()
+const {
+  data: { user },
+} = await supabase.auth.getUser()
 const loggedIn = !!user
 
 // ── Whitelist : seul l'email autorisé peut accéder au studio ──────────────
@@ -63,6 +70,7 @@ Remplacer aussi toutes les occurrences suivantes où `session` est utilisé impl
 cd /Users/kenjimobutu/Desktop/DEV/Projects/kenomi-canvas
 npx tsc --noEmit 2>&1 | head -20
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -77,6 +85,7 @@ git commit -m "fix(security): middleware getUser() au lieu de getSession() — v
 ### Task 2 : Ajouter `user_id` à `ideas` et sa policy RLS
 
 **Files:**
+
 - Create: `supabase/migrations/20260516_plan_g_ideas_rls.sql`
 
 **Contexte :** La table `ideas` a RLS activé mais n'a ni `user_id` ni `venture_id` — seul `service_role` peut la lire (via la policy existante). La table n'est pas encore utilisée dans le code applicatif (grep confirme 0 résultat). On peut donc ajouter `user_id` en toute sécurité avec une valeur par défaut = premier utilisateur existant.
@@ -201,6 +210,7 @@ git commit -m "fix(database): ideas — ajout user_id + policy RLS utilisateur (
 ### Task 3 : Ajouter `DASHBOARD_TOKEN_SECRET` dans Coolify et `.env.example`
 
 **Files:**
+
 - Modify: `.env.example`
 
 **Contexte :** `lib/dashboard-token.ts` lance `throw new Error('DASHBOARD_TOKEN_SECRET est requis')` si la variable est absente. En production sur Coolify, cette variable n'a pas encore été ajoutée — le dashboard admin crashe au démarrage.

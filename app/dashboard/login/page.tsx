@@ -3,8 +3,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
-  const router   = useRouter()
-  const [pwd, setPwd]     = useState('')
+  const router = useRouter()
+  const [pwd, setPwd] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -13,9 +13,9 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     const res = await fetch('/api/dashboard/login', {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ password: pwd }),
+      body: JSON.stringify({ password: pwd }),
     })
     if (res.ok) {
       router.push('/dashboard')
@@ -37,7 +37,7 @@ export default function LoginPage() {
           <input
             type="password"
             value={pwd}
-            onChange={e => setPwd(e.target.value)}
+            onChange={(e) => setPwd(e.target.value)}
             placeholder="Mot de passe"
             autoFocus
             className="bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-500"

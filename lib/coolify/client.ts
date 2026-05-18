@@ -1,10 +1,7 @@
 import { isAllowedWebhookUrl } from '@/lib/security'
 
 export interface CoolifyClient {
-  triggerDeploy(input: {
-    projectId: string
-    serviceId: string
-  }): Promise<{ deploymentId: string }>
+  triggerDeploy(input: { projectId: string; serviceId: string }): Promise<{ deploymentId: string }>
   getDeployment(input: { deploymentId: string }): Promise<{ status: string }>
 }
 
@@ -13,10 +10,7 @@ interface CreateCoolifyClientInput {
   fetchFn?: typeof fetch
 }
 
-function getRequiredEnv(
-  env: NodeJS.ProcessEnv,
-  key: 'COOLIFY_URL' | 'COOLIFY_TOKEN'
-) {
+function getRequiredEnv(env: NodeJS.ProcessEnv, key: 'COOLIFY_URL' | 'COOLIFY_TOKEN') {
   const value = env[key]
   if (!value) throw new Error(`${key} missing`)
   return value
@@ -39,8 +33,7 @@ async function parseJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 function readDeploymentId(payload: Record<string, unknown>): string {
-  const deploymentId =
-    payload.deploymentId ?? payload.deployment_id ?? payload.uuid ?? payload.id
+  const deploymentId = payload.deploymentId ?? payload.deployment_id ?? payload.uuid ?? payload.id
 
   if (typeof deploymentId !== 'string' || deploymentId.length === 0) {
     throw new Error('Coolify response missing deployment id')
@@ -49,18 +42,13 @@ function readDeploymentId(payload: Record<string, unknown>): string {
   return deploymentId
 }
 
-export function createCoolifyClient(
-  input: CreateCoolifyClientInput = {}
-): CoolifyClient {
+export function createCoolifyClient(input: CreateCoolifyClientInput = {}): CoolifyClient {
   const env = input.env ?? process.env
   const fetchFn = input.fetchFn ?? fetch
   const baseUrl = normalizeBaseUrl(getRequiredEnv(env, 'COOLIFY_URL'), env)
   const token = getRequiredEnv(env, 'COOLIFY_TOKEN')
 
-  async function request(
-    path: string,
-    init: RequestInit = {}
-  ): Promise<Record<string, unknown>> {
+  async function request(path: string, init: RequestInit = {}): Promise<Record<string, unknown>> {
     const response = await fetchFn(`${baseUrl}${path}`, {
       ...init,
       headers: {
@@ -93,9 +81,7 @@ export function createCoolifyClient(
     },
 
     async getDeployment(input) {
-      const payload = await request(
-        `/api/v1/deployments/${encodeURIComponent(input.deploymentId)}`
-      )
+      const payload = await request(`/api/v1/deployments/${encodeURIComponent(input.deploymentId)}`)
 
       const status = payload.status
       if (typeof status !== 'string' || status.length === 0) {

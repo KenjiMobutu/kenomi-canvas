@@ -3,7 +3,10 @@ import type { MarketingPublisher } from './adapters/types'
 export interface PublishActionSupabase {
   from(table: string): {
     select(columns?: string): {
-      eq(field: string, value: unknown): {
+      eq(
+        field: string,
+        value: unknown
+      ): {
         maybeSingle(): Promise<{ data: PublishDraftRow | null; error: { message: string } | null }>
       }
     }
@@ -40,7 +43,9 @@ function safeNumber(value: unknown): number {
   return n
 }
 
-export async function executePublishCampaign(input: ExecutePublishInput): Promise<ExecutePublishResult> {
+export async function executePublishCampaign(
+  input: ExecutePublishInput
+): Promise<ExecutePublishResult> {
   const nowIso = (input.now ?? (() => new Date()))().toISOString()
 
   const { data: draft, error: draftError } = await input.supabase
@@ -55,7 +60,11 @@ export async function executePublishCampaign(input: ExecutePublishInput): Promis
   if (!draft.venture_id) {
     await input.supabase
       .from('campaign_drafts')
-      .update({ status: 'failed', metadata: { ...(draft.metadata ?? {}), error: 'venture_id manquant' }, updated_at: nowIso })
+      .update({
+        status: 'failed',
+        metadata: { ...(draft.metadata ?? {}), error: 'venture_id manquant' },
+        updated_at: nowIso,
+      })
       .eq('id', input.draftId)
     return { success: false, error: 'draft sans venture_id' }
   }
@@ -101,12 +110,21 @@ export async function executePublishCampaign(input: ExecutePublishInput): Promis
       .from('campaign_drafts')
       .update({
         status: 'published',
-        metadata: { ...(draft.metadata ?? {}), external_id: publishResult.externalId, url: publishResult.url ?? null },
+        metadata: {
+          ...(draft.metadata ?? {}),
+          external_id: publishResult.externalId,
+          url: publishResult.url ?? null,
+        },
         updated_at: nowIso,
       })
       .eq('id', draft.id)
 
-    return { success: true, externalId: publishResult.externalId, url: publishResult.url, spendEur: budgetEur }
+    return {
+      success: true,
+      externalId: publishResult.externalId,
+      url: publishResult.url,
+      spendEur: budgetEur,
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'publish failed'
     await input.supabase

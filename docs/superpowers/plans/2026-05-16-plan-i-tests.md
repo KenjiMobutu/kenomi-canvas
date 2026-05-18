@@ -12,19 +12,20 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `lib/dashboard-token.test.ts` | Créer — tests du token HMAC |
-| `lib/rate-limit.test.ts` | Créer — tests du compteur en mémoire |
-| `lib/api-response.test.ts` | Créer — tests des helpers de réponse |
-| `lib/validation.ts` | Créer — fonctions pures extraites (email, filename) |
-| `lib/validation.test.ts` | Créer — tests des validations |
+| Fichier                       | Action                                              |
+| ----------------------------- | --------------------------------------------------- |
+| `lib/dashboard-token.test.ts` | Créer — tests du token HMAC                         |
+| `lib/rate-limit.test.ts`      | Créer — tests du compteur en mémoire                |
+| `lib/api-response.test.ts`    | Créer — tests des helpers de réponse                |
+| `lib/validation.ts`           | Créer — fonctions pures extraites (email, filename) |
+| `lib/validation.test.ts`      | Créer — tests des validations                       |
 
 ---
 
 ### Task 1 : Tests de `dashboard-token`
 
 **Files:**
+
 - Create: `lib/dashboard-token.test.ts`
 
 - [ ] **Step 1 : Écrire les tests**
@@ -95,6 +96,7 @@ describe('dashboard-token', () => {
 cd /Users/kenjimobutu/Desktop/DEV/Projects/kenomi-canvas
 npx vitest run lib/dashboard-token.test.ts 2>&1
 ```
+
 Expected : 8 tests PASS
 
 - [ ] **Step 3 : Commit**
@@ -109,6 +111,7 @@ git commit -m "test: dashboard-token — HMAC creation, verification, edge cases
 ### Task 2 : Tests de `rate-limit`
 
 **Files:**
+
 - Create: `lib/rate-limit.test.ts`
 
 - [ ] **Step 1 : Écrire les tests**
@@ -154,8 +157,8 @@ describe('isRateLimited', () => {
     const opts = { limit: 1, windowMs: 60_000 }
     expect(isRateLimited('key-a', opts)).toBe(false)
     expect(isRateLimited('key-b', opts)).toBe(false)
-    expect(isRateLimited('key-a', opts)).toBe(true)  // key-a bloquée
-    expect(isRateLimited('key-b', opts)).toBe(true)  // key-b bloquée indépendamment
+    expect(isRateLimited('key-a', opts)).toBe(true) // key-a bloquée
+    expect(isRateLimited('key-b', opts)).toBe(true) // key-b bloquée indépendamment
   })
 })
 ```
@@ -165,6 +168,7 @@ describe('isRateLimited', () => {
 ```bash
 npx vitest run lib/rate-limit.test.ts 2>&1
 ```
+
 Expected : 4 tests PASS
 
 - [ ] **Step 3 : Commit**
@@ -179,6 +183,7 @@ git commit -m "test: rate-limit — fenêtre glissante, reset, isolation des cl�
 ### Task 3 : Extraire et tester les validations
 
 **Files:**
+
 - Create: `lib/validation.ts`
 - Create: `lib/validation.test.ts`
 
@@ -325,11 +330,13 @@ describe('isAllowedFileSize', () => {
 ```bash
 npx vitest run lib/validation.test.ts 2>&1
 ```
+
 Expected : 16 tests PASS
 
 - [ ] **Step 4 : Mettre à jour `lib/security.ts` pour réutiliser `isValidEmail`**
 
 Dans `lib/security.ts`, remplacer :
+
 ```typescript
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -339,6 +346,7 @@ export function isValidEmail(email: string): boolean {
 ```
 
 Par :
+
 ```typescript
 export { isValidEmail } from './validation'
 ```
@@ -351,6 +359,7 @@ Vérifier que les imports dans le reste du code (`app/api/waitlist/route.ts`) po
 npx tsc --noEmit 2>&1 | head -10
 npx vitest run 2>&1
 ```
+
 Expected : 0 erreur TypeScript, tous les tests PASS
 
 - [ ] **Step 6 : Commit**
@@ -365,6 +374,7 @@ git commit -m "test: validation — email, sanitizeFilename, MIME types, taille 
 ### Task 4 : Tests de `api-response`
 
 **Files:**
+
 - Create: `lib/api-response.test.ts`
 
 - [ ] **Step 1 : Écrire les tests**
@@ -417,6 +427,7 @@ describe('apiOk', () => {
 ```bash
 npx vitest run lib/api-response.test.ts 2>&1
 ```
+
 Expected : 6 tests PASS
 
 - [ ] **Step 3 : Relancer la suite complète**
@@ -424,6 +435,7 @@ Expected : 6 tests PASS
 ```bash
 npx vitest run 2>&1 | tail -10
 ```
+
 Expected : tous les tests PASS, aucun FAIL
 
 - [ ] **Step 4 : Commit**

@@ -13,16 +13,16 @@ Afficher les vraies métriques CPU/RAM/Disk/Net de la VM ou LXC correspondante q
 
 ## Mapping VM/LXC → Service
 
-| Service id | vmid | Type |
-|------------|------|------|
+| Service id | vmid   | Type                        |
+| ---------- | ------ | --------------------------- |
 | `proxmox`  | `null` | nœud (cas spécial existant) |
-| `coolify`  | `102`  | QEMU |
-| `nginx`    | `101`  | LXC  |
-| `vault`    | `100`  | LXC  |
-| `uptime`   | `null` | pas de VM Proxmox |
-| `supabase` | `null` | externe |
-| `n8n`      | `null` | pas de VM Proxmox |
-| `ollama`   | `null` | pas de VM Proxmox |
+| `coolify`  | `102`  | QEMU                        |
+| `nginx`    | `101`  | LXC                         |
+| `vault`    | `100`  | LXC                         |
+| `uptime`   | `null` | pas de VM Proxmox           |
+| `supabase` | `null` | externe                     |
+| `n8n`      | `null` | pas de VM Proxmox           |
+| `ollama`   | `null` | pas de VM Proxmox           |
 
 ## Architecture
 
@@ -45,6 +45,7 @@ Aucun nouveau endpoint. La route et le client Proxmox ne changent pas.
 **`app/studio/infrastructure/page.tsx`**
 
 1. **`SERVICES_IN`** — ajout du champ `vmid: number | null` :
+
    ```ts
    { id: 'coolify', vmid: 102, ... }
    { id: 'nginx',   vmid: 101, ... }
@@ -53,6 +54,7 @@ Aucun nouveau endpoint. La route et le client Proxmox ne changent pas.
    ```
 
 2. **`ServiceInspector`** — logique de sélection des métriques :
+
    ```
    svc.id === 'proxmox'  → utilise proxmox.nodes[0]  (comportement actuel)
    svc.vmid !== null     → proxmox.vms.find(v => v.vmid === svc.vmid)
@@ -71,16 +73,16 @@ Aucun nouveau endpoint. La route et le client Proxmox ne changent pas.
 
 ## Comportement par service
 
-| Service | Jauges | Source |
-|---------|--------|--------|
-| Proxmox VE | CPU, RAM, Disk, VMs actives | `nodes[0]` |
-| Coolify | CPU, RAM, Disk, Net | `vms.find(102)` |
-| Nginx PM | CPU, RAM, Disk, Net | `vms.find(101)` |
-| Vaultwarden | CPU, RAM, Disk, Net | `vms.find(100)` |
-| Uptime Kuma | masqué | — |
-| Supabase | masqué | — |
-| n8n | masqué | — |
-| Ollama | masqué | — |
+| Service     | Jauges                      | Source          |
+| ----------- | --------------------------- | --------------- |
+| Proxmox VE  | CPU, RAM, Disk, VMs actives | `nodes[0]`      |
+| Coolify     | CPU, RAM, Disk, Net         | `vms.find(102)` |
+| Nginx PM    | CPU, RAM, Disk, Net         | `vms.find(101)` |
+| Vaultwarden | CPU, RAM, Disk, Net         | `vms.find(100)` |
+| Uptime Kuma | masqué                      | —               |
+| Supabase    | masqué                      | —               |
+| n8n         | masqué                      | —               |
+| Ollama      | masqué                      | —               |
 
 ## Gestion des erreurs
 

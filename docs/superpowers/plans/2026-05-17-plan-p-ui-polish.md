@@ -14,17 +14,18 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `app/studio/ventures/page.tsx` | Modifier — boutons OPEN/BRIEF fonctionnels |
-| `app/studio/analytics/page.tsx` | Modifier — MRR depuis kpi_snapshots réels |
-| `app/studio/automations/page.tsx` | Modifier — liste workflows n8n réels |
+| Fichier                           | Action                                     |
+| --------------------------------- | ------------------------------------------ |
+| `app/studio/ventures/page.tsx`    | Modifier — boutons OPEN/BRIEF fonctionnels |
+| `app/studio/analytics/page.tsx`   | Modifier — MRR depuis kpi_snapshots réels  |
+| `app/studio/automations/page.tsx` | Modifier — liste workflows n8n réels       |
 
 ---
 
 ### Task 1 : Boutons OPEN et BRIEF dans ventures
 
 **Files:**
+
 - Modify: `app/studio/ventures/page.tsx`
 
 **Contexte :** Les boutons OPEN et BRIEF dans `VentureCard` n'ont pas d'`onClick`. OPEN doit sélectionner la venture dans l'inspector (la page a déjà un state `selectedId` et un `VentureInspector`). BRIEF génère un texte résumé de la venture et le copie dans le clipboard avec un toast de confirmation.
@@ -98,7 +99,8 @@ Trouver toutes les utilisations de `<VentureCard` dans le JSX et ajouter les pro
   onClick={() => setSelectedId(v.id)}
   onOpen={() => setSelectedId(v.id)}
   onBrief={() => {
-    navigator.clipboard.writeText(generateBrief(v))
+    navigator.clipboard
+      .writeText(generateBrief(v))
       .then(() => toast.success('Brief copié dans le presse-papier'))
       .catch(() => toast.error('Impossible de copier'))
   }}
@@ -125,6 +127,7 @@ git commit -m "feat(ventures): boutons OPEN sélectionne + BRIEF copie résumé 
 ### Task 2 : Analytics — MRR depuis kpi_snapshots réels
 
 **Files:**
+
 - Modify: `app/studio/analytics/page.tsx`
 
 **Contexte :** Le graphe MRR utilise `makeSpark()` avec une seed pseudo-aléatoire. Les vraies données MRR sont dans `kpi_snapshots` (colonnes : `period`, `mrr`, `cac`, `conversion_rate`, `arr`, `burn_rate`). On charge toutes les snapshots de l'utilisateur, on les trie par date, et on affiche la vraie série MRR.
@@ -160,7 +163,11 @@ useEffect(() => {
     .limit(30)
     .then(({ data }) => {
       if (data && data.length > 0) {
-        setMrrSeries(data.map(d => typeof d.mrr === 'number' ? d.mrr : parseFloat(String(d.mrr ?? '0')) || 0))
+        setMrrSeries(
+          data.map((d) =>
+            typeof d.mrr === 'number' ? d.mrr : parseFloat(String(d.mrr ?? '0')) || 0
+          )
+        )
       }
     })
 }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -196,6 +203,7 @@ git commit -m "feat(analytics): MRR depuis kpi_snapshots réels (fallback makeSp
 ### Task 3 : Automations — liste workflows n8n réels
 
 **Files:**
+
 - Modify: `app/studio/automations/page.tsx`
 
 **Contexte :** La page automations affiche uniquement les workflows créés dans l'app (`DbWorkflowsList`). On ajoute une section "Workflows n8n" qui charge les vrais workflows depuis `GET /api/studio/n8n/workflows` et les affiche en lecture seule (nom, actif/inactif, trigger type). Si n8n n'est pas configuré, la section n'apparaît pas.
@@ -232,12 +240,15 @@ Ajouter un `useEffect` dans `AutomationsPage` :
 useEffect(() => {
   setN8nLoading(true)
   fetch('/api/studio/n8n/workflows')
-    .then(r => {
-      if (!r.ok) return r.json().then(e => { throw new Error(e.error || 'Erreur n8n') })
+    .then((r) => {
+      if (!r.ok)
+        return r.json().then((e) => {
+          throw new Error(e.error || 'Erreur n8n')
+        })
       return r.json()
     })
     .then((data: N8nWorkflow[]) => setN8nWorkflows(data))
-    .catch(e => setN8nError(e.message))
+    .catch((e) => setN8nError(e.message))
     .finally(() => setN8nLoading(false))
 }, [])
 ```

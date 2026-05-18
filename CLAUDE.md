@@ -23,11 +23,11 @@ Les migrations Supabase s'appliquent manuellement via l'éditeur SQL du dashboar
 
 ### Deux zones applicatives distinctes
 
-| Zone | Auth | Route |
-|------|------|-------|
-| Studio principal | Supabase Auth (JWT cookies, `@supabase/ssr`) | `/studio/*` |
-| Back-office admin | HMAC SHA-256 journalier (`lib/dashboard-token.ts`) | `/dashboard/*` |
-| Pages publiques waitlist | Aucune | `/[slug]` |
+| Zone                     | Auth                                               | Route          |
+| ------------------------ | -------------------------------------------------- | -------------- |
+| Studio principal         | Supabase Auth (JWT cookies, `@supabase/ssr`)       | `/studio/*`    |
+| Back-office admin        | HMAC SHA-256 journalier (`lib/dashboard-token.ts`) | `/dashboard/*` |
+| Pages publiques waitlist | Aucune                                             | `/[slug]`      |
 
 Le middleware (`middleware.ts`) gère toutes les redirections auth pour ces deux systèmes.
 
@@ -50,7 +50,7 @@ Chaque route API studio suit ce patron :
 ```ts
 const cookieStore = await cookies()
 const { user, supabase, response } = await requireAllowedUser(cookieStore)
-if (response) return response  // 401 ou 403
+if (response) return response // 401 ou 403
 ```
 
 Puis rate-limit via `isRateLimited()` (in-memory, se remet à zéro au redémarrage) et validation input.

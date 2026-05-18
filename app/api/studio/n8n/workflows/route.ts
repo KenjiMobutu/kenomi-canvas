@@ -26,7 +26,7 @@ export async function GET() {
     const resp = await fetch(`${baseUrl}/api/v1/workflows?limit=50`, {
       headers: {
         'X-N8N-API-KEY': settings?.n8n_api_key ?? '',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       signal: AbortSignal.timeout(5000),
     })
@@ -35,7 +35,7 @@ export async function GET() {
       return apiError(`n8n erreur ${resp.status}`, 502)
     }
 
-    const json = await resp.json() as { data?: unknown[] }
+    const json = (await resp.json()) as { data?: unknown[] }
     return NextResponse.json(json.data ?? [])
   } catch (e) {
     const msg = e instanceof Error && e.name === 'TimeoutError' ? 'n8n timeout' : 'n8n injoignable'

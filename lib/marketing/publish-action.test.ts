@@ -1,14 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
-import { executePublishCampaign, type PublishActionSupabase, type PublishDraftRow } from './publish-action'
+import {
+  executePublishCampaign,
+  type PublishActionSupabase,
+  type PublishDraftRow,
+} from './publish-action'
 
 interface FakeTables {
   campaign_drafts: Array<PublishDraftRow & { status?: string; updated_at?: string }>
   venture_events: Record<string, unknown>[]
 }
 
-function createFakeSupabase(seed: { campaign_drafts: PublishDraftRow[] }): PublishActionSupabase & { tables: FakeTables } {
+function createFakeSupabase(seed: {
+  campaign_drafts: PublishDraftRow[]
+}): PublishActionSupabase & { tables: FakeTables } {
   const tables: FakeTables = {
-    campaign_drafts: seed.campaign_drafts.map(d => ({ ...d })),
+    campaign_drafts: seed.campaign_drafts.map((d) => ({ ...d })),
     venture_events: [],
   }
 
@@ -29,7 +35,8 @@ function createFakeSupabase(seed: { campaign_drafts: PublishDraftRow[] }): Publi
             filterValue = value
             return {
               maybeSingle: async () => {
-                const rows = (tables as unknown as Record<string, Record<string, unknown>[]>)[table] ?? []
+                const rows =
+                  (tables as unknown as Record<string, Record<string, unknown>[]>)[table] ?? []
                 const data = rows.find(matches) ?? null
                 return { data: data as PublishDraftRow | null, error: null }
               },
@@ -46,7 +53,8 @@ function createFakeSupabase(seed: { campaign_drafts: PublishDraftRow[] }): Publi
             eq: (field: string, value: unknown) => {
               filterField = field
               filterValue = value
-              const rows = (tables as unknown as Record<string, Record<string, unknown>[]>)[table] ?? []
+              const rows =
+                (tables as unknown as Record<string, Record<string, unknown>[]>)[table] ?? []
               rows.filter(matches).forEach((row) => Object.assign(row, patchPayload))
               return Promise.resolve({ error: null })
             },
@@ -61,10 +69,15 @@ function createFakeSupabase(seed: { campaign_drafts: PublishDraftRow[] }): Publi
 describe('executePublishCampaign', () => {
   it('appelle le publisher, insère campaign_published, marque le draft published', async () => {
     const supabase = createFakeSupabase({
-      campaign_drafts: [{
-        id: 'd1', venture_id: 'v1', channel: 'email', content: 'Hi',
-        metadata: { channel_index: 0 },
-      }],
+      campaign_drafts: [
+        {
+          id: 'd1',
+          venture_id: 'v1',
+          channel: 'email',
+          content: 'Hi',
+          metadata: { channel_index: 0 },
+        },
+      ],
     })
     const publisher = {
       publish: vi.fn().mockResolvedValue({
@@ -103,17 +116,25 @@ describe('executePublishCampaign', () => {
 
   it('insère campaign_spend en cents si metadata.budget_eur > 0', async () => {
     const supabase = createFakeSupabase({
-      campaign_drafts: [{
-        id: 'd1', venture_id: 'v1', channel: 'twitter', content: 'Buy now',
-        metadata: { budget_eur: 50 },
-      }],
+      campaign_drafts: [
+        {
+          id: 'd1',
+          venture_id: 'v1',
+          channel: 'twitter',
+          content: 'Buy now',
+          metadata: { budget_eur: 50 },
+        },
+      ],
     })
     const publisher = {
       publish: vi.fn().mockResolvedValue({ externalId: 'ext-2' }),
     }
 
     const result = await executePublishCampaign({
-      supabase, publisher, draftId: 'd1', userId: 'u1',
+      supabase,
+      publisher,
+      draftId: 'd1',
+      userId: 'u1',
       now: () => new Date('2026-05-18T10:00:00.000Z'),
     })
 
@@ -128,14 +149,19 @@ describe('executePublishCampaign', () => {
 
   it('marque le draft failed si publisher throw', async () => {
     const supabase = createFakeSupabase({
-      campaign_drafts: [{ id: 'd1', venture_id: 'v1', channel: 'email', content: 'x', metadata: {} }],
+      campaign_drafts: [
+        { id: 'd1', venture_id: 'v1', channel: 'email', content: 'x', metadata: {} },
+      ],
     })
     const publisher = {
       publish: vi.fn().mockRejectedValue(new Error('n8n down')),
     }
 
     const result = await executePublishCampaign({
-      supabase, publisher, draftId: 'd1', userId: 'u1',
+      supabase,
+      publisher,
+      draftId: 'd1',
+      userId: 'u1',
     })
 
     expect(result.success).toBe(false)
@@ -149,7 +175,10 @@ describe('executePublishCampaign', () => {
     const publisher = { publish: vi.fn() }
 
     const result = await executePublishCampaign({
-      supabase, publisher, draftId: 'absent', userId: 'u1',
+      supabase,
+      publisher,
+      draftId: 'absent',
+      userId: 'u1',
     })
 
     expect(result.success).toBe(false)
@@ -158,12 +187,17 @@ describe('executePublishCampaign', () => {
 
   it('échoue si venture_id null sur le draft', async () => {
     const supabase = createFakeSupabase({
-      campaign_drafts: [{ id: 'd1', venture_id: null, channel: 'email', content: 'x', metadata: {} }],
+      campaign_drafts: [
+        { id: 'd1', venture_id: null, channel: 'email', content: 'x', metadata: {} },
+      ],
     })
     const publisher = { publish: vi.fn() }
 
     const result = await executePublishCampaign({
-      supabase, publisher, draftId: 'd1', userId: 'u1',
+      supabase,
+      publisher,
+      draftId: 'd1',
+      userId: 'u1',
     })
 
     expect(result.success).toBe(false)

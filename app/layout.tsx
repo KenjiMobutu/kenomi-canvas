@@ -15,7 +15,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${inter.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}>
+    <html
+      lang="fr"
+      className={`${inter.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}
+    >
       <body className="antialiased">
         <AuthProvider>
           {children}

@@ -23,7 +23,9 @@ interface TableRow {
   [key: string]: unknown
 }
 
-function createFakeSupabase(seed?: Partial<Record<TableName, TableRow[]>>): RunAgentStepSupabase & { tables: Record<TableName, TableRow[]> } {
+function createFakeSupabase(
+  seed?: Partial<Record<TableName, TableRow[]>>
+): RunAgentStepSupabase & { tables: Record<TableName, TableRow[]> } {
   const tables: Record<TableName, TableRow[]> = {
     agent_configs: seed?.agent_configs ?? [],
     venture_pipeline: seed?.venture_pipeline ?? [],
@@ -48,10 +50,11 @@ function createFakeSupabase(seed?: Partial<Record<TableName, TableRow[]>>): RunA
         inserted: null as TableRow | null,
       }
 
-      const matches = (row: TableRow) => state.filters.every((filter) => {
-        if (filter.op === 'eq') return row[filter.field] === filter.value
-        return row[filter.field] !== filter.value
-      })
+      const matches = (row: TableRow) =>
+        state.filters.every((filter) => {
+          if (filter.op === 'eq') return row[filter.field] === filter.value
+          return row[filter.field] !== filter.value
+        })
 
       const builder = {
         select: () => builder,
@@ -138,22 +141,24 @@ describe('runAgentStep', () => {
 
   it('met à jour une étape validation et retourne le score parsé', async () => {
     const supabase = createFakeSupabase({
-      venture_pipeline: [{
-        id: 'pipeline-1',
-        user_id: 'user-1',
-        status: 'approved',
-        idea_title: 'InboxPulse',
-        idea_niche: 'agences B2B',
-        idea_problem: 'priorisation',
-        idea_solution: 'scoring',
-        idea_market: 'outbound',
-        validation_output: null,
-        builder_output: null,
-        payment_output: null,
-        marketing_output: null,
-        decision_output: null,
-        venture_id: 'venture-1',
-      }],
+      venture_pipeline: [
+        {
+          id: 'pipeline-1',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'InboxPulse',
+          idea_niche: 'agences B2B',
+          idea_problem: 'priorisation',
+          idea_solution: 'scoring',
+          idea_market: 'outbound',
+          validation_output: null,
+          builder_output: null,
+          payment_output: null,
+          marketing_output: null,
+          decision_output: null,
+          venture_id: 'venture-1',
+        },
+      ],
     })
     const llm = async (): Promise<LLMResponse> => ({
       content: JSON.stringify({
@@ -187,22 +192,24 @@ describe('runAgentStep', () => {
   it('injecte les métriques business réelles dans le prompt Decision', async () => {
     let systemPrompt = ''
     const supabase = createFakeSupabase({
-      venture_pipeline: [{
-        id: 'pipeline-1',
-        user_id: 'user-1',
-        status: 'approved',
-        idea_title: 'InboxPulse',
-        idea_niche: 'agences B2B',
-        idea_problem: 'priorisation',
-        idea_solution: 'scoring',
-        idea_market: 'outbound',
-        validation_output: 'ok',
-        builder_output: 'ok',
-        payment_output: 'ok',
-        marketing_output: 'ok',
-        decision_output: null,
-        venture_id: 'venture-1',
-      }],
+      venture_pipeline: [
+        {
+          id: 'pipeline-1',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'InboxPulse',
+          idea_niche: 'agences B2B',
+          idea_problem: 'priorisation',
+          idea_solution: 'scoring',
+          idea_market: 'outbound',
+          validation_output: 'ok',
+          builder_output: 'ok',
+          payment_output: 'ok',
+          marketing_output: 'ok',
+          decision_output: null,
+          venture_id: 'venture-1',
+        },
+      ],
       venture_events: [
         { venture_id: 'venture-1', event_type: 'page_view', value: null },
         { venture_id: 'venture-1', event_type: 'waitlist_signup', value: null },
@@ -239,22 +246,24 @@ describe('runAgentStep', () => {
 
   it('transforme un verdict Decision continue en action de scaling bloquée par approbation', async () => {
     const supabase = createFakeSupabase({
-      venture_pipeline: [{
-        id: 'pipeline-1',
-        user_id: 'user-1',
-        status: 'approved',
-        idea_title: 'InboxPulse',
-        idea_niche: 'agences B2B',
-        idea_problem: 'priorisation',
-        idea_solution: 'scoring',
-        idea_market: 'outbound',
-        validation_output: 'ok',
-        builder_output: 'ok',
-        payment_output: 'ok',
-        marketing_output: 'ok',
-        decision_output: null,
-        venture_id: 'venture-1',
-      }],
+      venture_pipeline: [
+        {
+          id: 'pipeline-1',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'InboxPulse',
+          idea_niche: 'agences B2B',
+          idea_problem: 'priorisation',
+          idea_solution: 'scoring',
+          idea_market: 'outbound',
+          validation_output: 'ok',
+          builder_output: 'ok',
+          payment_output: 'ok',
+          marketing_output: 'ok',
+          decision_output: null,
+          venture_id: 'venture-1',
+        },
+      ],
     })
     const llm = async (): Promise<LLMResponse> => ({
       content: JSON.stringify({
@@ -309,22 +318,24 @@ describe('runAgentStep', () => {
 
   it('Decision stocke un metrics_snapshot complet (visits/revenue/spend/profit/ROI) depuis venture_events', async () => {
     const supabase = createFakeSupabase({
-      venture_pipeline: [{
-        id: 'pipeline-1',
-        user_id: 'user-1',
-        status: 'approved',
-        idea_title: 'InboxPulse',
-        idea_niche: 'agences B2B',
-        idea_problem: 'priorisation',
-        idea_solution: 'scoring',
-        idea_market: 'outbound',
-        validation_output: 'ok',
-        builder_output: 'ok',
-        payment_output: 'ok',
-        marketing_output: 'ok',
-        decision_output: null,
-        venture_id: 'venture-1',
-      }],
+      venture_pipeline: [
+        {
+          id: 'pipeline-1',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'InboxPulse',
+          idea_niche: 'agences B2B',
+          idea_problem: 'priorisation',
+          idea_solution: 'scoring',
+          idea_market: 'outbound',
+          validation_output: 'ok',
+          builder_output: 'ok',
+          payment_output: 'ok',
+          marketing_output: 'ok',
+          decision_output: null,
+          venture_id: 'venture-1',
+        },
+      ],
       venture_events: [
         { venture_id: 'venture-1', event_type: 'page_view', value: null },
         { venture_id: 'venture-1', event_type: 'page_view', value: null },
@@ -371,22 +382,24 @@ describe('runAgentStep', () => {
 
   it('transforme un verdict Decision pivot en nouvelle tâche Scout contextualisée', async () => {
     const supabase = createFakeSupabase({
-      venture_pipeline: [{
-        id: 'pipeline-1',
-        user_id: 'user-1',
-        status: 'approved',
-        idea_title: 'InboxPulse',
-        idea_niche: 'agences B2B',
-        idea_problem: 'priorisation',
-        idea_solution: 'scoring',
-        idea_market: 'outbound',
-        validation_output: 'ok',
-        builder_output: 'ok',
-        payment_output: 'ok',
-        marketing_output: 'ok',
-        decision_output: null,
-        venture_id: 'venture-1',
-      }],
+      venture_pipeline: [
+        {
+          id: 'pipeline-1',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'InboxPulse',
+          idea_niche: 'agences B2B',
+          idea_problem: 'priorisation',
+          idea_solution: 'scoring',
+          idea_market: 'outbound',
+          validation_output: 'ok',
+          builder_output: 'ok',
+          payment_output: 'ok',
+          marketing_output: 'ok',
+          decision_output: null,
+          venture_id: 'venture-1',
+        },
+      ],
     })
     const llm = async (): Promise<LLMResponse> => ({
       content: JSON.stringify({
@@ -425,27 +438,31 @@ describe('runAgentStep', () => {
         confidence: 71,
       },
     })
-    expect(String((supabase.tables.autonomy_jobs[0].payload as Record<string, unknown>).prompt)).toContain('cabinets de recrutement')
+    expect(
+      String((supabase.tables.autonomy_jobs[0].payload as Record<string, unknown>).prompt)
+    ).toContain('cabinets de recrutement')
   })
 
   it('transforme un verdict Decision stop en action stop_venture bloquée par approbation', async () => {
     const supabase = createFakeSupabase({
-      venture_pipeline: [{
-        id: 'pipeline-1',
-        user_id: 'user-1',
-        status: 'approved',
-        idea_title: 'InboxPulse',
-        idea_niche: 'agences B2B',
-        idea_problem: 'priorisation',
-        idea_solution: 'scoring',
-        idea_market: 'outbound',
-        validation_output: 'ok',
-        builder_output: 'ok',
-        payment_output: 'ok',
-        marketing_output: 'ok',
-        decision_output: null,
-        venture_id: 'venture-1',
-      }],
+      venture_pipeline: [
+        {
+          id: 'pipeline-1',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'InboxPulse',
+          idea_niche: 'agences B2B',
+          idea_problem: 'priorisation',
+          idea_solution: 'scoring',
+          idea_market: 'outbound',
+          validation_output: 'ok',
+          builder_output: 'ok',
+          payment_output: 'ok',
+          marketing_output: 'ok',
+          decision_output: null,
+          venture_id: 'venture-1',
+        },
+      ],
     })
     const llm = async (): Promise<LLMResponse> => ({
       content: JSON.stringify({
@@ -484,22 +501,24 @@ describe('runAgentStep', () => {
 
   it('Marketing insère un campaign_draft par channel × message après le run', async () => {
     const supabase = createFakeSupabase({
-      venture_pipeline: [{
-        id: 'pipeline-1',
-        user_id: 'user-1',
-        status: 'approved',
-        idea_title: 'InboxPulse',
-        idea_niche: 'agences B2B',
-        idea_problem: 'priorisation',
-        idea_solution: 'scoring',
-        idea_market: 'outbound',
-        validation_output: 'ok',
-        builder_output: 'ok',
-        payment_output: 'ok',
-        marketing_output: null,
-        decision_output: null,
-        venture_id: 'venture-1',
-      }],
+      venture_pipeline: [
+        {
+          id: 'pipeline-1',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'InboxPulse',
+          idea_niche: 'agences B2B',
+          idea_problem: 'priorisation',
+          idea_solution: 'scoring',
+          idea_market: 'outbound',
+          validation_output: 'ok',
+          builder_output: 'ok',
+          payment_output: 'ok',
+          marketing_output: null,
+          decision_output: null,
+          venture_id: 'venture-1',
+        },
+      ],
     })
     const llm = async (): Promise<LLMResponse> => ({
       content: JSON.stringify({
@@ -535,15 +554,22 @@ describe('runAgentStep', () => {
       content: 'Try it free',
     })
     // 4 actions publish_campaign blocked + 4 approvals pending
-    const publishActions = supabase.tables.autonomy_actions.filter(a => a.action_type === 'publish_campaign')
+    const publishActions = supabase.tables.autonomy_actions.filter(
+      (a) => a.action_type === 'publish_campaign'
+    )
     expect(publishActions).toHaveLength(4)
-    expect(publishActions.every(a => a.status === 'blocked' && a.risk_level === 'high')).toBe(true)
+    expect(publishActions.every((a) => a.status === 'blocked' && a.risk_level === 'high')).toBe(
+      true
+    )
     expect(publishActions[0]).toMatchObject({
       venture_id: 'venture-1',
       input: expect.objectContaining({ channel: 'email', pipeline_id: 'pipeline-1' }),
     })
-    const approvals = supabase.tables.human_approvals.filter(h => h.reason && typeof h.reason === 'string' && (h.reason as string).startsWith('Publier sur'))
+    const approvals = supabase.tables.human_approvals.filter(
+      (h) =>
+        h.reason && typeof h.reason === 'string' && (h.reason as string).startsWith('Publier sur')
+    )
     expect(approvals).toHaveLength(4)
-    expect(approvals.every(a => a.status === 'pending')).toBe(true)
+    expect(approvals.every((a) => a.status === 'pending')).toBe(true)
   })
 })

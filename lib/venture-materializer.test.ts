@@ -68,7 +68,10 @@ describe('buildLandingPageInsert', () => {
           { icon: '03', title: 'Résumé quotidien', description: 'Résumé quotidien' },
         ],
         faq: [
-          { q: 'Quand Inbox Pulse sera disponible ?', a: 'Les premiers accès sont ouverts progressivement aux inscrits.' },
+          {
+            q: 'Quand Inbox Pulse sera disponible ?',
+            a: 'Les premiers accès sont ouverts progressivement aux inscrits.',
+          },
           { q: 'Combien cela coûte ?', a: '29€/mois' },
         ],
         meta_title: 'Inbox Pulse',
@@ -102,17 +105,19 @@ describe('materializeBuilderOutput', () => {
   })
 
   it('remonte une erreur si la landing ne peut pas être insérée', async () => {
-    await expect(materializeBuilderOutput({
-      ventureId: 'venture-1',
-      ventureName: 'Inbox Pulse',
-      builderOutput: {
-        headline: 'Priorisez vos leads email',
-        subline: 'Un scoring IA.',
-        cta: 'Rejoindre',
-        features: ['Score'],
-        pricing: '29€/mois',
-      },
-      insertLandingPage: async () => ({ error: { message: 'insert failed' } }),
-    })).rejects.toThrow('insert failed')
+    await expect(
+      materializeBuilderOutput({
+        ventureId: 'venture-1',
+        ventureName: 'Inbox Pulse',
+        builderOutput: {
+          headline: 'Priorisez vos leads email',
+          subline: 'Un scoring IA.',
+          cta: 'Rejoindre',
+          features: ['Score'],
+          pricing: '29€/mois',
+        },
+        insertLandingPage: async () => ({ error: { message: 'insert failed' } }),
+      })
+    ).rejects.toThrow('insert failed')
   })
 })

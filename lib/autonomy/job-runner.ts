@@ -39,12 +39,11 @@ function throwIfError<T>(result: QueryResult<T>): T | null {
   return result.data
 }
 
-async function getJobById(supabase: AutonomyJobSupabase, jobId: string): Promise<AutonomyJobRow | null> {
-  const result = await supabase
-    .from('autonomy_jobs')
-    .select('*')
-    .eq('id', jobId)
-    .maybeSingle()
+async function getJobById(
+  supabase: AutonomyJobSupabase,
+  jobId: string
+): Promise<AutonomyJobRow | null> {
+  const result = await supabase.from('autonomy_jobs').select('*').eq('id', jobId).maybeSingle()
 
   return throwIfError(result)
 }
@@ -55,16 +54,11 @@ async function patchJob(
   patch: Partial<AutonomyJobRow>,
   expectedStatus?: AutonomyJobStatus
 ): Promise<AutonomyJobRow | null> {
-  let query = supabase
-    .from('autonomy_jobs')
-    .update(patch)
-    .eq('id', jobId)
+  let query = supabase.from('autonomy_jobs').update(patch).eq('id', jobId)
 
   if (expectedStatus) query = query.eq('status', expectedStatus)
 
-  const result = await query
-    .select('*')
-    .maybeSingle()
+  const result = await query.select('*').maybeSingle()
 
   return throwIfError(result)
 }
@@ -88,12 +82,17 @@ export async function claimNextJob(
   const job = throwIfError(result)
   if (!job) return null
 
-  return patchJob(supabase, job.id, {
-    status: 'running',
-    locked_at: nowIso,
-    attempt_count: job.attempt_count + 1,
-    updated_at: nowIso,
-  }, 'queued')
+  return patchJob(
+    supabase,
+    job.id,
+    {
+      status: 'running',
+      locked_at: nowIso,
+      attempt_count: job.attempt_count + 1,
+      updated_at: nowIso,
+    },
+    'queued'
+  )
 }
 
 export async function completeJob(

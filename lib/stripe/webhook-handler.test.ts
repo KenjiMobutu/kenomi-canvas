@@ -1,14 +1,8 @@
 import type Stripe from 'stripe'
 import { describe, expect, it } from 'vitest'
-import {
-  handleStripeWebhookEvent,
-  type StripeWebhookSupabase,
-} from './webhook-handler'
+import { handleStripeWebhookEvent, type StripeWebhookSupabase } from './webhook-handler'
 
-function createFakeSupabase(seed?: {
-  paymentStatus?: string
-  revenue?: number
-}) {
+function createFakeSupabase(seed?: { paymentStatus?: string; revenue?: number }) {
   const tables = {
     payments: [
       {

@@ -33,7 +33,8 @@ interface VentureWithLandingPages {
 export async function getLandingPage(slug: string): Promise<LandingPageData | null> {
   const { data, error } = await supabase
     .from('ventures')
-    .select(`
+    .select(
+      `
       id,
       nom,
       slug,
@@ -42,7 +43,8 @@ export async function getLandingPage(slug: string): Promise<LandingPageData | nu
         headline,
         copywriting
       )
-    `)
+    `
+    )
     .eq('slug', slug)
     .eq('statut', 'actif')
     .single()

@@ -35,9 +35,7 @@ export function buildCheckoutAutonomyAction(input: {
   }
 }
 
-export function getCheckoutEnvironment(
-  env: NodeJS.ProcessEnv = process.env
-): AutonomyEnvironment {
+export function getCheckoutEnvironment(env: NodeJS.ProcessEnv = process.env): AutonomyEnvironment {
   if (
     env.KENOMI_ENV === 'development' ||
     env.KENOMI_ENV === 'staging' ||
@@ -63,8 +61,7 @@ export function buildCheckoutSessionParams(input: {
   successUrl: string
   cancelUrl: string
 }): Stripe.Checkout.SessionCreateParams {
-  const mode =
-    input.payment.billing === 'one_time' ? 'payment' : 'subscription'
+  const mode = input.payment.billing === 'one_time' ? 'payment' : 'subscription'
 
   const priceData: NonNullable<
     NonNullable<Stripe.Checkout.SessionCreateParams['line_items']>[number]['price_data']

@@ -41,9 +41,7 @@ describe('aggregateVentureMetrics', () => {
   })
 
   it('évite les divisions par zéro quand aucun coût n’est connu', () => {
-    const metrics = aggregateVentureMetrics([
-      { event_type: 'payment_succeeded', value: 2900 },
-    ])
+    const metrics = aggregateVentureMetrics([{ event_type: 'payment_succeeded', value: 2900 }])
 
     expect(metrics.roi).toBe(0)
     expect(metrics.profitCents).toBe(2900)

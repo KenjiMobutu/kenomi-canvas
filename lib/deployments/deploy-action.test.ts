@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { requiresApproval } from '@/lib/autonomy/policy'
-import {
-  buildDeployAutonomyAction,
-  parseDeployRequest,
-} from './deploy-action'
+import { buildDeployAutonomyAction, parseDeployRequest } from './deploy-action'
 
 describe('deploy action', () => {
   it('requires approval in production', () => {
@@ -39,8 +36,6 @@ describe('deploy action', () => {
       serviceId: 'service-1',
     })
 
-    expect(() => parseDeployRequest({ projectId: '' })).toThrow(
-      'Invalid deploy request'
-    )
+    expect(() => parseDeployRequest({ projectId: '' })).toThrow('Invalid deploy request')
   })
 })

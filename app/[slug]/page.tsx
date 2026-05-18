@@ -43,27 +43,32 @@ export default async function LandingPage({ params, searchParams }: Props) {
   const { hero, features, faq } = data.copywriting
 
   const showWaitlistSuccess = waitlist === 'ok'
-  const showPaymentSuccess  = payment === 'success'
-  const showPaymentCancel   = payment === 'cancelled'
+  const showPaymentSuccess = payment === 'success'
+  const showPaymentCancel = payment === 'cancelled'
 
   return (
     <main className="min-h-screen">
       {/* BANNIÈRE CONFIRMATION */}
       {(showWaitlistSuccess || showPaymentSuccess || showPaymentCancel) && (
-        <div className={`px-4 py-3 text-center text-sm font-medium ${
-          showPaymentCancel
-            ? 'bg-yellow-900/50 border-b border-yellow-800 text-yellow-300'
-            : 'bg-green-900/50 border-b border-green-800 text-green-300'
-        }`}>
-          {showWaitlistSuccess && 'Inscription confirmée ! Vous serez notifié en priorité au lancement.'}
-          {showPaymentSuccess  && 'Paiement reçu ! Bienvenue — vous recevrez vos accès par email.'}
-          {showPaymentCancel   && 'Paiement annulé. Revenez quand vous voulez.'}
+        <div
+          className={`px-4 py-3 text-center text-sm font-medium ${
+            showPaymentCancel
+              ? 'bg-yellow-900/50 border-b border-yellow-800 text-yellow-300'
+              : 'bg-green-900/50 border-b border-green-800 text-green-300'
+          }`}
+        >
+          {showWaitlistSuccess &&
+            'Inscription confirmée ! Vous serez notifié en priorité au lancement.'}
+          {showPaymentSuccess && 'Paiement reçu ! Bienvenue — vous recevrez vos accès par email.'}
+          {showPaymentCancel && 'Paiement annulé. Revenez quand vous voulez.'}
         </div>
       )}
 
       {/* NAV */}
       <nav className="px-6 py-4 flex items-center justify-between max-w-5xl mx-auto">
-        <a href="/" className="text-gray-500 text-sm hover:text-white transition-colors">← Kenomi</a>
+        <a href="/" className="text-gray-500 text-sm hover:text-white transition-colors">
+          ← Kenomi
+        </a>
       </nav>
 
       {/* HERO */}
@@ -75,9 +80,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
         <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
           {hero.headline}
         </h1>
-        <p className="text-xl text-gray-400 mb-10 max-w-xl mx-auto">
-          {hero.subtitle}
-        </p>
+        <p className="text-xl text-gray-400 mb-10 max-w-xl mx-auto">{hero.subtitle}</p>
         <a
           href={showWaitlistSuccess ? undefined : '#waitlist'}
           className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"
@@ -114,11 +117,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
           <>
             <h2 className="text-3xl font-bold mb-4">Rejoignez la liste d&apos;attente</h2>
             <p className="text-gray-400 mb-8">Soyez parmi les premiers à accéder à {data.nom}.</p>
-            <form
-              action="/api/waitlist"
-              method="POST"
-              className="flex gap-3 max-w-md mx-auto"
-            >
+            <form action="/api/waitlist" method="POST" className="flex gap-3 max-w-md mx-auto">
               <input type="hidden" name="slug" value={slug} />
               <input
                 type="email"
@@ -155,7 +154,10 @@ export default async function LandingPage({ params, searchParams }: Props) {
 
       {/* FOOTER */}
       <footer className="border-t border-gray-900 py-8 text-center text-gray-600 text-sm">
-        Propulsé par <a href="/" className="text-gray-400 hover:text-white">Kenomi</a>
+        Propulsé par{' '}
+        <a href="/" className="text-gray-400 hover:text-white">
+          Kenomi
+        </a>
       </footer>
     </main>
   )

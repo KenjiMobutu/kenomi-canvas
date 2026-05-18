@@ -99,11 +99,13 @@ describe('getHealthDependencyConfig', () => {
   })
 
   it('permet de rendre une dépendance optionnelle par env', () => {
-    expect(getHealthDependencyConfig({
-      HEALTH_DATABASE_REQUIRED: 'false',
-      HEALTH_SUPABASE_REQUIRED: 'false',
-      HEALTH_STORAGE_REQUIRED: 'false',
-    } as unknown as NodeJS.ProcessEnv)).toEqual({
+    expect(
+      getHealthDependencyConfig({
+        HEALTH_DATABASE_REQUIRED: 'false',
+        HEALTH_SUPABASE_REQUIRED: 'false',
+        HEALTH_STORAGE_REQUIRED: 'false',
+      } as unknown as NodeJS.ProcessEnv)
+    ).toEqual({
       databaseRequired: false,
       supabaseRequired: false,
       storageRequired: false,

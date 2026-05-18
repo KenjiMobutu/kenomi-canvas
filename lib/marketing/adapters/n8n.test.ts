@@ -12,7 +12,7 @@ describe('createN8nPublisher', () => {
 
   it('throws when URL is not allowed (SSRF)', () => {
     expect(() =>
-      createN8nPublisher({ N8N_PUBLISH_WEBHOOK_URL: 'http://127.0.0.1/webhook' }),
+      createN8nPublisher({ N8N_PUBLISH_WEBHOOK_URL: 'http://127.0.0.1/webhook' })
     ).toThrow(/non autorisée/)
   })
 
@@ -61,7 +61,7 @@ describe('createN8nPublisher', () => {
     })
 
     await expect(
-      publisher.publish({ channel: 'twitter', content: 'x', ventureId: 'v-1' }),
+      publisher.publish({ channel: 'twitter', content: 'x', ventureId: 'v-1' })
     ).rejects.toThrow(/500/)
   })
 

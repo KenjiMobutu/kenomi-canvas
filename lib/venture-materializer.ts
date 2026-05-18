@@ -94,13 +94,15 @@ export async function findAvailableSlug(
   const baseSlug = slugifyVentureName(baseName)
   for (let index = 0; index < 50; index += 1) {
     const candidate = index === 0 ? baseSlug : `${baseSlug}-${index + 1}`
-    if (!await exists(candidate)) return candidate
+    if (!(await exists(candidate))) return candidate
   }
   return `${baseSlug}-${Date.now()}`
 }
 export type LandingPageInsert = ReturnType<typeof buildLandingPageInsert>
 
-export async function materializeBuilderOutput(input: MaterializeBuilderOutputInput): Promise<LandingPageInsert> {
+export async function materializeBuilderOutput(
+  input: MaterializeBuilderOutputInput
+): Promise<LandingPageInsert> {
   const payload = buildLandingPageInsert(input)
   const result = await input.insertLandingPage(payload)
   if (result.error) throw new Error(result.error.message)

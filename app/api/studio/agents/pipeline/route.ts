@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
   if (existing.status !== 'pending_validation') return apiError('Pipeline déjà traité', 409)
 
   if (action === 'reject') {
-    await supabase.from('venture_pipeline')
+    await supabase
+      .from('venture_pipeline')
       .update({ status: 'rejected', updated_at: new Date().toISOString() })
       .eq('id', pipelineId)
     return apiOk({ ok: true, action: 'rejected' })
@@ -72,18 +73,21 @@ export async function POST(req: NextRequest) {
 
   const { data: venture, error: ventureErr } = await supabase
     .from('ventures')
-    .insert(buildVentureInsertFromPipeline({
-      userId: user!.id,
-      ideaTitle: existing.idea_title,
-      ideaNiche: existing.idea_niche,
-      slug,
-    }))
+    .insert(
+      buildVentureInsertFromPipeline({
+        userId: user!.id,
+        ideaTitle: existing.idea_title,
+        ideaNiche: existing.idea_niche,
+        slug,
+      })
+    )
     .select('id')
     .single()
 
   if (ventureErr) return apiError(ventureErr.message, 500)
 
-  await supabase.from('venture_pipeline')
+  await supabase
+    .from('venture_pipeline')
     .update({
       status: 'approved',
       venture_id: venture.id,

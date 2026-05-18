@@ -21,7 +21,11 @@ export async function GET() {
     await db.$queryRaw`SELECT 1`
     checks.database = { ok: true, latencyMs: Date.now() - dbStart }
   } catch (e) {
-    checks.database = { ok: false, latencyMs: Date.now() - dbStart, error: process.env.NODE_ENV === 'production' ? 'database check failed' : (e as Error).message }
+    checks.database = {
+      ok: false,
+      latencyMs: Date.now() - dbStart,
+      error: process.env.NODE_ENV === 'production' ? 'database check failed' : (e as Error).message,
+    }
   }
 
   // 3. Supabase Auth (ping simple)
@@ -34,19 +38,25 @@ export async function GET() {
       ...(error ? { error: error.message } : {}),
     }
   } catch (e) {
-    checks.supabase = { ok: false, latencyMs: Date.now() - sbStart, error: process.env.NODE_ENV === 'production' ? 'supabase check failed' : (e as Error).message }
+    checks.supabase = {
+      ok: false,
+      latencyMs: Date.now() - sbStart,
+      error: process.env.NODE_ENV === 'production' ? 'supabase check failed' : (e as Error).message,
+    }
   }
 
   // 4. Storage bucket documents
   const stStart = Date.now()
   try {
-    const { error: stError } = await supabaseAdmin.storage
-      .from('documents')
-      .list('', { limit: 1 })
+    const { error: stError } = await supabaseAdmin.storage.from('documents').list('', { limit: 1 })
     checks.storage = {
       ok: !stError,
       latencyMs: Date.now() - stStart,
-      ...(stError ? { error: process.env.NODE_ENV === 'production' ? 'storage check failed' : stError.message } : {}),
+      ...(stError
+        ? {
+            error: process.env.NODE_ENV === 'production' ? 'storage check failed' : stError.message,
+          }
+        : {}),
     }
   } catch (e) {
     checks.storage = {

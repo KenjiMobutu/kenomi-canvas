@@ -12,12 +12,8 @@ describe('migration ordering', () => {
   it('creates decisions before the audit migration enables RLS or indexes it', () => {
     const migration = readMigration('20260516_audit_db_fixes2.sql')
 
-    const createTable = migration.indexOf(
-      'CREATE TABLE IF NOT EXISTS public.decisions'
-    )
-    const enableRls = migration.indexOf(
-      'ALTER TABLE public.decisions ENABLE ROW LEVEL SECURITY'
-    )
+    const createTable = migration.indexOf('CREATE TABLE IF NOT EXISTS public.decisions')
+    const enableRls = migration.indexOf('ALTER TABLE public.decisions ENABLE ROW LEVEL SECURITY')
     const createIndex = migration.indexOf('decisions_venture_id_idx')
 
     expect(createTable).toBeGreaterThanOrEqual(0)

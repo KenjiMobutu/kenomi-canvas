@@ -1,15 +1,17 @@
 // lib/pipeline-types.test.ts
 import { describe, it, expect } from 'vitest'
-import {
-  AGENT_CHAIN,
-  nextAgentInChain,
-  isAgentUnlocked,
-  parsePipelineIdea,
-} from './pipeline-types'
+import { AGENT_CHAIN, nextAgentInChain, isAgentUnlocked, parsePipelineIdea } from './pipeline-types'
 
 describe('AGENT_CHAIN', () => {
   it('contient 6 agents dans le bon ordre', () => {
-    expect(AGENT_CHAIN).toEqual(['scout', 'validation', 'builder', 'payment', 'marketing', 'decision'])
+    expect(AGENT_CHAIN).toEqual([
+      'scout',
+      'validation',
+      'builder',
+      'payment',
+      'marketing',
+      'decision',
+    ])
   })
 })
 
@@ -36,16 +38,52 @@ describe('isAgentUnlocked', () => {
     expect(isAgentUnlocked('validation', null)).toBe(false)
   })
   it('validation est débloqué si pipeline approved et validation_output null', () => {
-    expect(isAgentUnlocked('validation', { status: 'approved', validation_output: null, builder_output: null, payment_output: null, marketing_output: null, decision_output: null })).toBe(true)
+    expect(
+      isAgentUnlocked('validation', {
+        status: 'approved',
+        validation_output: null,
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+      })
+    ).toBe(true)
   })
   it('validation est bloqué si déjà exécuté', () => {
-    expect(isAgentUnlocked('validation', { status: 'approved', validation_output: 'done', builder_output: null, payment_output: null, marketing_output: null, decision_output: null })).toBe(false)
+    expect(
+      isAgentUnlocked('validation', {
+        status: 'approved',
+        validation_output: 'done',
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+      })
+    ).toBe(false)
   })
   it('builder est bloqué si validation_output null', () => {
-    expect(isAgentUnlocked('builder', { status: 'approved', validation_output: null, builder_output: null, payment_output: null, marketing_output: null, decision_output: null })).toBe(false)
+    expect(
+      isAgentUnlocked('builder', {
+        status: 'approved',
+        validation_output: null,
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+      })
+    ).toBe(false)
   })
   it('builder est débloqué si validation_output présent', () => {
-    expect(isAgentUnlocked('builder', { status: 'approved', validation_output: 'ok', builder_output: null, payment_output: null, marketing_output: null, decision_output: null })).toBe(true)
+    expect(
+      isAgentUnlocked('builder', {
+        status: 'approved',
+        validation_output: 'ok',
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+      })
+    ).toBe(true)
   })
 })
 

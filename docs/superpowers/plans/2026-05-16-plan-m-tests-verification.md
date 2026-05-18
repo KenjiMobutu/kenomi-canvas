@@ -14,20 +14,21 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `lib/chat-validation.ts` | Créer — fonctions pures extraites du handler chat (validation message) |
-| `lib/chat-validation.test.ts` | Créer — tests des validations chat |
-| `lib/automation-runs.test.ts` | Créer — tests de la logique de run (status, durée) |
-| `lib/waitlist-validation.test.ts` | Créer — tests de validation email + slug déjà dans validation.ts |
-| `lib/health-check.ts` | Créer — logique pure du health check (vérification env vars) |
-| `lib/health-check.test.ts` | Créer — tests du health check avec env manquant |
+| Fichier                           | Action                                                                 |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| `lib/chat-validation.ts`          | Créer — fonctions pures extraites du handler chat (validation message) |
+| `lib/chat-validation.test.ts`     | Créer — tests des validations chat                                     |
+| `lib/automation-runs.test.ts`     | Créer — tests de la logique de run (status, durée)                     |
+| `lib/waitlist-validation.test.ts` | Créer — tests de validation email + slug déjà dans validation.ts       |
+| `lib/health-check.ts`             | Créer — logique pure du health check (vérification env vars)           |
+| `lib/health-check.test.ts`        | Créer — tests du health check avec env manquant                        |
 
 ---
 
 ### Task 1 : Extraire et tester la validation du chat
 
 **Files:**
+
 - Create: `lib/chat-validation.ts`
 - Create: `lib/chat-validation.test.ts`
 
@@ -155,10 +156,14 @@ Dans `app/api/studio/chat/route.ts`, remplacer le bloc de validation manuel :
 // Avant (à remplacer)
 const { conversationId, message, agentId } = body
 if (!conversationId || !message?.trim()) {
-  return new Response(JSON.stringify({ error: 'conversationId and message are required' }), { status: 400 })
+  return new Response(JSON.stringify({ error: 'conversationId and message are required' }), {
+    status: 400,
+  })
 }
 if (message.length > 8000) {
-  return new Response(JSON.stringify({ error: 'Message trop long (max 8000 caractères)' }), { status: 400 })
+  return new Response(JSON.stringify({ error: 'Message trop long (max 8000 caractères)' }), {
+    status: 400,
+  })
 }
 ```
 
@@ -195,6 +200,7 @@ git commit -m "test(chat): extraire validateChatInput + 8 tests de validation"
 ### Task 2 : Tester la logique de statut des runs d'automation
 
 **Files:**
+
 - Create: `lib/automation-runs.test.ts`
 
 **Contexte :** La logique qui détermine le statut d'un run (`'success' | 'error' | 'timeout'`) et la durée est dans la route trigger. On la teste via des fonctions pures extraites.
@@ -262,20 +268,32 @@ describe('buildRunResult', () => {
   })
 
   it('succès avec webhook 200', () => {
-    const r = buildRunResult({ webhookUrl: 'https://n8n.example.com/hook/1', fetchError: null, fetchStatus: 200 })
+    const r = buildRunResult({
+      webhookUrl: 'https://n8n.example.com/hook/1',
+      fetchError: null,
+      fetchStatus: 200,
+    })
     expect(r.status).toBe('success')
     expect(r.httpStatus).toBe(200)
   })
 
   it('erreur avec webhook 500', () => {
-    const r = buildRunResult({ webhookUrl: 'https://n8n.example.com/hook/1', fetchError: null, fetchStatus: 500 })
+    const r = buildRunResult({
+      webhookUrl: 'https://n8n.example.com/hook/1',
+      fetchError: null,
+      fetchStatus: 500,
+    })
     expect(r.status).toBe('error')
     expect(r.httpStatus).toBe(500)
     expect(r.errorMessage).toBe('HTTP 500')
   })
 
   it('erreur avec webhook 404', () => {
-    const r = buildRunResult({ webhookUrl: 'https://n8n.example.com/hook/1', fetchError: null, fetchStatus: 404 })
+    const r = buildRunResult({
+      webhookUrl: 'https://n8n.example.com/hook/1',
+      fetchError: null,
+      fetchStatus: 404,
+    })
     expect(r.status).toBe('error')
     expect(r.errorMessage).toBe('HTTP 404')
   })
@@ -283,14 +301,22 @@ describe('buildRunResult', () => {
   it('timeout si AbortError avec name TimeoutError', () => {
     const err = new Error('signal timed out')
     err.name = 'TimeoutError'
-    const r = buildRunResult({ webhookUrl: 'https://n8n.example.com/hook/1', fetchError: err, fetchStatus: null })
+    const r = buildRunResult({
+      webhookUrl: 'https://n8n.example.com/hook/1',
+      fetchError: err,
+      fetchStatus: null,
+    })
     expect(r.status).toBe('timeout')
     expect(r.errorMessage).toBe('Webhook timeout (8s)')
   })
 
   it('erreur si fetch rejette pour autre raison', () => {
     const err = new Error('ECONNREFUSED')
-    const r = buildRunResult({ webhookUrl: 'https://n8n.example.com/hook/1', fetchError: err, fetchStatus: null })
+    const r = buildRunResult({
+      webhookUrl: 'https://n8n.example.com/hook/1',
+      fetchError: err,
+      fetchStatus: null,
+    })
     expect(r.status).toBe('error')
     expect(r.errorMessage).toBe('Webhook injoignable')
   })
@@ -327,7 +353,11 @@ if (wf.webhook_url) {
     const resp = await fetch(wf.webhook_url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
+      body: JSON.stringify({
+        source: 'kenomi-studio',
+        trigger: 'manual',
+        timestamp: new Date().toISOString(),
+      }),
       signal: AbortSignal.timeout(8000),
     })
     fetchStatus = resp.status
@@ -363,6 +393,7 @@ git commit -m "test(automations): extraire buildRunResult + 6 tests statut run"
 ### Task 3 : Tests de validation waitlist
 
 **Files:**
+
 - Create: `lib/waitlist-validation.test.ts`
 
 **Contexte :** Les validations slug et email de la waitlist utilisent les fonctions de `lib/validation.ts` (`isValidEmail`) et une regex locale `SLUG_RE`. On centralise `SLUG_RE` dans `lib/validation.ts` et on ajoute les tests correspondants.
@@ -490,6 +521,7 @@ git commit -m "test(waitlist): extraire isValidSlug + 12 tests validation slug/e
 ### Task 4 : Extraire et tester la vérification env du health check
 
 **Files:**
+
 - Create: `lib/health-check.ts`
 - Create: `lib/health-check.test.ts`
 
@@ -516,13 +548,14 @@ export interface EnvCheck {
 }
 
 export function checkEnvVars(env: NodeJS.ProcessEnv = process.env): EnvCheck {
-  const missing = REQUIRED_ENV_VARS.filter(k => !env[k])
+  const missing = REQUIRED_ENV_VARS.filter((k) => !env[k])
   if (missing.length === 0) return { ok: true }
   return {
     ok: false,
-    error: env.NODE_ENV === 'production'
-      ? 'configuration incomplete'
-      : `Manquantes: ${missing.join(', ')}`,
+    error:
+      env.NODE_ENV === 'production'
+        ? 'configuration incomplete'
+        : `Manquantes: ${missing.join(', ')}`,
   }
 }
 ```
@@ -671,6 +704,7 @@ Expected : `✓ Compiled successfully` ou `Route (app)` table affichée sans err
 - [ ] **Step 2 : Corriger les erreurs de build si présentes**
 
 Si le build échoue :
+
 - Lire l'erreur complète
 - Les erreurs courantes sont : import manquant (`Module not found`), variable `process.env` non déclarée côté client, usage de `cookies()` dans un composant client, etc.
 - Corriger le fichier incriminé

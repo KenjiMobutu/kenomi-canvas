@@ -1,19 +1,15 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { requireAllowedUser } from "@/lib/auth-server";
-import {
-  getProxmoxMetrics,
-  formatBytes,
-  formatUptime,
-} from "@/lib/proxmox-client";
+import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { requireAllowedUser } from '@/lib/auth-server'
+import { getProxmoxMetrics, formatBytes, formatUptime } from '@/lib/proxmox-client'
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const { response } = await requireAllowedUser(cookieStore);
-  if (response) return response;
+  const cookieStore = await cookies()
+  const { response } = await requireAllowedUser(cookieStore)
+  if (response) return response
 
   try {
-    const metrics = await getProxmoxMetrics();
+    const metrics = await getProxmoxMetrics()
 
     const result = {
       ...metrics,
@@ -38,15 +34,12 @@ export async function GET() {
         netin: vm.netin ?? 0,
         netout: vm.netout ?? 0,
       })),
-    };
+    }
 
-    return NextResponse.json(result);
+    return NextResponse.json(result)
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Erreur inconnue";
-    console.error("Proxmox metrics error:", message);
-    return NextResponse.json(
-      { error: `Proxmox indisponible: ${message}` },
-      { status: 503 }
-    );
+    const message = err instanceof Error ? err.message : 'Erreur inconnue'
+    console.error('Proxmox metrics error:', message)
+    return NextResponse.json({ error: `Proxmox indisponible: ${message}` }, { status: 503 })
   }
 }

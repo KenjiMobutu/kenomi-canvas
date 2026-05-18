@@ -4,8 +4,14 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { useEffect } from 'react'
 import {
-  LayoutDashboard, MessageSquare, Bot, Workflow,
-  FileText, KeyRound, Settings, LogOut,
+  LayoutDashboard,
+  MessageSquare,
+  Bot,
+  Workflow,
+  FileText,
+  KeyRound,
+  Settings,
+  LogOut,
 } from 'lucide-react'
 
 const nav = [
@@ -60,7 +66,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {g.group}
               </div>
               {g.items.map((it) => {
-                const active = pathname === it.to || (it.to !== '/studio' && pathname.startsWith(it.to))
+                const active =
+                  pathname === it.to || (it.to !== '/studio' && pathname.startsWith(it.to))
                 const Icon = it.icon
                 return (
                   <Link
@@ -101,9 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto bg-background">
-        {children}
-      </main>
+      <main className="flex-1 overflow-y-auto bg-background">{children}</main>
     </div>
   )
 }

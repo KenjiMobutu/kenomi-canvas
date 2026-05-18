@@ -3,7 +3,11 @@ import { apiError } from '@/lib/api-response'
 import { isRateLimited } from '@/lib/rate-limit'
 import { isValidSlug } from '@/lib/validation'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { isVentureEventType, recordVentureEventBySlug, type VentureEventSupabase } from '@/lib/venture-events'
+import {
+  isVentureEventType,
+  recordVentureEventBySlug,
+  type VentureEventSupabase,
+} from '@/lib/venture-events'
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
@@ -43,7 +47,10 @@ export async function POST(req: NextRequest) {
   })
 
   if (!result.ok) {
-    return apiError(result.error === 'venture_not_found' ? 'venture introuvable' : result.error, 404)
+    return apiError(
+      result.error === 'venture_not_found' ? 'venture introuvable' : result.error,
+      404
+    )
   }
 
   return NextResponse.json({ ok: true })

@@ -1,9 +1,7 @@
 import { isAllowedWebhookUrl } from '@/lib/security'
 import type { MarketingPublisher, PublishInput, PublishResult } from './types'
 
-export function createN8nPublisher(
-  env: Record<string, string | undefined>,
-): MarketingPublisher {
+export function createN8nPublisher(env: Record<string, string | undefined>): MarketingPublisher {
   const webhookUrl = env.N8N_PUBLISH_WEBHOOK_URL
   if (!webhookUrl) {
     throw new Error('N8N_PUBLISH_WEBHOOK_URL missing')

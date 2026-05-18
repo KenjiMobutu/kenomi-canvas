@@ -51,9 +51,7 @@ describe('buildCheckoutSessionParams', () => {
   })
 
   it('validates payment output before checkout creation', () => {
-    expect(() => parsePaymentOutput('{"price_amount": -1}')).toThrow(
-      'Invalid payment output'
-    )
+    expect(() => parsePaymentOutput('{"price_amount": -1}')).toThrow('Invalid payment output')
     expect(parsePaymentOutput(JSON.stringify(payment))).toEqual(payment)
   })
 })

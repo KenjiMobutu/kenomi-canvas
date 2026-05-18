@@ -36,22 +36,33 @@ export default function Login() {
           </p>
         </div>
         <input
-          type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           placeholder="email@kenomi.ai"
           className="w-full px-4 py-3 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
         />
         <input
-          type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           placeholder="Mot de passe"
           className="w-full px-4 py-3 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
         />
-        <button type="submit" disabled={loading}
-          className="w-full py-3 bg-foreground text-background font-bold rounded-md disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-3 bg-foreground text-background font-bold rounded-md disabled:opacity-50"
+        >
           {loading ? 'Connexion…' : 'Se connecter'}
         </button>
         <p className="text-sm text-muted-foreground text-center">
           Pas de compte ?{' '}
-          <Link href="/signup" className="text-accent hover:underline">Créer un compte</Link>
+          <Link href="/signup" className="text-accent hover:underline">
+            Créer un compte
+          </Link>
         </p>
       </form>
     </main>

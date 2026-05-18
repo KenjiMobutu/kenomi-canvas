@@ -22,39 +22,42 @@ Deno.serve(async (req) => {
     let slug: string, email: string
 
     if (body) {
-      slug  = (body.get('slug')  as string) ?? ''
+      slug = (body.get('slug') as string) ?? ''
       email = (body.get('email') as string) ?? ''
     } else {
       const json = await req.json()
-      slug  = json.slug  ?? ''
+      slug = json.slug ?? ''
       email = json.email ?? ''
     }
 
     if (!slug || !email) {
-      return new Response(
-        JSON.stringify({ error: 'slug et email requis' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'slug et email requis' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     if (!EMAIL_RE.test(email)) {
-      return new Response(
-        JSON.stringify({ error: 'Format email invalide' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'Format email invalide' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
     const { data: ventures } = await supabase
-      .from('ventures').select('id').eq('slug', slug).limit(1)
+      .from('ventures')
+      .select('id')
+      .eq('slug', slug)
+      .limit(1)
 
     const venture_id = ventures?.[0]?.id ?? null
     if (!venture_id) {
-      return new Response(
-        JSON.stringify({ error: 'Venture introuvable' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'Venture introuvable' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     const { error } = await supabase
@@ -69,9 +72,9 @@ Deno.serve(async (req) => {
     })
   } catch (err) {
     console.error(err)
-    return new Response(
-      JSON.stringify({ error: 'Erreur serveur' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: 'Erreur serveur' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 })

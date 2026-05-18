@@ -4,7 +4,9 @@ export interface AutonomyConfig {
   globalBudgetCapEur: number
 }
 
-export function getAutonomyConfig(env: Record<string, string | undefined> = process.env): AutonomyConfig {
+export function getAutonomyConfig(
+  env: Record<string, string | undefined> = process.env
+): AutonomyConfig {
   const rawCap = env.AUTONOMY_GLOBAL_BUDGET_CAP_EUR
   const parsedCap = rawCap !== undefined ? Number(rawCap) : NaN
   return {

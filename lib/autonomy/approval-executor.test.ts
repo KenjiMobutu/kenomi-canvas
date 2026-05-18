@@ -43,7 +43,8 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
         filters: [] as Array<{ field: string; value: unknown }>,
         patch: null as TableRow | null,
       }
-      const matches = (row: TableRow) => state.filters.every((filter) => row[filter.field] === filter.value)
+      const matches = (row: TableRow) =>
+        state.filters.every((filter) => row[filter.field] === filter.value)
       const builder = {
         select: () => builder,
         eq: (field: string, value: unknown) => {
@@ -78,8 +79,18 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
 describe('resolveHumanApproval', () => {
   it('rejette une approval pending et annule action associée', async () => {
     const supabase = createFakeSupabase({
-      human_approvals: [{ id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' }],
-      autonomy_actions: [{ id: 'action-1', user_id: 'user-1', venture_id: 'venture-1', action_type: 'scale_budget', status: 'blocked' }],
+      human_approvals: [
+        { id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' },
+      ],
+      autonomy_actions: [
+        {
+          id: 'action-1',
+          user_id: 'user-1',
+          venture_id: 'venture-1',
+          action_type: 'scale_budget',
+          status: 'blocked',
+        },
+      ],
     })
 
     const result = await resolveHumanApproval({
@@ -102,16 +113,28 @@ describe('resolveHumanApproval', () => {
 
   it('approuve et exécute stop_venture sur la venture, les landing pages, budgets et campagnes', async () => {
     const supabase = createFakeSupabase({
-      human_approvals: [{ id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'action-1',
-        user_id: 'user-1',
-        venture_id: 'venture-1',
-        action_type: 'stop_venture',
-        status: 'blocked',
-        input: { rationale: 'CAC trop élevé' },
-      }],
-      ventures: [{ id: 'venture-1', user_id: 'user-1', statut: 'actif', stage: 'Scale', next_action: 'Continuer' }],
+      human_approvals: [
+        { id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' },
+      ],
+      autonomy_actions: [
+        {
+          id: 'action-1',
+          user_id: 'user-1',
+          venture_id: 'venture-1',
+          action_type: 'stop_venture',
+          status: 'blocked',
+          input: { rationale: 'CAC trop élevé' },
+        },
+      ],
+      ventures: [
+        {
+          id: 'venture-1',
+          user_id: 'user-1',
+          statut: 'actif',
+          stage: 'Scale',
+          next_action: 'Continuer',
+        },
+      ],
       landing_pages: [{ id: 'landing-1', venture_id: 'venture-1', statut: 'deployed' }],
       budget_requests: [{ id: 'budget-1', venture_id: 'venture-1', status: 'pending' }],
       campaigns: [{ id: 'campaign-1', venture_id: 'venture-1', status: 'approved' }],
@@ -149,15 +172,19 @@ describe('resolveHumanApproval', () => {
 
   it('approuve et exécute deploy via Coolify', async () => {
     const supabase = createFakeSupabase({
-      human_approvals: [{ id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'action-1',
-        user_id: 'user-1',
-        venture_id: 'venture-1',
-        action_type: 'deploy',
-        status: 'blocked',
-        input: { projectId: 'project-1', serviceId: 'service-1' },
-      }],
+      human_approvals: [
+        { id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' },
+      ],
+      autonomy_actions: [
+        {
+          id: 'action-1',
+          user_id: 'user-1',
+          venture_id: 'venture-1',
+          action_type: 'deploy',
+          status: 'blocked',
+          input: { projectId: 'project-1', serviceId: 'service-1' },
+        },
+      ],
     })
 
     const result = await resolveHumanApproval({
@@ -185,15 +212,19 @@ describe('resolveHumanApproval', () => {
 
   it('marque deploy failed si Coolify échoue après approbation', async () => {
     const supabase = createFakeSupabase({
-      human_approvals: [{ id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'action-1',
-        user_id: 'user-1',
-        venture_id: 'venture-1',
-        action_type: 'deploy',
-        status: 'blocked',
-        input: { projectId: 'project-1', serviceId: 'service-1' },
-      }],
+      human_approvals: [
+        { id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' },
+      ],
+      autonomy_actions: [
+        {
+          id: 'action-1',
+          user_id: 'user-1',
+          venture_id: 'venture-1',
+          action_type: 'deploy',
+          status: 'blocked',
+          input: { projectId: 'project-1', serviceId: 'service-1' },
+        },
+      ],
     })
 
     const result = await resolveHumanApproval({
@@ -225,10 +256,15 @@ describe('resolveHumanApproval — dry-run', () => {
   it('dry-run: action deploy approuvée marque completed avec output.dry_run sans appeler Coolify', async () => {
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-1', user_id: 'u1', action_id: 'act-1', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-1', user_id: 'u1', action_type: 'deploy', status: 'pending',
-        input: { projectId: 'p1', serviceId: 's1' },
-      }],
+      autonomy_actions: [
+        {
+          id: 'act-1',
+          user_id: 'u1',
+          action_type: 'deploy',
+          status: 'pending',
+          input: { projectId: 'p1', serviceId: 's1' },
+        },
+      ],
     })
     const coolifyMock = {
       triggerDeploy: vi.fn().mockResolvedValue({ deploymentId: 'd-x' }),
@@ -252,10 +288,15 @@ describe('resolveHumanApproval — dry-run', () => {
   it('dry-run désactivé: action deploy approuvée appelle Coolify normalement', async () => {
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-2', user_id: 'u1', action_id: 'act-2', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-2', user_id: 'u1', action_type: 'deploy', status: 'pending',
-        input: { projectId: 'p1', serviceId: 's1' },
-      }],
+      autonomy_actions: [
+        {
+          id: 'act-2',
+          user_id: 'u1',
+          action_type: 'deploy',
+          status: 'pending',
+          input: { projectId: 'p1', serviceId: 's1' },
+        },
+      ],
     })
     const coolifyMock = {
       triggerDeploy: vi.fn().mockResolvedValue({ deploymentId: 'd-y' }),
@@ -273,13 +314,18 @@ describe('resolveHumanApproval — dry-run', () => {
     expect(result.executed).toBe(true)
   })
 
-  it('dry-run: stop_venture (interne) s\'exécute normalement', async () => {
+  it("dry-run: stop_venture (interne) s'exécute normalement", async () => {
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-3', user_id: 'u1', action_id: 'act-3', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-3', user_id: 'u1', action_type: 'stop_venture', status: 'pending',
-        venture_id: 'v1',
-      }],
+      autonomy_actions: [
+        {
+          id: 'act-3',
+          user_id: 'u1',
+          action_type: 'stop_venture',
+          status: 'pending',
+          venture_id: 'v1',
+        },
+      ],
       ventures: [{ id: 'v1', user_id: 'u1', statut: 'running' }],
     })
     const result = await resolveHumanApproval({
@@ -298,12 +344,17 @@ describe('resolveHumanApproval — budget policy', () => {
   it('bloque publish_campaign si global spend dépasse le cap', async () => {
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-b1', user_id: 'u1', action_id: 'act-b1', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-b1', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
-        venture_id: 'v1',
-        estimated_cost_eur: 50,
-        budget_cap_eur: 100,
-      }],
+      autonomy_actions: [
+        {
+          id: 'act-b1',
+          user_id: 'u1',
+          action_type: 'publish_campaign',
+          status: 'pending',
+          venture_id: 'v1',
+          estimated_cost_eur: 50,
+          budget_cap_eur: 100,
+        },
+      ],
       venture_events: [
         { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: 80 },
       ],
@@ -324,12 +375,17 @@ describe('resolveHumanApproval — budget policy', () => {
   it('bloque publish_campaign si cost > action cap', async () => {
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-b2', user_id: 'u1', action_id: 'act-b2', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-b2', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
-        venture_id: 'v1',
-        estimated_cost_eur: 200,
-        budget_cap_eur: 100,
-      }],
+      autonomy_actions: [
+        {
+          id: 'act-b2',
+          user_id: 'u1',
+          action_type: 'publish_campaign',
+          status: 'pending',
+          venture_id: 'v1',
+          estimated_cost_eur: 200,
+          budget_cap_eur: 100,
+        },
+      ],
       venture_events: [],
     })
     const result = await resolveHumanApproval({
@@ -340,7 +396,9 @@ describe('resolveHumanApproval — budget policy', () => {
       config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
     })
     expect(result.executed).toBe(false)
-    expect((fakeSupabase.tables.autonomy_actions[0].output as Record<string, unknown>).budget_breach).toBe('action_cap_exceeded')
+    expect(
+      (fakeSupabase.tables.autonomy_actions[0].output as Record<string, unknown>).budget_breach
+    ).toBe('action_cap_exceeded')
   })
 
   it('ignore les amount_eur négatifs/null/NaN: la somme reste correcte et déclenche le breach uniquement sur les vraies dépenses', async () => {
@@ -349,12 +407,17 @@ describe('resolveHumanApproval — budget policy', () => {
     // Si le bruit était compté (-500 ou NaN), la somme serait < 100 et le test passerait par erreur.
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-b3', user_id: 'u1', action_id: 'act-b3', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-b3', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
-        venture_id: 'v1',
-        estimated_cost_eur: 10,
-        budget_cap_eur: 1000,
-      }],
+      autonomy_actions: [
+        {
+          id: 'act-b3',
+          user_id: 'u1',
+          action_type: 'publish_campaign',
+          status: 'pending',
+          venture_id: 'v1',
+          estimated_cost_eur: 10,
+          budget_cap_eur: 1000,
+        },
+      ],
       venture_events: [
         { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: 40 },
         { user_id: 'u1', venture_id: 'v1', event_type: 'campaign_spend', amount_eur: 40 },
@@ -373,7 +436,9 @@ describe('resolveHumanApproval — budget policy', () => {
     })
     expect(result.executed).toBe(false)
     expect(fakeSupabase.tables.autonomy_actions[0].status).toBe('blocked')
-    expect((fakeSupabase.tables.autonomy_actions[0].output as Record<string, unknown>).budget_breach).toBe('global_cap_exceeded')
+    expect(
+      (fakeSupabase.tables.autonomy_actions[0].output as Record<string, unknown>).budget_breach
+    ).toBe('global_cap_exceeded')
   })
 })
 
@@ -381,15 +446,26 @@ describe('resolveHumanApproval — publish_campaign', () => {
   it('approuve une action publish_campaign, appelle le publisher et marque action completed', async () => {
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-p1', user_id: 'u1', action_id: 'act-p1', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-p1', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
-        venture_id: 'v1',
-        input: { draft_id: 'draft-1', channel: 'email' },
-      }],
-      campaign_drafts: [{
-        id: 'draft-1', user_id: 'u1', venture_id: 'v1',
-        channel: 'email', content: 'Hi', metadata: {},
-      }],
+      autonomy_actions: [
+        {
+          id: 'act-p1',
+          user_id: 'u1',
+          action_type: 'publish_campaign',
+          status: 'pending',
+          venture_id: 'v1',
+          input: { draft_id: 'draft-1', channel: 'email' },
+        },
+      ],
+      campaign_drafts: [
+        {
+          id: 'draft-1',
+          user_id: 'u1',
+          venture_id: 'v1',
+          channel: 'email',
+          content: 'Hi',
+          metadata: {},
+        },
+      ],
     })
     const publisher = {
       publish: vi.fn().mockResolvedValue({
@@ -411,19 +487,35 @@ describe('resolveHumanApproval — publish_campaign', () => {
     const action = fakeSupabase.tables.autonomy_actions[0]
     expect(action.status).toBe('completed')
     expect((action.output as Record<string, unknown>).external_id).toBe('ext-1')
-    expect(fakeSupabase.tables.venture_events.find((e) => e.event_type === 'campaign_published')).toBeTruthy()
+    expect(
+      fakeSupabase.tables.venture_events.find((e) => e.event_type === 'campaign_published')
+    ).toBeTruthy()
     expect(fakeSupabase.tables.campaign_drafts[0]).toMatchObject({ status: 'published' })
   })
 
   it('marque action failed si publisher rejette', async () => {
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-p2', user_id: 'u1', action_id: 'act-p2', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-p2', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
-        venture_id: 'v1',
-        input: { draft_id: 'draft-2', channel: 'email' },
-      }],
-      campaign_drafts: [{ id: 'draft-2', user_id: 'u1', venture_id: 'v1', channel: 'email', content: 'x', metadata: {} }],
+      autonomy_actions: [
+        {
+          id: 'act-p2',
+          user_id: 'u1',
+          action_type: 'publish_campaign',
+          status: 'pending',
+          venture_id: 'v1',
+          input: { draft_id: 'draft-2', channel: 'email' },
+        },
+      ],
+      campaign_drafts: [
+        {
+          id: 'draft-2',
+          user_id: 'u1',
+          venture_id: 'v1',
+          channel: 'email',
+          content: 'x',
+          metadata: {},
+        },
+      ],
     })
     const publisher = { publish: vi.fn().mockRejectedValue(new Error('boom')) }
     const result = await resolveHumanApproval({
@@ -443,19 +535,26 @@ describe('resolveHumanApproval — publish_campaign', () => {
   it('throw si draft_id manquant', async () => {
     const fakeSupabase = createFakeSupabase({
       human_approvals: [{ id: 'app-p3', user_id: 'u1', action_id: 'act-p3', status: 'pending' }],
-      autonomy_actions: [{
-        id: 'act-p3', user_id: 'u1', action_type: 'publish_campaign', status: 'pending',
-        venture_id: 'v1',
-        input: {},
-      }],
+      autonomy_actions: [
+        {
+          id: 'act-p3',
+          user_id: 'u1',
+          action_type: 'publish_campaign',
+          status: 'pending',
+          venture_id: 'v1',
+          input: {},
+        },
+      ],
     })
-    await expect(resolveHumanApproval({
-      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
-      userId: 'u1',
-      approvalId: 'app-p3',
-      decision: 'approved',
-      marketingPublisher: { publish: vi.fn() },
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
-    })).rejects.toThrow(/draft_id manquant/)
+    await expect(
+      resolveHumanApproval({
+        supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+        userId: 'u1',
+        approvalId: 'app-p3',
+        decision: 'approved',
+        marketingPublisher: { publish: vi.fn() },
+        config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+      })
+    ).rejects.toThrow(/draft_id manquant/)
   })
 })

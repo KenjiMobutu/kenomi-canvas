@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { claimNextJob, completeJob, failJob, rescheduleJob, type AutonomyJobRow } from './job-runner'
+import {
+  claimNextJob,
+  completeJob,
+  failJob,
+  rescheduleJob,
+  type AutonomyJobRow,
+} from './job-runner'
 
 function createFakeSupabase(initialJobs: AutonomyJobRow[]) {
   const jobs = initialJobs.map((job) => ({ ...job }))
@@ -31,8 +37,12 @@ function createFakeSupabase(initialJobs: AutonomyJobRow[]) {
         limit: () => builder,
         maybeSingle: async () => {
           const row = jobs.find((job) => {
-            const matchesEq = state.filters.every((filter) => job[filter.field as keyof AutonomyJobRow] === filter.value)
-            const matchesLte = !state.lteFilter || String(job[state.lteFilter.field as keyof AutonomyJobRow]) <= state.lteFilter.value
+            const matchesEq = state.filters.every(
+              (filter) => job[filter.field as keyof AutonomyJobRow] === filter.value
+            )
+            const matchesLte =
+              !state.lteFilter ||
+              String(job[state.lteFilter.field as keyof AutonomyJobRow]) <= state.lteFilter.value
             return matchesEq && matchesLte
           })
           if (!row) return { data: null, error: null }
@@ -83,7 +93,12 @@ describe('claimNextJob', () => {
 describe('job state transitions', () => {
   it('marque un job comme completed avec output', async () => {
     const supabase = createFakeSupabase([{ ...baseJob, status: 'running' }])
-    const completed = await completeJob(supabase, 'job-1', { ok: true }, new Date('2026-05-18T10:00:00.000Z'))
+    const completed = await completeJob(
+      supabase,
+      'job-1',
+      { ok: true },
+      new Date('2026-05-18T10:00:00.000Z')
+    )
 
     expect(completed?.status).toBe('completed')
     expect(completed?.payload).toEqual({ agentId: 'scout', output: { ok: true } })
@@ -92,7 +107,12 @@ describe('job state transitions', () => {
 
   it('marque un job comme failed avec last_error', async () => {
     const supabase = createFakeSupabase([{ ...baseJob, status: 'running' }])
-    const failed = await failJob(supabase, 'job-1', 'LLM unavailable', new Date('2026-05-18T10:00:00.000Z'))
+    const failed = await failJob(
+      supabase,
+      'job-1',
+      'LLM unavailable',
+      new Date('2026-05-18T10:00:00.000Z')
+    )
 
     expect(failed?.status).toBe('failed')
     expect(failed?.last_error).toBe('LLM unavailable')

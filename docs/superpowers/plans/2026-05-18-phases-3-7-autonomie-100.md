@@ -39,6 +39,7 @@ Si manquant: ajouter dans `.env.local` avant de continuer.
 ### Task 3.1: Schéma campaign_drafts
 
 **Files:**
+
 - Create: `supabase/migrations/20260518_marketing_drafts.sql`
 - Modify: `lib/autonomy/types.ts`
 - Test: `lib/migration-order.test.ts:1-100` (étendre)
@@ -76,7 +77,13 @@ CREATE INDEX IF NOT EXISTS campaign_drafts_venture_status_idx
 Modifier `lib/autonomy/types.ts` pour ajouter :
 
 ```ts
-export type CampaignDraftStatus = 'draft' | 'blocked' | 'approved' | 'published' | 'failed' | 'rejected'
+export type CampaignDraftStatus =
+  | 'draft'
+  | 'blocked'
+  | 'approved'
+  | 'published'
+  | 'failed'
+  | 'rejected'
 
 export interface CampaignDraft {
   id: string
@@ -120,6 +127,7 @@ git commit -m "feat(marketing): table campaign_drafts + types CampaignDraft"
 ### Task 3.2: Builder de drafts depuis output Marketing
 
 **Files:**
+
 - Create: `lib/marketing/campaign-drafts.ts`
 - Create: `lib/marketing/campaign-drafts.test.ts`
 
@@ -195,7 +203,7 @@ export function buildCampaignDrafts(input: {
   ventureId: string | null
   output: MarketingOutput
 }): DraftToCreate[] {
-  return input.output.channels.map(c => ({
+  return input.output.channels.map((c) => ({
     user_id: input.userId,
     venture_id: input.ventureId,
     channel: c.channel,
@@ -226,6 +234,7 @@ git commit -m "feat(marketing): buildCampaignDrafts() depuis output Marketing"
 ### Task 3.3: Insertion des drafts après step Marketing
 
 **Files:**
+
 - Modify: `lib/autonomy/run-agent-step.ts`
 - Modify: `lib/autonomy/run-agent-step.test.ts`
 
@@ -242,9 +251,7 @@ it('insère des campaign_drafts après step Marketing', async () => {
   const { fakeSupabase, result } = await runAgentStepWithFakes({
     agentId: 'marketing',
     output: {
-      channels: [
-        { channel: 'email', content: 'Hello', budget_eur: 0 },
-      ],
+      channels: [{ channel: 'email', content: 'Hello', budget_eur: 0 }],
     },
     userId: 'user-1',
     ventureId: 'venture-1',
@@ -304,6 +311,7 @@ git commit -m "feat(marketing): insère campaign_drafts après step Marketing"
 ### Task 3.4: Adapter interface + mock + n8n
 
 **Files:**
+
 - Create: `lib/marketing/adapters/types.ts`
 - Create: `lib/marketing/adapters/mock.ts`
 - Create: `lib/marketing/adapters/mock.test.ts`
@@ -379,7 +387,9 @@ export function createMockPublisher(): MarketingPublisher {
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createN8nPublisher } from './n8n'
 
-afterEach(() => { vi.restoreAllMocks() })
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('createN8nPublisher', () => {
   it('rejette si N8N_PUBLISH_WEBHOOK_URL absente', () => {
@@ -387,9 +397,11 @@ describe('createN8nPublisher', () => {
   })
 
   it('rejette URL non autorisée (SSRF)', () => {
-    expect(() => createN8nPublisher({
-      N8N_PUBLISH_WEBHOOK_URL: 'http://127.0.0.1/webhook',
-    })).toThrow(/non autorisée/i)
+    expect(() =>
+      createN8nPublisher({
+        N8N_PUBLISH_WEBHOOK_URL: 'http://127.0.0.1/webhook',
+      })
+    ).toThrow(/non autorisée/i)
   })
 
   it('POST au webhook avec payload signé', async () => {
@@ -413,7 +425,7 @@ describe('createN8nPublisher', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ 'X-Kenomi-Token': 'secret' }),
-      }),
+      })
     )
   })
 
@@ -426,11 +438,13 @@ describe('createN8nPublisher', () => {
     const pub = createN8nPublisher({
       N8N_PUBLISH_WEBHOOK_URL: 'https://n8n.kenomi.eu/webhook/publish',
     })
-    await expect(pub.publish({
-      channel: 'email',
-      content: 'x',
-      ventureId: 'v1',
-    })).rejects.toThrow(/500/)
+    await expect(
+      pub.publish({
+        channel: 'email',
+        content: 'x',
+        ventureId: 'v1',
+      })
+    ).rejects.toThrow(/500/)
   })
 })
 ```
@@ -469,7 +483,7 @@ export function createN8nPublisher(env: NodeJS.ProcessEnv): MarketingPublisher {
         const body = await res.text().catch(() => '')
         throw new Error(`n8n publish ${res.status}: ${body.slice(0, 200)}`)
       }
-      const data = await res.json() as { executionId?: string; url?: string }
+      const data = (await res.json()) as { executionId?: string; url?: string }
       return {
         externalId: data.executionId ?? `n8n-${Date.now()}`,
         url: data.url,
@@ -492,7 +506,7 @@ export type { MarketingPublisher, PublishInput, PublishResult } from './types'
 
 export function getMarketingPublisher(
   channel: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = process.env
 ): MarketingPublisher {
   if (env.MARKETING_ADAPTER === 'mock') return createMockPublisher()
   if (channel === 'email' || channel === 'twitter' || channel === 'linkedin') {
@@ -522,6 +536,7 @@ git commit -m "feat(marketing): adapters publish — types + mock + n8n avec SSR
 ### Task 3.5: Action publish_campaign + approval gate
 
 **Files:**
+
 - Create: `lib/marketing/publish-action.ts`
 - Create: `lib/marketing/publish-action.test.ts`
 - Modify: `lib/autonomy/approval-executor.ts`
@@ -561,10 +576,15 @@ describe('executePublishCampaign', () => {
   it('insère campaign_spend si budget_eur > 0', async () => {
     const tables: Record<string, unknown[]> = {
       venture_events: [],
-      campaign_drafts: [{
-        id: 'd1', channel: 'twitter', content: 'go', venture_id: 'v1',
-        metadata: { budget_eur: 50 },
-      }],
+      campaign_drafts: [
+        {
+          id: 'd1',
+          channel: 'twitter',
+          content: 'go',
+          venture_id: 'v1',
+          metadata: { budget_eur: 50 },
+        },
+      ],
     }
     const fakeSupabase = makeFakeSupabase(tables)
     const fakePublisher = { publish: vi.fn().mockResolvedValue({ externalId: 'ext-2' }) }
@@ -623,7 +643,9 @@ export interface ExecutePublishInput {
   userId: string
 }
 
-export async function executePublishCampaign(input: ExecutePublishInput): Promise<{ success: boolean; error?: string }> {
+export async function executePublishCampaign(
+  input: ExecutePublishInput
+): Promise<{ success: boolean; error?: string }> {
   const { data: draft } = await input.supabase
     .from('campaign_drafts')
     .select('id, venture_id, channel, content, metadata')
@@ -660,7 +682,10 @@ export async function executePublishCampaign(input: ExecutePublishInput): Promis
 
     await input.supabase
       .from('campaign_drafts')
-      .update({ status: 'published', metadata: { ...draft.metadata, external_id: result.externalId } })
+      .update({
+        status: 'published',
+        metadata: { ...draft.metadata, external_id: result.externalId },
+      })
       .eq('id', input.draftId)
 
     return { success: true }
@@ -699,6 +724,7 @@ git commit -m "feat(marketing): executePublishCampaign + branchement approval-ex
 ### Task 3.6: Création action publish_campaign après step Marketing
 
 **Files:**
+
 - Modify: `lib/autonomy/run-agent-step.ts`
 - Modify: `lib/autonomy/run-agent-step.test.ts`
 
@@ -754,6 +780,7 @@ git commit -m "feat(marketing): action publish_campaign + approval gate après s
 ### Task 3.7: UI Marketing — drafts + approvals
 
 **Files:**
+
 - Modify: `app/studio/marketing/page.tsx`
 - Create: `app/api/studio/marketing/drafts/route.ts`
 
@@ -785,6 +812,7 @@ export async function GET() {
 - [ ] **Step 2: UI Marketing page**
 
 Étendre `app/studio/marketing/page.tsx` pour afficher trois zones :
+
 - Drafts en attente (status: draft, blocked)
 - Approbations pending (depuis `/api/studio/autonomy/jobs?type=publish_campaign`)
 - Drafts publiés/échoués (historique)
@@ -813,6 +841,7 @@ git commit -m "feat(marketing): UI drafts + approbations publish_campaign"
 ### Task 4.1: Vérifier endpoint analytics
 
 **Files:**
+
 - Read: `app/api/studio/analytics/ventures/route.ts`
 - Read: `lib/metrics/venture-metrics.ts`
 
@@ -836,6 +865,7 @@ S'assurer que `aggregateVentureMetrics()` calcule bien visits/signups/revenue/sp
 ### Task 4.2: Remplacer KPIs décoratifs
 
 **Files:**
+
 - Modify: `app/studio/analytics/page.tsx`
 
 - [ ] **Step 1: Lire la page**
@@ -854,8 +884,8 @@ Repérer tout `1234`, `+12%`, mocks, etc. qui ne viennent pas d'un fetch.
 const [metrics, setMetrics] = useState<VentureMetrics | null>(null)
 useEffect(() => {
   fetch('/api/studio/analytics/ventures')
-    .then(r => r.json())
-    .then(d => setMetrics(d.metrics))
+    .then((r) => r.json())
+    .then((d) => setMetrics(d.metrics))
 }, [])
 ```
 
@@ -883,6 +913,7 @@ git commit -m "feat(analytics): remplace KPIs décoratifs par /api/studio/analyt
 ### Task 4.3: Snapshot complet dans decisions
 
 **Files:**
+
 - Modify: `lib/autonomy/run-agent-step.ts`
 - Modify: `lib/autonomy/run-agent-step.test.ts`
 
@@ -937,6 +968,7 @@ git commit -m "feat(analytics): snapshot complet visits/revenue/spend/profit/ROI
 ### Task 5.1: Config globale autonomy
 
 **Files:**
+
 - Create: `lib/autonomy/config.ts`
 - Create: `lib/autonomy/config.test.ts`
 - Modify: `app/api/studio/agents/orchestrate/route.ts`
@@ -966,7 +998,9 @@ describe('getAutonomyConfig', () => {
   })
 
   it('respecte AUTONOMY_GLOBAL_BUDGET_CAP_EUR=250', () => {
-    expect(getAutonomyConfig({ AUTONOMY_GLOBAL_BUDGET_CAP_EUR: '250' }).globalBudgetCapEur).toBe(250)
+    expect(getAutonomyConfig({ AUTONOMY_GLOBAL_BUDGET_CAP_EUR: '250' }).globalBudgetCapEur).toBe(
+      250
+    )
   })
 })
 ```
@@ -1014,6 +1048,7 @@ git commit -m "feat(autonomy): config globale enabled/dryRun/budget — kill swi
 ### Task 5.2: Dry-run dans approval-executor
 
 **Files:**
+
 - Modify: `lib/autonomy/approval-executor.ts`
 - Modify: `lib/autonomy/approval-executor.test.ts`
 
@@ -1039,10 +1074,13 @@ Dans `approval-executor.ts`, avant d'invoquer l'adapter externe :
 ```ts
 const config = getAutonomyConfig()
 if (config.dryRun) {
-  await supabase.from('autonomy_actions').update({
-    status: 'completed',
-    output: { dry_run: true, action_type: action.action_type },
-  }).eq('id', action.id)
+  await supabase
+    .from('autonomy_actions')
+    .update({
+      status: 'completed',
+      output: { dry_run: true, action_type: action.action_type },
+    })
+    .eq('id', action.id)
   return { success: true, output: { dry_run: true } }
 }
 ```
@@ -1060,6 +1098,7 @@ git commit -m "feat(autonomy): dry-run global — actions approuvées simulées 
 ### Task 5.3: Budget policy
 
 **Files:**
+
 - Modify: `lib/autonomy/policy.ts`
 - Modify: `lib/autonomy/policy.test.ts`
 - Modify: `lib/autonomy/approval-executor.ts`
@@ -1069,20 +1108,24 @@ git commit -m "feat(autonomy): dry-run global — actions approuvées simulées 
 ```ts
 describe('checkBudgetPolicy', () => {
   it('pass si tout sous les caps', () => {
-    expect(checkBudgetPolicy({
-      action: { estimated_cost_eur: 10, budget_cap_eur: 50 },
-      ventureSpentEur: 20,
-      ventureSpendCapEur: 100,
-      globalSpentEur: 50,
-      globalCapEur: 500,
-    })).toEqual({ ok: true })
+    expect(
+      checkBudgetPolicy({
+        action: { estimated_cost_eur: 10, budget_cap_eur: 50 },
+        ventureSpentEur: 20,
+        ventureSpendCapEur: 100,
+        globalSpentEur: 50,
+        globalCapEur: 500,
+      })
+    ).toEqual({ ok: true })
   })
 
   it('fail action cap', () => {
     const result = checkBudgetPolicy({
       action: { estimated_cost_eur: 100, budget_cap_eur: 50 },
-      ventureSpentEur: 0, ventureSpendCapEur: 1000,
-      globalSpentEur: 0, globalCapEur: 1000,
+      ventureSpentEur: 0,
+      ventureSpendCapEur: 1000,
+      globalSpentEur: 0,
+      globalCapEur: 1000,
     })
     expect(result).toMatchObject({ ok: false, reason: 'action_cap_exceeded' })
   })
@@ -1090,8 +1133,10 @@ describe('checkBudgetPolicy', () => {
   it('fail global cap', () => {
     const result = checkBudgetPolicy({
       action: { estimated_cost_eur: 10, budget_cap_eur: 50 },
-      ventureSpentEur: 0, ventureSpendCapEur: 1000,
-      globalSpentEur: 950, globalCapEur: 1000,
+      ventureSpentEur: 0,
+      ventureSpendCapEur: 1000,
+      globalSpentEur: 950,
+      globalCapEur: 1000,
     })
     expect(result).toMatchObject({ ok: false, reason: 'global_cap_exceeded' })
   })
@@ -1099,8 +1144,10 @@ describe('checkBudgetPolicy', () => {
   it('fail venture cap', () => {
     const result = checkBudgetPolicy({
       action: { estimated_cost_eur: 60, budget_cap_eur: 100 },
-      ventureSpentEur: 950, ventureSpendCapEur: 1000,
-      globalSpentEur: 0, globalCapEur: 10000,
+      ventureSpentEur: 950,
+      ventureSpendCapEur: 1000,
+      globalSpentEur: 0,
+      globalCapEur: 10000,
     })
     expect(result).toMatchObject({ ok: false, reason: 'venture_cap_exceeded' })
   })
@@ -1121,20 +1168,27 @@ export interface BudgetPolicyInput {
 
 export type BudgetReason = 'action_cap_exceeded' | 'venture_cap_exceeded' | 'global_cap_exceeded'
 
-export function checkBudgetPolicy(input: BudgetPolicyInput):
-  | { ok: true }
-  | { ok: false; reason: BudgetReason; detail: string }
-{
+export function checkBudgetPolicy(
+  input: BudgetPolicyInput
+): { ok: true } | { ok: false; reason: BudgetReason; detail: string } {
   const cost = input.action.estimated_cost_eur ?? 0
   const actionCap = input.action.budget_cap_eur ?? Infinity
   if (cost > actionCap) {
     return { ok: false, reason: 'action_cap_exceeded', detail: `${cost} > ${actionCap}` }
   }
   if (input.ventureSpentEur + cost > input.ventureSpendCapEur) {
-    return { ok: false, reason: 'venture_cap_exceeded', detail: `${input.ventureSpentEur + cost} > ${input.ventureSpendCapEur}` }
+    return {
+      ok: false,
+      reason: 'venture_cap_exceeded',
+      detail: `${input.ventureSpentEur + cost} > ${input.ventureSpendCapEur}`,
+    }
   }
   if (input.globalSpentEur + cost > input.globalCapEur) {
-    return { ok: false, reason: 'global_cap_exceeded', detail: `${input.globalSpentEur + cost} > ${input.globalCapEur}` }
+    return {
+      ok: false,
+      reason: 'global_cap_exceeded',
+      detail: `${input.globalSpentEur + cost} > ${input.globalCapEur}`,
+    }
   }
   return { ok: true }
 }
@@ -1157,6 +1211,7 @@ git commit -m "feat(autonomy): budget policy — action/venture/global caps + bl
 ### Task 5.4: UI Approval Gates — afficher breach
 
 **Files:**
+
 - Modify: `app/studio/agents/page.tsx`
 - Modify: `lib/autonomy/approval-view-model.ts`
 
@@ -1184,6 +1239,7 @@ git commit -m "feat(autonomy): UI affiche budget_breach_reason dans Approval Gat
 ### Task 6.1: Fake Supabase helper
 
 **Files:**
+
 - Create: `lib/test-utils/fake-supabase.ts`
 
 - [ ] **Step 1: Implémenter helper réutilisable**
@@ -1197,7 +1253,12 @@ export type FakeTables = Record<string, Record<string, unknown>[]>
 export function makeFakeSupabase(initial: FakeTables = {}) {
   const tables: FakeTables = JSON.parse(JSON.stringify(initial))
   // ... builder fluent qui mute tables[name]
-  return { tables, from(name: string) { /* ... */ } }
+  return {
+    tables,
+    from(name: string) {
+      /* ... */
+    },
+  }
 }
 ```
 
@@ -1217,6 +1278,7 @@ git commit -m "test: helper makeFakeSupabase réutilisable pour tests E2E"
 ### Task 6.2: Test full-loop autonomy
 
 **Files:**
+
 - Create: `lib/autonomy/full-loop.test.ts`
 
 - [ ] **Step 1: Écrire le test**
@@ -1313,6 +1375,7 @@ git commit -m "test(autonomy): E2E full-loop Scout→Decision en dry-run avec fa
 ### Task 6.3: Script smoke HTTP
 
 **Files:**
+
 - Create: `scripts/smoke-app.mjs`
 - Modify: `package.json`
 
@@ -1341,7 +1404,9 @@ for (const c of checks) {
     redirect: 'manual',
   })
   const ok = c.expect.includes(res.status)
-  console.log(`${ok ? 'OK' : 'FAIL'} ${c.method} ${c.path} → ${res.status} (expected ${c.expect.join('|')})`)
+  console.log(
+    `${ok ? 'OK' : 'FAIL'} ${c.method} ${c.path} → ${res.status} (expected ${c.expect.join('|')})`
+  )
   if (!ok) failed++
 }
 
@@ -1392,6 +1457,7 @@ git commit -m "test: script smoke HTTP — login, health, autonomy 401, events/w
 ### Task 7.1: Dashboard Jobs/Actions/Approvals dans Studio Agents
 
 **Files:**
+
 - Modify: `app/studio/agents/page.tsx`
 - Create: `lib/autonomy/action-view-model.ts`
 - Create: `lib/autonomy/action-view-model.test.ts`
@@ -1419,8 +1485,11 @@ describe('mapAction', () => {
 
   it('expose lastError si failed', () => {
     const vm = mapAction({
-      id: 'a2', action_type: 'deploy', status: 'failed',
-      created_at: '2026-05-18T10:00:00Z', updated_at: '2026-05-18T10:00:02Z',
+      id: 'a2',
+      action_type: 'deploy',
+      status: 'failed',
+      created_at: '2026-05-18T10:00:00Z',
+      updated_at: '2026-05-18T10:00:02Z',
       output: { error: 'coolify 500' },
     })
     expect(vm.lastError).toBe('coolify 500')
@@ -1445,16 +1514,21 @@ export interface ActionVM {
 }
 
 export function mapAction(row: {
-  id: string; action_type: string; status: string;
-  created_at: string; updated_at: string;
-  output: Record<string, unknown> | null;
+  id: string
+  action_type: string
+  status: string
+  created_at: string
+  updated_at: string
+  output: Record<string, unknown> | null
 }): ActionVM {
   const out = row.output ?? {}
   return {
     id: row.id,
     actionType: row.action_type,
     status: row.status as ActionVM['status'],
-    durationMs: row.updated_at ? new Date(row.updated_at).getTime() - new Date(row.created_at).getTime() : null,
+    durationMs: row.updated_at
+      ? new Date(row.updated_at).getTime() - new Date(row.created_at).getTime()
+      : null,
     provider: (out.provider as string) ?? null,
     model: (out.model as string) ?? null,
     retries: Number(out.retries ?? 0),
@@ -1467,6 +1541,7 @@ export function mapAction(row: {
 - [ ] **Step 3: 3 tabs dans la page**
 
 Modifier `app/studio/agents/page.tsx` :
+
 - Tab "Jobs" : `autonomy_jobs` (queued/running/failed/completed)
 - Tab "Actions" : `autonomy_actions` via `mapAction` (montre duration, provider, retries, error)
 - Tab "Approvals" : pending uniquement, avec Approve/Reject
@@ -1486,6 +1561,7 @@ git commit -m "feat(observability): dashboard Jobs/Actions/Approvals dans /studi
 ### Task 7.2: Runbooks d'incident
 
 **Files:**
+
 - Create: `docs/runbooks/autonomy-incident.md`
 - Create: `docs/runbooks/stripe-webhook.md`
 - Create: `docs/runbooks/coolify-deploy.md`
@@ -1496,6 +1572,7 @@ git commit -m "feat(observability): dashboard Jobs/Actions/Approvals dans /studi
 - [ ] **Step 1: Runbook autonomy-incident**
 
 Contenu :
+
 - Kill switch immédiat : `AUTONOMY_ENABLED=false` dans Coolify, redéployer
 - Dry-run : `AUTONOMY_DRY_RUN=true` pour neutraliser effets externes
 - Rejet approbations stuck : `PATCH /api/studio/autonomy/jobs` avec `decision: 'rejected'`
@@ -1550,6 +1627,7 @@ npm run smoke   # nécessite npm run dev dans un autre terminal
 ```
 
 Expected:
+
 - typecheck: 0 erreurs
 - tests: ~210+ tests passants (191 actuels + ~20 nouveaux)
 - lint: 0 errors, warnings ≤ 47 existants

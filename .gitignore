@@ -6,3 +6,7 @@ node_modules/
 .DS_Store
 
 /lib/generated/prisma
+
+# Outils locaux d'agents (Claude Code, superpowers)
+.claude/
+.superpowers/

@@ -8,7 +8,12 @@ interface QueryBuilder {
   update(row: Record<string, unknown>): QueryBuilder
   maybeSingle(): Promise<{ data: unknown; error: { message: string } | null }>
   then<TResult1 = { data: unknown; error: { message: string } | null }, TResult2 = never>(
-    onfulfilled?: ((value: { data: unknown; error: { message: string } | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onfulfilled?:
+      | ((value: {
+          data: unknown
+          error: { message: string } | null
+        }) => TResult1 | PromiseLike<TResult1>)
+      | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2>
 }
@@ -61,8 +66,10 @@ async function recalculateVentureRevenue(input: {
 
   if (error) throw new Error(error.message)
 
-  const revenue = ((data as Array<{ amount_eur: number | string }> | null) ?? [])
-    .reduce((sum, payment) => sum + Number(payment.amount_eur || 0), 0)
+  const revenue = ((data as Array<{ amount_eur: number | string }> | null) ?? []).reduce(
+    (sum, payment) => sum + Number(payment.amount_eur || 0),
+    0
+  )
 
   const update = await input.supabase
     .from('ventures')
@@ -98,10 +105,7 @@ export async function handleStripeWebhookEvent(input: {
   }
 
   const venture = await maybeSingle<VentureRow>(
-    input.supabase
-      .from('ventures')
-      .select('id, user_id')
-      .eq('id', payment.venture_id)
+    input.supabase.from('ventures').select('id, user_id').eq('id', payment.venture_id)
   )
 
   if (!venture) {

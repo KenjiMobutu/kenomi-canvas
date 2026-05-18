@@ -35,9 +35,7 @@ describe('createCoolifyClient', () => {
   })
 
   it('triggers a deployment with an authorized private host', async () => {
-    const fetchFn = vi.fn(async () =>
-      Response.json({ deploymentId: 'dep_123' })
-    )
+    const fetchFn = vi.fn(async () => Response.json({ deploymentId: 'dep_123' }))
 
     const client = createCoolifyClient({
       env: {
@@ -64,13 +62,11 @@ describe('createCoolifyClient', () => {
   })
 
   it('throws on failed Coolify responses', async () => {
-    const fetchFn = vi.fn(async () =>
-      Response.json({ message: 'nope' }, { status: 500 })
-    )
+    const fetchFn = vi.fn(async () => Response.json({ message: 'nope' }, { status: 500 }))
     const client = createCoolifyClient({ env: baseEnv, fetchFn })
 
-    await expect(
-      client.getDeployment({ deploymentId: 'dep_123' })
-    ).rejects.toThrow('Coolify request failed: 500')
+    await expect(client.getDeployment({ deploymentId: 'dep_123' })).rejects.toThrow(
+      'Coolify request failed: 500'
+    )
   })
 })

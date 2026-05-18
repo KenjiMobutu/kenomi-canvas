@@ -12,8 +12,8 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
+| Fichier                                           | Action                                                         |
+| ------------------------------------------------- | -------------------------------------------------------------- |
 | `supabase/migrations/20260515_audit_db_fixes.sql` | **Créer** — RLS + indexes + fix agent_id + ventures WITH CHECK |
 
 ---
@@ -21,6 +21,7 @@
 ### Task 1 : Créer la migration de corrections base de données
 
 **Files:**
+
 - Create: `supabase/migrations/20260515_audit_db_fixes.sql`
 
 - [ ] **Step 1 : Créer le fichier de migration**
@@ -29,9 +30,11 @@
 cd /Users/kenjimobutu/Desktop/DEV/Projects/kenomi-canvas
 supabase migration new audit_db_fixes
 ```
+
 Expected: `supabase/migrations/YYYYMMDDHHMMSS_audit_db_fixes.sql` créé
 
 Renommer si nécessaire pour cohérence de nommage :
+
 ```bash
 ls supabase/migrations/ | tail -3
 ```
@@ -184,11 +187,13 @@ Option A — via MCP (si connecté) :
 Utiliser l'outil `mcp__plugin_supabase_supabase__execute_sql` avec le contenu SQL ci-dessus.
 
 Option B — via CLI :
+
 ```bash
 supabase db push --local 2>&1 | tail -10
 ```
 
 Option C — via psql direct :
+
 ```bash
 psql "$DATABASE_URL" -f supabase/migrations/20260515_audit_db_fixes.sql 2>&1
 ```
@@ -245,6 +250,7 @@ git commit -m "fix(database): RLS payments/budget_requests/waitlist + index vent
 **Décision :** Créer une route serveur `/api/studio/settings/secrets` (lecture uniquement via service role) et révoquer le SELECT client sur les colonnes sensibles via une view restreinte.
 
 **Files:**
+
 - Create: `supabase/migrations/20260515_user_settings_view.sql`
 - Create: `app/api/studio/settings/secrets/route.ts`
 - Modify: `app/studio/settings/page.tsx` (lire les secrets via la route serveur)
@@ -302,12 +308,18 @@ export async function GET(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) },
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cs) {
+          cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+        },
       },
     }
   )
-  const { data: { user } } = await supabaseAuth.auth.getUser()
+  const {
+    data: { user },
+  } = await supabaseAuth.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Lire les secrets avec la service role key (côté serveur uniquement)
@@ -325,10 +337,10 @@ export async function GET(req: NextRequest) {
 
   // Masquer les valeurs (renvoyer seulement si elles existent)
   return NextResponse.json({
-    has_claude_key:          !!data?.claude_api_key,
-    has_openai_key:          !!data?.openai_api_key,
-    has_stripe_secret:       !!data?.stripe_secret_key,
-    has_stripe_webhook:      !!data?.stripe_webhook_secret,
+    has_claude_key: !!data?.claude_api_key,
+    has_openai_key: !!data?.openai_api_key,
+    has_stripe_secret: !!data?.stripe_secret_key,
+    has_stripe_webhook: !!data?.stripe_webhook_secret,
   })
 }
 ```

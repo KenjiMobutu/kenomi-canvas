@@ -10,7 +10,7 @@ export async function proxy(request: NextRequest) {
     if (pathname === '/dashboard/login') return NextResponse.next()
     const token = request.cookies.get('kenomi-dash-auth')?.value ?? ''
     const { verifyDashToken } = await import('@/lib/dashboard-token')
-    if (!await verifyDashToken(token))
+    if (!(await verifyDashToken(token)))
       return NextResponse.redirect(new URL('/dashboard/login', request.url))
     return NextResponse.next()
   }
@@ -35,7 +35,10 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError) {
     // Supabase injoignable — traiter comme non connecté (fail-open)
     console.error('[proxy] getUser error:', authError.message)
@@ -55,22 +58,18 @@ export async function proxy(request: NextRequest) {
 
   // ── / → cockpit si connecté, sinon login ──────────────────────────────────
   if (pathname === '/') {
-    return NextResponse.redirect(
-      new URL(loggedIn ? '/studio' : '/login', request.url)
-    )
+    return NextResponse.redirect(new URL(loggedIn ? '/studio' : '/login', request.url))
   }
 
   // ── /login → déjà connecté → cockpit ──────────────────────────────────────
   if (pathname === '/login') {
-    if (loggedIn)
-      return NextResponse.redirect(new URL('/studio', request.url))
+    if (loggedIn) return NextResponse.redirect(new URL('/studio', request.url))
     return response
   }
 
   // ── /studio/* → non connecté → login ──────────────────────────────────────
   if (pathname.startsWith('/studio')) {
-    if (!loggedIn)
-      return NextResponse.redirect(new URL('/login', request.url))
+    if (!loggedIn) return NextResponse.redirect(new URL('/login', request.url))
     return response
   }
 
@@ -78,11 +77,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/',
-    '/login',
-    '/signup',
-    '/dashboard/:path*',
-    '/studio/:path*',
-  ],
+  matcher: ['/', '/login', '/signup', '/dashboard/:path*', '/studio/:path*'],
 }

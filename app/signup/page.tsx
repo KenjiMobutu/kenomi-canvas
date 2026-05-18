@@ -17,7 +17,8 @@ export default function Signup() {
     setLoading(true)
     const supabase = createSupabaseBrowser()
     const { error } = await supabase.auth.signUp({
-      email, password,
+      email,
+      password,
       options: { data: { full_name: name } },
     })
     setLoading(false)
@@ -40,27 +41,41 @@ export default function Signup() {
           </p>
         </div>
         <input
-          type="text" value={name} onChange={(e) => setName(e.target.value)}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           placeholder="Votre nom"
           className="w-full px-4 py-3 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
         />
         <input
-          type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           placeholder="email@kenomi.ai"
           className="w-full px-4 py-3 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
         />
         <input
-          type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)}
+          type="password"
+          required
+          minLength={6}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           placeholder="Min. 6 caractères"
           className="w-full px-4 py-3 bg-input rounded-md text-sm ring-1 ring-border outline-none focus:ring-accent"
         />
-        <button type="submit" disabled={loading}
-          className="w-full py-3 bg-foreground text-background font-bold rounded-md disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-3 bg-foreground text-background font-bold rounded-md disabled:opacity-50"
+        >
           {loading ? 'Création…' : 'Créer mon compte'}
         </button>
         <p className="text-sm text-muted-foreground text-center">
           Déjà un compte ?{' '}
-          <Link href="/login" className="text-accent hover:underline">Se connecter</Link>
+          <Link href="/login" className="text-accent hover:underline">
+            Se connecter
+          </Link>
         </p>
       </form>
     </main>

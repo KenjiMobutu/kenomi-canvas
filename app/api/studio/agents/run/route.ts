@@ -3,7 +3,11 @@ import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
-import { runAgentStep, RunAgentStepError, type RunAgentStepSupabase } from '@/lib/autonomy/run-agent-step'
+import {
+  runAgentStep,
+  RunAgentStepError,
+  type RunAgentStepSupabase,
+} from '@/lib/autonomy/run-agent-step'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()

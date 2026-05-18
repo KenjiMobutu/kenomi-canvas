@@ -46,9 +46,6 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    ventures: buildVentureMetricSnapshots(
-      ventureRows,
-      (events ?? []) as VentureMetricSourceRow[]
-    ),
+    ventures: buildVentureMetricSnapshots(ventureRows, (events ?? []) as VentureMetricSourceRow[]),
   })
 }

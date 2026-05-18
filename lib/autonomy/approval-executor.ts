@@ -6,10 +6,7 @@ import {
   type ExecutePublishResult,
   type PublishActionSupabase,
 } from '@/lib/marketing/publish-action'
-import {
-  getMarketingPublisher,
-  type MarketingPublisher,
-} from '@/lib/marketing/adapters'
+import { getMarketingPublisher, type MarketingPublisher } from '@/lib/marketing/adapters'
 
 type QueryResponse = { data: unknown; error: { message: string } | null }
 
@@ -107,7 +104,10 @@ export interface ResolveHumanApprovalResult {
 }
 
 export class ApprovalExecutionError extends Error {
-  constructor(message: string, readonly status = 500) {
+  constructor(
+    message: string,
+    readonly status = 500
+  ) {
     super(message)
   }
 }
@@ -131,7 +131,8 @@ async function executeStopVenture(input: {
   nowIso: string
 }) {
   await update(
-    input.supabase.from('ventures')
+    input.supabase
+      .from('ventures')
       .update({
         statut: 'stopped',
         stage: 'Stopped',
@@ -143,20 +144,23 @@ async function executeStopVenture(input: {
   )
 
   await update(
-    input.supabase.from('landing_pages')
+    input.supabase
+      .from('landing_pages')
       .update({ statut: 'stopped' })
       .eq('venture_id', input.ventureId)
   )
 
   await update(
-    input.supabase.from('budget_requests')
+    input.supabase
+      .from('budget_requests')
       .update({ status: 'rejected' })
       .eq('venture_id', input.ventureId)
       .eq('status', 'pending')
   )
 
   await update(
-    input.supabase.from('campaigns')
+    input.supabase
+      .from('campaigns')
       .update({ status: 'rejected' })
       .eq('venture_id', input.ventureId)
   )
@@ -189,11 +193,14 @@ function readDeployInput(action: AutonomyActionRow): {
   return { projectId, serviceId }
 }
 
-export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Promise<ResolveHumanApprovalResult> {
+export async function resolveHumanApproval(
+  input: ResolveHumanApprovalInput
+): Promise<ResolveHumanApprovalResult> {
   const nowIso = (input.now ?? (() => new Date()))().toISOString()
   const config = input.config ?? getAutonomyConfig()
   const approval = await single<HumanApprovalRow>(
-    input.supabase.from('human_approvals')
+    input.supabase
+      .from('human_approvals')
       .select('id, user_id, action_id, status')
       .eq('id', input.approvalId)
       .eq('user_id', input.userId),
@@ -205,8 +212,11 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
   }
 
   const action = await single<AutonomyActionRow>(
-    input.supabase.from('autonomy_actions')
-      .select('id, user_id, venture_id, action_type, status, input, estimated_cost_eur, budget_cap_eur')
+    input.supabase
+      .from('autonomy_actions')
+      .select(
+        'id, user_id, venture_id, action_type, status, input, estimated_cost_eur, budget_cap_eur'
+      )
       .eq('id', approval.action_id)
       .eq('user_id', input.userId),
     'Action autonome introuvable'
@@ -214,7 +224,8 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
 
   if (input.decision === 'rejected') {
     await update(
-      input.supabase.from('human_approvals')
+      input.supabase
+        .from('human_approvals')
         .update({
           status: 'rejected',
           approved_by: input.userId,
@@ -226,7 +237,8 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
     )
 
     await update(
-      input.supabase.from('autonomy_actions')
+      input.supabase
+        .from('autonomy_actions')
         .update({
           status: 'cancelled',
           output: { approved: false },
@@ -246,7 +258,8 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
   }
 
   await update(
-    input.supabase.from('human_approvals')
+    input.supabase
+      .from('human_approvals')
       .update({
         status: 'approved',
         approved_by: input.userId,
@@ -259,7 +272,8 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
 
   if (config.dryRun && isExternalAction(action.action_type)) {
     await update(
-      input.supabase.from('autonomy_actions')
+      input.supabase
+        .from('autonomy_actions')
         .update({
           status: 'completed',
           output: { dry_run: true, action_type: action.action_type, approved: true },
@@ -296,7 +310,8 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
 
     if (!budgetCheck.ok) {
       await update(
-        input.supabase.from('autonomy_actions')
+        input.supabase
+          .from('autonomy_actions')
           .update({
             status: 'blocked',
             output: {
@@ -325,7 +340,8 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
   let output: Record<string, unknown> = { approved: true }
 
   if (action.action_type === 'stop_venture') {
-    if (!action.venture_id) throw new ApprovalExecutionError('Venture manquante pour stop_venture', 422)
+    if (!action.venture_id)
+      throw new ApprovalExecutionError('Venture manquante pour stop_venture', 422)
     await executeStopVenture({
       supabase: input.supabase,
       userId: input.userId,
@@ -340,8 +356,9 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
   if (action.action_type === 'deploy') {
     const deployInput = readDeployInput(action)
     try {
-      const deployment = await (input.coolifyClient ?? createCoolifyClient())
-        .triggerDeploy(deployInput)
+      const deployment = await (input.coolifyClient ?? createCoolifyClient()).triggerDeploy(
+        deployInput
+      )
       executed = true
       actionStatus = 'completed'
       output = {
@@ -396,7 +413,8 @@ export async function resolveHumanApproval(input: ResolveHumanApprovalInput): Pr
   }
 
   await update(
-    input.supabase.from('autonomy_actions')
+    input.supabase
+      .from('autonomy_actions')
       .update({
         status: actionStatus,
         output,

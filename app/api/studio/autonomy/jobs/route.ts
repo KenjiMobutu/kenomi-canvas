@@ -21,13 +21,17 @@ export async function GET() {
   const [jobs, actions, approvals] = await Promise.all([
     supabase
       .from('autonomy_jobs')
-      .select('id, venture_id, kind, status, attempt_count, next_run_at, locked_at, last_error, payload, created_at, updated_at')
+      .select(
+        'id, venture_id, kind, status, attempt_count, next_run_at, locked_at, last_error, payload, created_at, updated_at'
+      )
       .eq('user_id', user!.id)
       .order('created_at', { ascending: false })
       .limit(50),
     supabase
       .from('autonomy_actions')
-      .select('id, job_id, venture_id, action_type, risk_level, status, input, output, created_at, updated_at')
+      .select(
+        'id, job_id, venture_id, action_type, risk_level, status, input, output, created_at, updated_at'
+      )
       .eq('user_id', user!.id)
       .order('created_at', { ascending: false })
       .limit(50),
@@ -45,13 +49,16 @@ export async function GET() {
     approvals.error && { section: 'approvals', message: approvals.error.message },
   ].filter(Boolean)
 
-  return NextResponse.json({
-    ok: errors.length === 0,
-    jobs: jobs.data ?? [],
-    actions: actions.data ?? [],
-    approvals: approvals.data ?? [],
-    errors,
-  }, { status: errors.length === 0 ? 200 : 207 })
+  return NextResponse.json(
+    {
+      ok: errors.length === 0,
+      jobs: jobs.data ?? [],
+      actions: actions.data ?? [],
+      approvals: approvals.data ?? [],
+      errors,
+    },
+    { status: errors.length === 0 ? 200 : 207 }
+  )
 }
 
 export async function PATCH(request: Request) {

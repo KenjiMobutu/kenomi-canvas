@@ -114,9 +114,6 @@ export async function POST(req: NextRequest) {
       .eq('id', action.id)
       .eq('user_id', user!.id)
 
-    return apiError(
-      error instanceof Error ? error.message : 'Déploiement Coolify échoué',
-      500
-    )
+    return apiError(error instanceof Error ? error.message : 'Déploiement Coolify échoué', 500)
   }
 }

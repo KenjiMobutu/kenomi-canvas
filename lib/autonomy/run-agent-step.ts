@@ -1,8 +1,17 @@
 import { insertAuditEvent } from '@/lib/audit-log'
 import { parseAgentOutput, type AgentOutput } from '@/lib/agent-output-schemas'
 import { llmChat, type LLMMessage, type LLMResponse } from '@/lib/llm-client'
-import { aggregateVentureMetrics, buildDecisionMetricsContext, type VentureMetricSourceRow } from '@/lib/metrics/venture-metrics'
-import { buildSystemPrompt, isAgentUnlocked, parsePipelineIdea, type PipelineRow } from '@/lib/pipeline-types'
+import {
+  aggregateVentureMetrics,
+  buildDecisionMetricsContext,
+  type VentureMetricSourceRow,
+} from '@/lib/metrics/venture-metrics'
+import {
+  buildSystemPrompt,
+  isAgentUnlocked,
+  parsePipelineIdea,
+  type PipelineRow,
+} from '@/lib/pipeline-types'
 import { materializeBuilderOutput } from '@/lib/venture-materializer'
 import { buildCampaignDrafts, type MarketingOutputShape } from '@/lib/marketing/campaign-drafts'
 
@@ -17,7 +26,12 @@ interface QueryBuilder {
   maybeSingle(): Promise<{ data: unknown; error: { message: string } | null }>
   single(): Promise<{ data: unknown; error: { message: string } | null }>
   then<TResult1 = { data: unknown; error: { message: string } | null }, TResult2 = never>(
-    onfulfilled?: ((value: { data: unknown; error: { message: string } | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onfulfilled?:
+      | ((value: {
+          data: unknown
+          error: { message: string } | null
+        }) => TResult1 | PromiseLike<TResult1>)
+      | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2>
 }
@@ -31,12 +45,15 @@ export interface RunAgentStepInput {
   userId: string
   agentId: string
   prompt?: string
-  llm?: (messages: LLMMessage[], config: {
-    model: string
-    system: string
-    temperature: number
-    max_tokens: number
-  }) => Promise<LLMResponse>
+  llm?: (
+    messages: LLMMessage[],
+    config: {
+      model: string
+      system: string
+      temperature: number
+      max_tokens: number
+    }
+  ) => Promise<LLMResponse>
   now?: () => Date
 }
 
@@ -51,7 +68,10 @@ export interface RunAgentStepResult {
 }
 
 export class RunAgentStepError extends Error {
-  constructor(message: string, readonly status = 500) {
+  constructor(
+    message: string,
+    readonly status = 500
+  ) {
     super(message)
   }
 }
@@ -102,12 +122,12 @@ function parseOutputSafely(agentId: string, content: string): AgentOutput | null
 
 function isDecisionOutput(output: AgentOutput | null): output is DecisionOutput {
   return Boolean(
-    output
-    && 'verdict' in output
-    && (output.verdict === 'continue' || output.verdict === 'pivot' || output.verdict === 'stop')
-    && 'confidence' in output
-    && 'rationale' in output
-    && 'next_step' in output
+    output &&
+    'verdict' in output &&
+    (output.verdict === 'continue' || output.verdict === 'pivot' || output.verdict === 'stop') &&
+    'confidence' in output &&
+    'rationale' in output &&
+    'next_step' in output
   )
 }
 
@@ -121,23 +141,26 @@ async function insertApprovalGatedAction(input: {
   nowIso: string
 }) {
   const action = await single<{ id?: string }>(
-    input.supabase.from('autonomy_actions').insert({
-      user_id: input.userId,
-      venture_id: input.ventureId,
-      action_type: input.actionType,
-      risk_level: 'high',
-      status: 'blocked',
-      input: {
-        pipeline_id: input.pipelineId,
-        verdict: input.decision.verdict,
-        confidence: input.decision.confidence,
-        rationale: input.decision.rationale,
-        next_step: input.decision.next_step,
-      },
-      output: {},
-      created_at: input.nowIso,
-      updated_at: input.nowIso,
-    }).select('id')
+    input.supabase
+      .from('autonomy_actions')
+      .insert({
+        user_id: input.userId,
+        venture_id: input.ventureId,
+        action_type: input.actionType,
+        risk_level: 'high',
+        status: 'blocked',
+        input: {
+          pipeline_id: input.pipelineId,
+          verdict: input.decision.verdict,
+          confidence: input.decision.confidence,
+          rationale: input.decision.rationale,
+          next_step: input.decision.next_step,
+        },
+        output: {},
+        created_at: input.nowIso,
+        updated_at: input.nowIso,
+      })
+      .select('id')
   )
 
   if (!action?.id) {
@@ -229,7 +252,10 @@ interface DecisionMetricsBundle {
   metrics: ReturnType<typeof aggregateVentureMetrics> | null
 }
 
-async function getDecisionMetricsBundle(supabase: RunAgentStepSupabase, pipeline: PipelineRow | null): Promise<DecisionMetricsBundle> {
+async function getDecisionMetricsBundle(
+  supabase: RunAgentStepSupabase,
+  pipeline: PipelineRow | null
+): Promise<DecisionMetricsBundle> {
   if (!pipeline?.venture_id) return { context: '', metrics: null }
   try {
     const { data, error } = await supabase
@@ -279,46 +305,50 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
 
   const model = cfg?.model ?? 'qwen3:8b'
   const baseSystemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
-  const decisionBundle = agentId === 'decision'
-    ? await getDecisionMetricsBundle(supabase, pipeline)
-    : { context: '', metrics: null }
+  const decisionBundle =
+    agentId === 'decision'
+      ? await getDecisionMetricsBundle(supabase, pipeline)
+      : { context: '', metrics: null }
   const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}`
-  const userPrompt = input.prompt || (agentId === 'scout'
-    ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
-    : 'Exécute ta mission.')
+  const userPrompt =
+    input.prompt ||
+    (agentId === 'scout'
+      ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
+      : 'Exécute ta mission.')
 
   const startMs = now().getTime()
 
   if (pipeline && agentId !== 'scout') {
-    await supabase.from('venture_pipeline')
+    await supabase
+      .from('venture_pipeline')
       .update({ current_agent: agentId, updated_at: now().toISOString() })
       .eq('id', pipeline.id)
   }
 
   try {
-    const llmResult = await (input.llm ?? llmChat)(
-      [{ role: 'user', content: userPrompt }],
-      {
-        model,
-        system: systemPrompt,
-        temperature: cfg?.temperature ?? 0.7,
-        max_tokens: cfg?.max_tokens ?? 512,
-      }
-    )
+    const llmResult = await (input.llm ?? llmChat)([{ role: 'user', content: userPrompt }], {
+      model,
+      system: systemPrompt,
+      temperature: cfg?.temperature ?? 0.7,
+      max_tokens: cfg?.max_tokens ?? 512,
+    })
 
     const content = llmResult.content
     const durationMs = Math.max(0, now().getTime() - startMs)
     const usedModel = llmResult.model
 
     const agentRun = await single<{ id?: string }>(
-      supabase.from('agent_runs').insert({
-        user_id: userId,
-        agent_id: agentId,
-        model: usedModel,
-        prompt: userPrompt,
-        response: content,
-        duration_ms: durationMs,
-      }).select('id')
+      supabase
+        .from('agent_runs')
+        .insert({
+          user_id: userId,
+          agent_id: agentId,
+          model: usedModel,
+          prompt: userPrompt,
+          response: content,
+          duration_ms: durationMs,
+        })
+        .select('id')
     )
 
     await insertAuditEvent(supabase, {
@@ -337,13 +367,15 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     if (agentId === 'scout') {
       const parsed = parsePipelineIdea(content)
       if (pipeline && pipeline.status === 'pending_validation') {
-        await supabase.from('venture_pipeline')
+        await supabase
+          .from('venture_pipeline')
           .update({ status: 'rejected', updated_at: now().toISOString() })
           .eq('id', pipeline.id)
       }
 
       const newPipeline = await single<{ id?: string }>(
-        supabase.from('venture_pipeline')
+        supabase
+          .from('venture_pipeline')
           .insert({
             user_id: userId,
             ...parsed,
@@ -353,7 +385,8 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           .select('id')
       )
 
-      await supabase.from('agent_configs')
+      await supabase
+        .from('agent_configs')
         .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: now().toISOString() })
         .eq('user_id', userId)
         .eq('agent_id', agentId)
@@ -385,7 +418,12 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
 
       await supabase.from('venture_pipeline').update(extraFields).eq('id', pipeline.id)
 
-      if (agentId === 'builder' && pipeline.venture_id && parsedOutput && 'headline' in parsedOutput) {
+      if (
+        agentId === 'builder' &&
+        pipeline.venture_id &&
+        parsedOutput &&
+        'headline' in parsedOutput
+      ) {
         await materializeBuilderOutput({
           ventureId: pipeline.venture_id,
           ventureName: pipeline.idea_title,
@@ -408,7 +446,12 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         })
       }
 
-      if (agentId === 'marketing' && parsedOutput && 'channels' in parsedOutput && 'messages' in parsedOutput) {
+      if (
+        agentId === 'marketing' &&
+        parsedOutput &&
+        'channels' in parsedOutput &&
+        'messages' in parsedOutput
+      ) {
         const drafts = buildCampaignDrafts({
           userId,
           ventureId: pipeline.venture_id ?? null,
@@ -416,27 +459,31 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         })
         for (const draft of drafts) {
           const inserted = await single<{ id?: string }>(
-            supabase.from('campaign_drafts')
+            supabase
+              .from('campaign_drafts')
               .insert(draft as unknown as Record<string, unknown>)
               .select('id')
           )
           if (!inserted?.id || !pipeline.venture_id) continue
 
           const action = await single<{ id?: string }>(
-            supabase.from('autonomy_actions').insert({
-              user_id: userId,
-              venture_id: pipeline.venture_id,
-              action_type: 'publish_campaign',
-              risk_level: 'high',
-              status: 'blocked',
-              input: {
-                draft_id: inserted.id,
-                channel: draft.channel,
-                pipeline_id: pipeline.id,
-              },
-              created_at: now().toISOString(),
-              updated_at: now().toISOString(),
-            }).select('id')
+            supabase
+              .from('autonomy_actions')
+              .insert({
+                user_id: userId,
+                venture_id: pipeline.venture_id,
+                action_type: 'publish_campaign',
+                risk_level: 'high',
+                status: 'blocked',
+                input: {
+                  draft_id: inserted.id,
+                  channel: draft.channel,
+                  pipeline_id: pipeline.id,
+                },
+                created_at: now().toISOString(),
+                updated_at: now().toISOString(),
+              })
+              .select('id')
           )
           if (!action?.id) continue
 
@@ -452,7 +499,8 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       }
     }
 
-    await supabase.from('agent_configs')
+    await supabase
+      .from('agent_configs')
       .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: now().toISOString() })
       .eq('user_id', userId)
       .eq('agent_id', agentId)
@@ -467,7 +515,8 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     }
   } catch (error) {
     if (pipeline && agentId !== 'scout') {
-      await supabase.from('venture_pipeline')
+      await supabase
+        .from('venture_pipeline')
         .update({ current_agent: null, updated_at: now().toISOString() })
         .eq('id', pipeline.id)
     }

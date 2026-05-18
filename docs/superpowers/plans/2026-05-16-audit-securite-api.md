@@ -12,21 +12,22 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `lib/auth-server.ts` | **Créer** — helper `requireAllowedUser()` centralisé |
-| `lib/security.ts` | **Modifier** — blocklist SSRF étendue (IPv6-mapped, hexa, décimal) |
-| `lib/dashboard-token.ts` | **Modifier** — `verifyDashToken` accepte fenêtre J et J-1 + secret obligatoire |
-| `app/api/studio/chat/route.ts` | **Modifier** — utiliser `requireAllowedUser` + inverser ordre vérif conversation |
-| `app/api/studio/automations/trigger/route.ts` | **Modifier** — utiliser `requireAllowedUser` |
-| `app/api/waitlist/route.ts` | **Modifier** — `encodeURIComponent(slug)` |
-| `lib/security.test.ts` | **Modifier** — tests pour les nouveaux patterns SSRF |
+| Fichier                                       | Action                                                                           |
+| --------------------------------------------- | -------------------------------------------------------------------------------- |
+| `lib/auth-server.ts`                          | **Créer** — helper `requireAllowedUser()` centralisé                             |
+| `lib/security.ts`                             | **Modifier** — blocklist SSRF étendue (IPv6-mapped, hexa, décimal)               |
+| `lib/dashboard-token.ts`                      | **Modifier** — `verifyDashToken` accepte fenêtre J et J-1 + secret obligatoire   |
+| `app/api/studio/chat/route.ts`                | **Modifier** — utiliser `requireAllowedUser` + inverser ordre vérif conversation |
+| `app/api/studio/automations/trigger/route.ts` | **Modifier** — utiliser `requireAllowedUser`                                     |
+| `app/api/waitlist/route.ts`                   | **Modifier** — `encodeURIComponent(slug)`                                        |
+| `lib/security.test.ts`                        | **Modifier** — tests pour les nouveaux patterns SSRF                             |
 
 ---
 
 ### Task 1 : Créer le helper `requireAllowedUser`
 
 **Files:**
+
 - Create: `lib/auth-server.ts`
 
 - [ ] **Step 1 : Créer `lib/auth-server.ts`**
@@ -42,20 +43,35 @@ export async function requireAllowedUser(cookieStore: ReadonlyRequestCookies) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) },
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cs) {
+          cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+        },
       },
     }
   )
 
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
   if (error || !user) {
-    return { user: null, supabase, response: new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 }) }
+    return {
+      user: null,
+      supabase,
+      response: new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 }),
+    }
   }
 
   const ALLOWED = process.env.ALLOWED_EMAIL
   if (ALLOWED && user.email !== ALLOWED) {
-    return { user: null, supabase, response: new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }) }
+    return {
+      user: null,
+      supabase,
+      response: new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+    }
   }
 
   return { user, supabase, response: null }
@@ -68,6 +84,7 @@ export async function requireAllowedUser(cookieStore: ReadonlyRequestCookies) {
 cd /Users/kenjimobutu/Desktop/DEV/Projects/kenomi-canvas
 npx tsc --noEmit 2>&1 | head -20
 ```
+
 Expected: 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -82,6 +99,7 @@ git commit -m "feat(auth): helper requireAllowedUser — auth + whitelist centra
 ### Task 2 : Appliquer `requireAllowedUser` dans la route chat
 
 **Files:**
+
 - Modify: `app/api/studio/chat/route.ts`
 
 - [ ] **Step 1 : Remplacer le bloc auth et inverser l'ordre de vérification de la conversation**
@@ -148,6 +166,7 @@ Le reste de la route (stream SSE, insertion messages) reste identique.
 ```bash
 npx tsc --noEmit 2>&1 | head -20
 ```
+
 Expected: 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -162,6 +181,7 @@ git commit -m "fix(security): requireAllowedUser dans chat + vérif conversation
 ### Task 3 : Appliquer `requireAllowedUser` dans la route automations/trigger
 
 **Files:**
+
 - Modify: `app/api/studio/automations/trigger/route.ts`
 
 - [ ] **Step 1 : Remplacer le bloc auth**
@@ -187,6 +207,7 @@ export async function POST(req: NextRequest) {
 ```bash
 npx tsc --noEmit 2>&1 | head -20
 ```
+
 Expected: 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -201,6 +222,7 @@ git commit -m "fix(security): requireAllowedUser dans automations/trigger"
 ### Task 4 : Étendre la blocklist SSRF
 
 **Files:**
+
 - Modify: `lib/security.ts`
 - Modify: `lib/security.test.ts`
 
@@ -209,21 +231,21 @@ git commit -m "fix(security): requireAllowedUser dans automations/trigger"
 Ajouter dans `lib/security.test.ts` (dans le describe `isAllowedWebhookUrl`) :
 
 ```typescript
-  it('rejette IPv4-mapped IPv6 ::ffff:127.0.0.1', () => {
-    expect(isAllowedWebhookUrl('http://[::ffff:127.0.0.1]:8080')).toBe(false)
-  })
-  it('rejette IPv4-mapped IPv6 ::ffff:10.0.0.1', () => {
-    expect(isAllowedWebhookUrl('http://[::ffff:10.0.0.1]')).toBe(false)
-  })
-  it('rejette adresse IP en hexadécimal', () => {
-    expect(isAllowedWebhookUrl('http://0x7f000001')).toBe(false)
-  })
-  it('rejette adresse IP en décimal (2130706433 = 127.0.0.1)', () => {
-    expect(isAllowedWebhookUrl('http://2130706433')).toBe(false)
-  })
-  it('accepte toujours http://192.168.0.14:11434 (Ollama local)', () => {
-    expect(isAllowedWebhookUrl('http://192.168.0.14:11434')).toBe(true)
-  })
+it('rejette IPv4-mapped IPv6 ::ffff:127.0.0.1', () => {
+  expect(isAllowedWebhookUrl('http://[::ffff:127.0.0.1]:8080')).toBe(false)
+})
+it('rejette IPv4-mapped IPv6 ::ffff:10.0.0.1', () => {
+  expect(isAllowedWebhookUrl('http://[::ffff:10.0.0.1]')).toBe(false)
+})
+it('rejette adresse IP en hexadécimal', () => {
+  expect(isAllowedWebhookUrl('http://0x7f000001')).toBe(false)
+})
+it('rejette adresse IP en décimal (2130706433 = 127.0.0.1)', () => {
+  expect(isAllowedWebhookUrl('http://2130706433')).toBe(false)
+})
+it('accepte toujours http://192.168.0.14:11434 (Ollama local)', () => {
+  expect(isAllowedWebhookUrl('http://192.168.0.14:11434')).toBe(true)
+})
 ```
 
 - [ ] **Step 2 : Lancer les tests pour vérifier qu'ils échouent**
@@ -231,6 +253,7 @@ Ajouter dans `lib/security.test.ts` (dans le describe `isAllowedWebhookUrl`) :
 ```bash
 npm test 2>&1 | tail -20
 ```
+
 Expected: les 4 nouveaux tests échouent (IPv6-mapped, hexa, décimal passent alors qu'ils ne devraient pas)
 
 - [ ] **Step 3 : Mettre à jour `lib/security.ts`**
@@ -255,14 +278,14 @@ export function isAllowedWebhookUrl(url: string): boolean {
       /^172\.(1[6-9]|2\d|3[01])\./,
       /^192\.168\./,
       /^::1$/,
-      /^::ffff:/i,         // IPv4-mapped IPv6 (ex: ::ffff:127.0.0.1)
-      /^fc[0-9a-f]{2}:/i,  // ULA IPv6
-      /^fd[0-9a-f]{2}:/i,  // ULA IPv6
-      /^0x[0-9a-f]+$/i,    // IP en hexadécimal (ex: 0x7f000001)
-      /^\d{8,10}$/,        // IP en décimal (ex: 2130706433 = 127.0.0.1)
+      /^::ffff:/i, // IPv4-mapped IPv6 (ex: ::ffff:127.0.0.1)
+      /^fc[0-9a-f]{2}:/i, // ULA IPv6
+      /^fd[0-9a-f]{2}:/i, // ULA IPv6
+      /^0x[0-9a-f]+$/i, // IP en hexadécimal (ex: 0x7f000001)
+      /^\d{8,10}$/, // IP en décimal (ex: 2130706433 = 127.0.0.1)
     ]
 
-    return !SSRF_BLOCKED.some(r => r.test(h))
+    return !SSRF_BLOCKED.some((r) => r.test(h))
   } catch {
     return false
   }
@@ -284,6 +307,7 @@ export function isValidEmail(email: string): boolean {
 ```bash
 npm test 2>&1 | tail -20
 ```
+
 Expected: tous les tests passent (anciens + 4 nouveaux)
 
 - [ ] **Step 5 : Commit**
@@ -298,6 +322,7 @@ git commit -m "fix(security): blocklist SSRF — IPv6-mapped, hexa, décimal"
 ### Task 5 : Corriger le token dashboard (fenêtre J+J-1, secret obligatoire)
 
 **Files:**
+
 - Modify: `lib/dashboard-token.ts`
 
 - [ ] **Step 1 : Mettre à jour `lib/dashboard-token.ts`**
@@ -309,10 +334,16 @@ git commit -m "fix(security): blocklist SSRF — IPv6-mapped, hexa, décimal"
 async function hmacHex(key: string, data: string): Promise<string> {
   const enc = new TextEncoder()
   const cryptoKey = await crypto.subtle.importKey(
-    'raw', enc.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    'raw',
+    enc.encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
   )
   const sig = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(data))
-  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 function getDayWindow(): number {
@@ -321,7 +352,8 @@ function getDayWindow(): number {
 
 function getSecret(): string {
   const secret = process.env.DASHBOARD_TOKEN_SECRET
-  if (!secret) throw new Error('DASHBOARD_TOKEN_SECRET is not set — add it to your environment variables')
+  if (!secret)
+    throw new Error('DASHBOARD_TOKEN_SECRET is not set — add it to your environment variables')
   return secret
 }
 
@@ -404,6 +436,7 @@ git commit -m "fix(security): token dashboard — secret obligatoire + validité
 ### Task 6 : Encoder le slug dans la redirection waitlist
 
 **Files:**
+
 - Modify: `app/api/waitlist/route.ts`
 
 - [ ] **Step 1 : Remplacer la ligne de redirection**
@@ -411,15 +444,15 @@ git commit -m "fix(security): token dashboard — secret obligatoire + validité
 Dans `app/api/waitlist/route.ts`, remplacer :
 
 ```typescript
-    const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
-    return NextResponse.redirect(`${BASE}/${slug}?waitlist=ok`, { status: 302 })
+const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
+return NextResponse.redirect(`${BASE}/${slug}?waitlist=ok`, { status: 302 })
 ```
 
 Par :
 
 ```typescript
-    const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
-    return NextResponse.redirect(`${BASE}/${encodeURIComponent(slug)}?waitlist=ok`, { status: 302 })
+const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
+return NextResponse.redirect(`${BASE}/${encodeURIComponent(slug)}?waitlist=ok`, { status: 302 })
 ```
 
 - [ ] **Step 2 : Compiler**

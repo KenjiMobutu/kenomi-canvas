@@ -1,7 +1,14 @@
 // lib/pipeline-types.ts
 
-export const AGENT_CHAIN = ['scout', 'validation', 'builder', 'payment', 'marketing', 'decision'] as const
-export type ChainAgent = typeof AGENT_CHAIN[number]
+export const AGENT_CHAIN = [
+  'scout',
+  'validation',
+  'builder',
+  'payment',
+  'marketing',
+  'decision',
+] as const
+export type ChainAgent = (typeof AGENT_CHAIN)[number]
 
 export type PipelineStatus = 'pending_validation' | 'approved' | 'rejected' | 'running' | 'done'
 
@@ -27,7 +34,15 @@ export interface PipelineRow {
   updated_at: string
 }
 
-type AgentOutputs = Pick<PipelineRow, 'status' | 'validation_output' | 'builder_output' | 'payment_output' | 'marketing_output' | 'decision_output'>
+type AgentOutputs = Pick<
+  PipelineRow,
+  | 'status'
+  | 'validation_output'
+  | 'builder_output'
+  | 'payment_output'
+  | 'marketing_output'
+  | 'decision_output'
+>
 
 export function nextAgentInChain(agentId: string): ChainAgent | null {
   const idx = AGENT_CHAIN.indexOf(agentId as ChainAgent)
@@ -39,43 +54,58 @@ export function isAgentUnlocked(agentId: string, pipeline: AgentOutputs | null):
   if (agentId === 'scout') return true
   if (!pipeline || pipeline.status !== 'approved') return false
   switch (agentId) {
-    case 'validation': return pipeline.validation_output === null
-    case 'builder':    return pipeline.validation_output !== null && pipeline.builder_output === null
-    case 'payment':    return pipeline.builder_output !== null && pipeline.payment_output === null
-    case 'marketing':  return pipeline.payment_output !== null && pipeline.marketing_output === null
-    case 'decision':   return pipeline.marketing_output !== null && pipeline.decision_output === null
-    default:           return false
+    case 'validation':
+      return pipeline.validation_output === null
+    case 'builder':
+      return pipeline.validation_output !== null && pipeline.builder_output === null
+    case 'payment':
+      return pipeline.builder_output !== null && pipeline.payment_output === null
+    case 'marketing':
+      return pipeline.payment_output !== null && pipeline.marketing_output === null
+    case 'decision':
+      return pipeline.marketing_output !== null && pipeline.decision_output === null
+    default:
+      return false
   }
 }
 
 export function parsePipelineIdea(raw: string): {
-  idea_title: string; idea_niche: string; idea_problem: string
-  idea_solution: string; idea_market: string
+  idea_title: string
+  idea_niche: string
+  idea_problem: string
+  idea_solution: string
+  idea_market: string
 } {
   const extract = (key: string) => {
     const m = raw.match(new RegExp(`^${key}:\\s*(.+)$`, 'im'))
     return m ? m[1].trim() : ''
   }
   return {
-    idea_title:    extract('TITRE'),
-    idea_niche:    extract('NICHE'),
-    idea_problem:  extract('PROBL[EÈ]ME'),
+    idea_title: extract('TITRE'),
+    idea_niche: extract('NICHE'),
+    idea_problem: extract('PROBL[EÈ]ME'),
     idea_solution: extract('SOLUTION'),
-    idea_market:   extract('MARCH[EÉ]'),
+    idea_market: extract('MARCH[EÉ]'),
   }
 }
 
-export function buildSystemPrompt(agentId: string, pipeline: PipelineRow | null, customPrompt: string): string {
+export function buildSystemPrompt(
+  agentId: string,
+  pipeline: PipelineRow | null,
+  customPrompt: string
+): string {
   if (customPrompt.trim()) return customPrompt
 
-  const ctx = pipeline ? `
+  const ctx = pipeline
+    ? `
 Contexte venture active :
 - Titre : ${pipeline.idea_title}
 - Niche : ${pipeline.idea_niche}
 - Problème : ${pipeline.idea_problem}
 - Solution : ${pipeline.idea_solution}
 - Marché cible : ${pipeline.idea_market}
-` : ''
+`
+    : ''
 
   const prompts: Record<string, string> = {
     scout: `Tu es Scout, agent de découverte de ventures pour entrepreneur solo.

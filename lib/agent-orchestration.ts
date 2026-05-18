@@ -55,7 +55,9 @@ export interface ExecuteDueAgentRunsResult {
   update_errors: Array<{ scheduleId: string; agentId: string; message: string }>
 }
 
-export async function executeDueAgentRuns(input: ExecuteDueAgentRunsInput): Promise<ExecuteDueAgentRunsResult> {
+export async function executeDueAgentRuns(
+  input: ExecuteDueAgentRunsInput
+): Promise<ExecuteDueAgentRunsResult> {
   const executed: ExecuteDueAgentRunsResult['executed'] = []
   const execution_errors: ExecuteDueAgentRunsResult['execution_errors'] = []
   const update_errors: ExecuteDueAgentRunsResult['update_errors'] = []
@@ -64,13 +66,21 @@ export async function executeDueAgentRuns(input: ExecuteDueAgentRunsInput): Prom
   for (const run of input.runs) {
     try {
       const result = await input.runAgent(run)
-      executed.push({ scheduleId: run.scheduleId, agentId: run.agentId, agentRunId: result.agentRunId })
+      executed.push({
+        scheduleId: run.scheduleId,
+        agentId: run.agentId,
+        agentRunId: result.agentRunId,
+      })
 
       const schedule = input.schedules.find((item) => item.id === run.scheduleId)
       const nextRunAt = computeNextRunAt(input.now, schedule?.interval_minutes ?? 1440)
       const updateError = await input.updateSchedule(run.scheduleId, nextRunAt, nowIso)
       if (updateError) {
-        update_errors.push({ scheduleId: run.scheduleId, agentId: run.agentId, message: updateError })
+        update_errors.push({
+          scheduleId: run.scheduleId,
+          agentId: run.agentId,
+          message: updateError,
+        })
       }
     } catch (error) {
       execution_errors.push({

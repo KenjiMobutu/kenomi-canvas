@@ -7,10 +7,20 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { insertAuditEvent } from '@/lib/audit-log'
 
 const USER_TABLES = [
-  'venture_pipeline', 'agent_runs', 'agent_configs', 'agent_events',
-  'agent_schedules', 'automation_runs', 'automation_workflows',
-  'messages', 'conversations', 'documents', 'ventures',
-  'api_keys', 'agents', 'automations',
+  'venture_pipeline',
+  'agent_runs',
+  'agent_configs',
+  'agent_events',
+  'agent_schedules',
+  'automation_runs',
+  'automation_workflows',
+  'messages',
+  'conversations',
+  'documents',
+  'ventures',
+  'api_keys',
+  'agents',
+  'automations',
 ] as const
 
 export async function POST() {
@@ -30,7 +40,11 @@ export async function POST() {
 
   if (error) return apiError('Impossible de créer le token de suppression', 500)
 
-  return apiOk({ token, message: 'Renvoyez ce token dans DELETE /api/studio/privacy/delete pour confirmer la suppression.' })
+  return apiOk({
+    token,
+    message:
+      'Renvoyez ce token dans DELETE /api/studio/privacy/delete pour confirmer la suppression.',
+  })
 }
 
 export async function DELETE(req: NextRequest) {
@@ -67,7 +81,10 @@ export async function DELETE(req: NextRequest) {
     : null
   const expiredMs = 15 * 60 * 1000
   if (!requestedAt || Date.now() - requestedAt.getTime() > expiredMs) {
-    await supabaseAdmin.from('user_settings').update({ deletion_token: null, deletion_requested_at: null }).eq('user_id', user!.id)
+    await supabaseAdmin
+      .from('user_settings')
+      .update({ deletion_token: null, deletion_requested_at: null })
+      .eq('user_id', user!.id)
     return apiError('Token expiré (15 min). Recommencez avec POST.', 400)
   }
 
@@ -86,7 +103,10 @@ export async function DELETE(req: NextRequest) {
     if (error) tableErrors.push({ table, message: error.message })
   }
   if (tableErrors.length > 0) {
-    return apiError(`Erreur lors de la suppression des données (tables: ${tableErrors.map((failure) => failure.table).join(', ')})`, 500)
+    return apiError(
+      `Erreur lors de la suppression des données (tables: ${tableErrors.map((failure) => failure.table).join(', ')})`,
+      500
+    )
   }
 
   await supabaseAdmin.from('user_settings').delete().eq('user_id', user!.id)

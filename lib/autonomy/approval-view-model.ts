@@ -61,14 +61,13 @@ export function buildApprovalQueue(input: {
   approvals: AutonomyApprovalView[]
   actions: AutonomyActionView[]
 }): ApprovalQueueItem[] {
-  const actionsById = new Map(input.actions.map(action => [action.id, action]))
+  const actionsById = new Map(input.actions.map((action) => [action.id, action]))
 
   return input.approvals
     .map((approval) => {
       const action = actionsById.get(approval.action_id) ?? null
-      const confidence = typeof action?.input?.confidence === 'number'
-        ? action.input.confidence
-        : null
+      const confidence =
+        typeof action?.input?.confidence === 'number' ? action.input.confidence : null
 
       return {
         approval,

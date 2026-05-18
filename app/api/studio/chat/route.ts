@@ -46,7 +46,10 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: settings } = await supabase
-    .from('user_settings').select('*').eq('user_id', userId).maybeSingle()
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
 
   const baseUrl = (settings?.ollama_base_url || 'http://192.168.0.14:11434').replace(/\/$/, '')
   if (!isAllowedOllamaUrl(baseUrl)) {
@@ -56,7 +59,8 @@ export async function POST(req: NextRequest) {
   const model = settings?.ollama_model || 'qwen3:8b'
 
   const { data: history } = await supabase
-    .from('messages').select('role,content')
+    .from('messages')
+    .select('role,content')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true })
 
@@ -130,7 +134,8 @@ export async function POST(req: NextRequest) {
         role: 'assistant',
         content: fullContent,
       })
-      await supabase.from('conversations')
+      await supabase
+        .from('conversations')
         .update({ updated_at: new Date().toISOString(), ...(agentId ? { agent_id: agentId } : {}) })
         .eq('id', conversationId)
     },
@@ -140,7 +145,7 @@ export async function POST(req: NextRequest) {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
     },
   })
 }

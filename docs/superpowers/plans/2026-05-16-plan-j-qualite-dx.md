@@ -14,12 +14,12 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `package.json` | Modifier — ajouter scripts lint, typecheck, format |
-| `eslint.config.mjs` | Créer — config ESLint flat avec Next.js |
-| `.prettierrc` | Créer — config Prettier |
-| `lib/use-stream-chat.ts` | Créer — hook streaming SSE réutilisable |
+| Fichier                         | Action                                                    |
+| ------------------------------- | --------------------------------------------------------- |
+| `package.json`                  | Modifier — ajouter scripts lint, typecheck, format        |
+| `eslint.config.mjs`             | Créer — config ESLint flat avec Next.js                   |
+| `.prettierrc`                   | Créer — config Prettier                                   |
+| `lib/use-stream-chat.ts`        | Créer — hook streaming SSE réutilisable                   |
 | `app/studio/documents/page.tsx` | Modifier — validation upload MIME + taille + sanitisation |
 
 ---
@@ -27,6 +27,7 @@
 ### Task 1 : Scripts lint, typecheck, format
 
 **Files:**
+
 - Modify: `package.json`
 - Create: `eslint.config.mjs`
 - Create: `.prettierrc`
@@ -37,6 +38,7 @@
 cd /Users/kenjimobutu/Desktop/DEV/Projects/kenomi-canvas
 npm install --save-dev eslint @eslint/eslintrc eslint-config-next prettier 2>&1 | tail -5
 ```
+
 Expected : pas d'erreur npm
 
 - [ ] **Step 2 : Créer `eslint.config.mjs`**
@@ -104,6 +106,7 @@ Dans la section `"scripts"` de `package.json`, ajouter :
 ```bash
 npm run lint 2>&1 | tail -20
 ```
+
 Expected : 0 erreur (des warnings sont acceptables)
 
 - [ ] **Step 6 : Vérifier que typecheck passe**
@@ -111,6 +114,7 @@ Expected : 0 erreur (des warnings sont acceptables)
 ```bash
 npm run typecheck 2>&1 | head -10
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 7 : Commit**
@@ -125,6 +129,7 @@ git commit -m "feat(dx): scripts lint, typecheck, format + ESLint + Prettier"
 ### Task 2 : Extraire le streaming SSE dans un hook
 
 **Files:**
+
 - Create: `lib/use-stream-chat.ts`
 
 **Contexte :** La logique de streaming SSE (lecture du `ReadableStream`, parsing `data: ...`, accumulation du texte) est dupliquée entre `handleSend` et `newConvAndSend` dans `app/studio/chat/page.tsx`. On l'extrait dans un hook React réutilisable.
@@ -217,6 +222,7 @@ export function useStreamChat({ onToken, onDone, onError }: StreamChatOptions) {
 ```bash
 npx tsc --noEmit 2>&1 | head -10
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -233,6 +239,7 @@ git commit -m "refactor(chat): extraire le streaming SSE dans useStreamChat"
 ### Task 3 : Validation upload dans `documents/page.tsx`
 
 **Files:**
+
 - Modify: `app/studio/documents/page.tsx`
 
 **Contexte :** La fonction `upload` accepte n'importe quel fichier sans vérification de taille, de type MIME, ni sanitisation du nom. Un fichier de 500 Mo ou un `.exe` peut être uploadé. Cette tâche dépend de `lib/validation.ts` créé en **Plan I Task 3**.
@@ -242,7 +249,12 @@ git commit -m "refactor(chat): extraire le streaming SSE dans useStreamChat"
 Ouvrir `app/studio/documents/page.tsx`. Ajouter l'import en tête du fichier :
 
 ```typescript
-import { isAllowedMimeType, isAllowedFileSize, sanitizeFilename, MAX_UPLOAD_BYTES } from '@/lib/validation'
+import {
+  isAllowedMimeType,
+  isAllowedFileSize,
+  sanitizeFilename,
+  MAX_UPLOAD_BYTES,
+} from '@/lib/validation'
 ```
 
 Remplacer la fonction `upload` existante par :
@@ -297,6 +309,7 @@ async function upload(e: React.ChangeEvent<HTMLInputElement>) {
 ```bash
 npx tsc --noEmit 2>&1 | head -10
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 3 : Commit**

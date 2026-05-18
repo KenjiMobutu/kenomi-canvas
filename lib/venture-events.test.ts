@@ -30,7 +30,11 @@ function createFakeSupabase() {
         },
         maybeSingle: async () => {
           if (table !== 'ventures') return { data: null, error: null }
-          const venture = ventures.find((item) => state.filters.every((filter) => item[filter.field as keyof typeof item] === filter.value))
+          const venture = ventures.find((item) =>
+            state.filters.every(
+              (filter) => item[filter.field as keyof typeof item] === filter.value
+            )
+          )
           return { data: venture ?? null, error: null }
         },
       }

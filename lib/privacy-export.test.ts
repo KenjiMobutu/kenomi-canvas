@@ -10,8 +10,18 @@ describe('redactPrivacyExport', () => {
         stripe_secret_key: 'sk_live_xxx',
         stripe_webhook_secret: null,
       },
-      conversations: [{ id: 'c1', title: 'Nouvelle conversation', created_at: '2026-05-18T00:00:00.000Z' }],
-      messages: [{ id: 'm1', conversation_id: 'c1', role: 'user', content: 'hello', created_at: '2026-05-18T00:00:01.000Z' }],
+      conversations: [
+        { id: 'c1', title: 'Nouvelle conversation', created_at: '2026-05-18T00:00:00.000Z' },
+      ],
+      messages: [
+        {
+          id: 'm1',
+          conversation_id: 'c1',
+          role: 'user',
+          content: 'hello',
+          created_at: '2026-05-18T00:00:01.000Z',
+        },
+      ],
     })
 
     expect(result.settings).toEqual({
@@ -24,7 +34,13 @@ describe('redactPrivacyExport', () => {
       { id: 'c1', title: 'Nouvelle conversation', created_at: '2026-05-18T00:00:00.000Z' },
     ])
     expect(result.messages).toEqual([
-      { id: 'm1', conversation_id: 'c1', role: 'user', content: 'hello', created_at: '2026-05-18T00:00:01.000Z' },
+      {
+        id: 'm1',
+        conversation_id: 'c1',
+        role: 'user',
+        content: 'hello',
+        created_at: '2026-05-18T00:00:01.000Z',
+      },
     ])
   })
 

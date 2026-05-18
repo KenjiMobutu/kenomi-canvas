@@ -13,7 +13,10 @@ export async function requireAllowedUser(cookieStore: ReadonlyRequestCookies) {
     }
   )
 
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
 
   if (error || !user) {
     return {

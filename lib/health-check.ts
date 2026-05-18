@@ -31,17 +31,20 @@ export interface HealthSummary {
 }
 
 export function checkEnvVars(env: NodeJS.ProcessEnv = process.env): EnvCheck {
-  const missing = REQUIRED_ENV_VARS.filter(k => !env[k])
+  const missing = REQUIRED_ENV_VARS.filter((k) => !env[k])
   if (missing.length === 0) return { ok: true }
   return {
     ok: false,
-    error: env.NODE_ENV === 'production'
-      ? 'configuration incomplete'
-      : `Manquantes: ${missing.join(', ')}`,
+    error:
+      env.NODE_ENV === 'production'
+        ? 'configuration incomplete'
+        : `Manquantes: ${missing.join(', ')}`,
   }
 }
 
-export function getHealthDependencyConfig(env: NodeJS.ProcessEnv = process.env): HealthDependencyConfig {
+export function getHealthDependencyConfig(
+  env: NodeJS.ProcessEnv = process.env
+): HealthDependencyConfig {
   return {
     databaseRequired: env.HEALTH_DATABASE_REQUIRED !== 'false',
     supabaseRequired: env.HEALTH_SUPABASE_REQUIRED !== 'false',
@@ -57,7 +60,7 @@ export function buildHealthSummary(input: HealthSummaryInput): HealthSummary {
     input.config.storageRequired ? input.checks.storage : undefined,
   ].filter((check): check is EnvCheck => Boolean(check))
 
-  const ok = requiredChecks.every(check => check.ok)
+  const ok = requiredChecks.every((check) => check.ok)
   return {
     ok,
     status: ok ? 'ok' : 'degraded',

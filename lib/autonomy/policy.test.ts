@@ -19,18 +19,38 @@ describe('requiresApproval', () => {
   })
 
   it('demande une approbation pour checkout et deploy en production', () => {
-    expect(requiresApproval(action({ actionType: 'create_checkout', environment: 'production', riskLevel: 'medium' }))).toBe(true)
-    expect(requiresApproval(action({ actionType: 'deploy', environment: 'production', riskLevel: 'medium' }))).toBe(true)
+    expect(
+      requiresApproval(
+        action({ actionType: 'create_checkout', environment: 'production', riskLevel: 'medium' })
+      )
+    ).toBe(true)
+    expect(
+      requiresApproval(
+        action({ actionType: 'deploy', environment: 'production', riskLevel: 'medium' })
+      )
+    ).toBe(true)
   })
 
   it('autorise checkout et deploy hors production', () => {
-    expect(requiresApproval(action({ actionType: 'create_checkout', environment: 'staging', riskLevel: 'medium' }))).toBe(false)
-    expect(requiresApproval(action({ actionType: 'deploy', environment: 'development', riskLevel: 'medium' }))).toBe(false)
+    expect(
+      requiresApproval(
+        action({ actionType: 'create_checkout', environment: 'staging', riskLevel: 'medium' })
+      )
+    ).toBe(false)
+    expect(
+      requiresApproval(
+        action({ actionType: 'deploy', environment: 'development', riskLevel: 'medium' })
+      )
+    ).toBe(false)
   })
 
   it('bloque toujours les actions à risque business', () => {
-    expect(requiresApproval(action({ actionType: 'publish_campaign', riskLevel: 'high' }))).toBe(true)
-    expect(requiresApproval(action({ actionType: 'scale_budget', riskLevel: 'critical' }))).toBe(true)
+    expect(requiresApproval(action({ actionType: 'publish_campaign', riskLevel: 'high' }))).toBe(
+      true
+    )
+    expect(requiresApproval(action({ actionType: 'scale_budget', riskLevel: 'critical' }))).toBe(
+      true
+    )
     expect(requiresApproval(action({ actionType: 'stop_venture', riskLevel: 'high' }))).toBe(true)
   })
 
@@ -41,14 +61,16 @@ describe('requiresApproval', () => {
 
 describe('checkBudgetPolicy', () => {
   it('pass quand tout est sous les caps', () => {
-    expect(checkBudgetPolicy({
-      estimatedCostEur: 10,
-      actionCapEur: 50,
-      ventureSpentEur: 20,
-      ventureSpendCapEur: 100,
-      globalSpentEur: 50,
-      globalCapEur: 500,
-    })).toEqual({ ok: true })
+    expect(
+      checkBudgetPolicy({
+        estimatedCostEur: 10,
+        actionCapEur: 50,
+        ventureSpentEur: 20,
+        ventureSpendCapEur: 100,
+        globalSpentEur: 50,
+        globalCapEur: 500,
+      })
+    ).toEqual({ ok: true })
   })
 
   it('fail si cost > actionCap', () => {

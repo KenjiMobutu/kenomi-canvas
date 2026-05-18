@@ -26,14 +26,20 @@ describe('buildCampaignDrafts', () => {
   })
 
   it('retourne [] si channels ou messages vide', () => {
-    expect(buildCampaignDrafts({
-      userId: 'u1', ventureId: 'v1',
-      output: { channels: [], messages: ['Hi'] },
-    })).toEqual([])
-    expect(buildCampaignDrafts({
-      userId: 'u1', ventureId: 'v1',
-      output: { channels: ['email'], messages: [] },
-    })).toEqual([])
+    expect(
+      buildCampaignDrafts({
+        userId: 'u1',
+        ventureId: 'v1',
+        output: { channels: [], messages: ['Hi'] },
+      })
+    ).toEqual([])
+    expect(
+      buildCampaignDrafts({
+        userId: 'u1',
+        ventureId: 'v1',
+        output: { channels: ['email'], messages: [] },
+      })
+    ).toEqual([])
   })
 
   it('ignore channels et messages vides ou whitespace-only', () => {
@@ -46,8 +52,8 @@ describe('buildCampaignDrafts', () => {
       },
     })
     expect(drafts).toHaveLength(4)
-    expect(drafts.every(d => d.channel.trim().length > 0)).toBe(true)
-    expect(drafts.every(d => d.content.trim().length > 0)).toBe(true)
+    expect(drafts.every((d) => d.channel.trim().length > 0)).toBe(true)
+    expect(drafts.every((d) => d.content.trim().length > 0)).toBe(true)
   })
 
   it('expose channel_index et message_index dans metadata', () => {

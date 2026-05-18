@@ -6,7 +6,7 @@ export type { MarketingPublisher, PublishInput, PublishResult } from './types'
 
 export function getMarketingPublisher(
   channel: string,
-  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
 ): MarketingPublisher {
   if (env.MARKETING_ADAPTER === 'mock') return createMockPublisher()
   const knownChannels = ['email', 'twitter', 'linkedin', 'instagram', 'facebook']

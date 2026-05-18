@@ -12,19 +12,20 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `lib/rate-limit.ts` | Créer — compteur en mémoire par IP |
-| `lib/api-response.ts` | Créer — helpers de réponse JSON uniformes |
-| `app/api/dashboard/login/route.ts` | Modifier — appliquer rate limit |
-| `app/api/waitlist/route.ts` | Modifier — appliquer rate limit |
-| `app/api/health/route.ts` | Modifier — vérifications DB + Supabase + config |
+| Fichier                            | Action                                          |
+| ---------------------------------- | ----------------------------------------------- |
+| `lib/rate-limit.ts`                | Créer — compteur en mémoire par IP              |
+| `lib/api-response.ts`              | Créer — helpers de réponse JSON uniformes       |
+| `app/api/dashboard/login/route.ts` | Modifier — appliquer rate limit                 |
+| `app/api/waitlist/route.ts`        | Modifier — appliquer rate limit                 |
+| `app/api/health/route.ts`          | Modifier — vérifications DB + Supabase + config |
 
 ---
 
 ### Task 1 : Créer `lib/rate-limit.ts`
 
 **Files:**
+
 - Create: `lib/rate-limit.ts`
 
 - [ ] **Step 1 : Créer le fichier**
@@ -75,6 +76,7 @@ export function isRateLimited(key: string, { limit, windowMs }: RateLimitOptions
 cd /Users/kenjimobutu/Desktop/DEV/Projects/kenomi-canvas
 npx tsc --noEmit 2>&1 | head -10
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -89,6 +91,7 @@ git commit -m "feat(api): rate limiter en mémoire par IP"
 ### Task 2 : Créer `lib/api-response.ts`
 
 **Files:**
+
 - Create: `lib/api-response.ts`
 
 **Contexte :** Actuellement certaines routes retournent `NextResponse.json(...)` et d'autres `new Response(JSON.stringify(...))`. Ce helper uniformise les réponses d'erreur et les headers `Content-Type`.
@@ -123,6 +126,7 @@ export function apiOk<T>(data: T, status = 200): NextResponse {
 ```bash
 npx tsc --noEmit 2>&1 | head -10
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -137,6 +141,7 @@ git commit -m "feat(api): helper apiError/apiOk pour réponses uniformes"
 ### Task 3 : Rate limiting sur le login dashboard
 
 **Files:**
+
 - Modify: `app/api/dashboard/login/route.ts`
 
 **Contexte :** La route accepte actuellement un nombre illimité de tentatives de mot de passe. On limite à 5 tentatives par IP par fenêtre de 15 minutes.
@@ -173,10 +178,10 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({ ok: true })
   res.cookies.set('kenomi-dash-auth', token, {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge:   60 * 60 * 24,
-    path:     '/',
+    maxAge: 60 * 60 * 24,
+    path: '/',
   })
   return res
 }
@@ -187,6 +192,7 @@ export async function POST(req: NextRequest) {
 ```bash
 npx tsc --noEmit 2>&1 | head -10
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -201,6 +207,7 @@ git commit -m "fix(security): rate limit 5 tentatives/15min sur le login dashboa
 ### Task 4 : Rate limiting sur la route waitlist
 
 **Files:**
+
 - Modify: `app/api/waitlist/route.ts`
 
 **Contexte :** La waitlist est publique (non authentifiée). On limite à 3 inscriptions par IP par heure pour éviter le spam.
@@ -226,13 +233,16 @@ export async function POST(req: NextRequest) {
 
     const contentType = req.headers.get('content-type') ?? ''
 
-    if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+    if (
+      contentType.includes('application/x-www-form-urlencoded') ||
+      contentType.includes('multipart/form-data')
+    ) {
       const form = await req.formData()
-      slug  = (form.get('slug')  as string) ?? ''
+      slug = (form.get('slug') as string) ?? ''
       email = (form.get('email') as string) ?? ''
     } else {
       const body = await req.json()
-      slug  = body.slug  ?? ''
+      slug = body.slug ?? ''
       email = body.email ?? ''
     }
 
@@ -267,6 +277,7 @@ export async function POST(req: NextRequest) {
 ```bash
 npx tsc --noEmit 2>&1 | head -10
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 3 : Commit**
@@ -281,6 +292,7 @@ git commit -m "fix(security): rate limit 3 inscriptions/heure sur la waitlist pu
 ### Task 5 : Enrichir `/api/health`
 
 **Files:**
+
 - Modify: `app/api/health/route.ts`
 
 **Contexte :** Actuellement le health check retourne juste `'ok'`. On veut vérifier : DB Prisma joignable, Supabase joignable, variables d'env critiques présentes, et Ollama si configuré. La réponse est JSON structuré avec un statut HTTP 200 (tout ok) ou 503 (un check échoue).
@@ -312,7 +324,7 @@ export async function GET() {
     'DASHBOARD_TOKEN_SECRET',
     'ALLOWED_EMAIL',
   ]
-  const missingEnvs = requiredEnvs.filter(k => !process.env[k])
+  const missingEnvs = requiredEnvs.filter((k) => !process.env[k])
   checks.env = {
     ok: missingEnvs.length === 0,
     ...(missingEnvs.length > 0 ? { error: `Manquantes: ${missingEnvs.join(', ')}` } : {}),
@@ -344,7 +356,7 @@ export async function GET() {
     checks.supabase = { ok: false, latencyMs: Date.now() - sbStart, error: (e as Error).message }
   }
 
-  const allOk = Object.values(checks).every(c => c.ok)
+  const allOk = Object.values(checks).every((c) => c.ok)
   const status = allOk ? 200 : 503
 
   return Response.json(
@@ -359,16 +371,19 @@ export async function GET() {
 ```bash
 npx tsc --noEmit 2>&1 | head -10
 ```
+
 Expected : 0 erreur
 
 - [ ] **Step 3 : Tester manuellement**
 
 Démarrer le serveur dev :
+
 ```bash
 npm run dev &
 ```
 
 Appeler le health check :
+
 ```bash
 curl -s http://localhost:3000/api/health | python3 -m json.tool
 ```

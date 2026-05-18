@@ -45,7 +45,10 @@ export function useStreamChat({ onToken, onDone, onError }: StreamChatOptions) {
             const t = line.trim()
             if (!t.startsWith('data: ')) continue
             const raw = t.slice(6)
-            if (raw === '[DONE]') { streamDone = true; break }
+            if (raw === '[DONE]') {
+              streamDone = true
+              break
+            }
             try {
               const token = JSON.parse(raw) as string
               full += token

@@ -25,10 +25,10 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({ ok: true })
   res.cookies.set('kenomi-dash-auth', token, {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge:   60 * 60 * 24,
-    path:     '/',
+    maxAge: 60 * 60 * 24,
+    path: '/',
   })
   return res
 }

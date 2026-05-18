@@ -27,29 +27,34 @@ The audit found:
 ## File Structure
 
 **Privacy and RGPD**
+
 - Modify: `lib/privacy-export.ts` - add typed export rows and normalize Supabase query results.
 - Modify: `lib/privacy-export.test.ts` - cover conversation `title`, message inclusion, and query error reporting.
 - Modify: `app/api/studio/privacy/export/route.ts` - select real columns, include more user-owned tables, and return query errors safely.
 - Modify: `app/api/studio/privacy/delete/route.ts` - add final audit attempt before deletion and return per-table deletion failures.
 
 **Infrastructure topology**
+
 - Modify: `lib/infra-config.ts` - add stable client metadata fields needed by the UI: `short`, `color`, `vmid`, `kind`.
 - Modify: `lib/infra-config.test.ts` - verify private endpoint redaction while preserving UI metadata.
 - Modify: `app/api/studio/infra/services/route.ts` - return enriched sanitized services.
 - Modify: `app/studio/infrastructure/page.tsx` - fetch `/api/studio/infra/services` and stop hardcoding user-visible service metadata.
 
 **Agent orchestration**
+
 - Modify: `lib/agent-orchestration.ts` - add `computeNextRunAt()` and `partitionDueRuns()`.
 - Modify: `lib/agent-orchestration.test.ts` - cover schedule advancement and approval gating.
 - Modify: `app/api/studio/agents/orchestrate/route.ts` - update due schedules, record audit events, and return actionable execution plan.
 - Modify: `app/studio/agents/page.tsx` - display schedules, blocked approvals, and last autonomous candidate run.
 
 **Next 16 migration**
+
 - Create: `proxy.ts` - replacement for `middleware.ts`.
 - Delete: `middleware.ts` only after `proxy.ts` proves equivalent.
 - Test: manual auth redirect smoke tests.
 
 **Production warning cleanup**
+
 - Modify: `app/api/studio/agents/pipeline/route.ts` - remove unused import.
 - Modify: `app/studio/analytics/page.tsx` - remove render-time mutation.
 - Modify: `app/studio/infrastructure/page.tsx` - remove unused imports introduced by older UI.
@@ -62,6 +67,7 @@ The audit found:
 ### Task 1: Normalize Privacy Export Data
 
 **Files:**
+
 - Modify: `lib/privacy-export.ts`
 - Modify: `lib/privacy-export.test.ts`
 
@@ -82,8 +88,18 @@ describe('redactPrivacyExport', () => {
         stripe_secret_key: 'sk_live_xxx',
         stripe_webhook_secret: null,
       },
-      conversations: [{ id: 'c1', title: 'Nouvelle conversation', created_at: '2026-05-18T00:00:00.000Z' }],
-      messages: [{ id: 'm1', conversation_id: 'c1', role: 'user', content: 'hello', created_at: '2026-05-18T00:00:01.000Z' }],
+      conversations: [
+        { id: 'c1', title: 'Nouvelle conversation', created_at: '2026-05-18T00:00:00.000Z' },
+      ],
+      messages: [
+        {
+          id: 'm1',
+          conversation_id: 'c1',
+          role: 'user',
+          content: 'hello',
+          created_at: '2026-05-18T00:00:01.000Z',
+        },
+      ],
     })
 
     expect(result.settings).toEqual({
@@ -96,7 +112,13 @@ describe('redactPrivacyExport', () => {
       { id: 'c1', title: 'Nouvelle conversation', created_at: '2026-05-18T00:00:00.000Z' },
     ])
     expect(result.messages).toEqual([
-      { id: 'm1', conversation_id: 'c1', role: 'user', content: 'hello', created_at: '2026-05-18T00:00:01.000Z' },
+      {
+        id: 'm1',
+        conversation_id: 'c1',
+        role: 'user',
+        content: 'hello',
+        created_at: '2026-05-18T00:00:01.000Z',
+      },
     ])
   })
 
@@ -211,6 +233,7 @@ git commit -m "fix: validate privacy export redaction and errors"
 ### Task 2: Fix Privacy Export Route
 
 **Files:**
+
 - Modify: `app/api/studio/privacy/export/route.ts`
 
 - [ ] **Step 1: Replace incorrect `topic` select with real schema fields**
@@ -231,12 +254,16 @@ export async function GET() {
   const results = {
     settings: await supabase
       .from('user_settings')
-      .select('openai_api_key, claude_api_key, stripe_secret_key, stripe_webhook_secret, ollama_base_url, ollama_model, n8n_base_url, created_at, updated_at')
+      .select(
+        'openai_api_key, claude_api_key, stripe_secret_key, stripe_webhook_secret, ollama_base_url, ollama_model, n8n_base_url, created_at, updated_at'
+      )
       .eq('user_id', user!.id)
       .maybeSingle(),
     ventures: await supabase
       .from('ventures')
-      .select('id, name, niche, stage, score, mrr, cac, conversion, next_action, insight, created_at')
+      .select(
+        'id, name, niche, stage, score, mrr, cac, conversion, next_action, insight, created_at'
+      )
       .eq('user_id', user!.id),
     conversations: await supabase
       .from('conversations')
@@ -270,20 +297,22 @@ export async function GET() {
 
   const errors = collectPrivacyQueryErrors(results)
 
-  return NextResponse.json(redactPrivacyExport({
-    exported_at: new Date().toISOString(),
-    user: { id: user!.id, email: user!.email },
-    export_errors: errors,
-    settings: results.settings.data,
-    ventures: results.ventures.data ?? [],
-    conversations: results.conversations.data ?? [],
-    messages: results.messages.data ?? [],
-    documents: results.documents.data ?? [],
-    automations: results.automations.data ?? [],
-    automation_runs: results.automation_runs.data ?? [],
-    agent_runs: results.agent_runs.data ?? [],
-    agent_events: results.agent_events.data ?? [],
-  }))
+  return NextResponse.json(
+    redactPrivacyExport({
+      exported_at: new Date().toISOString(),
+      user: { id: user!.id, email: user!.email },
+      export_errors: errors,
+      settings: results.settings.data,
+      ventures: results.ventures.data ?? [],
+      conversations: results.conversations.data ?? [],
+      messages: results.messages.data ?? [],
+      documents: results.documents.data ?? [],
+      automations: results.automations.data ?? [],
+      automation_runs: results.automation_runs.data ?? [],
+      agent_runs: results.agent_runs.data ?? [],
+      agent_events: results.agent_events.data ?? [],
+    })
+  )
 }
 ```
 
@@ -309,6 +338,7 @@ git commit -m "fix: export real privacy data fields"
 ### Task 3: Make Privacy Delete Auditable
 
 **Files:**
+
 - Modify: `app/api/studio/privacy/delete/route.ts`
 
 - [ ] **Step 1: Add audit logging before deletion starts**
@@ -374,6 +404,7 @@ git commit -m "fix: audit and validate privacy deletion"
 ### Task 4: Enrich Sanitized Infra Config
 
 **Files:**
+
 - Modify: `lib/infra-config.ts`
 - Modify: `lib/infra-config.test.ts`
 
@@ -474,14 +505,94 @@ Use this default list:
 
 ```ts
 export const DEFAULT_INFRA_SERVICES: InfraServiceConfig[] = parseInfraServices([
-  { id: 'proxmox', label: 'Proxmox VE', endpoint: process.env.PROXMOX_BASE_URL ?? 'https://192.168.0.1:8006', role: 'Compute cluster', healthKey: null, short: 'PROX', color: '#34d399', vmid: null, kind: 'host' },
-  { id: 'coolify', label: 'Coolify', endpoint: process.env.COOLIFY_URL ?? 'http://192.168.0.19:8000', role: 'Deployments', healthKey: 'coolify', short: 'COOL', color: '#34d399', vmid: 102, kind: 'service' },
-  { id: 'nginx', label: 'Nginx PM', endpoint: process.env.NGINX_PM_URL ?? 'https://npm.tailnet.local', role: 'Proxy and SSL', healthKey: null, short: 'NPM', color: '#22d3ee', vmid: 101, kind: 'edge' },
-  { id: 'uptime', label: 'Uptime Kuma', endpoint: process.env.UPTIME_KUMA_URL ?? 'https://uptime.tailnet.local', role: 'Monitoring', healthKey: null, short: 'UPT', color: '#a78bfa', vmid: null, kind: 'service' },
-  { id: 'vault', label: 'Vaultwarden', endpoint: process.env.VAULTWARDEN_URL ?? 'https://vault.tailnet.local', role: 'Secrets and credentials', healthKey: null, short: 'VLT', color: '#fbbf24', vmid: 100, kind: 'service' },
-  { id: 'supabase', label: 'Supabase', endpoint: process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://supabase.kenomi.eu', role: 'Auth and database', healthKey: 'supabase', short: 'SUP', color: '#34d399', vmid: null, kind: 'external' },
-  { id: 'n8n', label: 'n8n', endpoint: process.env.N8N_BASE_URL ?? 'https://n8n.kenomi.eu', role: 'Automation', healthKey: 'n8n', short: 'N8N', color: '#e879f9', vmid: null, kind: 'service' },
-  { id: 'ollama', label: 'Ollama', endpoint: process.env.OLLAMA_BASE_URL ?? 'http://192.168.0.14:11434', role: 'Local inference', healthKey: 'ollama', short: 'OLL', color: '#fb923c', vmid: null, kind: 'external' },
+  {
+    id: 'proxmox',
+    label: 'Proxmox VE',
+    endpoint: process.env.PROXMOX_BASE_URL ?? 'https://192.168.0.1:8006',
+    role: 'Compute cluster',
+    healthKey: null,
+    short: 'PROX',
+    color: '#34d399',
+    vmid: null,
+    kind: 'host',
+  },
+  {
+    id: 'coolify',
+    label: 'Coolify',
+    endpoint: process.env.COOLIFY_URL ?? 'http://192.168.0.19:8000',
+    role: 'Deployments',
+    healthKey: 'coolify',
+    short: 'COOL',
+    color: '#34d399',
+    vmid: 102,
+    kind: 'service',
+  },
+  {
+    id: 'nginx',
+    label: 'Nginx PM',
+    endpoint: process.env.NGINX_PM_URL ?? 'https://npm.tailnet.local',
+    role: 'Proxy and SSL',
+    healthKey: null,
+    short: 'NPM',
+    color: '#22d3ee',
+    vmid: 101,
+    kind: 'edge',
+  },
+  {
+    id: 'uptime',
+    label: 'Uptime Kuma',
+    endpoint: process.env.UPTIME_KUMA_URL ?? 'https://uptime.tailnet.local',
+    role: 'Monitoring',
+    healthKey: null,
+    short: 'UPT',
+    color: '#a78bfa',
+    vmid: null,
+    kind: 'service',
+  },
+  {
+    id: 'vault',
+    label: 'Vaultwarden',
+    endpoint: process.env.VAULTWARDEN_URL ?? 'https://vault.tailnet.local',
+    role: 'Secrets and credentials',
+    healthKey: null,
+    short: 'VLT',
+    color: '#fbbf24',
+    vmid: 100,
+    kind: 'service',
+  },
+  {
+    id: 'supabase',
+    label: 'Supabase',
+    endpoint: process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://supabase.kenomi.eu',
+    role: 'Auth and database',
+    healthKey: 'supabase',
+    short: 'SUP',
+    color: '#34d399',
+    vmid: null,
+    kind: 'external',
+  },
+  {
+    id: 'n8n',
+    label: 'n8n',
+    endpoint: process.env.N8N_BASE_URL ?? 'https://n8n.kenomi.eu',
+    role: 'Automation',
+    healthKey: 'n8n',
+    short: 'N8N',
+    color: '#e879f9',
+    vmid: null,
+    kind: 'service',
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama',
+    endpoint: process.env.OLLAMA_BASE_URL ?? 'http://192.168.0.14:11434',
+    role: 'Local inference',
+    healthKey: 'ollama',
+    short: 'OLL',
+    color: '#fb923c',
+    vmid: null,
+    kind: 'external',
+  },
 ])
 ```
 
@@ -505,6 +616,7 @@ git commit -m "feat: enrich sanitized infra metadata"
 ### Task 5: Replace Static Infra UI Services with API Data
 
 **Files:**
+
 - Modify: `app/studio/infrastructure/page.tsx`
 
 - [ ] **Step 1: Add client service type**
@@ -525,11 +637,61 @@ type InfraService = {
 }
 
 const FALLBACK_SERVICES: InfraService[] = [
-  { id: 'proxmox', label: 'Proxmox VE', short: 'PROX', color: '#34d399', role: 'Compute cluster', endpointLabel: 'private', healthKey: null, vmid: null, kind: 'host' },
-  { id: 'coolify', label: 'Coolify', short: 'COOL', color: '#34d399', role: 'Deployments', endpointLabel: 'private', healthKey: 'coolify', vmid: 102, kind: 'service' },
-  { id: 'n8n', label: 'n8n', short: 'N8N', color: '#e879f9', role: 'Automation', endpointLabel: 'private', healthKey: 'n8n', vmid: null, kind: 'service' },
-  { id: 'supabase', label: 'Supabase', short: 'SUP', color: '#34d399', role: 'Auth and database', endpointLabel: 'supabase', healthKey: 'supabase', vmid: null, kind: 'external' },
-  { id: 'ollama', label: 'Ollama', short: 'OLL', color: '#fb923c', role: 'Local inference', endpointLabel: 'private', healthKey: 'ollama', vmid: null, kind: 'external' },
+  {
+    id: 'proxmox',
+    label: 'Proxmox VE',
+    short: 'PROX',
+    color: '#34d399',
+    role: 'Compute cluster',
+    endpointLabel: 'private',
+    healthKey: null,
+    vmid: null,
+    kind: 'host',
+  },
+  {
+    id: 'coolify',
+    label: 'Coolify',
+    short: 'COOL',
+    color: '#34d399',
+    role: 'Deployments',
+    endpointLabel: 'private',
+    healthKey: 'coolify',
+    vmid: 102,
+    kind: 'service',
+  },
+  {
+    id: 'n8n',
+    label: 'n8n',
+    short: 'N8N',
+    color: '#e879f9',
+    role: 'Automation',
+    endpointLabel: 'private',
+    healthKey: 'n8n',
+    vmid: null,
+    kind: 'service',
+  },
+  {
+    id: 'supabase',
+    label: 'Supabase',
+    short: 'SUP',
+    color: '#34d399',
+    role: 'Auth and database',
+    endpointLabel: 'supabase',
+    healthKey: 'supabase',
+    vmid: null,
+    kind: 'external',
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama',
+    short: 'OLL',
+    color: '#fb923c',
+    role: 'Local inference',
+    endpointLabel: 'private',
+    healthKey: 'ollama',
+    vmid: null,
+    kind: 'external',
+  },
 ]
 ```
 
@@ -548,7 +710,7 @@ async function loadServices() {
   try {
     const res = await fetch('/api/studio/infra/services')
     if (!res.ok) return
-    const data = await res.json() as { services?: InfraService[] }
+    const data = (await res.json()) as { services?: InfraService[] }
     if (!cancelled && data.services?.length) setServices(data.services)
   } catch {
     if (!cancelled) setServices(FALLBACK_SERVICES)
@@ -615,6 +777,7 @@ git commit -m "feat: load sanitized infra topology in UI"
 ### Task 6: Add Schedule Advancement Logic
 
 **Files:**
+
 - Modify: `lib/agent-orchestration.ts`
 - Modify: `lib/agent-orchestration.test.ts`
 
@@ -627,9 +790,9 @@ import { computeNextRunAt, partitionDueRuns } from './agent-orchestration'
 
 describe('computeNextRunAt', () => {
   it('ajoute interval_minutes à partir de now', () => {
-    expect(
-      computeNextRunAt(new Date('2026-05-18T10:00:00.000Z'), 30)
-    ).toBe('2026-05-18T10:30:00.000Z')
+    expect(computeNextRunAt(new Date('2026-05-18T10:00:00.000Z'), 30)).toBe(
+      '2026-05-18T10:30:00.000Z'
+    )
   })
 })
 
@@ -690,6 +853,7 @@ git commit -m "feat: add agent schedule advancement logic"
 ### Task 7: Advance Due Schedules and Log Orchestration
 
 **Files:**
+
 - Modify: `app/api/studio/agents/orchestrate/route.ts`
 
 - [ ] **Step 1: Update route imports**
@@ -786,6 +950,7 @@ git commit -m "feat: advance due agent schedules"
 ### Task 8: Show Orchestration Status in Agents UI
 
 **Files:**
+
 - Modify: `app/studio/agents/page.tsx`
 
 - [ ] **Step 1: Add orchestration response type**
@@ -811,7 +976,7 @@ const [orchestration, setOrchestration] = useState<OrchestrationStatus | null>(n
 async function loadOrchestration() {
   const res = await fetch('/api/studio/agents/orchestrate', { method: 'POST' })
   if (!res.ok) return
-  const data = await res.json() as OrchestrationStatus
+  const data = (await res.json()) as OrchestrationStatus
   setOrchestration(data)
 }
 ```
@@ -823,13 +988,15 @@ Call `loadOrchestration()` once when `user` is available, and after manual agent
 In the page header/actions area, render:
 
 ```tsx
-{orchestration && (
-  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-    <span className="ck-chip">DUE {orchestration.due.length}</span>
-    <span className="ck-chip">READY {orchestration.executable.length}</span>
-    <span className="ck-chip">GATED {orchestration.blocked.length}</span>
-  </div>
-)}
+{
+  orchestration && (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <span className="ck-chip">DUE {orchestration.due.length}</span>
+      <span className="ck-chip">READY {orchestration.executable.length}</span>
+      <span className="ck-chip">GATED {orchestration.blocked.length}</span>
+    </div>
+  )
+}
 ```
 
 If `ck-chip` does not exist in this file, use the existing inline chip style already used in nearby header actions.
@@ -859,6 +1026,7 @@ git commit -m "feat: show agent orchestration status"
 ### Task 9: Rename Middleware to Proxy
 
 **Files:**
+
 - Create: `proxy.ts`
 - Delete: `middleware.ts`
 
@@ -876,13 +1044,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/',
-    '/login',
-    '/signup',
-    '/dashboard/:path*',
-    '/studio/:path*',
-  ],
+  matcher: ['/', '/login', '/signup', '/dashboard/:path*', '/studio/:path*'],
 }
 ```
 
@@ -907,6 +1069,7 @@ npm run dev
 ```
 
 Manual checks:
+
 - `/studio` redirects to `/login` when logged out.
 - `/signup` redirects to `/login`.
 - `/dashboard` redirects to `/dashboard/login` when dashboard cookie is absent.
@@ -926,6 +1089,7 @@ git commit -m "chore: migrate middleware to Next proxy"
 ### Task 10: Fix Cheap Lint Warnings
 
 **Files:**
+
 - Modify: `app/api/studio/agents/pipeline/route.ts`
 - Modify: `app/studio/infrastructure/page.tsx`
 - Modify: `lib/supabase.ts`
@@ -989,6 +1153,7 @@ git commit -m "chore: reduce lint warnings"
 ### Task 11: Fix Analytics Render Mutation
 
 **Files:**
+
 - Modify: `app/studio/analytics/page.tsx`
 
 - [ ] **Step 1: Replace mutating accumulator**
@@ -1009,20 +1174,22 @@ const segments = items.map((item, index) => {
 Render with:
 
 ```tsx
-{segments.map(({ item: it, offset: off, length: len }) => (
-  <circle
-    key={it.agent.id}
-    cx="80"
-    cy="80"
-    r={r}
-    fill="none"
-    stroke={it.agent.color}
-    strokeWidth="18"
-    strokeDasharray={`${len} ${c - len}`}
-    strokeDashoffset={-off}
-    transform="rotate(-90 80 80)"
-  />
-))}
+{
+  segments.map(({ item: it, offset: off, length: len }) => (
+    <circle
+      key={it.agent.id}
+      cx="80"
+      cy="80"
+      r={r}
+      fill="none"
+      stroke={it.agent.color}
+      strokeWidth="18"
+      strokeDasharray={`${len} ${c - len}`}
+      strokeDashoffset={-off}
+      transform="rotate(-90 80 80)"
+    />
+  ))
+}
 ```
 
 - [ ] **Step 2: Run targeted checks**
@@ -1050,6 +1217,7 @@ git commit -m "fix: avoid render mutation in analytics chart"
 ### Task 12: Update Docs to Match Actual State
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `docs/security.md`
 - Modify: `docs/agents.md`
@@ -1103,6 +1271,7 @@ git commit -m "docs: align architecture docs with implementation"
 ### Task 13: Full Verification Gate
 
 **Files:**
+
 - No planned source edits.
 
 - [ ] **Step 1: Run full verification**
@@ -1117,6 +1286,7 @@ npm run lint
 ```
 
 Expected:
+
 - `typecheck` exits `0`.
 - `test` exits `0`.
 - `build` exits `0` with no `middleware` deprecation warning.
@@ -1131,6 +1301,7 @@ npm run dev
 ```
 
 Check:
+
 - `/studio` redirects to `/login` logged out.
 - `/api/studio/services/health` returns `401` logged out.
 - `/studio/infrastructure` displays services without raw internal IPs.
@@ -1152,6 +1323,7 @@ Expected: only intentional plan or implementation files are modified.
 ## Self-Review
 
 **Spec coverage**
+
 - Privacy export mismatch: Task 1 and Task 2.
 - Privacy delete safety: Task 3.
 - Infra API not wired into UI: Task 4 and Task 5.
@@ -1162,6 +1334,7 @@ Expected: only intentional plan or implementation files are modified.
 - Verification: Task 13.
 
 **Deferred on purpose**
+
 - Fully autonomous execution of agents from cron remains out of scope until service-role multi-user scoping and approval policy are designed.
 - Stripe product creation, Coolify deployments, and public launch automation remain explicitly gated future work.
 - Complete cleanup of every React Compiler warning is not required for this pass; this plan removes high-signal and cheap warnings first.

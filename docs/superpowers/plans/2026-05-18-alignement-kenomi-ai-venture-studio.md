@@ -13,23 +13,27 @@
 ## File Structure
 
 **Security and internal access**
+
 - Modify: `app/api/studio/services/health/route.ts` - require studio auth before returning service status.
 - Modify: `app/api/studio/settings/secrets/route.ts` - use shared `requireAllowedUser` instead of raw Supabase auth.
 - Modify: `lib/security.ts` - make private network access explicit allowlist driven.
 - Modify: `lib/security.test.ts` - update SSRF expectations for private hosts.
 
 **Infrastructure metadata**
+
 - Create: `lib/infra-config.ts` - server-side source of truth for service metadata and sanitized client payloads.
 - Create: `lib/infra-config.test.ts` - test internal URL redaction and env parsing.
 - Create: `app/api/studio/infra/services/route.ts` - authenticated route returning sanitized service topology.
 - Modify: `app/studio/infrastructure/page.tsx` - fetch sanitized topology instead of hardcoding IPs/domains client-side.
 
 **Framework/UI alignment**
+
 - Modify: `package.json` and `package-lock.json` - upgrade Next/React alignment and add required UI libs.
 - Create or modify: `components/ui/*` - shadcn/ui primitives only when directly used.
 - Modify: `eslint.config.mjs` and scripts if required by Next latest.
 
 **Agent orchestration**
+
 - Create: `supabase/migrations/20260518_agent_orchestration.sql` - schedules, tasks, events, approval gates.
 - Create: `lib/agent-orchestration.ts` - pure orchestration decision logic.
 - Create: `lib/agent-orchestration.test.ts` - tests for next run selection and human approval gates.
@@ -38,6 +42,7 @@
 - Modify: `app/studio/agents/page.tsx` - show schedules, blocked gates, and last autonomous run.
 
 **Audit and RGPD**
+
 - Create: `lib/audit-log.ts` - append-only structured audit event helper.
 - Create: `lib/audit-log.test.ts` - verify event shape and redaction.
 - Modify: `app/api/studio/agents/run/route.ts` and `app/api/studio/automations/trigger/route.ts` - record audit events.
@@ -48,6 +53,7 @@
 - Modify: `app/studio/settings/page.tsx` - add Privacy/Data controls.
 
 **Docs and verification**
+
 - Modify: `README.md` - update architecture status, env vars, and deployment requirements.
 - Create: `docs/security.md` - tailnet, public/private endpoints, secret handling, approval gates.
 - Create: `docs/agents.md` - agent chain, schedules, metrics, escalation model.
@@ -59,6 +65,7 @@
 ### Task 1: Require Studio Auth for Service Health
 
 **Files:**
+
 - Modify: `app/api/studio/services/health/route.ts`
 
 - [ ] **Step 1: Add authentication at the top of the GET handler**
@@ -114,6 +121,7 @@ git commit -m "fix: protect studio service health endpoint"
 ### Task 2: Reuse Allowed-User Auth for Secret Status
 
 **Files:**
+
 - Modify: `app/api/studio/settings/secrets/route.ts`
 
 - [ ] **Step 1: Replace raw auth with `requireAllowedUser`**
@@ -172,6 +180,7 @@ git commit -m "fix: enforce allowed user on secret status route"
 ### Task 3: Make Private Network Egress Explicit
 
 **Files:**
+
 - Modify: `lib/security.ts`
 - Modify: `lib/security.test.ts`
 
@@ -256,7 +265,8 @@ Expected: failures for `192.168.x.x` default behavior.
 Update the regex in both URL helpers:
 
 ```ts
-const SSRF_BLOCKED = /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
+const SSRF_BLOCKED =
+  /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
 ```
 
 Keep the existing `getTrustedHosts().has(hostname.toLowerCase())` check before the blocklist.
@@ -284,6 +294,7 @@ git commit -m "fix: require explicit allowlist for private service egress"
 ### Task 4: Add Server-Side Infra Config
 
 **Files:**
+
 - Create: `lib/infra-config.ts`
 - Create: `lib/infra-config.test.ts`
 
@@ -298,7 +309,13 @@ import { getSanitizedInfraServices, parseInfraServices } from './infra-config'
 describe('infra config', () => {
   it('redacts internal URLs from sanitized service metadata', () => {
     const services = parseInfraServices([
-      { id: 'ollama', label: 'Ollama', endpoint: 'http://192.168.0.14:11434', role: 'LLM', healthKey: 'ollama' },
+      {
+        id: 'ollama',
+        label: 'Ollama',
+        endpoint: 'http://192.168.0.14:11434',
+        role: 'LLM',
+        healthKey: 'ollama',
+      },
     ])
 
     expect(getSanitizedInfraServices(services)).toEqual([
@@ -308,7 +325,13 @@ describe('infra config', () => {
 
   it('keeps public host labels without protocol or path', () => {
     const services = parseInfraServices([
-      { id: 'n8n', label: 'n8n', endpoint: 'https://n8n.kenomi.eu/healthz', role: 'Automation', healthKey: 'n8n' },
+      {
+        id: 'n8n',
+        label: 'n8n',
+        endpoint: 'https://n8n.kenomi.eu/healthz',
+        role: 'Automation',
+        healthKey: 'n8n',
+      },
     ])
 
     expect(getSanitizedInfraServices(services)[0].endpointLabel).toBe('n8n.kenomi.eu')
@@ -343,7 +366,8 @@ export interface SanitizedInfraService {
   endpointLabel: string
 }
 
-const PRIVATE_HOST = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|fc00:|fd[0-9a-f]{2}:)/i
+const PRIVATE_HOST =
+  /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|fc00:|fd[0-9a-f]{2}:)/i
 
 export function parseInfraServices(services: InfraServiceConfig[]): InfraServiceConfig[] {
   return services.map((service) => ({
@@ -364,7 +388,9 @@ function endpointLabel(endpoint: string): string {
   }
 }
 
-export function getSanitizedInfraServices(services = DEFAULT_INFRA_SERVICES): SanitizedInfraService[] {
+export function getSanitizedInfraServices(
+  services = DEFAULT_INFRA_SERVICES
+): SanitizedInfraService[] {
   return services.map((service) => ({
     id: service.id,
     label: service.label,
@@ -375,11 +401,41 @@ export function getSanitizedInfraServices(services = DEFAULT_INFRA_SERVICES): Sa
 }
 
 export const DEFAULT_INFRA_SERVICES: InfraServiceConfig[] = parseInfraServices([
-  { id: 'proxmox', label: 'Proxmox VE', endpoint: process.env.PROXMOX_BASE_URL ?? 'https://proxmox.tailnet.local:8006', role: 'Compute cluster', healthKey: null },
-  { id: 'coolify', label: 'Coolify', endpoint: process.env.COOLIFY_URL ?? 'https://coolify.tailnet.local', role: 'Deployments', healthKey: 'coolify' },
-  { id: 'n8n', label: 'n8n', endpoint: process.env.N8N_BASE_URL ?? 'https://n8n.tailnet.local', role: 'Automation', healthKey: 'n8n' },
-  { id: 'supabase', label: 'Supabase', endpoint: process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://supabase.tailnet.local', role: 'Auth and database', healthKey: 'supabase' },
-  { id: 'ollama', label: 'Ollama', endpoint: process.env.OLLAMA_BASE_URL ?? 'http://ollama.tailnet.local:11434', role: 'Local inference', healthKey: 'ollama' },
+  {
+    id: 'proxmox',
+    label: 'Proxmox VE',
+    endpoint: process.env.PROXMOX_BASE_URL ?? 'https://proxmox.tailnet.local:8006',
+    role: 'Compute cluster',
+    healthKey: null,
+  },
+  {
+    id: 'coolify',
+    label: 'Coolify',
+    endpoint: process.env.COOLIFY_URL ?? 'https://coolify.tailnet.local',
+    role: 'Deployments',
+    healthKey: 'coolify',
+  },
+  {
+    id: 'n8n',
+    label: 'n8n',
+    endpoint: process.env.N8N_BASE_URL ?? 'https://n8n.tailnet.local',
+    role: 'Automation',
+    healthKey: 'n8n',
+  },
+  {
+    id: 'supabase',
+    label: 'Supabase',
+    endpoint: process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://supabase.tailnet.local',
+    role: 'Auth and database',
+    healthKey: 'supabase',
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama',
+    endpoint: process.env.OLLAMA_BASE_URL ?? 'http://ollama.tailnet.local:11434',
+    role: 'Local inference',
+    healthKey: 'ollama',
+  },
 ])
 ```
 
@@ -401,6 +457,7 @@ git commit -m "feat: add sanitized infrastructure config"
 ### Task 5: Expose Sanitized Infra Services via Authenticated API
 
 **Files:**
+
 - Create: `app/api/studio/infra/services/route.ts`
 - Modify: `app/studio/infrastructure/page.tsx`
 
@@ -460,6 +517,7 @@ git commit -m "feat: serve sanitized infrastructure topology"
 ### Task 6: Upgrade Next and Align React Tooling
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `package-lock.json`
 - Modify: `eslint.config.mjs` if required by the upgrade
@@ -520,6 +578,7 @@ git commit -m "chore: align Next and React stack"
 ### Task 7: Add Orchestration Schema
 
 **Files:**
+
 - Create: `supabase/migrations/20260518_agent_orchestration.sql`
 
 - [ ] **Step 1: Create migration**
@@ -587,6 +646,7 @@ git commit -m "feat: add agent orchestration tables"
 ### Task 8: Implement Pure Orchestration Logic
 
 **Files:**
+
 - Create: `lib/agent-orchestration.ts`
 - Create: `lib/agent-orchestration.test.ts`
 
@@ -599,19 +659,43 @@ import { selectDueAgentRuns } from './agent-orchestration'
 describe('selectDueAgentRuns', () => {
   it('returns enabled schedules due now', () => {
     const now = new Date('2026-05-18T10:00:00.000Z')
-    const runs = selectDueAgentRuns([
-      { id: '1', agent_id: 'scout', enabled: true, next_run_at: '2026-05-18T09:59:00.000Z', requires_human_approval: false },
-      { id: '2', agent_id: 'builder', enabled: true, next_run_at: '2026-05-18T10:10:00.000Z', requires_human_approval: false },
-    ], now)
+    const runs = selectDueAgentRuns(
+      [
+        {
+          id: '1',
+          agent_id: 'scout',
+          enabled: true,
+          next_run_at: '2026-05-18T09:59:00.000Z',
+          requires_human_approval: false,
+        },
+        {
+          id: '2',
+          agent_id: 'builder',
+          enabled: true,
+          next_run_at: '2026-05-18T10:10:00.000Z',
+          requires_human_approval: false,
+        },
+      ],
+      now
+    )
 
     expect(runs).toEqual([{ scheduleId: '1', agentId: 'scout', blockedByApproval: false }])
   })
 
   it('marks risky schedules as blocked by approval', () => {
     const now = new Date('2026-05-18T10:00:00.000Z')
-    const runs = selectDueAgentRuns([
-      { id: '1', agent_id: 'payment', enabled: true, next_run_at: '2026-05-18T09:59:00.000Z', requires_human_approval: true },
-    ], now)
+    const runs = selectDueAgentRuns(
+      [
+        {
+          id: '1',
+          agent_id: 'payment',
+          enabled: true,
+          next_run_at: '2026-05-18T09:59:00.000Z',
+          requires_human_approval: true,
+        },
+      ],
+      now
+    )
 
     expect(runs).toEqual([{ scheduleId: '1', agentId: 'payment', blockedByApproval: true }])
   })
@@ -673,6 +757,7 @@ git commit -m "feat: add agent orchestration planner"
 ### Task 9: Add Orchestration Route
 
 **Files:**
+
 - Create: `app/api/studio/agents/orchestrate/route.ts`
 - Modify: `app/api/studio/agents/run/route.ts`
 
@@ -702,10 +787,14 @@ export async function POST(req: NextRequest) {
   if (response) return response
 
   if (cronAuthorized) {
-    return NextResponse.json({
-      ok: false,
-      error: 'Cron orchestration requires service-role implementation before enabling multi-user execution',
-    }, { status: 501 })
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          'Cron orchestration requires service-role implementation before enabling multi-user execution',
+      },
+      { status: 501 }
+    )
   }
 
   const { data, error } = await supabase!
@@ -743,6 +832,7 @@ git commit -m "feat: add guarded agent orchestration route"
 ### Task 10: Add Audit Event Helper
 
 **Files:**
+
 - Create: `lib/audit-log.ts`
 - Create: `lib/audit-log.test.ts`
 
@@ -754,11 +844,13 @@ import { sanitizeAuditMetadata } from './audit-log'
 
 describe('sanitizeAuditMetadata', () => {
   it('redacts known sensitive fields', () => {
-    expect(sanitizeAuditMetadata({
-      api_key: 'sk-test',
-      password: 'secret',
-      safe: 'ok',
-    })).toEqual({
+    expect(
+      sanitizeAuditMetadata({
+        api_key: 'sk-test',
+        password: 'secret',
+        safe: 'ok',
+      })
+    ).toEqual({
       api_key: '[redacted]',
       password: '[redacted]',
       safe: 'ok',
@@ -782,7 +874,11 @@ export function sanitizeAuditMetadata(input: Record<string, unknown>): Record<st
 }
 
 export async function insertAuditEvent(
-  supabase: { from: (table: string) => { insert: (row: unknown) => Promise<{ error: { message: string } | null }> } },
+  supabase: {
+    from: (table: string) => {
+      insert: (row: unknown) => Promise<{ error: { message: string } | null }>
+    }
+  },
   event: {
     user_id: string
     agent_id?: string | null
@@ -820,6 +916,7 @@ git commit -m "feat: add structured audit logging helper"
 ### Task 11: Log Agent and Automation Actions
 
 **Files:**
+
 - Modify: `app/api/studio/agents/run/route.ts`
 - Modify: `app/api/studio/automations/trigger/route.ts`
 
@@ -882,6 +979,7 @@ git commit -m "feat: log agent and automation audit events"
 ### Task 12: Add Privacy Export Foundation
 
 **Files:**
+
 - Create: `lib/privacy-export.ts`
 - Create: `lib/privacy-export.test.ts`
 - Create: `app/api/studio/privacy/export/route.ts`
@@ -955,15 +1053,17 @@ export async function GET() {
     supabase.from('agent_runs').select('*').eq('user_id', user!.id),
   ])
 
-  return NextResponse.json(redactPrivacyExport({
-    exported_at: new Date().toISOString(),
-    user: { id: user!.id, email: user!.email },
-    settings: settings.data,
-    ventures: ventures.data ?? [],
-    conversations: conversations.data ?? [],
-    documents: documents.data ?? [],
-    agent_runs: agentRuns.data ?? [],
-  } as Parameters<typeof redactPrivacyExport>[0] & Record<string, unknown>))
+  return NextResponse.json(
+    redactPrivacyExport({
+      exported_at: new Date().toISOString(),
+      user: { id: user!.id, email: user!.email },
+      settings: settings.data,
+      ventures: ventures.data ?? [],
+      conversations: conversations.data ?? [],
+      documents: documents.data ?? [],
+      agent_runs: agentRuns.data ?? [],
+    } as Parameters<typeof redactPrivacyExport>[0] & Record<string, unknown>)
+  )
 }
 ```
 
@@ -989,6 +1089,7 @@ git commit -m "feat: add privacy export endpoint"
 ### Task 13: Update Project Documentation
 
 **Files:**
+
 - Modify: `README.md`
 - Create: `docs/security.md`
 - Create: `docs/agents.md`
@@ -1068,6 +1169,7 @@ git commit -m "docs: document security and agent architecture"
 ### Task 14: Final Verification
 
 **Files:**
+
 - No code changes expected.
 
 - [ ] **Step 1: Run full verification**
@@ -1080,6 +1182,7 @@ npm run lint
 ```
 
 Expected:
+
 - `typecheck`: exit `0`
 - `test`: all tests pass
 - `build`: exit `0`
@@ -1094,6 +1197,7 @@ npm run dev
 ```
 
 Verify:
+
 - `/login` loads.
 - `/studio` redirects to login when logged out.
 - `/api/studio/services/health` returns `401` when logged out.
@@ -1114,6 +1218,7 @@ git commit -m "chore: finalize venture studio alignment"
 ## Self-Review
 
 **Spec coverage**
+
 - Discover SaaS opportunities: covered by existing Scout and Phase 4 orchestration.
 - Generate MVPs automatically: partially covered by Builder output; full code generation remains a future subsystem.
 - Deploy products: existing Coolify awareness; deployment automation remains future work.
@@ -1125,6 +1230,7 @@ git commit -m "chore: finalize venture studio alignment"
 - RGPD: Phase 5 adds export foundation; deletion workflow still needs careful staged implementation after export.
 
 **Known deferred work**
+
 - Full autonomous MVP code generation.
 - Coolify deployment creation API.
 - Stripe product/price creation and checkout publishing.
@@ -1132,6 +1238,7 @@ git commit -m "chore: finalize venture studio alignment"
 - Real multi-machine Tailscale ACL verification.
 
 **No-placeholder scan**
+
 - This plan avoids “TBD” implementation steps.
 - Deferred items are explicitly listed as out-of-scope future subsystems.
 

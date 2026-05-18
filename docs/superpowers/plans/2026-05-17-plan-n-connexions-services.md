@@ -14,18 +14,19 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `lib/security.ts` | Modifier — whitelist TRUSTED_PRIVATE_HOSTS |
-| `supabase/migrations/20260517_plan_n_agent_model_n8n.sql` | Créer — colonne model + n8n settings |
-| `app/api/studio/n8n/workflows/route.ts` | Créer — proxy GET workflows n8n |
-| `app/studio/settings/page.tsx` | Modifier — champs n8n_base_url + n8n_api_key |
+| Fichier                                                   | Action                                       |
+| --------------------------------------------------------- | -------------------------------------------- |
+| `lib/security.ts`                                         | Modifier — whitelist TRUSTED_PRIVATE_HOSTS   |
+| `supabase/migrations/20260517_plan_n_agent_model_n8n.sql` | Créer — colonne model + n8n settings         |
+| `app/api/studio/n8n/workflows/route.ts`                   | Créer — proxy GET workflows n8n              |
+| `app/studio/settings/page.tsx`                            | Modifier — champs n8n_base_url + n8n_api_key |
 
 ---
 
 ### Task 1 : SSRF whitelist pour hosts privés de confiance
 
 **Files:**
+
 - Modify: `lib/security.ts`
 
 **Contexte :** `isAllowedWebhookUrl` et `isAllowedOllamaUrl` bloquent `192.168.x` via la regex SSRF. Ollama est sur `192.168.0.14:11434` et n8n sur `192.168.0.19:5678`. On ajoute une env var `TRUSTED_PRIVATE_HOSTS` (liste CSV de hostnames/IPs autorisés explicitement) qui court-circuite le blocage SSRF pour ces hôtes précis. Côté client (browser), ces appels ne passent jamais — seules les routes API serveur appellent Ollama/n8n, donc la whitelist est côté serveur uniquement.
@@ -40,7 +41,10 @@ Remplacer le contenu complet par :
 function getTrustedHosts(): Set<string> {
   const raw = process.env.TRUSTED_PRIVATE_HOSTS ?? ''
   return new Set(
-    raw.split(',').map(h => h.trim().toLowerCase()).filter(Boolean)
+    raw
+      .split(',')
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean)
   )
 }
 
@@ -52,7 +56,8 @@ export function isAllowedWebhookUrl(url: string): boolean {
     // Whitelist explicite pour hosts privés de confiance (n8n, etc.)
     if (getTrustedHosts().has(hostname.toLowerCase())) return true
 
-    const SSRF_BLOCKED = /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
+    const SSRF_BLOCKED =
+      /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
     if (SSRF_BLOCKED.test(hostname)) return false
     if (/^\d+$/.test(hostname)) return false
     return true
@@ -69,7 +74,8 @@ export function isAllowedOllamaUrl(url: string): boolean {
     // Whitelist explicite pour Ollama (réseau privé de confiance)
     if (getTrustedHosts().has(hostname.toLowerCase())) return true
 
-    const SSRF_BLOCKED = /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
+    const SSRF_BLOCKED =
+      /^(localhost|127\.|0\.0\.0\.0|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\]|\[::ffff:|fc00:|fd[0-9a-f]{2}:|0x)/i
     if (SSRF_BLOCKED.test(hostname)) return false
     if (/^\d+$/.test(hostname)) return false
     return true
@@ -125,6 +131,7 @@ git commit -m "fix(security): TRUSTED_PRIVATE_HOSTS whitelist pour Ollama et n8n
 ### Task 2 : Migration — colonne `model` dans `agent_configs` + colonnes n8n dans `user_settings`
 
 **Files:**
+
 - Create: `supabase/migrations/20260517_plan_n_agent_model_n8n.sql`
 
 **Contexte :** La table `agent_configs` n'a pas de colonne `model` (l'UI `TunePanel` permet de choisir un modèle mais ne peut pas le sauvegarder). La table `user_settings` n'a pas `n8n_base_url` ni `n8n_api_key`.
@@ -184,6 +191,7 @@ git commit -m "feat(database): colonne model dans agent_configs + n8n_base_url/n
 ### Task 3 : Route `GET /api/studio/n8n/workflows`
 
 **Files:**
+
 - Create: `app/api/studio/n8n/workflows/route.ts`
 
 **Contexte :** La page automations doit pouvoir lister les workflows n8n réels. On crée une route proxy qui lit `n8n_base_url` et `n8n_api_key` depuis `user_settings` de l'utilisateur, puis appelle l'API n8n `GET /api/v1/workflows`. Si aucune config n8n n'est présente, retourne une liste vide.
@@ -221,7 +229,7 @@ export async function GET() {
     const resp = await fetch(`${baseUrl}/api/v1/workflows?limit=50`, {
       headers: {
         'X-N8N-API-KEY': settings?.n8n_api_key ?? '',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       signal: AbortSignal.timeout(5000),
     })
@@ -230,7 +238,7 @@ export async function GET() {
       return apiError(`n8n erreur ${resp.status}`, 502)
     }
 
-    const json = await resp.json() as { data?: unknown[] }
+    const json = (await resp.json()) as { data?: unknown[] }
     return NextResponse.json(json.data ?? [])
   } catch (e) {
     const msg = e instanceof Error && e.name === 'TimeoutError' ? 'n8n timeout' : 'n8n injoignable'
@@ -259,6 +267,7 @@ git commit -m "feat(n8n): route GET /api/studio/n8n/workflows — proxy API n8n 
 ### Task 4 : Champs n8n + model dans la page Settings
 
 **Files:**
+
 - Modify: `app/studio/settings/page.tsx`
 
 **Contexte :** La page settings charge et sauvegarde `user_settings`. Il faut ajouter deux champs : `n8n_base_url` (URL de l'instance n8n) et `n8n_api_key` (clé API n8n). Chercher la section Ollama comme modèle — elle a un champ texte + un select modèle sauvegardés via `supabase.from('user_settings').upsert()`. Ajouter la section n8n juste après.
@@ -302,29 +311,43 @@ n8n_api_key:  n8nKey.trim() || null,
 Trouver la section Ollama dans le JSX (un `<div>` avec le label "Ollama"). Ajouter un bloc identique juste après pour n8n :
 
 ```tsx
-{/* Section n8n */}
-<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+{
+  /* Section n8n */
+}
+;<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+  <div
+    style={{
+      fontFamily: 'var(--font-mono)',
+      fontSize: 10,
+      color: muted,
+      letterSpacing: '.14em',
+      textTransform: 'uppercase',
+    }}
+  >
     n8n — Automations
   </div>
   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
     <div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, marginBottom: 4 }}>Base URL</div>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, marginBottom: 4 }}>
+        Base URL
+      </div>
       <input
         className="ck-input"
         value={n8nUrl}
-        onChange={e => setN8nUrl(e.target.value)}
+        onChange={(e) => setN8nUrl(e.target.value)}
         placeholder="http://192.168.0.19:5678"
         style={{ width: '100%' }}
       />
     </div>
     <div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, marginBottom: 4 }}>API Key</div>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, marginBottom: 4 }}>
+        API Key
+      </div>
       <input
         className="ck-input"
         type="password"
         value={n8nKey}
-        onChange={e => setN8nKey(e.target.value)}
+        onChange={(e) => setN8nKey(e.target.value)}
         placeholder="n8n_api_key_…"
         style={{ width: '100%' }}
       />
@@ -338,9 +361,14 @@ Trouver la section Ollama dans le JSX (un `<div>` avec le label "Ollama"). Ajout
 Ouvrir `app/studio/agents/page.tsx`. Dans `TunePanel`, la fonction `save()` fait un `upsert` sur `agent_configs` mais n'inclut pas `model` dans le payload. Ajouter `model: cfg.model` dans l'objet upsert :
 
 ```typescript
-const { error } = await supabase.from('agent_configs').upsert({
-  user_id: user.id, agent_id: agentId, ...cfg,
-}, { onConflict: 'user_id,agent_id' })
+const { error } = await supabase.from('agent_configs').upsert(
+  {
+    user_id: user.id,
+    agent_id: agentId,
+    ...cfg,
+  },
+  { onConflict: 'user_id,agent_id' }
+)
 ```
 
 `...cfg` inclut déjà `model` depuis `AgentConfig` — vérifier que l'interface inclut `model` :

@@ -1,16 +1,10 @@
 import Stripe from 'stripe'
 import { describe, expect, it } from 'vitest'
-import {
-  createStripeClient,
-  getStripeSecretKey,
-  getStripeWebhookSecret,
-} from './server'
+import { createStripeClient, getStripeSecretKey, getStripeWebhookSecret } from './server'
 
 describe('Stripe server adapter', () => {
   it('requires STRIPE_SECRET_KEY', () => {
-    expect(() => getStripeSecretKey({} as NodeJS.ProcessEnv)).toThrow(
-      'STRIPE_SECRET_KEY missing'
-    )
+    expect(() => getStripeSecretKey({} as NodeJS.ProcessEnv)).toThrow('STRIPE_SECRET_KEY missing')
   })
 
   it('reads STRIPE_SECRET_KEY from the environment', () => {

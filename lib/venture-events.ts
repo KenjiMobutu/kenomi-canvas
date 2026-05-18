@@ -8,7 +8,7 @@ export const VENTURE_EVENT_TYPES = [
   'decision',
 ] as const
 
-export type VentureEventType = typeof VENTURE_EVENT_TYPES[number]
+export type VentureEventType = (typeof VENTURE_EVENT_TYPES)[number]
 
 export interface VentureEventInput {
   userId: string
@@ -75,15 +75,17 @@ export async function recordVentureEventBySlug(
   const venture = data as VentureLookup | null
   if (!venture) return { ok: false, error: 'venture_not_found' }
 
-  const insert = await supabase.from('venture_events').insert(buildVentureEventInsert({
-    userId: venture.user_id,
-    ventureId: venture.id,
-    eventType: input.eventType,
-    source: input.source,
-    value: input.value,
-    metadata: input.metadata,
-    occurredAt: input.occurredAt,
-  }))
+  const insert = await supabase.from('venture_events').insert(
+    buildVentureEventInsert({
+      userId: venture.user_id,
+      ventureId: venture.id,
+      eventType: input.eventType,
+      source: input.source,
+      value: input.value,
+      metadata: input.metadata,
+      occurredAt: input.occurredAt,
+    })
+  )
 
   if (insert.error) return { ok: false, error: insert.error.message }
   return { ok: true, ventureId: venture.id }

@@ -12,18 +12,19 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `supabase/migrations/20260516_plan_k_automation_runs.sql` | Créer — table automation_runs + RLS |
-| `app/api/studio/automations/trigger/route.ts` | Modifier — insérer dans automation_runs + rate limit |
-| `app/api/studio/chat/route.ts` | Modifier — rate limit 20 messages/min par user |
-| `app/api/health/route.ts` | Modifier — ajouter check storage bucket documents |
+| Fichier                                                   | Action                                               |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| `supabase/migrations/20260516_plan_k_automation_runs.sql` | Créer — table automation_runs + RLS                  |
+| `app/api/studio/automations/trigger/route.ts`             | Modifier — insérer dans automation_runs + rate limit |
+| `app/api/studio/chat/route.ts`                            | Modifier — rate limit 20 messages/min par user       |
+| `app/api/health/route.ts`                                 | Modifier — ajouter check storage bucket documents    |
 
 ---
 
 ### Task 1 : Table `automation_runs`
 
 **Files:**
+
 - Create: `supabase/migrations/20260516_plan_k_automation_runs.sql`
 
 - [ ] **Step 1 : Créer la migration**
@@ -103,6 +104,7 @@ git commit -m "feat(database): table automation_runs — historique des triggers
 ### Task 2 : Insérer dans `automation_runs` lors du trigger
 
 **Files:**
+
 - Modify: `app/api/studio/automations/trigger/route.ts`
 
 **Contexte :** La route actuelle incrémente `run_count` et `last_run_at` mais n'enregistre pas de ligne de run. On ajoute un insert dans `automation_runs` après chaque tentative de trigger (succès, erreur, timeout), et on ajoute un rate limit de 10 triggers/min par user pour éviter les spams de webhook.
@@ -167,7 +169,11 @@ export async function POST(req: NextRequest) {
       const resp = await fetch(wf.webhook_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
+        body: JSON.stringify({
+          source: 'kenomi-studio',
+          trigger: 'manual',
+          timestamp: new Date().toISOString(),
+        }),
         signal: AbortSignal.timeout(8000),
       })
       httpStatus = resp.status
@@ -204,10 +210,7 @@ export async function POST(req: NextRequest) {
   await Promise.all([runInsert, wfUpdate])
 
   if (status !== 'success') {
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: status === 'timeout' ? 504 : 502 }
-    )
+    return NextResponse.json({ error: errorMessage }, { status: status === 'timeout' ? 504 : 502 })
   }
 
   return NextResponse.json({ ok: true, durationMs })
@@ -234,6 +237,7 @@ git commit -m "feat(automations): historique runs dans automation_runs + rate li
 ### Task 3 : Rate limit sur le chat
 
 **Files:**
+
 - Modify: `app/api/studio/chat/route.ts`
 
 **Contexte :** Le chat est protégé par `requireAllowedUser()` mais n'a pas de rate limit. On ajoute 20 messages/min par user pour éviter l'abus d'Ollama (chaque message déclenche un appel Ollama avec timeout 30s).
@@ -250,9 +254,9 @@ import { apiError } from '@/lib/api-response'
 Puis, juste après la ligne `if (response) return response` (vérification auth), insérer :
 
 ```typescript
-  if (isRateLimited(`chat:${user!.id}`, { limit: 20, windowMs: 60_000 })) {
-    return apiError('Trop de messages. Réessayez dans une minute.', 429)
-  }
+if (isRateLimited(`chat:${user!.id}`, { limit: 20, windowMs: 60_000 })) {
+  return apiError('Trop de messages. Réessayez dans une minute.', 429)
+}
 ```
 
 - [ ] **Step 2 : Compiler**
@@ -275,6 +279,7 @@ git commit -m "fix(security): rate limit 20 messages/min sur le chat"
 ### Task 4 : Check storage dans `/api/health`
 
 **Files:**
+
 - Modify: `app/api/health/route.ts`
 
 **Contexte :** Le healthcheck actuel vérifie env, Prisma et Supabase Auth, mais pas le Storage. Le spec exige un check du bucket `documents`. On utilise `supabaseAdmin` pour lister les fichiers à la racine du bucket — si le bucket est accessible, la réponse est OK même si la liste est vide.
@@ -284,24 +289,24 @@ git commit -m "fix(security): rate limit 20 messages/min sur le chat"
 Dans `app/api/health/route.ts`, après le bloc `// 3. Supabase Auth`, ajouter :
 
 ```typescript
-  // 4. Storage bucket documents
-  const stStart = Date.now()
-  try {
-    const { error: stError } = await supabaseAdmin.storage
-      .from('documents')
-      .list('', { limit: 1 })
-    checks.storage = {
-      ok: !stError,
-      latencyMs: Date.now() - stStart,
-      ...(stError ? { error: process.env.NODE_ENV === 'production' ? 'storage check failed' : stError.message } : {}),
-    }
-  } catch (e) {
-    checks.storage = {
-      ok: false,
-      latencyMs: Date.now() - stStart,
-      error: process.env.NODE_ENV === 'production' ? 'storage check failed' : (e as Error).message,
-    }
+// 4. Storage bucket documents
+const stStart = Date.now()
+try {
+  const { error: stError } = await supabaseAdmin.storage.from('documents').list('', { limit: 1 })
+  checks.storage = {
+    ok: !stError,
+    latencyMs: Date.now() - stStart,
+    ...(stError
+      ? { error: process.env.NODE_ENV === 'production' ? 'storage check failed' : stError.message }
+      : {}),
   }
+} catch (e) {
+  checks.storage = {
+    ok: false,
+    latencyMs: Date.now() - stStart,
+    error: process.env.NODE_ENV === 'production' ? 'storage check failed' : (e as Error).message,
+  }
+}
 ```
 
 - [ ] **Step 2 : Compiler**

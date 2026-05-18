@@ -15,6 +15,7 @@
 ### Tables existantes (Supabase self-hosted)
 
 **`agent_configs`** — config par agent, `UNIQUE(user_id, agent_id)`
+
 ```
 id uuid, user_id uuid, agent_id text, model text DEFAULT 'qwen3:8b',
 system_prompt text, temperature numeric DEFAULT 0.7, max_tokens integer DEFAULT 2048,
@@ -22,12 +23,14 @@ paused boolean DEFAULT false, run_count integer DEFAULT 0, last_run_at timestamp
 ```
 
 **`agent_runs`** — historique des runs (créée manuellement en prod)
+
 ```
 id uuid, user_id uuid, agent_id text, model text, prompt text,
 response text, duration_ms integer, created_at timestamptz
 ```
 
 **`ventures`** — ventures existantes
+
 ```
 id uuid, user_id uuid, name text, niche text, stage text DEFAULT 'Validation',
 score integer DEFAULT 0, mrr text, cac text, conversion text,
@@ -61,20 +64,21 @@ next_action text, insight text, created_at timestamptz
 
 ## Structure des fichiers
 
-| Fichier | Action | Rôle |
-|---------|--------|------|
-| `supabase/migrations/20260517_venture_pipeline.sql` | Créer | Table `venture_pipeline` |
-| `lib/pipeline-types.ts` | Créer | Types TypeScript partagés |
-| `app/api/studio/agents/pipeline/route.ts` | Créer | GET pipeline actif + POST validate/reject |
-| `app/api/studio/agents/run/route.ts` | Modifier | Logique pipeline : blocage, prompt enrichi, transitions de statut |
-| `app/studio/agents/page.tsx` | Modifier | Card validation humaine + indicateurs pipeline par agent |
-| `lib/pipeline-types.test.ts` | Créer | Tests unitaires sur les helpers de statut |
+| Fichier                                             | Action   | Rôle                                                              |
+| --------------------------------------------------- | -------- | ----------------------------------------------------------------- |
+| `supabase/migrations/20260517_venture_pipeline.sql` | Créer    | Table `venture_pipeline`                                          |
+| `lib/pipeline-types.ts`                             | Créer    | Types TypeScript partagés                                         |
+| `app/api/studio/agents/pipeline/route.ts`           | Créer    | GET pipeline actif + POST validate/reject                         |
+| `app/api/studio/agents/run/route.ts`                | Modifier | Logique pipeline : blocage, prompt enrichi, transitions de statut |
+| `app/studio/agents/page.tsx`                        | Modifier | Card validation humaine + indicateurs pipeline par agent          |
+| `lib/pipeline-types.test.ts`                        | Créer    | Tests unitaires sur les helpers de statut                         |
 
 ---
 
 ## Task 1 : Migration DB `venture_pipeline`
 
 **Files:**
+
 - Create: `supabase/migrations/20260517_venture_pipeline.sql`
 
 - [ ] **Step 1 : Écrire la migration SQL**
@@ -131,10 +135,12 @@ CREATE INDEX IF NOT EXISTS pipeline_user_status_idx
 Ouvrir le dashboard Supabase → SQL Editor → coller et exécuter le contenu du fichier.
 
 Vérifier :
+
 ```sql
 SELECT column_name, data_type FROM information_schema.columns
 WHERE table_name = 'venture_pipeline' ORDER BY ordinal_position;
 ```
+
 Attendu : 18 colonnes dont `idea_title`, `status`, `validation_score`, `venture_id`.
 
 - [ ] **Step 3 : Commit**
@@ -149,6 +155,7 @@ git commit -m "feat(db): table venture_pipeline pour orchestration agents"
 ## Task 2 : Types TypeScript partagés
 
 **Files:**
+
 - Create: `lib/pipeline-types.ts`
 - Create: `lib/pipeline-types.test.ts`
 
@@ -157,16 +164,18 @@ git commit -m "feat(db): table venture_pipeline pour orchestration agents"
 ```typescript
 // lib/pipeline-types.test.ts
 import { describe, it, expect } from 'vitest'
-import {
-  AGENT_CHAIN,
-  nextAgentInChain,
-  isAgentUnlocked,
-  parsePipelineIdea,
-} from './pipeline-types'
+import { AGENT_CHAIN, nextAgentInChain, isAgentUnlocked, parsePipelineIdea } from './pipeline-types'
 
 describe('AGENT_CHAIN', () => {
   it('contient 6 agents dans le bon ordre', () => {
-    expect(AGENT_CHAIN).toEqual(['scout', 'validation', 'builder', 'payment', 'marketing', 'decision'])
+    expect(AGENT_CHAIN).toEqual([
+      'scout',
+      'validation',
+      'builder',
+      'payment',
+      'marketing',
+      'decision',
+    ])
   })
 })
 
@@ -193,16 +202,52 @@ describe('isAgentUnlocked', () => {
     expect(isAgentUnlocked('validation', null)).toBe(false)
   })
   it('validation est débloqué si pipeline approved et validation_output null', () => {
-    expect(isAgentUnlocked('validation', { status: 'approved', validation_output: null, builder_output: null, payment_output: null, marketing_output: null, decision_output: null })).toBe(true)
+    expect(
+      isAgentUnlocked('validation', {
+        status: 'approved',
+        validation_output: null,
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+      })
+    ).toBe(true)
   })
   it('validation est bloqué si déjà exécuté', () => {
-    expect(isAgentUnlocked('validation', { status: 'approved', validation_output: 'done', builder_output: null, payment_output: null, marketing_output: null, decision_output: null })).toBe(false)
+    expect(
+      isAgentUnlocked('validation', {
+        status: 'approved',
+        validation_output: 'done',
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+      })
+    ).toBe(false)
   })
   it('builder est bloqué si validation_output null', () => {
-    expect(isAgentUnlocked('builder', { status: 'approved', validation_output: null, builder_output: null, payment_output: null, marketing_output: null, decision_output: null })).toBe(false)
+    expect(
+      isAgentUnlocked('builder', {
+        status: 'approved',
+        validation_output: null,
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+      })
+    ).toBe(false)
   })
   it('builder est débloqué si validation_output présent', () => {
-    expect(isAgentUnlocked('builder', { status: 'approved', validation_output: 'ok', builder_output: null, payment_output: null, marketing_output: null, decision_output: null })).toBe(true)
+    expect(
+      isAgentUnlocked('builder', {
+        status: 'approved',
+        validation_output: 'ok',
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+      })
+    ).toBe(true)
   })
 })
 
@@ -232,6 +277,7 @@ MARCHÉ: PME 10-50 salariés`
 ```bash
 npx vitest run lib/pipeline-types.test.ts
 ```
+
 Attendu : FAIL — `Cannot find module './pipeline-types'`
 
 - [ ] **Step 3 : Implémenter `lib/pipeline-types.ts`**
@@ -239,8 +285,15 @@ Attendu : FAIL — `Cannot find module './pipeline-types'`
 ```typescript
 // lib/pipeline-types.ts
 
-export const AGENT_CHAIN = ['scout', 'validation', 'builder', 'payment', 'marketing', 'decision'] as const
-export type ChainAgent = typeof AGENT_CHAIN[number]
+export const AGENT_CHAIN = [
+  'scout',
+  'validation',
+  'builder',
+  'payment',
+  'marketing',
+  'decision',
+] as const
+export type ChainAgent = (typeof AGENT_CHAIN)[number]
 
 export type PipelineStatus = 'pending_validation' | 'approved' | 'rejected' | 'running' | 'done'
 
@@ -266,7 +319,15 @@ export interface PipelineRow {
   updated_at: string
 }
 
-type AgentOutputs = Pick<PipelineRow, 'status' | 'validation_output' | 'builder_output' | 'payment_output' | 'marketing_output' | 'decision_output'>
+type AgentOutputs = Pick<
+  PipelineRow,
+  | 'status'
+  | 'validation_output'
+  | 'builder_output'
+  | 'payment_output'
+  | 'marketing_output'
+  | 'decision_output'
+>
 
 export function nextAgentInChain(agentId: string): ChainAgent | null {
   const idx = AGENT_CHAIN.indexOf(agentId as ChainAgent)
@@ -278,45 +339,60 @@ export function isAgentUnlocked(agentId: string, pipeline: AgentOutputs | null):
   if (agentId === 'scout') return true
   if (!pipeline || pipeline.status !== 'approved') return false
   switch (agentId) {
-    case 'validation': return pipeline.validation_output === null
-    case 'builder':    return pipeline.validation_output !== null && pipeline.builder_output === null
-    case 'payment':    return pipeline.builder_output !== null && pipeline.payment_output === null
-    case 'marketing':  return pipeline.payment_output !== null && pipeline.marketing_output === null
-    case 'decision':   return pipeline.marketing_output !== null && pipeline.decision_output === null
-    default:           return false
+    case 'validation':
+      return pipeline.validation_output === null
+    case 'builder':
+      return pipeline.validation_output !== null && pipeline.builder_output === null
+    case 'payment':
+      return pipeline.builder_output !== null && pipeline.payment_output === null
+    case 'marketing':
+      return pipeline.payment_output !== null && pipeline.marketing_output === null
+    case 'decision':
+      return pipeline.marketing_output !== null && pipeline.decision_output === null
+    default:
+      return false
   }
 }
 
 // Parse la réponse structurée de Scout
 export function parsePipelineIdea(raw: string): {
-  idea_title: string; idea_niche: string; idea_problem: string
-  idea_solution: string; idea_market: string
+  idea_title: string
+  idea_niche: string
+  idea_problem: string
+  idea_solution: string
+  idea_market: string
 } {
   const extract = (key: string) => {
     const m = raw.match(new RegExp(`^${key}:\\s*(.+)$`, 'im'))
     return m ? m[1].trim() : ''
   }
   return {
-    idea_title:   extract('TITRE'),
-    idea_niche:   extract('NICHE'),
+    idea_title: extract('TITRE'),
+    idea_niche: extract('NICHE'),
     idea_problem: extract('PROBLÈME|PROBLEME'),
     idea_solution: extract('SOLUTION'),
-    idea_market:  extract('MARCHÉ|MARCHE'),
+    idea_market: extract('MARCHÉ|MARCHE'),
   }
 }
 
 // System prompts par agent — injectés avec le contexte pipeline
-export function buildSystemPrompt(agentId: string, pipeline: PipelineRow | null, customPrompt: string): string {
+export function buildSystemPrompt(
+  agentId: string,
+  pipeline: PipelineRow | null,
+  customPrompt: string
+): string {
   if (customPrompt.trim()) return customPrompt
 
-  const ctx = pipeline ? `
+  const ctx = pipeline
+    ? `
 Contexte venture active :
 - Titre : ${pipeline.idea_title}
 - Niche : ${pipeline.idea_niche}
 - Problème : ${pipeline.idea_problem}
 - Solution : ${pipeline.idea_solution}
 - Marché cible : ${pipeline.idea_market}
-` : ''
+`
+    : ''
 
   const prompts: Record<string, string> = {
     scout: `Tu es Scout, agent de découverte de ventures pour entrepreneur solo.
@@ -368,6 +444,7 @@ Réponds en JSON strict :
 ```bash
 npx vitest run lib/pipeline-types.test.ts
 ```
+
 Attendu : PASS — 11 tests passing
 
 - [ ] **Step 5 : Commit**
@@ -382,6 +459,7 @@ git commit -m "feat(pipeline): types + helpers isAgentUnlocked + parsePipelineId
 ## Task 3 : Route API `pipeline` (GET + POST validate/reject)
 
 **Files:**
+
 - Create: `app/api/studio/agents/pipeline/route.ts`
 
 - [ ] **Step 1 : Créer la route**
@@ -444,7 +522,8 @@ export async function POST(req: NextRequest) {
   if (existing.status !== 'pending_validation') return apiError('Pipeline déjà traité', 409)
 
   if (action === 'reject') {
-    await supabase.from('venture_pipeline')
+    await supabase
+      .from('venture_pipeline')
       .update({ status: 'rejected', updated_at: new Date().toISOString() })
       .eq('id', pipelineId)
     return apiOk({ ok: true, action: 'rejected' })
@@ -459,7 +538,9 @@ export async function POST(req: NextRequest) {
       niche: existing.idea_niche,
       stage: 'Validation',
       score: 50,
-      mrr: '0', cac: '0', conversion: '0',
+      mrr: '0',
+      cac: '0',
+      conversion: '0',
       next_action: 'Lancer agent Validation',
       insight: 'Idée générée par Scout',
     })
@@ -468,7 +549,8 @@ export async function POST(req: NextRequest) {
 
   if (ventureErr) return apiError(ventureErr.message, 500)
 
-  await supabase.from('venture_pipeline')
+  await supabase
+    .from('venture_pipeline')
     .update({
       status: 'approved',
       venture_id: venture.id,
@@ -485,6 +567,7 @@ export async function POST(req: NextRequest) {
 ```bash
 npm run typecheck
 ```
+
 Attendu : no errors
 
 - [ ] **Step 3 : Commit**
@@ -499,9 +582,11 @@ git commit -m "feat(api): route pipeline GET (pipeline actif) + POST approve/rej
 ## Task 4 : Modifier la route `run` pour gérer le pipeline
 
 **Files:**
+
 - Modify: `app/api/studio/agents/run/route.ts`
 
 La route doit :
+
 1. Si `agentId === 'scout'` → utiliser le system prompt Scout fixe, parser la réponse, insérer dans `venture_pipeline`
 2. Si autre agent → vérifier qu'un pipeline `approved` existe et que l'agent est débloqué, enrichir le system prompt avec le contexte, sauvegarder l'output dans la colonne dédiée
 
@@ -515,7 +600,12 @@ import { requireAllowedUser } from '@/lib/auth-server'
 import { isRateLimited } from '@/lib/rate-limit'
 import { isAllowedOllamaUrl } from '@/lib/security'
 import { apiError } from '@/lib/api-response'
-import { isAgentUnlocked, parsePipelineIdea, buildSystemPrompt, type PipelineRow } from '@/lib/pipeline-types'
+import {
+  isAgentUnlocked,
+  parsePipelineIdea,
+  buildSystemPrompt,
+  type PipelineRow,
+} from '@/lib/pipeline-types'
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -547,23 +637,23 @@ export async function POST(req: NextRequest) {
   if (cfg?.paused) return apiError('Agent en pause', 409)
 
   // Charger pipeline actif (non rejeté, le plus récent)
-  const { data: pipeline } = await supabase
+  const { data: pipeline } = (await supabase
     .from('venture_pipeline')
     .select('*')
     .eq('user_id', user!.id)
     .not('status', 'eq', 'rejected')
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle() as { data: PipelineRow | null }
+    .maybeSingle()) as { data: PipelineRow | null }
 
   // Vérifier que l'agent est débloqué
   if (!isAgentUnlocked(agentId, pipeline)) {
     if (agentId === 'scout') {
       // Scout peut toujours run — logique ci-dessous
     } else if (!pipeline || pipeline.status === 'pending_validation') {
-      return apiError('Validez l\'idée Scout avant de lancer cet agent', 409)
+      return apiError("Validez l'idée Scout avant de lancer cet agent", 409)
     } else {
-      return apiError('Cet agent attend la fin de l\'étape précédente', 409)
+      return apiError("Cet agent attend la fin de l'étape précédente", 409)
     }
   }
 
@@ -579,15 +669,18 @@ export async function POST(req: NextRequest) {
 
   const model = cfg?.model ?? 'qwen3:8b'
   const systemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
-  const userPrompt = prompt || (agentId === 'scout'
-    ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
-    : 'Exécute ta mission.')
+  const userPrompt =
+    prompt ||
+    (agentId === 'scout'
+      ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
+      : 'Exécute ta mission.')
 
   const startMs = Date.now()
 
   // Marquer l'agent comme en cours dans le pipeline
   if (pipeline && agentId !== 'scout') {
-    await supabase.from('venture_pipeline')
+    await supabase
+      .from('venture_pipeline')
       .update({ current_agent: agentId, updated_at: new Date().toISOString() })
       .eq('id', pipeline.id)
   }
@@ -614,14 +707,18 @@ export async function POST(req: NextRequest) {
 
     if (!resp.ok) return apiError(`Ollama ${resp.status}`, 502)
 
-    const json = await resp.json() as { message?: { content?: string } }
+    const json = (await resp.json()) as { message?: { content?: string } }
     const content = json.message?.content ?? ''
     const durationMs = Date.now() - startMs
 
     // Persister dans agent_runs
     await supabase.from('agent_runs').insert({
-      user_id: user!.id, agent_id: agentId, model,
-      prompt: userPrompt, response: content, duration_ms: durationMs,
+      user_id: user!.id,
+      agent_id: agentId,
+      model,
+      prompt: userPrompt,
+      response: content,
+      duration_ms: durationMs,
     })
 
     // Logique pipeline selon l'agent
@@ -629,12 +726,14 @@ export async function POST(req: NextRequest) {
       const parsed = parsePipelineIdea(content)
       // Rejeter l'éventuel pipeline pending encore ouvert
       if (pipeline && pipeline.status === 'pending_validation') {
-        await supabase.from('venture_pipeline')
+        await supabase
+          .from('venture_pipeline')
           .update({ status: 'rejected', updated_at: new Date().toISOString() })
           .eq('id', pipeline.id)
       }
       // Créer un nouveau pipeline avec l'idée Scout
-      const { data: newPipeline } = await supabase.from('venture_pipeline')
+      const { data: newPipeline } = await supabase
+        .from('venture_pipeline')
         .insert({
           user_id: user!.id,
           ...parsed,
@@ -644,12 +743,17 @@ export async function POST(req: NextRequest) {
         .select('id')
         .single()
 
-      await supabase.from('agent_configs')
+      await supabase
+        .from('agent_configs')
         .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: new Date().toISOString() })
-        .eq('user_id', user!.id).eq('agent_id', agentId)
+        .eq('user_id', user!.id)
+        .eq('agent_id', agentId)
 
       return NextResponse.json({
-        ok: true, content, durationMs, model,
+        ok: true,
+        content,
+        durationMs,
+        model,
         pipeline: { id: newPipeline?.id, ...parsed, status: 'pending_validation' },
       })
     }
@@ -657,35 +761,44 @@ export async function POST(req: NextRequest) {
     // Agents suivants : sauvegarder l'output dans la colonne dédiée
     const outputCol: Record<string, string> = {
       validation: 'validation_output',
-      builder:    'builder_output',
-      payment:    'payment_output',
-      marketing:  'marketing_output',
-      decision:   'decision_output',
+      builder: 'builder_output',
+      payment: 'payment_output',
+      marketing: 'marketing_output',
+      decision: 'decision_output',
     }
     const col = outputCol[agentId]
     if (col && pipeline) {
-      const extraFields: Record<string, unknown> = { [col]: content, current_agent: null, updated_at: new Date().toISOString() }
+      const extraFields: Record<string, unknown> = {
+        [col]: content,
+        current_agent: null,
+        updated_at: new Date().toISOString(),
+      }
       // Extraire le score si c'est Validation
       if (agentId === 'validation') {
         try {
           const parsed = JSON.parse(content)
           if (typeof parsed.score === 'number') extraFields.validation_score = parsed.score
-        } catch { /* score non parseable → on ignore */ }
+        } catch {
+          /* score non parseable → on ignore */
+        }
       }
       // Si c'est Decision → marquer done
       if (agentId === 'decision') extraFields.status = 'done'
       await supabase.from('venture_pipeline').update(extraFields).eq('id', pipeline.id)
     }
 
-    await supabase.from('agent_configs')
+    await supabase
+      .from('agent_configs')
       .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: new Date().toISOString() })
-      .eq('user_id', user!.id).eq('agent_id', agentId)
+      .eq('user_id', user!.id)
+      .eq('agent_id', agentId)
 
     return NextResponse.json({ ok: true, content, durationMs, model })
   } catch (e) {
     // Réinitialiser current_agent en cas d'erreur
     if (pipeline && agentId !== 'scout') {
-      await supabase.from('venture_pipeline')
+      await supabase
+        .from('venture_pipeline')
         .update({ current_agent: null, updated_at: new Date().toISOString() })
         .eq('id', pipeline.id)
     }
@@ -700,6 +813,7 @@ export async function POST(req: NextRequest) {
 ```bash
 npm run typecheck
 ```
+
 Attendu : no errors
 
 - [ ] **Step 3 : Commit**
@@ -714,6 +828,7 @@ git commit -m "feat(api): run/route intègre pipeline — Scout insère, agents 
 ## Task 5 : UI — Card de validation humaine + indicateurs pipeline dans la page Agents
 
 **Files:**
+
 - Modify: `app/studio/agents/page.tsx`
 
 Ajouter en haut de la page (avant le 2-col principal) :
@@ -731,6 +846,7 @@ Lire `app/studio/agents/page.tsx` lignes 1-15 pour confirmer les imports.
 - [ ] **Step 2 : Ajouter les imports nécessaires en tête de fichier**
 
 Ajouter après les imports existants :
+
 ```typescript
 import type { PipelineRow } from '@/lib/pipeline-types'
 import { isAgentUnlocked, AGENT_CHAIN } from '@/lib/pipeline-types'
@@ -882,7 +998,7 @@ useEffect(() => {
     try {
       const res = await fetch('/api/studio/agents/pipeline')
       if (res.ok) {
-        const data = await res.json() as { pipeline: PipelineRow | null }
+        const data = (await res.json()) as { pipeline: PipelineRow | null }
         if (!cancelled) setPipeline(data.pipeline)
       }
     } finally {
@@ -890,7 +1006,9 @@ useEffect(() => {
     }
   }
   loadPipeline()
-  return () => { cancelled = true }
+  return () => {
+    cancelled = true
+  }
 }, [])
 
 async function handleApprove() {
@@ -902,10 +1020,10 @@ async function handleApprove() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'approve', pipelineId: pipeline.id }),
     })
-    const data = await res.json() as { ok?: boolean; ventureId?: string; error?: string }
+    const data = (await res.json()) as { ok?: boolean; ventureId?: string; error?: string }
     if (!res.ok) return toast.error(data.error || 'Erreur validation')
     toast.success('Venture créée · les agents sont débloqués')
-    setPipeline(p => p ? { ...p, status: 'approved' } : p)
+    setPipeline((p) => (p ? { ...p, status: 'approved' } : p))
   } finally {
     setValidating(false)
   }
@@ -948,6 +1066,7 @@ Dans le `return` de `AgentsPage`, ajouter en tête du `<div>` principal (avant `
 ```
 
 Et passer `pipeline` à `AgentInspector` :
+
 ```typescript
 <AgentInspector agent={selected} activity={activity} queue={queue} pipeline={pipeline} />
 ```
@@ -955,6 +1074,7 @@ Et passer `pipeline` à `AgentInspector` :
 - [ ] **Step 7 : Modifier `AgentInspector` pour recevoir `pipeline` et griser le bouton Run si bloqué**
 
 Changer la signature :
+
 ```typescript
 function AgentInspector({ agent, activity, queue, pipeline }: {
   agent: AgentData; activity: number[]; queue: string[]; pipeline: PipelineRow | null
@@ -962,14 +1082,20 @@ function AgentInspector({ agent, activity, queue, pipeline }: {
 ```
 
 Ajouter avant le `return` :
+
 ```typescript
 const unlocked = isAgentUnlocked(agent.id, pipeline)
 const lockReason = !unlocked
-  ? (agent.id === 'scout' ? '' : pipeline?.status === 'pending_validation' ? 'Validez l\'idée Scout d\'abord' : 'Attendez l\'agent précédent')
+  ? agent.id === 'scout'
+    ? ''
+    : pipeline?.status === 'pending_validation'
+      ? "Validez l'idée Scout d'abord"
+      : "Attendez l'agent précédent"
   : ''
 ```
 
 Modifier le bouton Run :
+
 ```typescript
 <button
   onClick={handleRun}
@@ -991,6 +1117,7 @@ Modifier le bouton Run :
 - [ ] **Step 8 : Après un run Scout réussi, mettre à jour le pipeline local**
 
 Dans `handleRun` de `AgentInspector`, après `toast.success(...)` :
+
 ```typescript
 // Si Scout a généré une idée, récupérer le nouveau pipeline
 if (agent.id === 'scout' && data.pipeline) {
@@ -999,6 +1126,7 @@ if (agent.id === 'scout' && data.pipeline) {
 ```
 
 Cela nécessite de passer `setPipeline` en prop à `AgentInspector` :
+
 ```typescript
 function AgentInspector({ agent, activity, queue, pipeline, setPipeline }: {
   agent: AgentData; activity: number[]; queue: string[]
@@ -1008,6 +1136,7 @@ function AgentInspector({ agent, activity, queue, pipeline, setPipeline }: {
 ```
 
 Et dans `AgentsPage` :
+
 ```typescript
 <AgentInspector agent={selected} activity={activity} queue={queue} pipeline={pipeline} setPipeline={setPipeline} />
 ```
@@ -1017,6 +1146,7 @@ Et dans `AgentsPage` :
 ```bash
 npm run build
 ```
+
 Attendu : ✓ Compiled successfully, `/studio/agents` listé dans les routes
 
 - [ ] **Step 10 : Commit**
@@ -1031,6 +1161,7 @@ git commit -m "feat(agents): pipeline UI — PipelineStatusBar + PipelineValidat
 ## Task 6 : Push et déploiement
 
 **Files:**
+
 - Aucun fichier modifié
 
 - [ ] **Step 1 : Vérifier l'état git**
@@ -1038,6 +1169,7 @@ git commit -m "feat(agents): pipeline UI — PipelineStatusBar + PipelineValidat
 ```bash
 git log --oneline -6
 ```
+
 Attendu : 5 commits de ce plan visibles
 
 - [ ] **Step 2 : Push**
@@ -1065,17 +1197,17 @@ Scénario à tester sur `lab.kenomi.eu` :
 
 ### Spec coverage
 
-| Exigence | Tâche |
-|----------|-------|
-| Scout génère idée structurée | Task 2 (`buildSystemPrompt` Scout), Task 4 (insert pipeline) |
-| Validation humaine (valider/rejeter) | Task 3 (route POST approve/reject), Task 5 (PipelineValidationCard) |
-| Création venture en DB à la validation | Task 3 (insert ventures) |
-| Agents suivants bloqués jusqu'à validation | Task 2 (`isAgentUnlocked`), Task 4 (vérif route run), Task 5 (bouton grisé) |
-| Chaîne séquentielle (chaque agent attend le précédent) | Task 2 (`isAgentUnlocked`), Task 4 (vérif + update output col) |
-| Outputs persistés par agent | Task 4 (`outputCol` map + update) |
-| Barre de progression visuelle | Task 5 (`PipelineStatusBar`) |
-| Decision = synthèse finale | Task 2 (`buildSystemPrompt` Decision), Task 4 (status → 'done') |
-| Venture créée dans `/studio/ventures` | Task 3 (insert ventures) |
+| Exigence                                               | Tâche                                                                       |
+| ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| Scout génère idée structurée                           | Task 2 (`buildSystemPrompt` Scout), Task 4 (insert pipeline)                |
+| Validation humaine (valider/rejeter)                   | Task 3 (route POST approve/reject), Task 5 (PipelineValidationCard)         |
+| Création venture en DB à la validation                 | Task 3 (insert ventures)                                                    |
+| Agents suivants bloqués jusqu'à validation             | Task 2 (`isAgentUnlocked`), Task 4 (vérif route run), Task 5 (bouton grisé) |
+| Chaîne séquentielle (chaque agent attend le précédent) | Task 2 (`isAgentUnlocked`), Task 4 (vérif + update output col)              |
+| Outputs persistés par agent                            | Task 4 (`outputCol` map + update)                                           |
+| Barre de progression visuelle                          | Task 5 (`PipelineStatusBar`)                                                |
+| Decision = synthèse finale                             | Task 2 (`buildSystemPrompt` Decision), Task 4 (status → 'done')             |
+| Venture créée dans `/studio/ventures`                  | Task 3 (insert ventures)                                                    |
 
 ### Placeholder scan
 

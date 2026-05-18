@@ -12,8 +12,8 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
+| Fichier                                            | Action                                |
+| -------------------------------------------------- | ------------------------------------- |
 | `supabase/migrations/20260516_audit_db_fixes2.sql` | **Créer** — toutes les corrections DB |
 
 ---
@@ -21,6 +21,7 @@
 ### Task 1 : Créer la migration complète
 
 **Files:**
+
 - Create: `supabase/migrations/20260516_audit_db_fixes2.sql`
 
 - [ ] **Step 1 : Créer le fichier de migration**
@@ -287,6 +288,7 @@ SQL=$(cat /Users/kenjimobutu/Desktop/DEV/Projects/kenomi-canvas/supabase/migrati
 - [ ] **Step 3 : Vérifier que ventures.user_id est NOT NULL**
 
 Dans le SQL Editor Supabase, exécuter :
+
 ```sql
 SELECT column_name, is_nullable
 FROM information_schema.columns
@@ -294,6 +296,7 @@ WHERE table_schema = 'public'
   AND table_name = 'ventures'
   AND column_name = 'user_id';
 ```
+
 Expected : `is_nullable = NO`
 
 - [ ] **Step 4 : Vérifier que RLS est actif sur les tables legacy**
@@ -304,6 +307,7 @@ FROM pg_tables
 WHERE schemaname = 'public'
   AND tablename IN ('ideas', 'landing_pages', 'metrics', 'decisions', 'ventures');
 ```
+
 Expected : `rowsecurity = true` pour toutes les lignes.
 
 - [ ] **Step 5 : Vérifier les index créés**
@@ -315,6 +319,7 @@ WHERE schemaname = 'public'
   AND (indexname LIKE '%_user_id_idx' OR indexname LIKE '%_venture_id_idx')
 ORDER BY tablename;
 ```
+
 Expected : 11 index listés.
 
 - [ ] **Step 6 : Vérifier la policy waitlist_public_insert**
@@ -326,6 +331,7 @@ WHERE schemaname = 'public'
   AND tablename = 'waitlist'
   AND policyname = 'waitlist_public_insert';
 ```
+
 Expected : `with_check` contient `EXISTS (SELECT 1 FROM ventures WHERE id = venture_id)`.
 
 - [ ] **Step 7 : Vérifier que la table automations a disparu**
@@ -336,6 +342,7 @@ SELECT EXISTS (
   WHERE table_schema = 'public' AND table_name = 'automations'
 ) AS automations_exists;
 ```
+
 Expected : `false`
 
 ---
@@ -353,6 +360,7 @@ SET LOCAL request.jwt.claims = '{"sub": "00000000-0000-0000-0000-000000000000", 
 
 SELECT COUNT(*) FROM public.ventures;
 ```
+
 Expected : `0` (aucune venture visible pour un UUID inexistant)
 
 - [ ] **Step 2 : Tester que waitlist rejecte un venture_id invalide**
@@ -362,6 +370,7 @@ Expected : `0` (aucune venture visible pour un UUID inexistant)
 INSERT INTO public.waitlist (venture_id, slug, email)
 VALUES ('00000000-0000-0000-0000-000000000000', 'test', 'test@example.com');
 ```
+
 Expected : erreur RLS `new row violates row-level security policy`
 
 - [ ] **Step 3 : Commit de validation**

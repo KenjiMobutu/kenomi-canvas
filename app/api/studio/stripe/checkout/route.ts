@@ -40,9 +40,7 @@ export async function POST(req: NextRequest) {
     return apiError('Trop de créations checkout. Réessayez dans une minute.', 429)
   }
 
-  const parsedBody = checkoutRequestSchema.safeParse(
-    await req.json().catch(() => ({}))
-  )
+  const parsedBody = checkoutRequestSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsedBody.success) {
     return apiError('Payload checkout invalide', 400)
   }

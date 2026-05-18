@@ -40,7 +40,7 @@ describe('isRateLimited', () => {
     const opts = { limit: 1, windowMs: 60_000 }
     expect(isRateLimited('key-a', opts)).toBe(false)
     expect(isRateLimited('key-b', opts)).toBe(false)
-    expect(isRateLimited('key-a', opts)).toBe(true)  // key-a bloquée
-    expect(isRateLimited('key-b', opts)).toBe(true)  // key-b bloquée indépendamment
+    expect(isRateLimited('key-a', opts)).toBe(true) // key-a bloquée
+    expect(isRateLimited('key-b', opts)).toBe(true) // key-b bloquée indépendamment
   })
 })

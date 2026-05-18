@@ -3,14 +3,16 @@ import { sanitizeAuditMetadata } from './audit-log'
 
 describe('sanitizeAuditMetadata', () => {
   it('redacte les clés sensibles connues', () => {
-    expect(sanitizeAuditMetadata({
-      api_key: 'sk-test',
-      password: 'secret',
-      token: 'abc',
-      authorization: 'Bearer xyz',
-      safe_field: 'ok',
-      duration_ms: 42,
-    })).toEqual({
+    expect(
+      sanitizeAuditMetadata({
+        api_key: 'sk-test',
+        password: 'secret',
+        token: 'abc',
+        authorization: 'Bearer xyz',
+        safe_field: 'ok',
+        duration_ms: 42,
+      })
+    ).toEqual({
       api_key: '[redacted]',
       password: '[redacted]',
       token: '[redacted]',

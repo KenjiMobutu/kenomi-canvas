@@ -12,22 +12,23 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `lib/dashboard-token.ts` | **Créer** — HMAC signing pour le cookie admin |
-| `app/api/dashboard/login/route.ts` | **Modifier** — stocker token HMAC au lieu du mot de passe brut |
-| `middleware.ts` | **Modifier** — vérifier token HMAC au lieu de comparer le mot de passe |
-| `app/api/studio/automations/trigger/route.ts` | **Modifier** — SSRF guard + timeout + resp.ok check + user_id filter |
-| `app/api/studio/chat/route.ts` | **Modifier** — SSRF guard sur ollama_base_url + max message length |
-| `app/api/waitlist/route.ts` | **Modifier** — open redirect fix + validation email |
-| `supabase/functions/waitlist/index.ts` | **Modifier** — validation email + venture_id guard |
-| `lib/gamification.test.ts` | **Modifier** — tests unitaires pour isAllowedUrl et isValidEmail |
+| Fichier                                       | Action                                                                 |
+| --------------------------------------------- | ---------------------------------------------------------------------- |
+| `lib/dashboard-token.ts`                      | **Créer** — HMAC signing pour le cookie admin                          |
+| `app/api/dashboard/login/route.ts`            | **Modifier** — stocker token HMAC au lieu du mot de passe brut         |
+| `middleware.ts`                               | **Modifier** — vérifier token HMAC au lieu de comparer le mot de passe |
+| `app/api/studio/automations/trigger/route.ts` | **Modifier** — SSRF guard + timeout + resp.ok check + user_id filter   |
+| `app/api/studio/chat/route.ts`                | **Modifier** — SSRF guard sur ollama_base_url + max message length     |
+| `app/api/waitlist/route.ts`                   | **Modifier** — open redirect fix + validation email                    |
+| `supabase/functions/waitlist/index.ts`        | **Modifier** — validation email + venture_id guard                     |
+| `lib/gamification.test.ts`                    | **Modifier** — tests unitaires pour isAllowedUrl et isValidEmail       |
 
 ---
 
 ### Task 1 : Module HMAC pour le cookie admin dashboard
 
 **Files:**
+
 - Create: `lib/dashboard-token.ts`
 - Test: `lib/gamification.test.ts` (on l'élargit en `lib/utils.test.ts`)
 
@@ -64,6 +65,7 @@ export function verifyDashToken(token: string): boolean {
 cd /Users/kenjimobutu/Desktop/DEV/Projects/kenomi-canvas
 npx tsc --noEmit 2>&1 | head -20
 ```
+
 Expected: pas d'erreur
 
 - [ ] **Step 3 : Mettre à jour `app/api/dashboard/login/route.ts`**
@@ -90,10 +92,10 @@ export async function POST(req: Request) {
   const res = NextResponse.json({ ok: true })
   res.cookies.set('kenomi-dash-auth', token, {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge:   60 * 60 * 24 * 7,
-    path:     '/',
+    maxAge: 60 * 60 * 24 * 7,
+    path: '/',
   })
   return res
 }
@@ -124,14 +126,20 @@ Alternative si Edge Runtime pose problème — utiliser `crypto` du Web API :
 async function hmacHex(key: string, data: string): Promise<string> {
   const enc = new TextEncoder()
   const cryptoKey = await crypto.subtle.importKey(
-    'raw', enc.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    'raw',
+    enc.encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
   )
   const sig = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(data))
-  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 export async function createDashToken(): Promise<string> {
-  const secret  = process.env.DASHBOARD_TOKEN_SECRET ?? process.env.DASHBOARD_PASSWORD ?? 'dev'
+  const secret = process.env.DASHBOARD_TOKEN_SECRET ?? process.env.DASHBOARD_PASSWORD ?? 'dev'
   const payload = process.env.DASHBOARD_PASSWORD ?? ''
   return hmacHex(secret, payload)
 }
@@ -144,12 +152,13 @@ export async function verifyDashToken(token: string): Promise<boolean> {
 ```
 
 Avec cette version, `middleware.ts` devient :
+
 ```typescript
 if (pathname.startsWith('/dashboard')) {
   if (pathname === '/dashboard/login') return NextResponse.next()
   const token = request.cookies.get('kenomi-dash-auth')?.value ?? ''
   const { verifyDashToken } = await import('@/lib/dashboard-token')
-  if (!await verifyDashToken(token))
+  if (!(await verifyDashToken(token)))
     return NextResponse.redirect(new URL('/dashboard/login', request.url))
   return NextResponse.next()
 }
@@ -162,6 +171,7 @@ Et `login/route.ts` utilise `await createDashToken()`.
 ```bash
 npx tsc --noEmit 2>&1 | head -20
 ```
+
 Expected: 0 erreur
 
 - [ ] **Step 6 : Commit**
@@ -176,6 +186,7 @@ git commit -m "fix(security): cookie admin → token HMAC, plus de mot de passe 
 ### Task 2 : Protection SSRF sur la route automations/trigger
 
 **Files:**
+
 - Modify: `app/api/studio/automations/trigger/route.ts`
 
 - [ ] **Step 1 : Remplacer intégralement `app/api/studio/automations/trigger/route.ts`**
@@ -205,13 +216,19 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cs) { cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) },
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cs) {
+          cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+        },
       },
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let id: string
@@ -238,18 +255,23 @@ export async function POST(req: NextRequest) {
     }
     try {
       const resp = await fetch(wf.webhook_url, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
-        signal:  AbortSignal.timeout(8000),
+        body: JSON.stringify({
+          source: 'kenomi-studio',
+          trigger: 'manual',
+          timestamp: new Date().toISOString(),
+        }),
+        signal: AbortSignal.timeout(8000),
       })
       if (!resp.ok) {
         return NextResponse.json({ error: `Webhook erreur HTTP ${resp.status}` }, { status: 502 })
       }
     } catch (e) {
-      const msg = e instanceof Error && e.name === 'TimeoutError'
-        ? 'Webhook timeout (8s)'
-        : 'Webhook injoignable'
+      const msg =
+        e instanceof Error && e.name === 'TimeoutError'
+          ? 'Webhook timeout (8s)'
+          : 'Webhook injoignable'
       return NextResponse.json({ error: msg }, { status: 502 })
     }
   }
@@ -269,6 +291,7 @@ export async function POST(req: NextRequest) {
 ```bash
 npx tsc --noEmit 2>&1 | head -10
 ```
+
 Expected: 0 erreur
 
 - [ ] **Step 3 : Test manuel — déclencher un workflow depuis la page automations**
@@ -289,6 +312,7 @@ git commit -m "fix(security): SSRF guard + timeout 8s + vérif resp.ok sur trigg
 ### Task 3 : Protection SSRF sur la route chat (ollama_base_url)
 
 **Files:**
+
 - Modify: `app/api/studio/chat/route.ts` (lignes 41 et 64)
 
 - [ ] **Step 1 : Ajouter la validation `ollama_base_url` dans `app/api/studio/chat/route.ts`**
@@ -296,29 +320,35 @@ git commit -m "fix(security): SSRF guard + timeout 8s + vérif resp.ok sur trigg
 Après la ligne `const baseUrl = (settings?.ollama_base_url || 'http://192.168.0.14:11434').replace(/\/$/, '')`, ajouter :
 
 ```typescript
-  // Valider que baseUrl est une URL bien formée et non une endpoint de métadonnées
-  function isAllowedOllamaUrl(url: string): boolean {
-    try {
-      const { protocol, hostname } = new URL(url)
-      if (!['http:', 'https:'].includes(protocol)) return false
-      if (/^169\.254\./.test(hostname)) return false
-      return true
-    } catch { return false }
+// Valider que baseUrl est une URL bien formée et non une endpoint de métadonnées
+function isAllowedOllamaUrl(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url)
+    if (!['http:', 'https:'].includes(protocol)) return false
+    if (/^169\.254\./.test(hostname)) return false
+    return true
+  } catch {
+    return false
   }
-  if (!isAllowedOllamaUrl(baseUrl)) {
-    return new Response(JSON.stringify({ error: 'URL Ollama invalide' }), { status: 400 })
-  }
+}
+if (!isAllowedOllamaUrl(baseUrl)) {
+  return new Response(JSON.stringify({ error: 'URL Ollama invalide' }), { status: 400 })
+}
 ```
 
 - [ ] **Step 2 : Ajouter la limite de taille sur `message` (après la vérification `!message?.trim()`)**
 
 ```typescript
-  if (!conversationId || !message?.trim()) {
-    return new Response(JSON.stringify({ error: 'conversationId and message are required' }), { status: 400 })
-  }
-  if (message.length > 8000) {
-    return new Response(JSON.stringify({ error: 'Message trop long (max 8000 caractères)' }), { status: 400 })
-  }
+if (!conversationId || !message?.trim()) {
+  return new Response(JSON.stringify({ error: 'conversationId and message are required' }), {
+    status: 400,
+  })
+}
+if (message.length > 8000) {
+  return new Response(JSON.stringify({ error: 'Message trop long (max 8000 caractères)' }), {
+    status: 400,
+  })
+}
 ```
 
 - [ ] **Step 3 : Compiler**
@@ -339,20 +369,23 @@ git commit -m "fix(security): SSRF guard ollama_base_url + max 8000 chars sur me
 ### Task 4 : Open redirect fix dans la route /api/waitlist
 
 **Files:**
+
 - Modify: `app/api/waitlist/route.ts`
 
 - [ ] **Step 1 : Remplacer la ligne `origin` dans `app/api/waitlist/route.ts`**
 
 Remplacer :
+
 ```typescript
-    const origin = req.headers.get('origin') ?? `https://lab.kenomi.eu`
-    return NextResponse.redirect(`${origin}/${slug}?waitlist=ok`, { status: 302 })
+const origin = req.headers.get('origin') ?? `https://lab.kenomi.eu`
+return NextResponse.redirect(`${origin}/${slug}?waitlist=ok`, { status: 302 })
 ```
 
 Par :
+
 ```typescript
-    const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
-    return NextResponse.redirect(`${BASE}/${slug}?waitlist=ok`, { status: 302 })
+const BASE = (process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu').replace(/\/$/, '')
+return NextResponse.redirect(`${BASE}/${slug}?waitlist=ok`, { status: 302 })
 ```
 
 - [ ] **Step 2 : Ajouter `APP_ORIGIN=https://lab.kenomi.eu` dans `.env.local`**
@@ -366,10 +399,10 @@ echo 'APP_ORIGIN=https://lab.kenomi.eu' >> /Users/kenjimobutu/Desktop/DEV/Projec
 Dans `app/api/waitlist/route.ts`, après le check `if (!slug || !email)`, ajouter :
 
 ```typescript
-    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
-    if (!EMAIL_RE.test(email)) {
-      return NextResponse.json({ error: 'Format email invalide' }, { status: 400 })
-    }
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+if (!EMAIL_RE.test(email)) {
+  return NextResponse.json({ error: 'Format email invalide' }, { status: 400 })
+}
 ```
 
 - [ ] **Step 4 : Compiler**
@@ -390,6 +423,7 @@ git commit -m "fix(security): open redirect waitlist → APP_ORIGIN fixe + valid
 ### Task 5 : Validation email + venture_id guard dans l'Edge Function waitlist
 
 **Files:**
+
 - Modify: `supabase/functions/waitlist/index.ts`
 
 - [ ] **Step 1 : Remplacer intégralement `supabase/functions/waitlist/index.ts`**
@@ -420,39 +454,42 @@ Deno.serve(async (req) => {
     let slug: string, email: string
 
     if (body) {
-      slug  = (body.get('slug')  as string) ?? ''
+      slug = (body.get('slug') as string) ?? ''
       email = (body.get('email') as string) ?? ''
     } else {
       const json = await req.json()
-      slug  = json.slug  ?? ''
+      slug = json.slug ?? ''
       email = json.email ?? ''
     }
 
     if (!slug || !email) {
-      return new Response(
-        JSON.stringify({ error: 'slug et email requis' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'slug et email requis' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     if (!EMAIL_RE.test(email)) {
-      return new Response(
-        JSON.stringify({ error: 'Format email invalide' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'Format email invalide' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
     const { data: ventures } = await supabase
-      .from('ventures').select('id').eq('slug', slug).limit(1)
+      .from('ventures')
+      .select('id')
+      .eq('slug', slug)
+      .limit(1)
 
     const venture_id = ventures?.[0]?.id ?? null
     if (!venture_id) {
-      return new Response(
-        JSON.stringify({ error: 'Venture introuvable' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'Venture introuvable' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     const { error } = await supabase
@@ -467,10 +504,10 @@ Deno.serve(async (req) => {
     })
   } catch (err) {
     console.error(err)
-    return new Response(
-      JSON.stringify({ error: 'Erreur serveur' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: 'Erreur serveur' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 })
 ```
@@ -496,6 +533,7 @@ git commit -m "fix(security): edge function waitlist — validation email + vent
 ### Task 6 : Tests unitaires pour les helpers de sécurité
 
 **Files:**
+
 - Create: `lib/security.ts` — extraire les fonctions `isAllowedWebhookUrl` et `isValidEmail`
 - Create: `lib/security.test.ts`
 
@@ -571,16 +609,19 @@ describe('isValidEmail', () => {
 ```bash
 npm test 2>&1 | tail -15
 ```
+
 Expected: 15 tests existants + 9 nouveaux = 24 passent
 
 - [ ] **Step 4 : Mettre à jour trigger et chat pour importer depuis security.ts**
 
 Dans `app/api/studio/automations/trigger/route.ts`, remplacer la fonction `isAllowedWebhookUrl` inline par :
+
 ```typescript
 import { isAllowedWebhookUrl } from '@/lib/security'
 ```
 
 Dans `app/api/studio/chat/route.ts`, remplacer la fonction `isAllowedOllamaUrl` inline par :
+
 ```typescript
 import { isAllowedOllamaUrl } from '@/lib/security'
 ```
@@ -590,6 +631,7 @@ import { isAllowedOllamaUrl } from '@/lib/security'
 ```bash
 npx next build 2>&1 | tail -10
 ```
+
 Expected: build réussi
 
 - [ ] **Step 6 : Commit final Plan A**

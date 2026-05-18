@@ -35,9 +35,7 @@ export function buildDeployAutonomyAction(input: {
   }
 }
 
-export function getDeployEnvironment(
-  env: NodeJS.ProcessEnv = process.env
-): AutonomyEnvironment {
+export function getDeployEnvironment(env: NodeJS.ProcessEnv = process.env): AutonomyEnvironment {
   if (
     env.KENOMI_ENV === 'development' ||
     env.KENOMI_ENV === 'staging' ||

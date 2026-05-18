@@ -9,22 +9,25 @@ async function getDashboardData(): Promise<VentureNodeData[]> {
     const ventures = await db.venture.findMany({
       orderBy: { created_at: 'asc' },
       include: {
-        _count:    { select: { waitlist: true } },
-        decisions: { orderBy: { created_at: 'desc' }, take: 1,
-                     select: { decision: true, reason: true } },
+        _count: { select: { waitlist: true } },
+        decisions: {
+          orderBy: { created_at: 'desc' },
+          take: 1,
+          select: { decision: true, reason: true },
+        },
       },
     })
 
-    return ventures.map(v => ({
-      id:            v.id,
-      nom:           v.nom,
-      slug:          v.slug,
-      type_produit:  v.type_produit,
-      statut:        v.statut,
+    return ventures.map((v) => ({
+      id: v.id,
+      nom: v.nom,
+      slug: v.slug,
+      type_produit: v.type_produit,
+      statut: v.statut,
       waitlistCount: v._count.waitlist,
       revenus_total: v.revenus_total,
       budget_depense: v.budget_depense,
-      lastDecision:  v.decisions[0]
+      lastDecision: v.decisions[0]
         ? { decision: v.decisions[0].decision ?? '', reason: v.decisions[0].reason ?? null }
         : null,
     }))
@@ -46,15 +49,17 @@ export default async function DashboardPage() {
           <span className="text-gray-300 text-sm">Dashboard</span>
         </div>
         <div className="flex items-center gap-4 text-sm text-gray-500">
-          <span>{ventures.length} venture{ventures.length !== 1 ? 's' : ''}</span>
+          <span>
+            {ventures.length} venture{ventures.length !== 1 ? 's' : ''}
+          </span>
           <span className="text-emerald-600 font-medium">
-            {ventures.filter(v => v.statut === 'actif').length} actives
+            {ventures.filter((v) => v.statut === 'actif').length} actives
           </span>
           <span className="text-amber-600 font-medium">
-            {ventures.filter(v => v.statut === 'watch').length} watch
+            {ventures.filter((v) => v.statut === 'watch').length} watch
           </span>
           <span className="text-green-600 font-medium">
-            {ventures.filter(v => v.statut === 'scale').length} scale
+            {ventures.filter((v) => v.statut === 'scale').length} scale
           </span>
           <form action="/api/dashboard/logout" method="POST">
             <button className="text-gray-400 hover:text-gray-600 transition-colors text-xs">
@@ -69,7 +74,9 @@ export default async function DashboardPage() {
         {ventures.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
             <span className="text-5xl">📭</span>
-            <p className="text-sm">Aucune venture trouvée — lancez le Scout Agent pour commencer.</p>
+            <p className="text-sm">
+              Aucune venture trouvée — lancez le Scout Agent pour commencer.
+            </p>
           </div>
         ) : (
           <DashboardFlow ventures={ventures} />

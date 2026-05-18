@@ -1,8 +1,6 @@
 import Stripe from 'stripe'
 
-export function getStripeSecretKey(
-  env: NodeJS.ProcessEnv = process.env
-): string {
+export function getStripeSecretKey(env: NodeJS.ProcessEnv = process.env): string {
   const key = env.STRIPE_SECRET_KEY
 
   if (!key) {
@@ -12,17 +10,13 @@ export function getStripeSecretKey(
   return key
 }
 
-export function createStripeClient(
-  env: NodeJS.ProcessEnv = process.env
-): Stripe {
+export function createStripeClient(env: NodeJS.ProcessEnv = process.env): Stripe {
   return new Stripe(getStripeSecretKey(env), {
     apiVersion: '2026-04-22.dahlia',
   })
 }
 
-export function getStripeWebhookSecret(
-  env: NodeJS.ProcessEnv = process.env
-): string {
+export function getStripeWebhookSecret(env: NodeJS.ProcessEnv = process.env): string {
   const secret = env.STRIPE_WEBHOOK_SECRET
 
   if (!secret) {

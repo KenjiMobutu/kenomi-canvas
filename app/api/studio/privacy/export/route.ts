@@ -11,12 +11,16 @@ export async function GET() {
   const results = {
     settings: await supabase
       .from('user_settings')
-      .select('openai_api_key, claude_api_key, stripe_secret_key, stripe_webhook_secret, ollama_base_url, ollama_model, n8n_base_url, created_at, updated_at')
+      .select(
+        'openai_api_key, claude_api_key, stripe_secret_key, stripe_webhook_secret, ollama_base_url, ollama_model, n8n_base_url, created_at, updated_at'
+      )
       .eq('user_id', user!.id)
       .maybeSingle(),
     ventures: await supabase
       .from('ventures')
-      .select('id, name, niche, stage, score, mrr, cac, conversion, next_action, insight, created_at')
+      .select(
+        'id, name, niche, stage, score, mrr, cac, conversion, next_action, insight, created_at'
+      )
       .eq('user_id', user!.id),
     conversations: await supabase
       .from('conversations')
@@ -50,18 +54,20 @@ export async function GET() {
 
   const errors = collectPrivacyQueryErrors(results)
 
-  return NextResponse.json(redactPrivacyExport({
-    exported_at: new Date().toISOString(),
-    user: { id: user!.id, email: user!.email },
-    export_errors: errors,
-    settings: results.settings.data,
-    ventures: results.ventures.data ?? [],
-    conversations: results.conversations.data ?? [],
-    messages: results.messages.data ?? [],
-    documents: results.documents.data ?? [],
-    automations: results.automations.data ?? [],
-    automation_runs: results.automation_runs.data ?? [],
-    agent_runs: results.agent_runs.data ?? [],
-    agent_events: results.agent_events.data ?? [],
-  }))
+  return NextResponse.json(
+    redactPrivacyExport({
+      exported_at: new Date().toISOString(),
+      user: { id: user!.id, email: user!.email },
+      export_errors: errors,
+      settings: results.settings.data,
+      ventures: results.ventures.data ?? [],
+      conversations: results.conversations.data ?? [],
+      messages: results.messages.data ?? [],
+      documents: results.documents.data ?? [],
+      automations: results.automations.data ?? [],
+      automation_runs: results.automation_runs.data ?? [],
+      agent_runs: results.agent_runs.data ?? [],
+      agent_events: results.agent_events.data ?? [],
+    })
+  )
 }

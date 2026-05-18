@@ -47,7 +47,11 @@ export async function POST(req: NextRequest) {
       const resp = await fetch(wf.webhook_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: 'kenomi-studio', trigger: 'manual', timestamp: new Date().toISOString() }),
+        body: JSON.stringify({
+          source: 'kenomi-studio',
+          trigger: 'manual',
+          timestamp: new Date().toISOString(),
+        }),
         signal: AbortSignal.timeout(8000),
       })
       fetchStatus = resp.status
@@ -96,10 +100,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (status !== 'success') {
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: status === 'timeout' ? 504 : 502 }
-    )
+    return NextResponse.json({ error: errorMessage }, { status: status === 'timeout' ? 504 : 502 })
   }
 
   return NextResponse.json({ ok: true, durationMs })

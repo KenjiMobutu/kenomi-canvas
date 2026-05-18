@@ -14,17 +14,18 @@
 
 ## Fichiers modifiés
 
-| Fichier | Action |
-|---|---|
-| `app/api/studio/automations/runs/route.ts` | Créer — GET runs d'un workflow |
-| `app/studio/automations/page.tsx` | Modifier — panneau runs réels + fetch après trigger |
-| `app/studio/documents/page.tsx` | Modifier — corriger delete (storage avant DB, gestion erreur) |
+| Fichier                                    | Action                                                        |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| `app/api/studio/automations/runs/route.ts` | Créer — GET runs d'un workflow                                |
+| `app/studio/automations/page.tsx`          | Modifier — panneau runs réels + fetch après trigger           |
+| `app/studio/documents/page.tsx`            | Modifier — corriger delete (storage avant DB, gestion erreur) |
 
 ---
 
 ### Task 1 : Route GET `/api/studio/automations/runs`
 
 **Files:**
+
 - Create: `app/api/studio/automations/runs/route.ts`
 
 - [ ] **Step 1 : Créer la route**
@@ -89,6 +90,7 @@ git commit -m "feat(automations): route GET /api/studio/automations/runs"
 ### Task 2 : Afficher les runs réels dans la page automations
 
 **Files:**
+
 - Modify: `app/studio/automations/page.tsx`
 
 **Contexte :** La page a déjà une section `RunsFeed` qui affiche des données statiques. On la remplace par des données réelles issues de la route créée en Task 1, chargées quand un workflow DB est sélectionné. Après chaque trigger réussi ou raté, on recharge les runs.
@@ -242,6 +244,7 @@ git commit -m "feat(automations): historique runs réels dans l'UI — chargé a
 ### Task 3 : Corriger la suppression de documents
 
 **Files:**
+
 - Modify: `app/studio/documents/page.tsx`
 
 **Contexte :** La fonction `deleteDoc` actuelle supprime d'abord la ligne DB, puis le fichier storage, sans gérer l'erreur de l'étape storage. Si le delete storage échoue, le fichier reste orphelin dans le bucket. On inverse l'ordre (storage d'abord) et on affiche un toast si le delete storage échoue.
@@ -260,27 +263,25 @@ Trouver le bloc de code qui supprime un document (il fait un appel à `supabase.
 Remplacer ce bloc par :
 
 ```typescript
-  async function deleteDoc(d: Doc) {
-    // Storage d'abord pour éviter les orphelins
-    const { error: storageError } = await supabase.storage
-      .from('documents')
-      .remove([d.storage_path])
-    if (storageError) {
-      return toast.error(`Suppression storage échouée : ${storageError.message}`)
-    }
-
-    const { error: dbError } = await supabase
-      .from('documents')
-      .delete()
-      .eq('id', d.id)
-      .eq('user_id', user!.id)
-    if (dbError) {
-      return toast.error(`Suppression base échouée : ${dbError.message}`)
-    }
-
-    toast.success('Document supprimé')
-    load()
+async function deleteDoc(d: Doc) {
+  // Storage d'abord pour éviter les orphelins
+  const { error: storageError } = await supabase.storage.from('documents').remove([d.storage_path])
+  if (storageError) {
+    return toast.error(`Suppression storage échouée : ${storageError.message}`)
   }
+
+  const { error: dbError } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', d.id)
+    .eq('user_id', user!.id)
+  if (dbError) {
+    return toast.error(`Suppression base échouée : ${dbError.message}`)
+  }
+
+  toast.success('Document supprimé')
+  load()
+}
 ```
 
 **Note :** La fonction s'appelle peut-être différemment (chercher la ligne qui fait `.remove([d.storage_path])` et `.delete().eq('id', d.id)`). Adapte le nom si nécessaire, mais garde la même signature.

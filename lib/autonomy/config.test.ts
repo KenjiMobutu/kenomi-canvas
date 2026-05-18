@@ -19,10 +19,14 @@ describe('getAutonomyConfig', () => {
   })
 
   it('respecte AUTONOMY_GLOBAL_BUDGET_CAP_EUR=250', () => {
-    expect(getAutonomyConfig({ AUTONOMY_GLOBAL_BUDGET_CAP_EUR: '250' }).globalBudgetCapEur).toBe(250)
+    expect(getAutonomyConfig({ AUTONOMY_GLOBAL_BUDGET_CAP_EUR: '250' }).globalBudgetCapEur).toBe(
+      250
+    )
   })
 
   it('fallback à 100 si AUTONOMY_GLOBAL_BUDGET_CAP_EUR invalide', () => {
-    expect(getAutonomyConfig({ AUTONOMY_GLOBAL_BUDGET_CAP_EUR: 'abc' }).globalBudgetCapEur).toBe(100)
+    expect(getAutonomyConfig({ AUTONOMY_GLOBAL_BUDGET_CAP_EUR: 'abc' }).globalBudgetCapEur).toBe(
+      100
+    )
   })
 })
