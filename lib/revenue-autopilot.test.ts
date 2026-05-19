@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildRevenueAutopilotPlan, filterDuplicateDailyAutopilotSteps } from './revenue-autopilot'
+import {
+  buildRevenueAutopilotPlan,
+  filterDuplicateDailyAutopilotSteps,
+  stepFromRoiDecision,
+} from './revenue-autopilot'
 import type { RevenueLoopSnapshot } from './revenue-loop'
 
 const baseSnapshot: RevenueLoopSnapshot = {
@@ -226,6 +230,60 @@ describe('buildRevenueAutopilotPlan', () => {
       risk: 'high',
       recommendedBudgetEur: 26,
     })
+  })
+})
+
+describe('stepFromRoiDecision', () => {
+  it('transforme une décision cut ROI en approval stop_venture', () => {
+    expect(
+      stepFromRoiDecision({
+        ventureId: 'venture-1',
+        roiDecision: {
+          decision: 'cut',
+          ventureDecision: 'stop',
+          reason: 'Spend engagé sans revenu attribué.',
+        },
+      })
+    ).toMatchObject({
+      kind: 'stop_venture',
+      execution: 'approval',
+      risk: 'high',
+      ventureId: 'venture-1',
+      reason: 'Spend engagé sans revenu attribué.',
+    })
+  })
+
+  it('transforme une décision scale ROI en approval scale_budget', () => {
+    expect(
+      stepFromRoiDecision({
+        ventureId: 'venture-1',
+        recommendedBudgetEur: 42,
+        roiDecision: {
+          decision: 'scale',
+          ventureDecision: 'scale',
+          reason: 'ROI 2.00 positif.',
+        },
+      })
+    ).toMatchObject({
+      kind: 'scale_budget',
+      execution: 'approval',
+      risk: 'high',
+      ventureId: 'venture-1',
+      recommendedBudgetEur: 42,
+    })
+  })
+
+  it('ne crée pas d’action pour hold', () => {
+    expect(
+      stepFromRoiDecision({
+        ventureId: 'venture-1',
+        roiDecision: {
+          decision: 'hold',
+          ventureDecision: 'continue',
+          reason: 'Signal insuffisant.',
+        },
+      })
+    ).toBeNull()
   })
 })
 

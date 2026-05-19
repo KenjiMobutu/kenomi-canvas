@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   buildRevenueAutopilotPlan,
   filterDuplicateDailyAutopilotSteps,
+  stepFromRoiDecision,
   type RevenueAutopilotStep,
 } from '@/lib/revenue-autopilot'
 import {
@@ -26,7 +27,11 @@ import { insertAuditEvent } from '@/lib/audit-log'
 import { getCheckoutEnvironment, parsePaymentOutput } from '@/lib/stripe/checkout-action'
 import { buildAcquisitionRoi, type AcquisitionEventRow } from '@/lib/metrics/acquisition-roi'
 import { buildRevenueDailyCycleAudit } from '@/lib/revenue-daily-cycle'
-import { buildRevenueVentureDecisionPatch, deriveRevenueRoiDecision } from '@/lib/revenue-proof'
+import {
+  buildRevenueVentureDecisionPatch,
+  deriveRevenueRoiDecision,
+  type RevenueRoiDecision,
+} from '@/lib/revenue-proof'
 
 function normalizeCycleActions(actions: RevenueAutonomyActionRow[]) {
   return actions.map((action) => ({
@@ -54,6 +59,7 @@ function normalizeCycleDecisions(decisions: RevenueDecisionRow[]) {
 
 type QueryResult<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 type RevenueRouteSupabase = Awaited<ReturnType<typeof requireAllowedUser>>['supabase']
+type RecordedRevenueDecisionRow = RevenueDecisionRow & { roiDecision: RevenueRoiDecision }
 
 async function readTable<T>(query: QueryResult<T>): Promise<T[]> {
   const { data, error } = await query
@@ -363,7 +369,7 @@ async function recordRoiDecision(input: {
   acquisition: ReturnType<typeof buildAcquisitionRoi>
   events: AcquisitionEventRow[]
   nowIso: string
-}): Promise<RevenueDecisionRow | null> {
+}): Promise<RecordedRevenueDecisionRow | null> {
   const ventureId =
     input.events.find((event) => event.venture_id)?.venture_id ??
     input.snapshot.loops.find((loop) => loop.ventureId)?.ventureId ??
@@ -426,6 +432,7 @@ async function recordRoiDecision(input: {
     decision: roiDecision.decision,
     reason: roiDecision.reason,
     created_at: input.nowIso,
+    roiDecision,
   }
 }
 
@@ -542,14 +549,62 @@ export async function POST(req: NextRequest) {
       events: postContext.ventureEvents,
       nowIso,
     })
+    let finalContext = postContext
+
+    const decisionStep = roiDecision
+      ? stepFromRoiDecision({
+          roiDecision: roiDecision.roiDecision,
+          ventureId: roiDecision.venture_id ?? null,
+          recommendedBudgetEur: postAcquisition.summary.recommendedBudgetEur,
+        })
+      : null
+
+    if (decisionStep) {
+      const decisionPlan = filterDuplicateDailyAutopilotSteps({
+        plan: {
+          mode: 'approval_required',
+          generatedAt: nowIso,
+          revenueEur: postContext.snapshot.summary.revenueEur,
+          blockedRevenueEur: postContext.snapshot.summary.blockedRevenueEur,
+          steps: [decisionStep],
+        },
+        actions: postContext.autonomyActions.map((action) => ({
+          action_type: action.action_type,
+          venture_id: action.venture_id,
+          status: action.status,
+          input: action.input,
+          created_at: action.created_at,
+        })),
+        now: new Date(nowIso),
+      })
+
+      for (const step of decisionPlan.steps.slice(0, 1)) {
+        executed.push(
+          await executeAutopilotStep({
+            supabase: result.supabase,
+            userId: result.user.id,
+            step,
+            nowIso,
+          })
+        )
+      }
+
+      if (decisionPlan.steps.length > 0) {
+        finalContext = await loadRevenueContext({
+          supabase: result.supabase,
+          userId: result.user.id,
+        })
+      }
+    }
+
     const cycle = buildRevenueDailyCycleAudit({
       plan: result.plan,
       acquisition: postAcquisition,
-      events: postContext.ventureEvents,
-      actions: normalizeCycleActions(postContext.autonomyActions),
-      approvals: normalizeCycleApprovals(postContext.approvals),
+      events: finalContext.ventureEvents,
+      actions: normalizeCycleActions(finalContext.autonomyActions),
+      approvals: normalizeCycleApprovals(finalContext.approvals),
       decisions: normalizeCycleDecisions(
-        roiDecision ? [roiDecision, ...postContext.decisions] : postContext.decisions
+        roiDecision ? [roiDecision, ...finalContext.decisions] : finalContext.decisions
       ),
       executed,
       now: new Date(nowIso),

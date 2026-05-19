@@ -1,5 +1,6 @@
 import type { RevenueLoopItem, RevenueLoopNextAction, RevenueLoopSnapshot } from './revenue-loop'
 import type { AutonomyEnvironment, AutonomyRiskLevel } from './autonomy/types'
+import type { RevenueRoiDecision } from './revenue-proof'
 
 export type RevenueAutopilotExecution = 'auto' | 'approval' | 'hold'
 export type RevenueAutopilotMode = 'execute' | 'approval_required' | 'hold'
@@ -53,6 +54,41 @@ export interface FilterDuplicateDailyAutopilotStepsInput {
   plan: RevenueAutopilotPlan
   actions: RevenueAutopilotExistingAction[]
   now?: Date
+}
+
+export function stepFromRoiDecision(input: {
+  roiDecision: RevenueRoiDecision
+  ventureId: string | null
+  recommendedBudgetEur?: number
+}): RevenueAutopilotStep | null {
+  if (!input.ventureId) return null
+
+  if (input.roiDecision.decision === 'scale') {
+    return {
+      kind: 'scale_budget',
+      execution: 'approval',
+      risk: 'high',
+      ventureId: input.ventureId,
+      label: 'Approuver scale budget ROI',
+      reason: input.roiDecision.reason,
+      blockedRevenueEur: 0,
+      recommendedBudgetEur: Math.max(1, input.recommendedBudgetEur ?? 25),
+    }
+  }
+
+  if (input.roiDecision.decision === 'cut') {
+    return {
+      kind: 'stop_venture',
+      execution: 'approval',
+      risk: 'high',
+      ventureId: input.ventureId,
+      label: 'Approuver arrêt venture ROI',
+      reason: input.roiDecision.reason,
+      blockedRevenueEur: 0,
+    }
+  }
+
+  return null
 }
 
 function daysSince(value: string | null | undefined, now: Date): number {
