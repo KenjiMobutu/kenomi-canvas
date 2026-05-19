@@ -1,0 +1,204 @@
+import type { RevenueLoopItem, RevenueLoopNextAction, RevenueLoopSnapshot } from './revenue-loop'
+import type { AutonomyEnvironment, AutonomyRiskLevel } from './autonomy/types'
+
+export type RevenueAutopilotExecution = 'auto' | 'approval' | 'hold'
+export type RevenueAutopilotMode = 'execute' | 'approval_required' | 'hold'
+
+export type RevenueAutopilotStepKind =
+  | 'run_agent'
+  | 'create_checkout'
+  | 'publish_campaign'
+  | 'scale_budget'
+  | 'stop_venture'
+  | 'monitor'
+
+export interface RevenueAutopilotStep {
+  kind: RevenueAutopilotStepKind
+  execution: RevenueAutopilotExecution
+  risk: AutonomyRiskLevel
+  ventureId?: string | null
+  pipelineId?: string | null
+  agentId?: string
+  approvalActionType?: string
+  label: string
+  reason: string
+  blockedRevenueEur: number
+}
+
+export interface RevenueAutopilotPlan {
+  mode: RevenueAutopilotMode
+  generatedAt: string
+  revenueEur: number
+  blockedRevenueEur: number
+  steps: RevenueAutopilotStep[]
+}
+
+export interface BuildRevenueAutopilotPlanInput {
+  snapshot: RevenueLoopSnapshot
+  environment: AutonomyEnvironment
+  now?: Date
+  staleNoRevenueDays?: number
+}
+
+function daysSince(value: string | null | undefined, now: Date): number {
+  const ms = Date.parse(value ?? '')
+  if (!Number.isFinite(ms)) return 0
+  return Math.max(0, Math.floor((now.getTime() - ms) / 86_400_000))
+}
+
+function stageDone(loop: RevenueLoopItem, key: string): boolean {
+  return loop.stages.some((stage) => stage.key === key && stage.status === 'done')
+}
+
+function findLoopForRecommended(snapshot: RevenueLoopSnapshot): RevenueLoopItem | null {
+  const loopId = snapshot.summary.recommendedAction?.loopId
+  if (!loopId) return snapshot.loops[0] ?? null
+  return snapshot.loops.find((loop) => loop.id === loopId) ?? snapshot.loops[0] ?? null
+}
+
+function stepFromNextAction(input: {
+  action: RevenueLoopNextAction
+  loop?: RevenueLoopItem | null
+  environment: AutonomyEnvironment
+}): RevenueAutopilotStep {
+  const { action, loop, environment } = input
+  const reason =
+    loop?.priorityReason ??
+    ('reason' in action && typeof action.reason === 'string' ? action.reason : 'Priorité revenue')
+  const blockedRevenueEur =
+    loop?.blockedRevenueEur ??
+    ('blockedRevenueEur' in action && typeof action.blockedRevenueEur === 'number'
+      ? action.blockedRevenueEur
+      : 0)
+  if (action.type === 'run_agent') {
+    return {
+      kind: 'run_agent',
+      execution: 'auto',
+      risk: 'low',
+      ventureId: action.ventureId,
+      agentId: action.agentId,
+      label: action.label,
+      reason,
+      blockedRevenueEur,
+    }
+  }
+
+  if (action.type === 'create_checkout') {
+    const production = environment === 'production'
+    return {
+      kind: 'create_checkout',
+      execution: production ? 'approval' : 'auto',
+      risk: 'medium',
+      ventureId: action.ventureId,
+      pipelineId: action.pipelineId,
+      label: action.label,
+      reason: production ? 'Checkout Stripe en production requiert approval' : reason,
+      blockedRevenueEur,
+    }
+  }
+
+  if (action.type === 'resolve_approval') {
+    return {
+      kind:
+        action.actionType === 'publish_campaign'
+          ? 'publish_campaign'
+          : action.actionType === 'scale_budget'
+            ? 'scale_budget'
+            : action.actionType === 'stop_venture'
+              ? 'stop_venture'
+              : 'create_checkout',
+      execution: 'approval',
+      risk: action.actionType === 'create_checkout' ? 'medium' : 'high',
+      ventureId: action.ventureId,
+      approvalActionType: action.actionType,
+      label: action.label,
+      reason: action.reason ?? 'Approval humaine requise',
+      blockedRevenueEur,
+    }
+  }
+
+  return {
+    kind: 'monitor',
+    execution: 'hold',
+    risk: 'low',
+    ventureId: action.ventureId,
+    label: action.label,
+    reason,
+    blockedRevenueEur,
+  }
+}
+
+function hardBusinessStep(input: {
+  snapshot: RevenueLoopSnapshot
+  now: Date
+  staleNoRevenueDays: number
+}): RevenueAutopilotStep | null {
+  const winner = input.snapshot.loops.find((loop) => loop.revenueEur > 0 && loop.paidPayments > 0)
+  if (winner?.ventureId) {
+    return {
+      kind: 'scale_budget',
+      execution: 'approval',
+      risk: 'high',
+      ventureId: winner.ventureId,
+      pipelineId: winner.pipelineId,
+      label: 'Proposer scale budget',
+      reason: `${winner.ventureName} encaisse déjà ${winner.revenueEur} EUR sur ${winner.paidPayments} paiements.`,
+      blockedRevenueEur: 0,
+    }
+  }
+
+  const stale = input.snapshot.loops.find((loop) => {
+    if (!loop.ventureId || loop.revenueEur > 0) return false
+    if (!stageDone(loop, 'checkout') || !stageDone(loop, 'marketing')) return false
+    return daysSince(loop.updatedAt, input.now) >= input.staleNoRevenueDays
+  })
+
+  if (stale?.ventureId) {
+    const age = daysSince(stale.updatedAt, input.now)
+    return {
+      kind: 'stop_venture',
+      execution: 'approval',
+      risk: 'high',
+      ventureId: stale.ventureId,
+      pipelineId: stale.pipelineId,
+      label: 'Proposer arrêt venture',
+      reason: `${stale.ventureName} a ${age} jours de funnel actif sans revenu.`,
+      blockedRevenueEur: 0,
+    }
+  }
+
+  return null
+}
+
+export function buildRevenueAutopilotPlan(
+  input: BuildRevenueAutopilotPlanInput
+): RevenueAutopilotPlan {
+  const now = input.now ?? new Date()
+  const staleNoRevenueDays = input.staleNoRevenueDays ?? 7
+  const hardStep = hardBusinessStep({ snapshot: input.snapshot, now, staleNoRevenueDays })
+  const loop = findLoopForRecommended(input.snapshot)
+  const recommendedStep = input.snapshot.summary.recommendedAction
+    ? stepFromNextAction({
+        action: input.snapshot.summary.recommendedAction,
+        loop,
+        environment: input.environment,
+      })
+    : null
+  const step = hardStep ?? recommendedStep
+  const steps = step ? [step] : []
+  const firstExecution = steps[0]?.execution
+  const mode: RevenueAutopilotMode =
+    firstExecution === 'auto'
+      ? 'execute'
+      : firstExecution === 'approval'
+        ? 'approval_required'
+        : 'hold'
+
+  return {
+    mode,
+    generatedAt: now.toISOString(),
+    revenueEur: input.snapshot.summary.revenueEur,
+    blockedRevenueEur: input.snapshot.summary.blockedRevenueEur,
+    steps,
+  }
+}

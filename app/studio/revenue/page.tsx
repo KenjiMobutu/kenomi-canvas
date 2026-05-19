@@ -14,6 +14,7 @@ import {
   Target,
   TrendingUp,
   X,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
@@ -151,6 +152,7 @@ export default function RevenuePage() {
   const [snapshot, setSnapshot] = useState<RevenueLoopSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
+  const [autopilotBusy, setAutopilotBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -222,6 +224,26 @@ export default function RevenuePage() {
     }
   }
 
+  async function runAutopilot() {
+    setAutopilotBusy(true)
+    try {
+      const res = await fetch('/api/studio/revenue/autopilot', { method: 'POST' })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error ?? 'Autopilot impossible')
+      const executedCount = Array.isArray(json?.executed) ? json.executed.length : 0
+      toast.success(
+        executedCount > 0
+          ? `Autopilot revenue: ${executedCount} action lancée`
+          : 'Autopilot revenue évalué'
+      )
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Autopilot impossible')
+    } finally {
+      setAutopilotBusy(false)
+    }
+  }
+
   return (
     <main
       style={{
@@ -256,24 +278,35 @@ export default function RevenuePage() {
             Autonomie agents et revenu vérifiable
           </h1>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          title="Rafraîchir"
-          style={{
-            height: 40,
-            width: 40,
-            display: 'grid',
-            placeItems: 'center',
-            borderRadius: 8,
-            border: `1px solid ${C.line2}`,
-            background: C.panel,
-            color: C.text,
-            cursor: 'pointer',
-          }}
-        >
-          <RefreshCw size={17} />
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button
+            onClick={runAutopilot}
+            disabled={autopilotBusy}
+            style={buttonStyle('primary')}
+            title="Lancer la cadence revenue-first"
+          >
+            <Zap size={15} />
+            Autopilot
+          </button>
+          <button
+            onClick={load}
+            disabled={loading}
+            title="Rafraîchir"
+            style={{
+              height: 40,
+              width: 40,
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: 8,
+              border: `1px solid ${C.line2}`,
+              background: C.panel,
+              color: C.text,
+              cursor: 'pointer',
+            }}
+          >
+            <RefreshCw size={17} />
+          </button>
+        </div>
       </header>
 
       {error && (
