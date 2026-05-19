@@ -3,6 +3,7 @@ import { requiresApproval } from '@/lib/autonomy/policy'
 import {
   buildCheckoutAutonomyAction,
   buildCheckoutSessionParams,
+  parsePaymentOutputPayload,
   parsePaymentOutput,
   type PaymentOutput,
 } from './checkout-action'
@@ -53,6 +54,10 @@ describe('buildCheckoutSessionParams', () => {
   it('validates payment output before checkout creation', () => {
     expect(() => parsePaymentOutput('{"price_amount": -1}')).toThrow('Invalid payment output')
     expect(parsePaymentOutput(JSON.stringify(payment))).toEqual(payment)
+    expect(parsePaymentOutputPayload(payment)).toEqual(payment)
+    expect(() => parsePaymentOutputPayload({ ...payment, price_amount: 0 })).toThrow(
+      'Invalid payment output'
+    )
   })
 })
 

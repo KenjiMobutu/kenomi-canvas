@@ -222,6 +222,86 @@ describe('resolveHumanApproval', () => {
     })
   })
 
+  it('approuve et exécute create_checkout via Stripe', async () => {
+    const supabase = createFakeSupabase({
+      human_approvals: [
+        { id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' },
+      ],
+      autonomy_actions: [
+        {
+          id: 'action-1',
+          user_id: 'user-1',
+          venture_id: 'venture-1',
+          action_type: 'create_checkout',
+          status: 'blocked',
+          input: {
+            pipeline_id: 'pipeline-1',
+            payment: {
+              product_name: 'InboxPulse',
+              price_amount: 2900,
+              price_currency: 'eur',
+              billing: 'monthly',
+              checkout_description: 'Scoring IA des leads email.',
+              trial_days: 7,
+            },
+            successUrl: 'https://kenomi.test/success',
+            cancelUrl: 'https://kenomi.test/cancel',
+          },
+        },
+      ],
+    })
+
+    const stripeClient = {
+      checkout: {
+        sessions: {
+          create: vi.fn(async () => ({
+            id: 'cs_test_123',
+            url: 'https://checkout.stripe.test/session',
+            mode: 'subscription',
+            payment_intent: null,
+            customer_details: { email: 'buyer@test.local' },
+          })),
+        },
+      },
+    }
+
+    const result = await resolveHumanApproval({
+      supabase,
+      userId: 'user-1',
+      approvalId: 'approval-1',
+      decision: 'approved',
+      stripeClient,
+      now: () => new Date('2026-05-18T12:00:00.000Z'),
+    })
+
+    expect(result).toMatchObject({ executed: true, actionType: 'create_checkout' })
+    expect(stripeClient.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'subscription',
+        success_url: 'https://kenomi.test/success',
+        cancel_url: 'https://kenomi.test/cancel',
+        metadata: { venture_id: 'venture-1' },
+      })
+    )
+    expect(supabase.tables.payments[0]).toMatchObject({
+      venture_id: 'venture-1',
+      stripe_session_id: 'cs_test_123',
+      amount_eur: 29,
+      provider_status: 'ready',
+      checkout_url: 'https://checkout.stripe.test/session',
+      autonomy_action_id: 'action-1',
+    })
+    expect(supabase.tables.autonomy_actions[0]).toMatchObject({
+      status: 'completed',
+      output: {
+        executed: true,
+        handler: 'create_checkout',
+        stripe_session_id: 'cs_test_123',
+        checkout_url: 'https://checkout.stripe.test/session',
+      },
+    })
+  })
+
   it('marque deploy failed si Coolify échoue après approbation', async () => {
     const supabase = createFakeSupabase({
       human_approvals: [

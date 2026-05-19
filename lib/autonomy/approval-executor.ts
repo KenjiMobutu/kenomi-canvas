@@ -2,6 +2,12 @@ import { createCoolifyClient, type CoolifyClient } from '@/lib/coolify/client'
 import { getAutonomyConfig, type AutonomyConfig } from './config'
 import { checkBudgetPolicy } from './policy'
 import {
+  buildCheckoutSessionParams,
+  parsePaymentOutputPayload,
+  type PaymentOutput,
+} from '@/lib/stripe/checkout-action'
+import { createStripeClient } from '@/lib/stripe/server'
+import {
   executePublishCampaign,
   type ExecutePublishResult,
   type PublishActionSupabase,
@@ -20,6 +26,7 @@ interface QueryFilterBuilder extends QueryResult {
 interface TableQueryBuilder {
   select(columns?: string): QueryFilterBuilder
   update(row: Record<string, unknown>): QueryFilterBuilder
+  insert(row: Record<string, unknown>): QueryFilterBuilder
 }
 
 export interface ApprovalExecutorSupabase {
@@ -49,6 +56,20 @@ interface AutonomyActionRow {
 interface VentureSpendRow {
   venture_id?: string | null
   amount_eur?: number | null
+}
+
+interface CheckoutStripeClient {
+  checkout: {
+    sessions: {
+      create(params: ReturnType<typeof buildCheckoutSessionParams>): Promise<{
+        id: string
+        url: string | null
+        mode: string | null
+        payment_intent?: string | { id?: string | null } | null
+        customer_details?: { email?: string | null } | null
+      }>
+    }
+  }
 }
 
 const BUDGET_RELEVANT_ACTIONS = new Set(['publish_campaign', 'scale_budget'])
@@ -90,6 +111,7 @@ export interface ResolveHumanApprovalInput {
   approvalId: string
   decision: ApprovalResolution
   coolifyClient?: CoolifyClient
+  stripeClient?: CheckoutStripeClient
   marketingPublisher?: MarketingPublisher
   now?: () => Date
   config?: AutonomyConfig
@@ -201,6 +223,76 @@ function readDeployInput(action: AutonomyActionRow): {
   }
 
   return { projectId, serviceId }
+}
+
+function readCheckoutInput(action: AutonomyActionRow): {
+  payment: PaymentOutput
+  successUrl: string
+  cancelUrl: string
+} {
+  const paymentPayload = action.input?.payment ?? action.input?.payment_output
+  const successUrl = action.input?.successUrl
+  const cancelUrl = action.input?.cancelUrl
+
+  if (typeof successUrl !== 'string' || successUrl.length === 0) {
+    throw new ApprovalExecutionError('successUrl manquant pour create_checkout', 422)
+  }
+
+  if (typeof cancelUrl !== 'string' || cancelUrl.length === 0) {
+    throw new ApprovalExecutionError('cancelUrl manquant pour create_checkout', 422)
+  }
+
+  if (typeof paymentPayload === 'string') {
+    return { payment: parsePaymentOutputPayload(JSON.parse(paymentPayload)), successUrl, cancelUrl }
+  }
+
+  return { payment: parsePaymentOutputPayload(paymentPayload), successUrl, cancelUrl }
+}
+
+async function executeCreateCheckout(input: {
+  supabase: ApprovalExecutorSupabase
+  stripeClient: CheckoutStripeClient
+  action: AutonomyActionRow
+  nowIso: string
+}) {
+  if (!input.action.venture_id) {
+    throw new ApprovalExecutionError('Venture manquante pour create_checkout', 422)
+  }
+
+  const checkoutInput = readCheckoutInput(input.action)
+  const session = await input.stripeClient.checkout.sessions.create(
+    buildCheckoutSessionParams({
+      payment: checkoutInput.payment,
+      ventureId: input.action.venture_id,
+      successUrl: checkoutInput.successUrl,
+      cancelUrl: checkoutInput.cancelUrl,
+    })
+  )
+
+  await update(
+    input.supabase.from('payments').insert({
+      venture_id: input.action.venture_id,
+      stripe_session_id: session.id,
+      stripe_payment_intent_id:
+        typeof session.payment_intent === 'string' ? session.payment_intent : null,
+      amount_eur: checkoutInput.payment.price_amount / 100,
+      currency: checkoutInput.payment.price_currency.toLowerCase(),
+      status: 'pending',
+      provider_status: 'ready',
+      provider_session_id: session.id,
+      customer_email: session.customer_details?.email ?? null,
+      checkout_url: session.url,
+      checkout_mode: session.mode,
+      autonomy_action_id: input.action.id,
+      created_at: input.nowIso,
+      updated_at: input.nowIso,
+    })
+  )
+
+  return {
+    stripeSessionId: session.id,
+    checkoutUrl: session.url,
+  }
 }
 
 export async function resolveHumanApproval(
@@ -382,6 +474,32 @@ export async function resolveHumanApproval(
         executed: false,
         handler: 'deploy',
         error: error instanceof Error ? error.message : 'Coolify deploy failed',
+      }
+    }
+  }
+
+  if (action.action_type === 'create_checkout') {
+    try {
+      const checkout = await executeCreateCheckout({
+        supabase: input.supabase,
+        stripeClient: input.stripeClient ?? createStripeClient(),
+        action,
+        nowIso,
+      })
+      executed = true
+      actionStatus = 'completed'
+      output = {
+        executed: true,
+        handler: 'create_checkout',
+        stripe_session_id: checkout.stripeSessionId,
+        checkout_url: checkout.checkoutUrl,
+      }
+    } catch (error) {
+      actionStatus = 'failed'
+      output = {
+        executed: false,
+        handler: 'create_checkout',
+        error: error instanceof Error ? error.message : 'Stripe checkout failed',
       }
     }
   }

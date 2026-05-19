@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   BarChart3,
   Bot,
+  CircleDollarSign,
   FileText,
   GitBranch,
   KeyRound,
@@ -27,6 +28,7 @@ const nav = [
   { href: '/studio', label: 'Cockpit', icon: LayoutDashboard, group: 'Studio' },
   { href: '/studio/ventures', label: 'Ventures', icon: GitBranch, group: 'Studio' },
   { href: '/studio/agents', label: 'Agents', icon: Bot, group: 'Studio' },
+  { href: '/studio/revenue', label: 'Revenue', icon: CircleDollarSign, group: 'Studio' },
   { href: '/studio/marketing', label: 'Marketing', icon: Megaphone, group: 'Studio' },
   { href: '/studio/analytics', label: 'Analytics', icon: BarChart3, group: 'Studio' },
   { href: '/studio/automations', label: 'Automations', icon: Workflow, group: 'Studio' },

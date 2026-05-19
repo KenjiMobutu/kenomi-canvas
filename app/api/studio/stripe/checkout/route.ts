@@ -14,6 +14,7 @@ import {
 import { createStripeClient } from '@/lib/stripe/server'
 
 const checkoutRequestSchema = z.object({
+  ventureId: z.string().min(1).optional(),
   successUrl: z.string().url().optional(),
   cancelUrl: z.string().url().optional(),
 })
@@ -45,13 +46,19 @@ export async function POST(req: NextRequest) {
     return apiError('Payload checkout invalide', 400)
   }
 
-  const { data: pipeline, error: pipelineError } = await supabase
+  let pipelineQuery = supabase
     .from('venture_pipeline')
     .select('id, venture_id, payment_output')
     .eq('user_id', user!.id)
     .in('status', ['approved', 'done'])
     .not('venture_id', 'is', null)
     .not('payment_output', 'is', null)
+
+  if (parsedBody.data.ventureId) {
+    pipelineQuery = pipelineQuery.eq('venture_id', parsedBody.data.ventureId)
+  }
+
+  const { data: pipeline, error: pipelineError } = await pipelineQuery
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -74,6 +81,10 @@ export async function POST(req: NextRequest) {
   const actionPolicy = buildCheckoutAutonomyAction({ environment })
   const approvalRequired = requiresApproval(actionPolicy)
   const nowIso = new Date().toISOString()
+  const urls = {
+    ...defaultCheckoutUrls(req.nextUrl.origin),
+    ...parsedBody.data,
+  }
 
   const { data: action, error: actionError } = await supabase
     .from('autonomy_actions')
@@ -87,6 +98,8 @@ export async function POST(req: NextRequest) {
         pipeline_id: typedPipeline.id,
         payment,
         environment,
+        successUrl: urls.successUrl,
+        cancelUrl: urls.cancelUrl,
       },
       output: {},
       created_at: nowIso,
@@ -119,11 +132,6 @@ export async function POST(req: NextRequest) {
       },
       { status: 202 }
     )
-  }
-
-  const urls = {
-    ...defaultCheckoutUrls(req.nextUrl.origin),
-    ...parsedBody.data,
   }
 
   try {

@@ -13,9 +13,17 @@ const paymentOutputSchema = z.object({
 
 export type PaymentOutput = z.infer<typeof paymentOutputSchema>
 
+export function parsePaymentOutputPayload(raw: unknown): PaymentOutput {
+  try {
+    return paymentOutputSchema.parse(raw)
+  } catch {
+    throw new Error('Invalid payment output')
+  }
+}
+
 export function parsePaymentOutput(raw: string): PaymentOutput {
   try {
-    return paymentOutputSchema.parse(JSON.parse(raw))
+    return parsePaymentOutputPayload(JSON.parse(raw))
   } catch {
     throw new Error('Invalid payment output')
   }
