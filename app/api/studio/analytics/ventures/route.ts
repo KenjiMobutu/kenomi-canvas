@@ -5,6 +5,7 @@ import {
   buildVentureMetricSnapshots,
   type VentureMetricSourceRow,
 } from '@/lib/metrics/venture-metrics'
+import { buildAcquisitionRoi, type AcquisitionEventRow } from '@/lib/metrics/acquisition-roi'
 import { buildMetricSource } from '@/lib/metrics/source-contract'
 
 interface VentureRow {
@@ -45,7 +46,7 @@ export async function GET() {
 
   const { data: events, error: eventsError } = await supabase
     .from('venture_events')
-    .select('venture_id, event_type, value')
+    .select('venture_id, event_type, value, metadata, occurred_at')
     .eq('user_id', user!.id)
     .in('venture_id', ventureIds)
 
@@ -53,11 +54,12 @@ export async function GET() {
     return NextResponse.json({ error: eventsError.message }, { status: 500 })
   }
 
-  const eventRows = (events ?? []) as VentureMetricSourceRow[]
+  const eventRows = (events ?? []) as Array<VentureMetricSourceRow & AcquisitionEventRow>
 
   return NextResponse.json({
     ok: true,
     ventures: buildVentureMetricSnapshots(ventureRows, eventRows),
+    acquisition: buildAcquisitionRoi(eventRows),
     source: buildMetricSource({
       source: 'venture_events',
       window: 'all_visible_events',

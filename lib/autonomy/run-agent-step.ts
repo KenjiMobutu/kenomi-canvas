@@ -7,6 +7,11 @@ import {
   type VentureMetricSourceRow,
 } from '@/lib/metrics/venture-metrics'
 import {
+  buildAcquisitionRoi,
+  buildAcquisitionRoiContext,
+  type AcquisitionEventRow,
+} from '@/lib/metrics/acquisition-roi'
+import {
   buildSystemPrompt,
   isAgentUnlocked,
   parsePipelineIdea,
@@ -262,12 +267,17 @@ async function getDecisionMetricsBundle(
   try {
     const { data, error } = await supabase
       .from('venture_events')
-      .select('venture_id, event_type, value')
+      .select('venture_id, event_type, value, metadata, occurred_at')
       .eq('venture_id', pipeline.venture_id)
 
     if (error) return { context: '', metrics: null }
-    const metrics = aggregateVentureMetrics((data ?? []) as VentureMetricSourceRow[])
-    return { context: `\n${buildDecisionMetricsContext(metrics)}`, metrics }
+    const rows = (data ?? []) as Array<VentureMetricSourceRow & AcquisitionEventRow>
+    const metrics = aggregateVentureMetrics(rows)
+    const acquisitionContext = buildAcquisitionRoiContext(buildAcquisitionRoi(rows))
+    return {
+      context: `\n${buildDecisionMetricsContext(metrics)}${acquisitionContext ? `\n${acquisitionContext}` : ''}`,
+      metrics,
+    }
   } catch {
     return { context: '', metrics: null }
   }

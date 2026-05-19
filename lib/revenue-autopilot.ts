@@ -23,6 +23,7 @@ export interface RevenueAutopilotStep {
   label: string
   reason: string
   blockedRevenueEur: number
+  recommendedBudgetEur?: number
 }
 
 export interface RevenueAutopilotPlan {
@@ -135,6 +136,7 @@ function hardBusinessStep(input: {
 }): RevenueAutopilotStep | null {
   const winner = input.snapshot.loops.find((loop) => loop.revenueEur > 0 && loop.paidPayments > 0)
   if (winner?.ventureId) {
+    const recommendedBudgetEur = Math.min(250, Math.max(25, Math.round(winner.revenueEur * 0.3)))
     return {
       kind: 'scale_budget',
       execution: 'approval',
@@ -144,6 +146,7 @@ function hardBusinessStep(input: {
       label: 'Proposer scale budget',
       reason: `${winner.ventureName} encaisse déjà ${winner.revenueEur} EUR sur ${winner.paidPayments} paiements.`,
       blockedRevenueEur: 0,
+      recommendedBudgetEur,
     }
   }
 

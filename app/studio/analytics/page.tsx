@@ -39,6 +39,30 @@ const VENTURE_ACCENTS = [
 
 type VentureAN = { id: string; name: string; mrr: number; accent: string }
 
+type AcquisitionRoiRow = {
+  id: string
+  channel: string
+  campaignId: string
+  revenueCents: number
+  spendCents: number
+  profitCents: number
+  roi: number
+  recommendation: 'scale' | 'hold' | 'cut'
+  recommendedBudgetEur: number
+}
+
+type AcquisitionRoiPayload = {
+  summary: {
+    revenueCents: number
+    spendCents: number
+    profitCents: number
+    roi: number
+    recommendedBudgetEur: number
+  }
+  channels: AcquisitionRoiRow[]
+  campaigns: AcquisitionRoiRow[]
+}
+
 function BigKPI({
   label,
   value,
@@ -622,6 +646,7 @@ export default function AnalyticsPage() {
   const [mrrSparkSeries, setMrrSparkSeries] = useState<number[]>([])
   const [liveSnapshots, setLiveSnapshots] = useState<LiveVentureMetrics[]>([])
   const [liveSource, setLiveSource] = useState<MetricSourceContract | null>(null)
+  const [acquisition, setAcquisition] = useState<AcquisitionRoiPayload | null>(null)
   const [liveLoading, setLiveLoading] = useState(true)
   const [llmCost, setLlmCost] = useState<{
     totalUsd: number
@@ -639,6 +664,7 @@ export default function AnalyticsPage() {
         if (data?.ok && Array.isArray(data.ventures)) {
           setLiveSnapshots(data.ventures as LiveVentureMetrics[])
           setLiveSource((data.source ?? null) as MetricSourceContract | null)
+          setAcquisition((data.acquisition ?? null) as AcquisitionRoiPayload | null)
         }
       })
       .catch(() => {
@@ -895,7 +921,7 @@ export default function AnalyticsPage() {
           style={{
             background: surface,
             border: `1px solid ${line2}`,
-            borderRadius: 14,
+            borderRadius: 8,
             padding: 16,
             display: 'flex',
             flexDirection: 'column',
@@ -1069,6 +1095,128 @@ export default function AnalyticsPage() {
             source venture_events · {live_metrics.source?.window ?? 'all_visible_events'} ·{' '}
             {live_metrics.source?.status ?? 'unavailable'}
           </div>
+        </div>
+
+        <div
+          style={{
+            background: surface,
+            border: `1px solid ${line2}`,
+            borderRadius: 8,
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 14,
+                fontWeight: 800,
+                color: text,
+              }}
+            >
+              ROI acquisition · allocation budget
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: acquisition?.summary.recommendedBudgetEur ? amber : muted2,
+                letterSpacing: 0,
+                textTransform: 'uppercase',
+              }}
+            >
+              budget recommandé €{(acquisition?.summary.recommendedBudgetEur ?? 0).toFixed(0)}
+            </div>
+          </div>
+          {!acquisition || acquisition.channels.length === 0 ? (
+            <div
+              style={{
+                padding: '14px 16px',
+                borderRadius: 8,
+                background: surface2,
+                border: `1px dashed ${line2}`,
+                color: muted,
+                fontSize: 12,
+              }}
+            >
+              Aucun canal attribuable pour l’instant. Les prochains événements venture_events
+              relieront spend, paiement et ROI.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {acquisition.channels.slice(0, 5).map((row) => {
+                const color =
+                  row.recommendation === 'scale'
+                    ? emerald
+                    : row.recommendation === 'cut'
+                      ? rose
+                      : amber
+                return (
+                  <div
+                    key={row.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '1fr' : '1.2fr repeat(5, minmax(76px, 1fr))',
+                      gap: 8,
+                      alignItems: 'center',
+                      padding: 10,
+                      borderRadius: 8,
+                      background: surface2,
+                      border: `1px solid ${line}`,
+                    }}
+                  >
+                    <div>
+                      <div style={{ color: text, fontWeight: 800 }}>{row.channel}</div>
+                      <div
+                        style={{
+                          color,
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0,
+                          marginTop: 3,
+                        }}
+                      >
+                        {row.recommendation}
+                      </div>
+                    </div>
+                    {[
+                      ['Revenu', `€${(row.revenueCents / 100).toFixed(2)}`],
+                      ['Spend', `€${(row.spendCents / 100).toFixed(2)}`],
+                      ['Profit', `€${(row.profitCents / 100).toFixed(2)}`],
+                      ['ROI', row.spendCents > 0 ? `${(row.roi * 100).toFixed(0)}%` : '—'],
+                      ['Budget', `€${row.recommendedBudgetEur.toFixed(0)}`],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <div
+                          style={{
+                            color: muted2,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 9,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {label}
+                        </div>
+                        <div style={{ color: text, fontWeight: 800, marginTop: 2 }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* KPI snapshots manuels conservés avec source explicite. */}

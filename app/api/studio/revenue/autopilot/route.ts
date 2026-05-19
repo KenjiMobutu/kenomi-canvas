@@ -140,10 +140,14 @@ async function createAutopilotApproval(input: {
           ? 'stop_venture'
           : input.step.kind
 
+  const scaleBudgetEur =
+    actionType === 'scale_budget' ? Math.max(1, input.step.recommendedBudgetEur ?? 25) : 0
+
   let actionInput: Record<string, unknown> = {
     source: 'revenue_autopilot',
     reason: input.step.reason,
     pipeline_id: input.step.pipelineId ?? null,
+    recommended_budget_eur: actionType === 'scale_budget' ? scaleBudgetEur : null,
   }
 
   if (input.step.kind === 'create_checkout') {
@@ -176,8 +180,9 @@ async function createAutopilotApproval(input: {
       action_type: actionType,
       risk_level: input.step.risk,
       status: 'blocked',
-      estimated_cost_eur: actionType === 'scale_budget' ? 25 : 0,
-      budget_cap_eur: actionType === 'scale_budget' ? 50 : null,
+      estimated_cost_eur: actionType === 'scale_budget' ? scaleBudgetEur : 0,
+      budget_cap_eur:
+        actionType === 'scale_budget' ? Math.max(50, Math.ceil(scaleBudgetEur * 1.25)) : null,
       input: actionInput,
       output: {},
       created_at: input.nowIso,

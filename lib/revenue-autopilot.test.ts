@@ -192,6 +192,7 @@ describe('buildRevenueAutopilotPlan', () => {
       execution: 'approval',
       ventureId: 'venture-winner',
       risk: 'high',
+      recommendedBudgetEur: 26,
     })
   })
 })
