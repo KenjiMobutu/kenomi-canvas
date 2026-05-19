@@ -58,6 +58,10 @@ describe('studio ops summary', () => {
       label: 'Valider les approvals',
       href: '/studio/agents',
       tone: 'warn',
+      intent: {
+        method: 'GET',
+        endpoint: '/studio/agents',
+      },
     })
   })
 
@@ -80,6 +84,14 @@ describe('studio ops summary', () => {
         detail: 'Les sources critiques répondent. Ouvrir le cockpit pour inspection.',
         href: '/studio',
         tone: 'ok',
+        intent: {
+          id: 'verify-sources',
+          method: 'GET',
+          endpoint: '/studio',
+          payload: null,
+          requiresConfirmation: false,
+          risk: 'low',
+        },
       },
     ])
   })

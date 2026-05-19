@@ -49,6 +49,14 @@ type OpsSummaryAction = {
   detail: string
   href: string
   tone: 'ok' | 'warn' | 'muted'
+  intent?: {
+    id: string
+    method: 'GET' | 'POST'
+    endpoint: string
+    payload: Record<string, unknown> | null
+    requiresConfirmation: boolean
+    risk: 'low' | 'medium' | 'high'
+  }
 }
 
 type OpsSummaryPayload = {
@@ -1570,7 +1578,17 @@ function KpiGrid({ kpi }: { kpi: KpiRow | null }) {
   )
 }
 
-function OpsSummaryStrip({ summary }: { summary: OpsSummaryPayload | null }) {
+function OpsSummaryStrip({
+  summary,
+  actionState,
+  actionMessage,
+  onRunAction,
+}: {
+  summary: OpsSummaryPayload | null
+  actionState: Record<string, 'idle' | 'running' | 'done' | 'error'>
+  actionMessage: Record<string, string>
+  onRunAction: (action: OpsSummaryAction) => void
+}) {
   const cards = summary?.cards ?? []
 
   if (cards.length === 0) {
@@ -1695,20 +1713,32 @@ function OpsSummaryStrip({ summary }: { summary: OpsSummaryPayload | null }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
         {resolvedSummary.actions.slice(0, 3).map((action) => {
           const color = action.tone === 'warn' ? amber : action.tone === 'ok' ? emerald : muted2
-          return (
-            <a
-              key={action.id}
-              href={action.href}
-              style={{
-                display: 'block',
-                textDecoration: 'none',
-                padding: '9px 10px',
-                borderRadius: 8,
-                border: `1px solid ${color}33`,
-                background: `${color}10`,
-                color: text,
-              }}
-            >
+          const state = actionState[action.id] ?? 'idle'
+          const isExecutable = action.intent?.method === 'POST'
+          const statusLabel =
+            state === 'running'
+              ? 'en cours'
+              : state === 'done'
+                ? 'fait'
+                : state === 'error'
+                  ? 'erreur'
+                  : isExecutable
+                    ? 'executer'
+                    : 'ouvrir'
+          const commonStyle = {
+            display: 'block',
+            width: '100%',
+            textAlign: 'left' as const,
+            textDecoration: 'none',
+            padding: '9px 10px',
+            borderRadius: 8,
+            border: `1px solid ${color}33`,
+            background: `${color}10`,
+            color: text,
+            cursor: state === 'running' ? 'wait' : 'pointer',
+          }
+          const content = (
+            <>
               <div
                 style={{
                   display: 'flex',
@@ -1733,16 +1763,45 @@ function OpsSummaryStrip({ summary }: { summary: OpsSummaryPayload | null }) {
                   style={{
                     fontFamily: 'var(--font-mono)',
                     fontSize: 9,
-                    color: muted2,
+                    color: state === 'error' ? rose : state === 'done' ? emerald : muted2,
                     letterSpacing: '.08em',
                   }}
                 >
-                  ouvrir
+                  {statusLabel}
                 </span>
               </div>
               <div style={{ marginTop: 4, fontSize: 11.5, color: muted, lineHeight: 1.45 }}>
-                {action.detail}
+                {actionMessage[action.id] || action.detail}
               </div>
+            </>
+          )
+
+          if (isExecutable) {
+            return (
+              <button
+                key={action.id}
+                type="button"
+                disabled={state === 'running'}
+                onClick={() => onRunAction(action)}
+                style={{
+                  ...commonStyle,
+                  font: 'inherit',
+                }}
+              >
+                {content}
+              </button>
+            )
+          }
+
+          return (
+            <a
+              key={action.id}
+              href={action.href}
+              style={{
+                ...commonStyle,
+              }}
+            >
+              {content}
             </a>
           )
         })}
@@ -2298,6 +2357,10 @@ export default function CockpitPage() {
   const [showCmdk, setShowCmdk] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [opsSummary, setOpsSummary] = useState<OpsSummaryPayload | null>(null)
+  const [opsActionState, setOpsActionState] = useState<
+    Record<string, 'idle' | 'running' | 'done' | 'error'>
+  >({})
+  const [opsActionMessage, setOpsActionMessage] = useState<Record<string, string>>({})
   const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -2342,8 +2405,7 @@ export default function CockpitPage() {
     load()
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!user) return
+  const loadOpsSummary = useCallback(() => {
     let cancelled = false
     fetch('/api/studio/ops/summary')
       .then((res) => res.json())
@@ -2356,7 +2418,59 @@ export default function CockpitPage() {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    return loadOpsSummary()
+  }, [user, loadOpsSummary])
+
+  const runOpsAction = useCallback(
+    async (action: OpsSummaryAction) => {
+      if (!action.intent || action.intent.method === 'GET') {
+        window.location.href = action.href
+        return
+      }
+
+      if (action.intent.requiresConfirmation) {
+        const confirmed = window.confirm(`${action.label}\n\n${action.detail}`)
+        if (!confirmed) return
+      }
+
+      setOpsActionState((current) => ({ ...current, [action.id]: 'running' }))
+      setOpsActionMessage((current) => ({ ...current, [action.id]: '' }))
+
+      try {
+        const response = await fetch(action.intent.endpoint, {
+          method: action.intent.method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(action.intent.payload),
+        })
+        const payload = await response.json().catch(() => null)
+
+        setOpsActionState((current) => ({
+          ...current,
+          [action.id]: response.ok ? 'done' : 'error',
+        }))
+        setOpsActionMessage((current) => ({
+          ...current,
+          [action.id]:
+            payload?.message ??
+            payload?.error ??
+            (response.ok ? 'Action terminee.' : 'Action impossible.'),
+        }))
+
+        if (response.ok) loadOpsSummary()
+      } catch {
+        setOpsActionState((current) => ({ ...current, [action.id]: 'error' }))
+        setOpsActionMessage((current) => ({
+          ...current,
+          [action.id]: 'Action impossible depuis le navigateur.',
+        }))
+      }
+    },
+    [loadOpsSummary]
+  )
 
   /* Keyboard shortcuts */
   useEffect(() => {
@@ -2472,7 +2586,12 @@ export default function CockpitPage() {
         {!isMobile && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
             <TodayRhythm />
-            <OpsSummaryStrip summary={opsSummary} />
+            <OpsSummaryStrip
+              summary={opsSummary}
+              actionState={opsActionState}
+              actionMessage={opsActionMessage}
+              onRunAction={runOpsAction}
+            />
             <KpiGrid kpi={kpi} />
             <MissionFeedCompact />
           </div>
