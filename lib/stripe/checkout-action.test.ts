@@ -51,6 +51,25 @@ describe('buildCheckoutSessionParams', () => {
     expect(params.subscription_data).toBeUndefined()
   })
 
+  it('can attach public landing metadata and customer email without disabling dynamic methods', () => {
+    const params = buildCheckoutSessionParams({
+      payment: { ...payment, billing: 'one_time', trial_days: 0 },
+      ventureId: 'venture_123',
+      successUrl: 'https://kenomi.test/success',
+      cancelUrl: 'https://kenomi.test/cancel',
+      customerEmail: 'buyer@test.local',
+      metadata: { source: 'public_landing', slug: 'notefast' },
+    })
+
+    expect(params.customer_email).toBe('buyer@test.local')
+    expect(params.metadata).toEqual({
+      venture_id: 'venture_123',
+      source: 'public_landing',
+      slug: 'notefast',
+    })
+    expect(params).not.toHaveProperty('payment_method_types')
+  })
+
   it('validates payment output before checkout creation', () => {
     expect(() => parsePaymentOutput('{"price_amount": -1}')).toThrow('Invalid payment output')
     expect(parsePaymentOutput(JSON.stringify(payment))).toEqual(payment)

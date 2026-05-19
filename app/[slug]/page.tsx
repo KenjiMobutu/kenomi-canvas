@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 interface Props {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ waitlist?: string; payment?: string }>
+  searchParams: Promise<{ waitlist?: string; payment?: string; checkout?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function LandingPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { waitlist, payment } = await searchParams
+  const { waitlist, payment, checkout } = await searchParams
   const data = await getLandingPage(slug)
   if (!data) notFound()
 
@@ -43,34 +43,33 @@ export default async function LandingPage({ params, searchParams }: Props) {
   })
 
   const { hero, features, faq } = data.copywriting
-  const { data: paymentRows } = await supabaseAdmin
-    .from('payments')
-    .select('checkout_url, provider_status, status, created_at')
+  const { data: checkoutPipelines } = await supabaseAdmin
+    .from('venture_pipeline')
+    .select('id')
     .eq('venture_id', data.venture_id)
-    .not('checkout_url', 'is', null)
+    .in('status', ['approved', 'done'])
+    .not('payment_output', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(5)
+    .limit(1)
 
-  const checkoutPayment = (paymentRows ?? []).find((payment) =>
-    ['ready', 'pending'].includes(String(payment.provider_status ?? payment.status))
-  )
   const primaryCta = selectPublicLandingCta({
     heroCta: hero.cta,
-    checkoutUrl: checkoutPayment?.checkout_url ?? null,
-    providerStatus: checkoutPayment?.provider_status ?? checkoutPayment?.status ?? null,
+    checkoutAvailable: (checkoutPipelines ?? []).length > 0,
+    checkoutHref: '/api/public/stripe/checkout',
   })
 
   const showWaitlistSuccess = waitlist === 'ok'
   const showPaymentSuccess = payment === 'success'
   const showPaymentCancel = payment === 'cancelled'
+  const showCheckoutError = checkout === 'error'
 
   return (
     <main className="min-h-screen">
       {/* BANNIÈRE CONFIRMATION */}
-      {(showWaitlistSuccess || showPaymentSuccess || showPaymentCancel) && (
+      {(showWaitlistSuccess || showPaymentSuccess || showPaymentCancel || showCheckoutError) && (
         <div
           className={`px-4 py-3 text-center text-sm font-medium ${
-            showPaymentCancel
+            showPaymentCancel || showCheckoutError
               ? 'bg-yellow-900/50 border-b border-yellow-800 text-yellow-300'
               : 'bg-green-900/50 border-b border-green-800 text-green-300'
           }`}
@@ -79,6 +78,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
             'Inscription confirmée ! Vous serez notifié en priorité au lancement.'}
           {showPaymentSuccess && 'Paiement reçu ! Bienvenue — vous recevrez vos accès par email.'}
           {showPaymentCancel && 'Paiement annulé. Revenez quand vous voulez.'}
+          {showCheckoutError && 'Checkout indisponible pour le moment. Rejoignez la waitlist.'}
         </div>
       )}
 
@@ -99,12 +99,24 @@ export default async function LandingPage({ params, searchParams }: Props) {
           {hero.headline}
         </h1>
         <p className="text-xl text-gray-400 mb-10 max-w-xl mx-auto">{hero.subtitle}</p>
-        <a
-          href={showWaitlistSuccess ? undefined : primaryCta.href}
-          className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"
-        >
-          {showWaitlistSuccess ? 'Inscrit !' : `${primaryCta.label} →`}
-        </a>
+        {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
+          <form action={primaryCta.href} method="POST" className="inline-flex">
+            <input type="hidden" name="slug" value={slug} />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"
+            >
+              {primaryCta.label} →
+            </button>
+          </form>
+        ) : (
+          <a
+            href={showWaitlistSuccess ? undefined : primaryCta.href}
+            className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"
+          >
+            {showWaitlistSuccess ? 'Inscrit !' : `${primaryCta.label} →`}
+          </a>
+        )}
       </section>
 
       {/* FEATURES */}

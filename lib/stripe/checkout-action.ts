@@ -68,6 +68,8 @@ export function buildCheckoutSessionParams(input: {
   ventureId: string
   successUrl: string
   cancelUrl: string
+  customerEmail?: string | null
+  metadata?: Record<string, string>
 }): Stripe.Checkout.SessionCreateParams {
   const mode = input.payment.billing === 'one_time' ? 'payment' : 'subscription'
 
@@ -92,7 +94,8 @@ export function buildCheckoutSessionParams(input: {
     mode,
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
-    metadata: { venture_id: input.ventureId },
+    metadata: { venture_id: input.ventureId, ...(input.metadata ?? {}) },
+    ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
     line_items: [
       {
         quantity: 1,

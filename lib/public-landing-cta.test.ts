@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { selectPublicLandingCta } from './public-landing-cta'
 
 describe('selectPublicLandingCta', () => {
+  it('uses public checkout endpoint when payment configuration is available', () => {
+    expect(
+      selectPublicLandingCta({
+        heroCta: 'Acheter',
+        checkoutAvailable: true,
+        checkoutHref: '/api/public/stripe/checkout',
+      })
+    ).toEqual({
+      kind: 'checkout',
+      label: 'Acheter',
+      href: '/api/public/stripe/checkout',
+    })
+  })
+
   it('uses checkout when a ready payment has a checkout URL', () => {
     expect(
       selectPublicLandingCta({
