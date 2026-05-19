@@ -161,10 +161,45 @@ type ProxmoxData = {
   error?: string
   errors?: { scope: string; message: string }[]
 }
+type DiagnosticStatus = 'ok' | 'degraded' | 'down'
+type DiagnosticSource = 'settings' | 'env' | 'runtime'
+type DiagnosticLine = {
+  id: string
+  label: string
+  status: DiagnosticStatus
+  source: DiagnosticSource
+  urlLabel: string
+  latencyMs: number
+  lastError: string | null
+  repairAction: string
+  checkedAt: string
+  detail?: string
+}
+type InfraDiagnostics = {
+  checkedAt: string
+  runtime: {
+    environment: string
+    sourceCommit: string
+    commitShort: string
+  }
+  summary: {
+    ok: boolean
+    checksOk: number
+    checksTotal: number
+  }
+  services: DiagnosticLine[]
+  proxmox: DiagnosticLine
+}
 
 function statusColor(ok: boolean | null): string {
   if (ok === null) return amber
   return ok ? emerald : rose
+}
+
+function diagnosticStatusColor(status: DiagnosticStatus): string {
+  if (status === 'ok') return emerald
+  if (status === 'degraded') return amber
+  return rose
 }
 
 function minutesAgo(iso: string): string {
@@ -1020,12 +1055,279 @@ function DeploysPanel() {
   )
 }
 
+function DiagnosticsPanel({
+  diagnostics,
+  error,
+  isMobile,
+}: {
+  diagnostics: InfraDiagnostics | null
+  error: string | null
+  isMobile: boolean
+}) {
+  const rows = diagnostics ? [...diagnostics.services, diagnostics.proxmox] : []
+  const summaryColor = diagnostics?.summary.ok ? emerald : diagnostics ? amber : muted
+
+  return (
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 14,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 14,
+              fontWeight: 800,
+              color: text,
+              letterSpacing: '-.01em',
+            }}
+          >
+            Diagnostic prod
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted2,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+              marginTop: 2,
+            }}
+          >
+            runtime · config source · repair hint
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span
+            style={{
+              padding: '4px 9px',
+              borderRadius: 5,
+              background: `${summaryColor}18`,
+              color: summaryColor,
+              border: `1px solid ${summaryColor}30`,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.1em',
+              fontWeight: 800,
+            }}
+          >
+            {diagnostics
+              ? `${diagnostics.summary.checksOk}/${diagnostics.summary.checksTotal}`
+              : '—'}
+          </span>
+          <span
+            style={{
+              padding: '4px 9px',
+              borderRadius: 5,
+              background: surface2,
+              color: muted,
+              border: `1px solid ${line}`,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.1em',
+            }}
+          >
+            {diagnostics ? diagnostics.runtime.commitShort : 'local'}
+          </span>
+        </div>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '9px 10px',
+            borderRadius: 7,
+            background: `${rose}12`,
+            border: `1px solid ${rose}30`,
+            color: rose,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10.5,
+            lineHeight: 1.5,
+          }}
+        >
+          Diagnostic indisponible · {error}
+        </div>
+      )}
+
+      {diagnostics && (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+              gap: 8,
+            }}
+          >
+            {[
+              { label: 'Env', value: diagnostics.runtime.environment, color: cyan },
+              { label: 'Source', value: diagnostics.runtime.sourceCommit, color: muted },
+              { label: 'Checked', value: minutesAgo(diagnostics.checkedAt), color: emerald },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  background: surface2,
+                  border: `1px solid ${line}`,
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 8.5,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {item.label}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10.5,
+                    color: item.color,
+                    marginTop: 3,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={item.value}
+                >
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rows.map((row) => {
+              const color = diagnosticStatusColor(row.status)
+              return (
+                <div
+                  key={row.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : '120px 1fr 90px 90px',
+                    gap: isMobile ? 5 : 10,
+                    alignItems: 'center',
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    background: bg,
+                    border: `1px solid ${line}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        background: color,
+                        boxShadow: row.status === 'ok' ? `0 0 7px ${color}` : 'none',
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: text,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {row.label}
+                    </span>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10,
+                        color: muted,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={row.urlLabel}
+                    >
+                      {row.urlLabel}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        color: row.lastError ? rose : muted2,
+                        marginTop: 2,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={row.lastError ?? row.repairAction}
+                    >
+                      {row.lastError ?? row.detail ?? row.repairAction}
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      color,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.12em',
+                      fontWeight: 800,
+                    }}
+                  >
+                    {row.status}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      color: muted2,
+                      letterSpacing: '.1em',
+                    }}
+                  >
+                    {row.source} · {row.latencyMs}ms
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function InfrastructurePage() {
   const [selectedId, setSelectedId] = useState('coolify')
   const [health, setHealth] = useState<HealthData | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
   const [proxmox, setProxmox] = useState<ProxmoxData | null>(null)
   const [proxmoxError, setProxmoxError] = useState<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<InfraDiagnostics | null>(null)
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null)
   const [services, setServices] = useState<InfraService[]>(FALLBACK_SERVICES)
   const isMobile = useIsMobile()
 
@@ -1074,12 +1376,29 @@ export default function InfrastructurePage() {
         if (!cancelled) setServices(FALLBACK_SERVICES)
       }
     }
+    async function loadDiagnostics() {
+      try {
+        const res = await fetch('/api/studio/infra/diagnostics')
+        const data = (await res.json().catch(() => null)) as InfraDiagnostics | null
+        if (!cancelled && data) {
+          setDiagnostics(data)
+          setDiagnosticsError(null)
+        }
+        if (!cancelled && !data) {
+          setDiagnosticsError(`HTTP ${res.status}`)
+        }
+      } catch {
+        if (!cancelled) setDiagnosticsError('requête réseau échouée')
+      }
+    }
     loadServices()
     loadHealth()
     loadProxmox()
+    loadDiagnostics()
     const interval = setInterval(() => {
       loadHealth()
       loadProxmox()
+      loadDiagnostics()
     }, 30_000)
     return () => {
       cancelled = true
@@ -1223,6 +1542,8 @@ export default function InfrastructurePage() {
             Proxmox metrics indisponibles · {proxmoxError}
           </div>
         )}
+
+        <DiagnosticsPanel diagnostics={diagnostics} error={diagnosticsError} isMobile={isMobile} />
 
         {/* Topology + Service inspector */}
         <div
