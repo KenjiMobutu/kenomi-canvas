@@ -127,6 +127,33 @@ describe('handleStripeWebhookEvent', () => {
     expect(supabase.tables.ventures[0].revenus_total).toBe(29)
   })
 
+  it("distingue montant attendu et montant encaisse pour un checkout trial a 0 EUR", async () => {
+    const supabase = createFakeSupabase()
+    const event = checkoutCompletedEvent()
+    ;(event.data.object as Stripe.Checkout.Session).amount_total = 0
+    ;(event.data.object as Stripe.Checkout.Session).payment_intent = null
+
+    const result = await handleStripeWebhookEvent({
+      supabase: supabase as unknown as StripeWebhookSupabase,
+      event,
+      now: () => new Date('2026-05-18T12:00:00.000Z'),
+    })
+
+    expect(result).toEqual({ ok: true, handled: true })
+    expect(supabase.tables.payments[0]).toMatchObject({
+      amount_eur: 29,
+      expected_amount_eur: 29,
+      collected_amount_eur: 0,
+      status: 'completed',
+      provider_status: 'completed',
+    })
+    expect(supabase.tables.venture_events[0]).toMatchObject({
+      event_type: 'payment_succeeded',
+      value: 0,
+    })
+    expect(supabase.tables.ventures[0].revenus_total).toBe(0)
+  })
+
   it('does not duplicate events for already completed payments', async () => {
     const supabase = createFakeSupabase({ paymentStatus: 'completed', revenue: 29 })
 

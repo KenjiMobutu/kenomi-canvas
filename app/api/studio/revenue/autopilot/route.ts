@@ -26,7 +26,7 @@ import { insertAuditEvent } from '@/lib/audit-log'
 import { getCheckoutEnvironment, parsePaymentOutput } from '@/lib/stripe/checkout-action'
 import { buildAcquisitionRoi, type AcquisitionEventRow } from '@/lib/metrics/acquisition-roi'
 import { buildRevenueDailyCycleAudit } from '@/lib/revenue-daily-cycle'
-import { deriveRevenueRoiDecision } from '@/lib/revenue-proof'
+import { buildRevenueVentureDecisionPatch, deriveRevenueRoiDecision } from '@/lib/revenue-proof'
 
 function normalizeCycleActions(actions: RevenueAutonomyActionRow[]) {
   return actions.map((action) => ({
@@ -413,21 +413,12 @@ async function recordRoiDecision(input: {
     if (decisionError) throw new Error(decisionError.message)
   }
 
-  await input.supabase
+  const { error: ventureUpdateError } = await input.supabase
     .from('ventures')
-    .update({
-      current_decision: roiDecision.ventureDecision,
-      last_decision_at: input.nowIso,
-      next_action:
-        roiDecision.decision === 'scale'
-          ? 'Valider ou exécuter le scale budget proposé.'
-          : roiDecision.decision === 'cut'
-            ? 'Valider le cut avant arrêt ou pivot.'
-            : 'Hold: attendre un signal revenu/spend plus dur.',
-      updated_at: input.nowIso,
-    })
+    .update(buildRevenueVentureDecisionPatch({ roiDecision, nowIso: input.nowIso }))
     .eq('id', ventureId)
     .eq('user_id', input.userId)
+  if (ventureUpdateError) throw new Error(ventureUpdateError.message)
 
   return {
     id: `roi-${input.nowIso}`,

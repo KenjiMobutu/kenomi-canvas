@@ -42,6 +42,9 @@ export interface RevenuePaymentRow {
   status?: string | null
   provider_status?: string | null
   amount_eur?: number | string | null
+  expected_amount_eur?: number | string | null
+  collected_amount_eur?: number | string | null
+  trial_days?: number | string | null
   checkout_url?: string | null
   created_at?: string | null
   updated_at?: string | null
@@ -195,7 +198,24 @@ function isPaid(payment: RevenuePaymentRow) {
   const statuses = [payment.status, payment.provider_status].map((status) =>
     String(status ?? '').toLowerCase()
   )
-  return statuses.some((status) => ['paid', 'completed', 'succeeded', 'success'].includes(status))
+  return (
+    collectedAmountEur(payment) > 0 &&
+    statuses.some((status) => ['paid', 'completed', 'succeeded', 'success'].includes(status))
+  )
+}
+
+function collectedAmountEur(payment: RevenuePaymentRow): number {
+  if (payment.collected_amount_eur !== null && payment.collected_amount_eur !== undefined) {
+    return toNumber(payment.collected_amount_eur)
+  }
+  return toNumber(payment.amount_eur)
+}
+
+function expectedAmountEur(payment: RevenuePaymentRow): number {
+  if (payment.expected_amount_eur !== null && payment.expected_amount_eur !== undefined) {
+    return toNumber(payment.expected_amount_eur)
+  }
+  return toNumber(payment.amount_eur)
 }
 
 function hasCheckout(payment: RevenuePaymentRow) {
@@ -235,9 +255,9 @@ function estimateBlockedRevenueEur(input: {
 }): number {
   if (input.revenueEur > 0) return 0
   const pendingPayment = byDateDesc(input.payments).find(
-    (payment) => toNumber(payment.amount_eur) > 0
+    (payment) => expectedAmountEur(payment) > 0 && collectedAmountEur(payment) <= 0
   )
-  if (pendingPayment) return toNumber(pendingPayment.amount_eur)
+  if (pendingPayment) return expectedAmountEur(pendingPayment)
   return parsePaymentOutputAmount(input.pipeline?.payment_output)
 }
 
@@ -338,7 +358,10 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       ? (paymentsByVenture.get(pipeline.venture_id) ?? [])
       : []
     const paidPayments = venturePayments.filter(isPaid)
-    const revenueEur = paidPayments.reduce((sum, payment) => sum + toNumber(payment.amount_eur), 0)
+    const revenueEur = paidPayments.reduce(
+      (sum, payment) => sum + collectedAmountEur(payment),
+      0
+    )
     const checkoutPayment = byDateDesc(venturePayments).find(hasCheckout)
     const ventureActions = pipeline.venture_id
       ? byDateDesc(actionsByVenture.get(pipeline.venture_id) ?? [])
@@ -512,7 +535,7 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       const venturePayments = paymentsByVenture.get(venture.id) ?? []
       const paidPayments = venturePayments.filter(isPaid)
       const revenueEur = paidPayments.reduce(
-        (sum, payment) => sum + toNumber(payment.amount_eur),
+        (sum, payment) => sum + collectedAmountEur(payment),
         0
       )
       const nextAction: RevenueLoopNextAction = {

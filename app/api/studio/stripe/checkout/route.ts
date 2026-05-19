@@ -176,6 +176,9 @@ export async function POST(req: NextRequest) {
       stripe_payment_intent_id:
         typeof session.payment_intent === 'string' ? session.payment_intent : null,
       amount_eur: payment.price_amount / 100,
+      expected_amount_eur: payment.price_amount / 100,
+      collected_amount_eur: 0,
+      trial_days: payment.trial_days,
       currency: payment.price_currency.toLowerCase(),
       status: 'pending',
       provider_status: 'ready',

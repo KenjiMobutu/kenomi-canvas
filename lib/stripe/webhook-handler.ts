@@ -31,6 +31,8 @@ interface PaymentRow {
   venture_id: string | null
   stripe_session_id: string | null
   amount_eur: number | string
+  expected_amount_eur?: number | string | null
+  collected_amount_eur?: number | string | null
   status: string | null
 }
 
@@ -60,14 +62,20 @@ async function recalculateVentureRevenue(input: {
 }) {
   const { data, error } = await input.supabase
     .from('payments')
-    .select('amount_eur')
+    .select('amount_eur, collected_amount_eur')
     .eq('venture_id', input.ventureId)
     .eq('status', 'completed')
 
   if (error) throw new Error(error.message)
 
-  const revenue = ((data as Array<{ amount_eur: number | string }> | null) ?? []).reduce(
-    (sum, payment) => sum + Number(payment.amount_eur || 0),
+  const revenue = (
+    (data as Array<{
+      amount_eur: number | string
+      collected_amount_eur?: number | string | null
+    }> | null) ?? []
+  ).reduce(
+    (sum, payment) =>
+      sum + Number(payment.collected_amount_eur ?? payment.amount_eur ?? 0),
     0
   )
 
@@ -92,7 +100,7 @@ export async function handleStripeWebhookEvent(input: {
   const payment = await maybeSingle<PaymentRow>(
     input.supabase
       .from('payments')
-      .select('venture_id, stripe_session_id, amount_eur, status')
+      .select('venture_id, stripe_session_id, amount_eur, expected_amount_eur, collected_amount_eur, status')
       .eq('stripe_session_id', session.id)
   )
 
@@ -117,12 +125,16 @@ export async function handleStripeWebhookEvent(input: {
     typeof session.amount_total === 'number'
       ? session.amount_total
       : Math.round(Number(payment.amount_eur || 0) * 100)
+  const expectedAmountEur = Number(payment.expected_amount_eur ?? payment.amount_eur ?? 0)
+  const collectedAmountEur = amountCents / 100
 
   const paymentUpdate = await input.supabase
     .from('payments')
     .update({
       status: 'completed',
       provider_status: 'completed',
+      expected_amount_eur: expectedAmountEur,
+      collected_amount_eur: collectedAmountEur,
       stripe_payment_intent_id: getStringId(session.payment_intent),
       customer_email: getCustomerEmail(session),
       updated_at: nowIso,

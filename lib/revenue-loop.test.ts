@@ -154,6 +154,36 @@ describe('buildRevenueLoopSnapshot', () => {
     })
   })
 
+  it("ne compte pas un checkout trial a 0 EUR comme revenu encaisse", () => {
+    const snapshot = buildRevenueLoopSnapshot({
+      pipelines: [{ ...basePipeline, marketing_output: '{}' }],
+      ventures: [{ id: 'venture-1', name: 'InboxPulse', stage: 'marketing', mrr: '29' }],
+      payments: [
+        {
+          id: 'payment-trial',
+          venture_id: 'venture-1',
+          status: 'completed',
+          provider_status: 'completed',
+          amount_eur: 29,
+          expected_amount_eur: 29,
+          collected_amount_eur: 0,
+          trial_days: 7,
+          checkout_url: 'https://checkout.stripe.test/session',
+          created_at: '2026-05-18T11:00:00.000Z',
+        },
+      ],
+      campaignDrafts: [],
+      autonomyActions: [],
+      approvals: [],
+      decisions: [],
+    })
+
+    expect(snapshot.summary.revenueEur).toBe(0)
+    expect(snapshot.summary.paidPayments).toBe(0)
+    expect(snapshot.agentRevenueAttribution).toEqual([])
+    expect(snapshot.loops[0].blockedRevenueEur).toBe(29)
+  })
+
   it('priorise la prochaine action qui débloque le revenu le plus directement', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [

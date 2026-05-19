@@ -49,4 +49,13 @@ describe('migration ordering', () => {
     expect(migration).toContain('ALTER COLUMN agent DROP NOT NULL')
     expect(migration).toContain('ALTER COLUMN action DROP NOT NULL')
   })
+
+  it('adds explicit expected and collected revenue columns to payments', () => {
+    const migration = readMigration('20260519_payment_revenue_truth.sql')
+
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS expected_amount_eur')
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS collected_amount_eur')
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS trial_days')
+    expect(migration).toContain('payment_succeeded')
+  })
 })

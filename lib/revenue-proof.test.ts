@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildRevenueProofAudit, deriveRevenueRoiDecision } from './revenue-proof'
+import {
+  buildRevenueProofAudit,
+  buildRevenueVentureDecisionPatch,
+  deriveRevenueRoiDecision,
+} from './revenue-proof'
 
 describe('deriveRevenueRoiDecision', () => {
   it('recommande scale quand le ROI acquisition est positif', () => {
@@ -33,6 +37,26 @@ describe('deriveRevenueRoiDecision', () => {
         recommendedBudgetEur: 0,
       })
     ).toMatchObject({ decision: 'hold', ventureDecision: 'continue' })
+  })
+})
+
+describe('buildRevenueVentureDecisionPatch', () => {
+  it("n'ecrit que les colonnes venture disponibles en production", () => {
+    const patch = buildRevenueVentureDecisionPatch({
+      roiDecision: {
+        decision: 'cut',
+        ventureDecision: 'stop',
+        reason: 'Spend engagé sans revenu attribué.',
+      },
+      nowIso: '2026-05-19T20:00:00.000Z',
+    })
+
+    expect(patch).toEqual({
+      current_decision: 'stop',
+      last_decision_at: '2026-05-19T20:00:00.000Z',
+      next_action: 'Valider le cut avant arrêt ou pivot.',
+    })
+    expect(patch).not.toHaveProperty('updated_at')
   })
 })
 

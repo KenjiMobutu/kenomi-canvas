@@ -395,6 +395,9 @@ async function executeCreateCheckout(input: {
       stripe_payment_intent_id:
         typeof session.payment_intent === 'string' ? session.payment_intent : null,
       amount_eur: checkoutInput.payment.price_amount / 100,
+      expected_amount_eur: checkoutInput.payment.price_amount / 100,
+      collected_amount_eur: 0,
+      trial_days: checkoutInput.payment.trial_days,
       currency: checkoutInput.payment.price_currency.toLowerCase(),
       status: 'pending',
       provider_status: 'ready',

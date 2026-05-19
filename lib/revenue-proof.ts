@@ -39,6 +39,12 @@ export interface RevenueRoiDecision {
   reason: string
 }
 
+export interface RevenueVentureDecisionPatch {
+  current_decision: RevenueProofVentureDecision
+  last_decision_at: string
+  next_action: string
+}
+
 export interface RevenueProofStage {
   key:
     | 'checkout_created'
@@ -112,6 +118,22 @@ export function deriveRevenueRoiDecision(input: {
     decision: 'hold',
     ventureDecision: 'continue',
     reason: 'Signal insuffisant pour scaler ou couper.',
+  }
+}
+
+export function buildRevenueVentureDecisionPatch(input: {
+  roiDecision: RevenueRoiDecision
+  nowIso: string
+}): RevenueVentureDecisionPatch {
+  return {
+    current_decision: input.roiDecision.ventureDecision,
+    last_decision_at: input.nowIso,
+    next_action:
+      input.roiDecision.decision === 'scale'
+        ? 'Valider ou exécuter le scale budget proposé.'
+        : input.roiDecision.decision === 'cut'
+          ? 'Valider le cut avant arrêt ou pivot.'
+          : 'Hold: attendre un signal revenu/spend plus dur.',
   }
 }
 
