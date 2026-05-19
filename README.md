@@ -94,6 +94,8 @@ npm run dev
 | `COOLIFY_URL`                   | URL API Coolify autorisée côté serveur                           |
 | `COOLIFY_TOKEN`                 | Token API Coolify côté serveur                                   |
 | `TRUSTED_PRIVATE_HOSTS`         | Hosts privés autorisés pour appels serveur, séparés par virgules |
+| `SOURCE_COMMIT`                 | Commit embarqué dans le runtime, affiché par le diagnostic infra |
+| `EXPECTED_SOURCE_COMMIT`        | Commit attendu pour la parité prod, optionnel                    |
 
 ### Health check
 

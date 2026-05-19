@@ -11,7 +11,7 @@ interface CreateCoolifyClientInput {
 }
 
 function getRequiredEnv(env: NodeJS.ProcessEnv, key: 'COOLIFY_URL' | 'COOLIFY_TOKEN') {
-  const value = env[key]
+  const value = key === 'COOLIFY_TOKEN' ? (env.COOLIFY_TOKEN ?? env.COOLIFY_API_TOKEN) : env[key]
   if (!value) throw new Error(`${key} missing`)
   return value
 }

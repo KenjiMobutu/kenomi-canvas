@@ -11,11 +11,18 @@ incorrect service.
 COOLIFY_URL=https://coolify.example.internal
 COOLIFY_TOKEN=...
 TRUSTED_PRIVATE_HOSTS=coolify.example.internal
+SOURCE_COMMIT=<git-sha-built>
+EXPECTED_SOURCE_COMMIT=<git-sha-expected>
 ```
 
 If `COOLIFY_URL` uses a private tailnet or LAN host, the hostname must be listed
 in `TRUSTED_PRIVATE_HOSTS`. This prevents broad SSRF access while allowing the
 known internal deploy target.
+
+`SOURCE_COMMIT` must be passed as a Docker build arg and runtime env whenever
+Coolify builds a new image. The Infrastructure page compares it with
+`EXPECTED_SOURCE_COMMIT` when present so operators can see whether the running
+container matches the commit they expected to deploy.
 
 ## Normal Flow
 

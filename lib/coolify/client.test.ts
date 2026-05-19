@@ -23,6 +23,30 @@ describe('createCoolifyClient', () => {
     ).toThrow('COOLIFY_TOKEN missing')
   })
 
+  it('accepts legacy COOLIFY_API_TOKEN as a token fallback', async () => {
+    const fetchFn = vi.fn(async () => Response.json({ deploymentId: 'dep_legacy' }))
+    const client = createCoolifyClient({
+      env: {
+        COOLIFY_URL: 'https://coolify.tailnet.local',
+        COOLIFY_API_TOKEN: 'legacy-token',
+      } as unknown as NodeJS.ProcessEnv,
+      fetchFn,
+    })
+
+    await expect(
+      client.triggerDeploy({ projectId: 'project-1', serviceId: 'service-1' })
+    ).resolves.toEqual({ deploymentId: 'dep_legacy' })
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      'https://coolify.tailnet.local/api/v1/deployments',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer legacy-token',
+        }),
+      })
+    )
+  })
+
   it('rejects untrusted private URLs', () => {
     expect(() =>
       createCoolifyClient({

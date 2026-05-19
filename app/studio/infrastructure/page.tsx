@@ -198,6 +198,43 @@ type DiagnosticActionResult = {
   targetId: string
   checkedAt: string
 }
+type InfraOpsEvent = {
+  id: string
+  type: string
+  severity: string
+  targetId: string
+  targetLabel: string
+  status: DiagnosticStatus | 'unknown'
+  message: string
+  createdAt: string
+}
+type InfraIncident = {
+  id: string
+  targetId: string
+  targetLabel: string
+  status: 'open' | 'resolved'
+  severity: string
+  lastError: string
+  repairAction: string
+  createdAt: string
+}
+type DeploymentParity = {
+  status: 'ok' | 'mismatch' | 'unknown'
+  runtimeCommit: string
+  expectedCommit: string
+  message: string
+}
+type InfraOpsHistory = {
+  checkedAt: string
+  summary: {
+    actionsTotal: number
+    openIncidents: number
+    lastActionAt: string | null
+  }
+  events: InfraOpsEvent[]
+  incidents: InfraIncident[]
+  parity: DeploymentParity
+}
 
 function statusColor(ok: boolean | null): string {
   if (ok === null) return amber
@@ -1406,6 +1443,356 @@ function DiagnosticsPanel({
   )
 }
 
+function InfraOpsJournalPanel({
+  history,
+  error,
+  isMobile,
+}: {
+  history: InfraOpsHistory | null
+  error: string | null
+  isMobile: boolean
+}) {
+  const parity = history?.parity
+  const parityColor =
+    parity?.status === 'ok' ? emerald : parity?.status === 'mismatch' ? rose : amber
+  const incidents = history?.incidents ?? []
+  const events = history?.events ?? []
+
+  return (
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 14,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 14,
+              fontWeight: 800,
+              color: text,
+              letterSpacing: '-.01em',
+            }}
+          >
+            Journal ops
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted2,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+              marginTop: 2,
+            }}
+          >
+            incidents · actions · deployment parity
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span
+            style={{
+              padding: '4px 9px',
+              borderRadius: 5,
+              background: `${history?.summary.openIncidents ? rose : emerald}18`,
+              color: history?.summary.openIncidents ? rose : emerald,
+              border: `1px solid ${history?.summary.openIncidents ? rose : emerald}30`,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.1em',
+              fontWeight: 800,
+            }}
+          >
+            {history ? `${history.summary.openIncidents} open` : '—'}
+          </span>
+          <span
+            style={{
+              padding: '4px 9px',
+              borderRadius: 5,
+              background: `${parityColor}18`,
+              color: parityColor,
+              border: `1px solid ${parityColor}30`,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.1em',
+              fontWeight: 800,
+            }}
+          >
+            {parity ? parity.status : 'unknown'}
+          </span>
+        </div>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '9px 10px',
+            borderRadius: 7,
+            background: `${rose}12`,
+            border: `1px solid ${rose}30`,
+            color: rose,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10.5,
+            lineHeight: 1.5,
+          }}
+        >
+          Journal indisponible · {error}
+        </div>
+      )}
+
+      {history && (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+              gap: 8,
+            }}
+          >
+            {[
+              {
+                label: 'Runtime',
+                value: parity?.runtimeCommit ?? '—',
+                color: parityColor,
+              },
+              {
+                label: 'Expected',
+                value: parity?.expectedCommit ?? '—',
+                color: muted,
+              },
+              {
+                label: 'Last action',
+                value: history.summary.lastActionAt ? minutesAgo(history.summary.lastActionAt) : '—',
+                color: cyan,
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  background: surface2,
+                  border: `1px solid ${line}`,
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 8.5,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {item.label}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10.5,
+                    color: item.color,
+                    marginTop: 3,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={item.value}
+                >
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: 10,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: muted2,
+                  letterSpacing: '.14em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Incidents
+              </div>
+              {incidents.length === 0 ? (
+                <div
+                  style={{
+                    padding: '10px',
+                    borderRadius: 8,
+                    background: bg,
+                    border: `1px solid ${line}`,
+                    color: muted2,
+                    fontSize: 11,
+                  }}
+                >
+                  Aucun incident tracé
+                </div>
+              ) : (
+                incidents.slice(0, 4).map((incident) => {
+                  const color = incident.status === 'open' ? rose : emerald
+                  return (
+                    <div
+                      key={incident.id}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        background: bg,
+                        border: `1px solid ${line}`,
+                        minWidth: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span style={{ color: text, fontSize: 11, fontWeight: 800 }}>
+                          {incident.targetLabel}
+                        </span>
+                        <span
+                          style={{
+                            color,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 9,
+                            letterSpacing: '.1em',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {incident.status}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          marginTop: 3,
+                          color: muted2,
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9.5,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={incident.lastError}
+                      >
+                        {incident.lastError}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: muted2,
+                  letterSpacing: '.14em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Dernières actions
+              </div>
+              {events.length === 0 ? (
+                <div
+                  style={{
+                    padding: '10px',
+                    borderRadius: 8,
+                    background: bg,
+                    border: `1px solid ${line}`,
+                    color: muted2,
+                    fontSize: 11,
+                  }}
+                >
+                  Aucune action diagnostic
+                </div>
+              ) : (
+                events.slice(0, 5).map((event) => {
+                  const color =
+                    event.severity === 'error'
+                      ? rose
+                      : event.severity === 'warn'
+                        ? amber
+                        : emerald
+                  return (
+                    <div
+                      key={event.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '72px 1fr',
+                        gap: 8,
+                        alignItems: 'center',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        background: bg,
+                        border: `1px solid ${line}`,
+                        minWidth: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          color,
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          letterSpacing: '.1em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {event.type}
+                      </span>
+                      <span
+                        style={{
+                          color: muted,
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9.5,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={event.message}
+                      >
+                        {event.message}
+                      </span>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function InfrastructurePage() {
   const [selectedId, setSelectedId] = useState('coolify')
   const [health, setHealth] = useState<HealthData | null>(null)
@@ -1418,6 +1805,8 @@ export default function InfrastructurePage() {
   const [diagnosticActionResult, setDiagnosticActionResult] =
     useState<DiagnosticActionResult | null>(null)
   const [diagnosticActionError, setDiagnosticActionError] = useState<string | null>(null)
+  const [opsHistory, setOpsHistory] = useState<InfraOpsHistory | null>(null)
+  const [opsHistoryError, setOpsHistoryError] = useState<string | null>(null)
   const [services, setServices] = useState<InfraService[]>(FALLBACK_SERVICES)
   const isMobile = useIsMobile()
 
@@ -1433,6 +1822,21 @@ export default function InfrastructurePage() {
       setDiagnosticsError(`HTTP ${res.status}`)
     } catch {
       setDiagnosticsError('requête réseau échouée')
+    }
+  }, [])
+
+  const loadOpsHistory = useCallback(async () => {
+    try {
+      const res = await fetch('/api/studio/infra/diagnostics/history')
+      const data = (await res.json().catch(() => null)) as InfraOpsHistory | null
+      if (data) {
+        setOpsHistory(data)
+        setOpsHistoryError(null)
+        return
+      }
+      setOpsHistoryError(`HTTP ${res.status}`)
+    } catch {
+      setOpsHistoryError('requête réseau échouée')
     }
   }, [])
 
@@ -1463,13 +1867,14 @@ export default function InfrastructurePage() {
         } else {
           await loadDiagnostics()
         }
+        await loadOpsHistory()
       } catch (error) {
         setDiagnosticActionError(error instanceof Error ? error.message : 'action échouée')
       } finally {
         setDiagnosticActionPending(null)
       }
     },
-    [loadDiagnostics]
+    [loadDiagnostics, loadOpsHistory]
   )
 
   useEffect(() => {
@@ -1521,16 +1926,18 @@ export default function InfrastructurePage() {
     loadHealth()
     loadProxmox()
     loadDiagnostics()
+    loadOpsHistory()
     const interval = setInterval(() => {
       loadHealth()
       loadProxmox()
       loadDiagnostics()
+      loadOpsHistory()
     }, 30_000)
     return () => {
       cancelled = true
       clearInterval(interval)
     }
-  }, [loadDiagnostics])
+  }, [loadDiagnostics, loadOpsHistory])
 
   const selected = services.find((s) => s.id === selectedId) ?? services[0] ?? FALLBACK_SERVICES[0]
 
@@ -1677,6 +2084,12 @@ export default function InfrastructurePage() {
           actionResult={diagnosticActionResult}
           actionError={diagnosticActionError}
           onAction={runDiagnosticAction}
+        />
+
+        <InfraOpsJournalPanel
+          history={opsHistory}
+          error={opsHistoryError}
+          isMobile={isMobile}
         />
 
         {/* Topology + Service inspector */}

@@ -100,12 +100,16 @@ export function buildDiagnosticActionAudit(input: {
   action: InfraDiagnosticActionId
   target: InfraDiagnosticLine
 }): InfraDiagnosticActionAudit {
+  const result = buildDiagnosticActionResult(input)
   return {
     eventType: `infra.diagnostic.${input.action}`,
     severity:
       input.action === 'record_incident' ? severityForStatus(input.target.status) : 'info',
     metadata: {
       action: input.action,
+      action_label: ACTIONS[input.action].label,
+      checked_at: input.target.checkedAt,
+      operator_message: result.message,
       target_id: input.target.id,
       target_label: input.target.label,
       status: input.target.status,

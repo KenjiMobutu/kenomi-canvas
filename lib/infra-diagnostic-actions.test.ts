@@ -86,6 +86,9 @@ describe('infra diagnostic actions', () => {
       severity: 'error',
       metadata: {
         action: 'record_incident',
+        action_label: 'Tracer',
+        checked_at: '2026-05-19T13:30:00.000Z',
+        operator_message: 'Incident trace pour n8n · This operation was aborted',
         target_id: 'n8n',
         target_label: 'n8n',
         status: 'down',

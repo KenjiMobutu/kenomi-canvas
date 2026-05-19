@@ -32,6 +32,40 @@ import {
 const MODELS_OLLAMA = ['qwen3:8b', 'qwen3:14b', 'llama3.1:8b', 'mistral:7b', 'codestral:latest']
 
 type Section = 'modeles' | 'infrastructure' | 'payments' | 'compte'
+type InfraSettingsDiagnostics = {
+  checkedAt: string
+  runtime: {
+    environment: string
+    sourceCommit: string
+    commitShort: string
+  }
+  summary: {
+    ok: boolean
+    checksOk: number
+    checksTotal: number
+  }
+  services: {
+    id: string
+    label: string
+    status: 'ok' | 'degraded' | 'down'
+    source: 'settings' | 'env' | 'runtime'
+    urlLabel: string
+    latencyMs: number
+    lastError: string | null
+    repairAction: string
+  }[]
+  proxmox: {
+    id: string
+    label: string
+    status: 'ok' | 'degraded' | 'down'
+    source: 'settings' | 'env' | 'runtime'
+    urlLabel: string
+    latencyMs: number
+    lastError: string | null
+    repairAction: string
+    detail?: string
+  }
+}
 
 function SectionCard({
   title,
@@ -165,6 +199,193 @@ function SecretInput({
   )
 }
 
+function InfraSettingsCheck({
+  diagnostics,
+  loading,
+  error,
+  onCheck,
+}: {
+  diagnostics: InfraSettingsDiagnostics | null
+  loading: boolean
+  error: string | null
+  onCheck: () => void
+}) {
+  const rows = diagnostics ? [...diagnostics.services, diagnostics.proxmox] : []
+  const summaryColor = diagnostics?.summary.ok ? emerald : diagnostics ? amber : muted
+
+  return (
+    <SectionCard title="Vérification endpoints" icon={<Server size={16} />}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: muted2,
+              letterSpacing: '.12em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Supabase · VM Coolify
+          </div>
+          <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>
+            Instance self-hosted vérifiée depuis le serveur Studio.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onCheck}
+          disabled={loading}
+          style={{
+            minHeight: 32,
+            padding: '6px 12px',
+            borderRadius: 7,
+            border: `1px solid ${cyan}35`,
+            background: loading ? surface2 : `${cyan}12`,
+            color: loading ? muted2 : cyan,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.1em',
+            textTransform: 'uppercase',
+            cursor: loading ? 'wait' : 'pointer',
+          }}
+        >
+          {loading ? 'Check...' : 'Tester'}
+        </button>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '9px 10px',
+            borderRadius: 7,
+            background: `${rose}12`,
+            border: `1px solid ${rose}30`,
+            color: rose,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10.5,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {diagnostics && (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: 8,
+            }}
+          >
+            {[
+              {
+                label: 'Checks',
+                value: `${diagnostics.summary.checksOk}/${diagnostics.summary.checksTotal}`,
+                color: summaryColor,
+              },
+              {
+                label: 'Runtime',
+                value: diagnostics.runtime.environment,
+                color: cyan,
+              },
+              {
+                label: 'Source',
+                value: diagnostics.runtime.commitShort,
+                color: muted,
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  background: surface2,
+                  border: `1px solid ${line}`,
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 8.5,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {item.label}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10.5,
+                    color: item.color,
+                    marginTop: 3,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rows.map((row) => {
+              const color = row.status === 'ok' ? emerald : row.status === 'degraded' ? amber : rose
+              return (
+                <div
+                  key={row.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '92px 1fr 72px',
+                    gap: 8,
+                    alignItems: 'center',
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    background: surface2,
+                    border: `1px solid ${line}`,
+                  }}
+                >
+                  <span style={{ color: text, fontSize: 11, fontWeight: 800 }}>{row.label}</span>
+                  <span
+                    style={{
+                      color: row.lastError ? rose : muted2,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={row.lastError ?? row.urlLabel}
+                  >
+                    {row.lastError ?? `${row.source} · ${row.urlLabel}`}
+                  </span>
+                  <span
+                    style={{
+                      color,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      letterSpacing: '.1em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {row.status}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </SectionCard>
+  )
+}
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const [cfg, setCfg] = useState<UserSettings>(DEFAULT_USER_SETTINGS)
@@ -175,6 +396,9 @@ export default function SettingsPage() {
   const [exportLoading, setExportLoading] = useState(false)
   const [deleteStep, setDeleteStep] = useState<'idle' | 'confirm' | 'deleting'>('idle')
   const [deleteToken, setDeleteToken] = useState<string | null>(null)
+  const [infraDiagnostics, setInfraDiagnostics] = useState<InfraSettingsDiagnostics | null>(null)
+  const [infraDiagnosticsLoading, setInfraDiagnosticsLoading] = useState(false)
+  const [infraDiagnosticsError, setInfraDiagnosticsError] = useState<string | null>(null)
 
   function patch(partial: Partial<UserSettings>) {
     setCfg((prev) => ({ ...prev, ...partial }))
@@ -247,6 +471,29 @@ export default function SettingsPage() {
     setTimeout(() => {
       window.location.href = '/'
     }, 2000)
+  }
+
+  async function checkInfrastructureSettings() {
+    setInfraDiagnosticsLoading(true)
+    setInfraDiagnosticsError(null)
+    try {
+      const res = await fetch('/api/studio/infra/diagnostics')
+      const data = (await res.json().catch(() => null)) as InfraSettingsDiagnostics | null
+      if (!res.ok && !data) {
+        setInfraDiagnosticsError(`Diagnostic indisponible · HTTP ${res.status}`)
+        return
+      }
+      if (data) {
+        setInfraDiagnostics(data)
+        toast.success(`Infra vérifiée · ${data.summary.checksOk}/${data.summary.checksTotal}`)
+        return
+      }
+      setInfraDiagnosticsError('Diagnostic indisponible')
+    } catch {
+      setInfraDiagnosticsError('Diagnostic indisponible · requête réseau échouée')
+    } finally {
+      setInfraDiagnosticsLoading(false)
+    }
   }
 
   async function save() {
@@ -440,6 +687,13 @@ export default function SettingsPage() {
         {/* Infrastructure */}
         {section === 'infrastructure' && (
           <>
+            <InfraSettingsCheck
+              diagnostics={infraDiagnostics}
+              loading={infraDiagnosticsLoading}
+              error={infraDiagnosticsError}
+              onCheck={checkInfrastructureSettings}
+            />
+
             <SectionCard title="Supabase (Self-hosted)" icon={<Database size={16} />}>
               <Field
                 label="URL Supabase"
