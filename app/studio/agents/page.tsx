@@ -1057,11 +1057,15 @@ function AutonomyObservabilityPanel({
   actions,
   approvals,
   approvalQueue,
+  operatingJobKey,
+  onJobAction,
 }: {
   jobs: AutonomyJobView[]
   actions: AutonomyActionView[]
   approvals: AutonomyApprovalView[]
   approvalQueue: ApprovalQueueItem[]
+  operatingJobKey: string | null
+  onJobAction: (jobId: string, type: 'retry_job' | 'cancel_job') => void
 }) {
   const [tab, setTab] = useState<ObservabilityTab>('jobs')
   const jobItems = useMemo(() => buildJobList(jobs), [jobs])
@@ -1152,18 +1156,61 @@ function AutonomyObservabilityPanel({
           {jobItems.length === 0 ? (
             <EmptyOpsRow label="Aucun job enregistré" />
           ) : (
-            jobItems.slice(0, 8).map((job) => (
-              <div key={job.id} style={opsRowStyle}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={opsTitleStyle}>{job.label}</div>
-                  <div style={opsMetaStyle}>
-                    retry {job.retryCount} · next {compactDate(job.nextRunAt)} ·{' '}
-                    {job.lastError ?? 'no error'}
+            jobItems.slice(0, 8).map((job) => {
+              const canRetry = job.status === 'failed' || job.status === 'cancelled'
+              const canCancel = job.status === 'queued'
+              const retryKey = `${job.id}:retry_job`
+              const cancelKey = `${job.id}:cancel_job`
+
+              return (
+                <div key={job.id} style={opsRowStyle}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={opsTitleStyle}>{job.label}</div>
+                    <div style={opsMetaStyle}>
+                      retry {job.retryCount} · next {compactDate(job.nextRunAt)} ·{' '}
+                      {job.lastError ?? 'no error'}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    {(canRetry || canCancel) && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {canRetry && (
+                          <button
+                            type="button"
+                            onClick={() => onJobAction(job.id, 'retry_job')}
+                            disabled={operatingJobKey !== null}
+                            style={opsMiniButtonStyle(emerald, operatingJobKey !== null)}
+                          >
+                            <RefreshCw size={12} />
+                            {operatingJobKey === retryKey ? '...' : 'Retry'}
+                          </button>
+                        )}
+                        {canCancel && (
+                          <button
+                            type="button"
+                            onClick={() => onJobAction(job.id, 'cancel_job')}
+                            disabled={operatingJobKey !== null}
+                            style={opsMiniButtonStyle(rose, operatingJobKey !== null)}
+                          >
+                            <X size={12} />
+                            {operatingJobKey === cancelKey ? '...' : 'Cancel'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <StatusPill status={job.status} />
                   </div>
                 </div>
-                <StatusPill status={job.status} />
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       )}
@@ -1245,6 +1292,26 @@ const opsMetaStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
+}
+
+function opsMiniButtonStyle(color: string, disabled: boolean): React.CSSProperties {
+  return {
+    minHeight: 28,
+    padding: '4px 8px',
+    borderRadius: 7,
+    border: `1px solid ${color}55`,
+    background: `${color}14`,
+    color,
+    fontFamily: 'var(--font-display)',
+    fontSize: 10,
+    fontWeight: 800,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.6 : 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  }
 }
 
 function EmptyOpsRow({ label }: { label: string }) {
@@ -2203,6 +2270,7 @@ export default function AgentsPage() {
   const [autonomyApprovals, setAutonomyApprovals] = useState<AutonomyApprovalView[]>([])
   const [autonomyLoading, setAutonomyLoading] = useState(false)
   const [resolvingApprovalKey, setResolvingApprovalKey] = useState<string | null>(null)
+  const [operatingJobKey, setOperatingJobKey] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
 
   const loadAgentRuns = useCallback(async () => {
@@ -2316,6 +2384,32 @@ export default function AgentsPage() {
       toast.error('Erreur réseau approval')
     } finally {
       setResolvingApprovalKey(null)
+    }
+  }
+
+  async function handleJobAction(jobId: string, type: 'retry_job' | 'cancel_job') {
+    const key = `${jobId}:${type}`
+    setOperatingJobKey(key)
+    try {
+      const res = await fetch('/api/studio/autonomy/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, jobId }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        message?: string
+        error?: string
+      }
+      if (!res.ok) {
+        toast.error(data.message || data.error || 'Action job impossible')
+        return
+      }
+      toast.success(data.message || (type === 'retry_job' ? 'Job remis en file' : 'Job annulé'))
+      await loadAutonomyState()
+    } catch {
+      toast.error('Erreur réseau job')
+    } finally {
+      setOperatingJobKey(null)
     }
   }
 
@@ -2467,6 +2561,8 @@ export default function AgentsPage() {
           actions={autonomyActions}
           approvals={autonomyApprovals}
           approvalQueue={approvalQueue}
+          operatingJobKey={operatingJobKey}
+          onJobAction={handleJobAction}
         />
 
         <button

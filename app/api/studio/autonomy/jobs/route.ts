@@ -6,11 +6,21 @@ import {
   resolveHumanApproval,
   type ApprovalExecutorSupabase,
 } from '@/lib/autonomy/approval-executor'
+import {
+  cancelAutonomyJob,
+  retryAutonomyJob,
+  type OperatorSupabase,
+} from '@/lib/autonomy/operator-actions'
 import { requireAllowedUser } from '@/lib/auth-server'
 
 const approvalResolutionSchema = z.object({
   approvalId: z.string().min(1),
   decision: z.enum(['approved', 'rejected']),
+})
+
+const operatorActionSchema = z.object({
+  type: z.enum(['retry_job', 'cancel_job']),
+  jobId: z.string().min(1),
 })
 
 export async function GET() {
@@ -86,4 +96,38 @@ export async function PATCH(request: Request) {
     }
     return NextResponse.json({ error: 'Erreur approval autonomy' }, { status: 500 })
   }
+}
+
+export async function POST(request: Request) {
+  const cookieStore = await cookies()
+  const { user, supabase, response } = await requireAllowedUser(cookieStore)
+  if (response) return response
+
+  const parsed = operatorActionSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Payload action autonomy invalide' }, { status: 400 })
+  }
+
+  const result =
+    parsed.data.type === 'retry_job'
+      ? await retryAutonomyJob({
+          supabase: supabase as unknown as OperatorSupabase,
+          userId: user!.id,
+          jobId: parsed.data.jobId,
+        })
+      : await cancelAutonomyJob({
+          supabase: supabase as unknown as OperatorSupabase,
+          userId: user!.id,
+          jobId: parsed.data.jobId,
+        })
+
+  const status = result.ok
+    ? 200
+    : result.code === 'not_found'
+      ? 404
+      : result.code === 'invalid_status'
+        ? 409
+        : 500
+
+  return NextResponse.json(result, { status })
 }
