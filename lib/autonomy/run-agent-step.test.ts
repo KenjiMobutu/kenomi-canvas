@@ -378,6 +378,14 @@ describe('runAgentStep', () => {
     const snapshot = supabase.tables.decisions[0].metrics_snapshot as Record<string, number>
     expect(snapshot.signup_rate).toBeCloseTo(1 / 3, 4)
     expect(snapshot.roi).toBeCloseTo(7000 / 3000, 4)
+    expect(supabase.tables.autonomy_actions[0]).toMatchObject({
+      action_type: 'scale_budget',
+      estimated_cost_eur: 30,
+      budget_cap_eur: 50,
+      input: expect.objectContaining({
+        recommended_budget_eur: 30,
+      }),
+    })
   })
 
   it('transforme un verdict Decision pivot en nouvelle tâche Scout contextualisée', async () => {

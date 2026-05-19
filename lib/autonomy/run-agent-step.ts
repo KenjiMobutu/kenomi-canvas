@@ -145,8 +145,11 @@ async function insertApprovalGatedAction(input: {
   pipelineId: string
   actionType: 'scale_budget' | 'stop_venture'
   decision: DecisionOutput
+  recommendedBudgetEur?: number
   nowIso: string
 }) {
+  const estimatedCostEur =
+    input.actionType === 'scale_budget' ? (input.recommendedBudgetEur ?? 25) : 0
   const action = await single<{ id?: string }>(
     input.supabase
       .from('autonomy_actions')
@@ -156,12 +159,19 @@ async function insertApprovalGatedAction(input: {
         action_type: input.actionType,
         risk_level: 'high',
         status: 'blocked',
+        estimated_cost_eur: estimatedCostEur,
+        budget_cap_eur:
+          input.actionType === 'scale_budget'
+            ? Math.max(50, Math.ceil(estimatedCostEur * 1.25))
+            : null,
         input: {
           pipeline_id: input.pipelineId,
           verdict: input.decision.verdict,
           confidence: input.decision.confidence,
           rationale: input.decision.rationale,
           next_step: input.decision.next_step,
+          recommended_budget_eur:
+            input.actionType === 'scale_budget' ? estimatedCostEur : undefined,
         },
         output: {},
         created_at: input.nowIso,
@@ -243,6 +253,13 @@ async function materializeDecisionFollowup(input: {
     return
   }
 
+  const revenueEur = (input.metrics?.revenueCents ?? 0) / 100
+  const profitEur = (input.metrics?.profitCents ?? 0) / 100
+  const recommendedBudgetEur =
+    input.decision.verdict === 'continue'
+      ? Math.min(250, Math.max(25, Math.round((revenueEur > 0 ? revenueEur : profitEur) * 0.3)))
+      : undefined
+
   await insertApprovalGatedAction({
     supabase: input.supabase,
     userId: input.userId,
@@ -250,6 +267,7 @@ async function materializeDecisionFollowup(input: {
     pipelineId: input.pipeline.id,
     actionType: input.decision.verdict === 'continue' ? 'scale_budget' : 'stop_venture',
     decision: input.decision,
+    recommendedBudgetEur,
     nowIso: input.nowIso,
   })
 }

@@ -1,4 +1,5 @@
 import { createCoolifyClient, type CoolifyClient } from '@/lib/coolify/client'
+import { randomUUID } from 'crypto'
 import { getAutonomyConfig, type AutonomyConfig } from './config'
 import { checkBudgetPolicy } from './policy'
 import {
@@ -247,6 +248,118 @@ function readCheckoutInput(action: AutonomyActionRow): {
   }
 
   return { payment: parsePaymentOutputPayload(paymentPayload), successUrl, cancelUrl }
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
+}
+
+function readPositiveNumber(value: unknown, fallback: number): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
+async function executeScaleBudget(input: {
+  supabase: ApprovalExecutorSupabase
+  userId: string
+  action: AutonomyActionRow
+  nowIso: string
+}) {
+  if (!input.action.venture_id) {
+    throw new ApprovalExecutionError('Venture manquante pour scale_budget', 422)
+  }
+
+  const budgetEur = readPositiveNumber(
+    input.action.input?.recommended_budget_eur,
+    readPositiveNumber(input.action.estimated_cost_eur, 25)
+  )
+  const channel = readString(input.action.input?.channel, 'email').toLowerCase()
+  const rationale = readString(input.action.input?.rationale, 'ROI positif')
+  const nextStep = readString(
+    input.action.input?.next_step,
+    `Scaler ${channel} avec ${budgetEur} EUR`
+  )
+  const content = readString(
+    input.action.input?.content,
+    [
+      nextStep,
+      '',
+      'Test budget scale piloté par Kenomi. Objectif: convertir vite, mesurer ROI, couper si le signal faiblit.',
+    ].join('\n')
+  )
+
+  await update(
+    input.supabase.from('budget_requests').insert({
+      venture_id: input.action.venture_id,
+      campaign_name: `Scale ${channel}`,
+      amount_eur: budgetEur,
+      reason: rationale,
+      status: 'approved',
+      approved_at: input.nowIso,
+      created_at: input.nowIso,
+    })
+  )
+
+  const draftId = randomUUID()
+  await update(
+    input.supabase.from('campaign_drafts').insert({
+      id: draftId,
+      user_id: input.userId,
+      venture_id: input.action.venture_id,
+      channel,
+      content,
+      status: 'blocked',
+      metadata: {
+        budget_eur: budgetEur,
+        source: 'scale_budget',
+        autonomy_action_id: input.action.id,
+        rationale,
+      },
+      created_at: input.nowIso,
+      updated_at: input.nowIso,
+    })
+  )
+
+  const publishActionId = randomUUID()
+  await update(
+    input.supabase.from('autonomy_actions').insert({
+      id: publishActionId,
+      user_id: input.userId,
+      venture_id: input.action.venture_id,
+      action_type: 'publish_campaign',
+      risk_level: 'high',
+      status: 'blocked',
+      estimated_cost_eur: budgetEur,
+      budget_cap_eur: Math.max(budgetEur, Number(input.action.budget_cap_eur ?? budgetEur)),
+      input: {
+        draft_id: draftId,
+        channel,
+        source: 'scale_budget',
+        parent_action_id: input.action.id,
+      },
+      output: {},
+      created_at: input.nowIso,
+      updated_at: input.nowIso,
+    })
+  )
+
+  await update(
+    input.supabase.from('human_approvals').insert({
+      user_id: input.userId,
+      action_id: publishActionId,
+      status: 'pending',
+      reason: `Publier scale ${channel} avec ${budgetEur} EUR`,
+      created_at: input.nowIso,
+      updated_at: input.nowIso,
+    })
+  )
+
+  return {
+    budgetEur,
+    channel,
+    draftId,
+    publishActionId,
+  }
 }
 
 async function executeCreateCheckout(input: {
@@ -536,6 +649,34 @@ export async function resolveHumanApproval(
         handler: 'publish_campaign',
         draft_id: draftId,
         error: publishResult.error,
+      }
+    }
+  }
+
+  if (action.action_type === 'scale_budget') {
+    try {
+      const scale = await executeScaleBudget({
+        supabase: input.supabase,
+        userId: input.userId,
+        action,
+        nowIso,
+      })
+      executed = true
+      actionStatus = 'completed'
+      output = {
+        executed: true,
+        handler: 'scale_budget',
+        budget_eur: scale.budgetEur,
+        channel: scale.channel,
+        draft_id: scale.draftId,
+        publish_action_id: scale.publishActionId,
+      }
+    } catch (error) {
+      actionStatus = 'failed'
+      output = {
+        executed: false,
+        handler: 'scale_budget',
+        error: error instanceof Error ? error.message : 'Scale budget failed',
       }
     }
   }

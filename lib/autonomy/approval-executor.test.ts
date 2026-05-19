@@ -140,7 +140,9 @@ describe('resolveHumanApproval', () => {
       landing_pages: [{ id: 'landing-1', venture_id: 'venture-1', statut: 'deployed' }],
       budget_requests: [{ id: 'budget-1', venture_id: 'venture-1', status: 'pending' }],
       campaigns: [{ id: 'campaign-1', venture_id: 'venture-1', status: 'approved' }],
-      payments: [{ id: 'payment-1', venture_id: 'venture-1', status: 'pending', provider_status: 'ready' }],
+      payments: [
+        { id: 'payment-1', venture_id: 'venture-1', status: 'pending', provider_status: 'ready' },
+      ],
     })
 
     const result = await resolveHumanApproval({
@@ -648,5 +650,79 @@ describe('resolveHumanApproval — publish_campaign', () => {
         config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
       })
     ).rejects.toThrow(/draft_id manquant/)
+  })
+})
+
+describe('resolveHumanApproval — scale_budget', () => {
+  it('approuve un scale_budget et prépare une campagne payante traçable', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-s1', user_id: 'u1', action_id: 'act-s1', status: 'pending' }],
+      autonomy_actions: [
+        {
+          id: 'act-s1',
+          user_id: 'u1',
+          action_type: 'scale_budget',
+          status: 'blocked',
+          venture_id: 'v1',
+          estimated_cost_eur: 25,
+          budget_cap_eur: 50,
+          input: {
+            channel: 'email',
+            recommended_budget_eur: 25,
+            rationale: 'ROI positif',
+            next_step: 'Scaler email',
+          },
+        },
+      ],
+    })
+
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-s1',
+      decision: 'approved',
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+      now: () => new Date('2026-05-19T09:00:00.000Z'),
+    })
+
+    expect(result).toMatchObject({ executed: true, actionType: 'scale_budget' })
+    expect(fakeSupabase.tables.budget_requests[0]).toMatchObject({
+      venture_id: 'v1',
+      campaign_name: 'Scale email',
+      amount_eur: 25,
+      status: 'approved',
+      reason: 'ROI positif',
+    })
+    expect(fakeSupabase.tables.campaign_drafts[0]).toMatchObject({
+      user_id: 'u1',
+      venture_id: 'v1',
+      channel: 'email',
+      status: 'blocked',
+      metadata: expect.objectContaining({
+        budget_eur: 25,
+        source: 'scale_budget',
+        autonomy_action_id: 'act-s1',
+      }),
+    })
+    const publishAction = fakeSupabase.tables.autonomy_actions.find(
+      (action) => action.action_type === 'publish_campaign'
+    )
+    expect(publishAction).toMatchObject({
+      user_id: 'u1',
+      venture_id: 'v1',
+      status: 'blocked',
+      risk_level: 'high',
+    })
+    expect(fakeSupabase.tables.human_approvals).toContainEqual(
+      expect.objectContaining({
+        action_id: publishAction?.id,
+        status: 'pending',
+        reason: 'Publier scale email avec 25 EUR',
+      })
+    )
+    expect(fakeSupabase.tables.autonomy_actions[0]).toMatchObject({
+      status: 'completed',
+      output: expect.objectContaining({ handler: 'scale_budget', budget_eur: 25 }),
+    })
   })
 })
