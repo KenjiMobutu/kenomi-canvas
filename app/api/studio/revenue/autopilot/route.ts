@@ -1,6 +1,10 @@
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { buildRevenueAutopilotPlan, type RevenueAutopilotStep } from '@/lib/revenue-autopilot'
+import {
+  buildRevenueAutopilotPlan,
+  filterDuplicateDailyAutopilotSteps,
+  type RevenueAutopilotStep,
+} from '@/lib/revenue-autopilot'
 import {
   buildRevenueLoopSnapshot,
   type RevenueApprovalRow,
@@ -440,9 +444,19 @@ async function buildPlanForRequest(req: NextRequest) {
   if (!user?.id) return { response: apiError('Utilisateur autopilot manquant', 500) }
 
   const context = await loadRevenueContext({ supabase, userId: user.id })
-  const plan = buildRevenueAutopilotPlan({
+  const rawPlan = buildRevenueAutopilotPlan({
     snapshot: context.snapshot,
     environment: getCheckoutEnvironment(),
+  })
+  const plan = filterDuplicateDailyAutopilotSteps({
+    plan: rawPlan,
+    actions: context.autonomyActions.map((action) => ({
+      action_type: action.action_type,
+      venture_id: action.venture_id,
+      status: action.status,
+      input: action.input,
+      created_at: action.created_at,
+    })),
   })
   const acquisition = buildAcquisitionRoi(context.ventureEvents)
   const cycle = buildRevenueDailyCycleAudit({

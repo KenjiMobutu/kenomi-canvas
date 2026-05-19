@@ -127,3 +127,41 @@ SMOKE_BASE_URL=https://lab-preview.kenomi.eu npm run smoke
 
 # 5. Promote la preview en prod
 ```
+
+## 4. Smoke revenue-proof production
+
+Ce smoke est le gate qui empeche de declarer "100% autonomie revenue-first"
+tant que la boucle n'a pas de preuve live.
+
+### Exécution
+
+```bash
+SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:revenue-proof
+```
+
+Le script vérifie:
+
+- `/api/health` retourne 200.
+- `/api/studio/revenue/proof` ne s'ouvre pas en GET.
+- `/api/studio/revenue/proof` est protégé en POST sans session.
+- Supabase prod contient au moins:
+  - un checkout,
+  - un paiement complété,
+  - un event `payment_succeeded`,
+  - un event `campaign_published`,
+  - un event `campaign_spend`,
+  - un event `page_view`,
+  - un event `waitlist_signup`,
+  - une décision `scale`, `cut` ou `hold`.
+
+### Résultat attendu avant preuve live
+
+Avant le paiement Stripe test et les events contrôlés, ce smoke doit échouer
+avec des libellés comme:
+
+```text
+not ok revenue proof incomplete: checkout_missing, completed_payment_missing
+```
+
+Cet échec est sain: il signifie que la release gate mesure la preuve réelle,
+pas la présence du code.

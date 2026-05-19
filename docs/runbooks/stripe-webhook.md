@@ -10,7 +10,7 @@ in `venture_events` or venture revenue is not updated.
 Stripe must send events to:
 
 ```text
-/api/stripe/webhook
+https://lab.kenomi.eu/api/stripe/webhook
 ```
 
 Required environment variables:
@@ -59,6 +59,35 @@ where metadata->>'stripe_session_id' = '<cs_...>';
 
 Use Stripe Dashboard replay for failed deliveries after fixing env vars or DB
 state. Do not manually insert revenue unless Stripe confirms payment success.
+
+## Test Payment Proof
+
+Use this flow to prove real revenue attribution in production:
+
+1. Open `/studio/revenue`.
+2. Click the priority action that creates the Stripe checkout.
+3. Approve the `create_checkout` approval if production requires it.
+4. Open the Checkout URL.
+5. Pay with Stripe test card:
+
+```text
+4242 4242 4242 4242
+```
+
+Use any future expiry date and any CVC.
+
+6. Verify Supabase through the Coolify VM:
+
+```bash
+ssh coolify "docker exec supabase-db-i12k0ju0ok5wk4gnts6uap03 psql -U supabase_admin -d postgres -c \"select status, provider_status, amount_eur, checkout_url is not null as has_checkout from public.payments order by created_at desc limit 5; select event_type, value, metadata->>'stripe_session_id' as session from public.venture_events where event_type='payment_succeeded' order by occurred_at desc limit 5;\""
+```
+
+Expected:
+
+- latest payment `status='completed'`
+- latest payment `provider_status='completed'`
+- `has_checkout=true`
+- at least one `venture_events.payment_succeeded`
 
 ## Manual Repair
 

@@ -41,6 +41,20 @@ export interface BuildRevenueAutopilotPlanInput {
   staleNoRevenueDays?: number
 }
 
+export interface RevenueAutopilotExistingAction {
+  action_type?: string | null
+  venture_id?: string | null
+  status?: string | null
+  input?: Record<string, unknown> | null
+  created_at?: string | null
+}
+
+export interface FilterDuplicateDailyAutopilotStepsInput {
+  plan: RevenueAutopilotPlan
+  actions: RevenueAutopilotExistingAction[]
+  now?: Date
+}
+
 function daysSince(value: string | null | undefined, now: Date): number {
   const ms = Date.parse(value ?? '')
   if (!Number.isFinite(ms)) return 0
@@ -202,6 +216,50 @@ export function buildRevenueAutopilotPlan(
     generatedAt: now.toISOString(),
     revenueEur: input.snapshot.summary.revenueEur,
     blockedRevenueEur: input.snapshot.summary.blockedRevenueEur,
+    steps,
+  }
+}
+
+function actionTypeForStep(step: RevenueAutopilotStep): string {
+  return step.kind
+}
+
+function sameUtcDay(a: Date, b: Date): boolean {
+  return a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10)
+}
+
+function isActiveAutopilotAction(
+  action: RevenueAutopilotExistingAction,
+  step: RevenueAutopilotStep,
+  now: Date
+): boolean {
+  const createdAt = Date.parse(action.created_at ?? '')
+  if (!Number.isFinite(createdAt)) return false
+  if (!sameUtcDay(new Date(createdAt), now)) return false
+  if (action.action_type !== actionTypeForStep(step)) return false
+  if ((action.venture_id ?? null) !== (step.ventureId ?? null)) return false
+  if (action.input?.source !== 'revenue_autopilot') return false
+  return ['blocked', 'running', 'completed', 'planned'].includes(String(action.status ?? ''))
+}
+
+function modeForSteps(steps: RevenueAutopilotStep[]): RevenueAutopilotMode {
+  const firstExecution = steps[0]?.execution
+  if (firstExecution === 'auto') return 'execute'
+  if (firstExecution === 'approval') return 'approval_required'
+  return 'hold'
+}
+
+export function filterDuplicateDailyAutopilotSteps(
+  input: FilterDuplicateDailyAutopilotStepsInput
+): RevenueAutopilotPlan {
+  const now = input.now ?? new Date()
+  const steps = input.plan.steps.filter(
+    (step) => !input.actions.some((action) => isActiveAutopilotAction(action, step, now))
+  )
+
+  return {
+    ...input.plan,
+    mode: modeForSteps(steps),
     steps,
   }
 }
