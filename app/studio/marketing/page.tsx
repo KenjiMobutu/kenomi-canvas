@@ -30,6 +30,7 @@ import {
 import { CheckCircle2, RefreshCw, Send, XCircle } from 'lucide-react'
 import { getStatusColor } from '@/components/studio/StatusBadge'
 import { EmptyState } from '@/components/studio/EmptyState'
+import { getMissingMarketingDraftsAction } from '@/lib/autonomy/supervised-loop-state'
 
 interface CampaignDraft {
   id: string
@@ -1005,6 +1006,10 @@ export default function MarketingPage() {
   }
 
   const pendingPublishCount = publishApprovals.filter((r) => r.isPending).length
+  const missingDraftAction = getMissingMarketingDraftsAction({
+    draftCount: drafts.length,
+    pendingApprovalCount: pendingPublishCount,
+  })
   const draftsByStatus = useMemo(() => {
     const acc: Record<CampaignDraft['status'], CampaignDraft[]> = {
       draft: [],
@@ -1276,8 +1281,22 @@ export default function MarketingPage() {
 
           {drafts.length === 0 && !draftsLoading ? (
             <EmptyState>
-              Aucun draft généré pour l&apos;instant. Lancez l&apos;agent Marketing depuis{' '}
-              <span style={{ color: cyan }}>/studio/agents</span>.
+              <span>{missingDraftAction?.detail ?? 'Aucun draft généré pour l’instant.'}</span>{' '}
+              {missingDraftAction ? (
+                <a
+                  href={missingDraftAction.href}
+                  style={{
+                    color: cyan,
+                    fontWeight: 800,
+                    textDecoration: 'none',
+                    borderBottom: `1px solid ${cyan}66`,
+                  }}
+                >
+                  {missingDraftAction.label}
+                </a>
+              ) : (
+                <span style={{ color: cyan }}>Valider les approbations en attente</span>
+              )}
             </EmptyState>
           ) : (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

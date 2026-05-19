@@ -24,6 +24,7 @@ import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { aggregateLive, type LiveVentureMetrics } from '@/lib/metrics/analytics-live'
+import { getMissingAnalyticsEventsAction } from '@/lib/autonomy/supervised-loop-state'
 
 const VENTURE_ACCENTS = [
   '#22d3ee',
@@ -670,6 +671,11 @@ export default function AnalyticsPage() {
   }, [])
 
   const live_metrics = useMemo(() => aggregateLive(liveSnapshots), [liveSnapshots])
+  const firstPublicSlug = liveSnapshots.find((snapshot) => snapshot.slug)?.slug ?? null
+  const missingEventsAction = getMissingAnalyticsEventsAction({
+    hasEvents: live_metrics.hasData,
+    publicSlug: firstPublicSlug,
+  })
 
   useEffect(() => {
     if (!user) return
@@ -957,10 +963,32 @@ export default function AnalyticsPage() {
                 lineHeight: 1.6,
               }}
             >
-              Aucun événement capturé pour l&apos;instant. Lancez l&apos;agent Marketing ou publiez
-              une landing pour commencer à collecter des{' '}
-              <span style={{ color: cyan }}>page_view</span> et{' '}
-              <span style={{ color: emerald }}>payment_succeeded</span>.
+              <div>
+                {missingEventsAction?.detail ??
+                  'Aucun événement capturé pour l’instant. Publiez une landing pour collecter les premiers signaux.'}
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <span>Signaux attendus : </span>
+                <span style={{ color: cyan }}>page_view</span>
+                <span> · </span>
+                <span style={{ color: emerald }}>payment_succeeded</span>
+                {missingEventsAction && (
+                  <>
+                    <span> · </span>
+                    <a
+                      href={missingEventsAction.href}
+                      style={{
+                        color: amber,
+                        fontWeight: 800,
+                        textDecoration: 'none',
+                        borderBottom: `1px solid ${amber}66`,
+                      }}
+                    >
+                      {missingEventsAction.label}
+                    </a>
+                  </>
+                )}
+              </div>
             </div>
           ) : (
             <div

@@ -233,6 +233,18 @@ describe('full autonomy loop with fakes', () => {
       }),
     })
 
+    expect(supabase.tables.landing_pages[0]).toMatchObject({
+      venture_id: 'venture-1',
+      headline: 'Priorisez vos leads email',
+      statut: 'deployed',
+      copywriting: expect.objectContaining({
+        hero: expect.objectContaining({
+          headline: 'Priorisez vos leads email',
+          cta: 'Rejoindre la beta',
+        }),
+      }),
+    })
+
     await runAgentStep({
       supabase,
       userId: 'user-1',

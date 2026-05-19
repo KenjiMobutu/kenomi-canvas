@@ -7,6 +7,10 @@ import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import { surface, surface2, line, line2, text, muted, muted2, accent, bg } from '@/lib/ck-vars'
 import { agentById, makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
+import {
+  getMissingLandingAction,
+  type SupervisedLoopRepairAction,
+} from '@/lib/autonomy/supervised-loop-state'
 
 const em = '#34d399',
   am = '#fbbf24',
@@ -40,6 +44,7 @@ const STAGE_AGENTS: Record<string, string[]> = {
 interface Venture {
   id: string
   name: string
+  slug?: string | null
   niche: string
   stage: string
   score: number
@@ -296,12 +301,14 @@ function generateBrief(v: DV): string {
 
 function VentureInspector({
   v,
+  repairAction,
   onSave,
   onDelete,
   onOpen,
   onBrief,
 }: {
   v: DV | null
+  repairAction?: SupervisedLoopRepairAction | null
   onSave: (id: string, form: EditForm) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onOpen: () => void
@@ -467,6 +474,56 @@ function VentureInspector({
           {editing ? 'Vue' : 'Éditer'}
         </button>
       </div>
+
+      {!editing && repairAction && (
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 10,
+            background: `${am}12`,
+            border: `1px solid ${am}55`,
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            gap: 10,
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                color: am,
+                letterSpacing: '.14em',
+                textTransform: 'uppercase',
+                fontWeight: 800,
+              }}
+            >
+              Réparation requise
+            </div>
+            <div style={{ marginTop: 4, fontSize: 12, color: text, lineHeight: 1.45 }}>
+              {repairAction.detail}
+            </div>
+          </div>
+          <a
+            href={repairAction.href}
+            style={{
+              padding: '8px 10px',
+              borderRadius: 7,
+              background: am,
+              color: '#0b0d12',
+              border: `1px solid ${am}66`,
+              fontFamily: 'var(--font-display)',
+              fontWeight: 800,
+              fontSize: 11,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {repairAction.label}
+          </a>
+        </div>
+      )}
 
       {/* Edit fields */}
       {editing && (
@@ -954,10 +1011,35 @@ export default function VenturesPage() {
   const isMobile = useIsMobile()
   const [items, setItems] = useState<DV[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [landingVentureIds, setLandingVentureIds] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', niche: '', stage: 'validation', score: '', mrr: '' })
 
   const supabase = createSupabaseBrowser()
+
+  async function refreshLandingCoverage(ventureIds: string[]) {
+    if (ventureIds.length === 0) {
+      setLandingVentureIds(new Set())
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('landing_pages')
+      .select('venture_id')
+      .in('venture_id', ventureIds)
+    if (error) {
+      setLandingVentureIds(new Set())
+      return
+    }
+
+    setLandingVentureIds(
+      new Set(
+        ((data as Array<{ venture_id: string | null }> | null) ?? []).flatMap((row) =>
+          row.venture_id ? [row.venture_id] : []
+        )
+      )
+    )
+  }
 
   useEffect(() => {
     if (!user) return
@@ -975,6 +1057,7 @@ export default function VenturesPage() {
       }
       const dvs = ((data as Venture[]) || []).map(toDisplay)
       setItems(dvs)
+      await refreshLandingCoverage(dvs.map((v) => v.id))
       if (!selectedId && dvs.length > 0) setSelectedId(dvs[0].id)
     }
     load()
@@ -983,17 +1066,16 @@ export default function VenturesPage() {
     }
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function reload() {
+  async function reload() {
     if (!user) return
-    supabase
+    const { data } = await supabase
       .from('ventures')
       .select('*')
       .eq('user_id', user!.id)
       .order('score', { ascending: false })
-      .then(({ data }) => {
-        const dvs = ((data as Venture[]) || []).map(toDisplay)
-        setItems(dvs)
-      })
+    const dvs = ((data as Venture[]) || []).map(toDisplay)
+    setItems(dvs)
+    await refreshLandingCoverage(dvs.map((v) => v.id))
   }
 
   async function create(e: React.FormEvent) {
@@ -1014,7 +1096,7 @@ export default function VenturesPage() {
     if (error) return toast.error(error.message)
     setForm({ name: '', niche: '', stage: 'validation', score: '', mrr: '' })
     setAdding(false)
-    reload()
+    await reload()
   }
 
   async function update(id: string, f: EditForm) {
@@ -1038,7 +1120,7 @@ export default function VenturesPage() {
       return
     }
     toast.success('Venture mise à jour')
-    reload()
+    await reload()
   }
 
   async function remove(id: string) {
@@ -1049,10 +1131,16 @@ export default function VenturesPage() {
     }
     setSelectedId(null)
     toast.success('Venture supprimée')
-    reload()
+    await reload()
   }
 
   const selected = items.find((v) => v.id === selectedId) ?? null
+  const selectedRepairAction = selected
+    ? getMissingLandingAction({
+        ventureName: selected.name,
+        hasLanding: landingVentureIds.has(selected.id),
+      })
+    : null
 
   const funnelCounts = STAGES.map((s) => ({
     stage: s,
@@ -1459,6 +1547,7 @@ export default function VenturesPage() {
         {(!isMobile || selectedId) && (
           <VentureInspector
             v={selected}
+            repairAction={selectedRepairAction}
             onSave={update}
             onDelete={remove}
             onOpen={() => {
