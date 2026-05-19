@@ -4,6 +4,10 @@ export interface AgentRunMetricInput {
   duration_ms: number | null
   created_at: string
   fallback_triggered?: boolean | null
+  total_tokens?: number | null
+  cost_usd?: number | string | null
+  provider?: string | null
+  model?: string | null
 }
 
 export interface AgentRunMetric {
@@ -13,6 +17,25 @@ export interface AgentRunMetric {
   last_run_at: string | null
   avg_duration_ms: number | null
   fallback_count: number
+  total_tokens: number
+  cost_usd: number
+  providers: string[]
+  last_model: string | null
+}
+
+function emptyMetric(agentId: string): AgentRunMetric {
+  return {
+    agent_id: agentId,
+    run_count: 0,
+    runs_24h: 0,
+    last_run_at: null,
+    avg_duration_ms: null,
+    fallback_count: 0,
+    total_tokens: 0,
+    cost_usd: 0,
+    providers: [],
+    last_model: null,
+  }
 }
 
 export function buildAgentRunMetrics(
@@ -24,38 +47,31 @@ export function buildAgentRunMetrics(
   const metrics: Record<string, AgentRunMetric> = {}
 
   agentIds.forEach((agentId) => {
-    metrics[agentId] = {
-      agent_id: agentId,
-      run_count: 0,
-      runs_24h: 0,
-      last_run_at: null,
-      avg_duration_ms: null,
-      fallback_count: 0,
-    }
+    metrics[agentId] = emptyMetric(agentId)
   })
 
   const durationTotals = new Map<string, { sum: number; count: number }>()
+  const providers = new Map<string, Set<string>>()
 
   runs.forEach((run) => {
-    const metric =
-      metrics[run.agent_id] ??
-      (metrics[run.agent_id] = {
-        agent_id: run.agent_id,
-        run_count: 0,
-        runs_24h: 0,
-        last_run_at: null,
-        avg_duration_ms: null,
-        fallback_count: 0,
-      })
+    const metric = metrics[run.agent_id] ?? (metrics[run.agent_id] = emptyMetric(run.agent_id))
 
     metric.run_count += 1
+    metric.total_tokens += Number(run.total_tokens ?? 0)
+    metric.cost_usd += Number(run.cost_usd ?? 0)
 
     const runTime = Date.parse(run.created_at)
     if (Number.isFinite(runTime) && runTime >= dayAgo) metric.runs_24h += 1
     if (!metric.last_run_at || Date.parse(run.created_at) > Date.parse(metric.last_run_at)) {
       metric.last_run_at = run.created_at
+      metric.last_model = run.model ?? null
     }
     if (run.fallback_triggered) metric.fallback_count += 1
+    if (run.provider) {
+      const set = providers.get(run.agent_id) ?? new Set<string>()
+      set.add(run.provider)
+      providers.set(run.agent_id, set)
+    }
 
     if (typeof run.duration_ms === 'number' && Number.isFinite(run.duration_ms)) {
       const current = durationTotals.get(run.agent_id) ?? { sum: 0, count: 0 }
@@ -70,6 +86,11 @@ export function buildAgentRunMetrics(
     if (metric && duration.count > 0) {
       metric.avg_duration_ms = Math.round(duration.sum / duration.count)
     }
+  })
+
+  providers.forEach((set, agentId) => {
+    const metric = metrics[agentId]
+    if (metric) metric.providers = Array.from(set).sort()
   })
 
   return metrics

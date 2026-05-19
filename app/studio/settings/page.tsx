@@ -518,7 +518,7 @@ export default function SettingsPage() {
                 <input
                   value={cfg.proxmox_node}
                   onChange={(e) => patch({ proxmox_node: e.target.value })}
-                  placeholder="pve"
+                  placeholder="proxmox"
                   className="ck-input"
                   style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
                 />

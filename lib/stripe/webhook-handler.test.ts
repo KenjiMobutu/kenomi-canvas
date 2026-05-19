@@ -113,6 +113,7 @@ describe('handleStripeWebhookEvent', () => {
     expect(result).toEqual({ ok: true, handled: true })
     expect(supabase.tables.payments[0]).toMatchObject({
       status: 'completed',
+      provider_status: 'completed',
       stripe_payment_intent_id: 'pi_test_123',
       customer_email: 'founder@example.com',
     })

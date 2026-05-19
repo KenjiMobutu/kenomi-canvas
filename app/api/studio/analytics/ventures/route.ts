@@ -5,6 +5,7 @@ import {
   buildVentureMetricSnapshots,
   type VentureMetricSourceRow,
 } from '@/lib/metrics/venture-metrics'
+import { buildMetricSource } from '@/lib/metrics/source-contract'
 
 interface VentureRow {
   id: string
@@ -31,7 +32,15 @@ export async function GET() {
   const ventureIds = ventureRows.map((venture) => venture.id)
 
   if (ventureIds.length === 0) {
-    return NextResponse.json({ ok: true, ventures: [] })
+    return NextResponse.json({
+      ok: true,
+      ventures: [],
+      source: buildMetricSource({
+        source: 'venture_events',
+        window: 'all_visible_events',
+        rowCount: 0,
+      }),
+    })
   }
 
   const { data: events, error: eventsError } = await supabase
@@ -44,8 +53,15 @@ export async function GET() {
     return NextResponse.json({ error: eventsError.message }, { status: 500 })
   }
 
+  const eventRows = (events ?? []) as VentureMetricSourceRow[]
+
   return NextResponse.json({
     ok: true,
-    ventures: buildVentureMetricSnapshots(ventureRows, (events ?? []) as VentureMetricSourceRow[]),
+    ventures: buildVentureMetricSnapshots(ventureRows, eventRows),
+    source: buildMetricSource({
+      source: 'venture_events',
+      window: 'all_visible_events',
+      rowCount: eventRows.length,
+    }),
   })
 }

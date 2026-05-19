@@ -5,6 +5,7 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
+import { selectPublicLandingCta } from '@/lib/public-landing-cta'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,22 @@ export default async function LandingPage({ params, searchParams }: Props) {
   })
 
   const { hero, features, faq } = data.copywriting
+  const { data: paymentRows } = await supabaseAdmin
+    .from('payments')
+    .select('checkout_url, provider_status, status, created_at')
+    .eq('venture_id', data.venture_id)
+    .not('checkout_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  const checkoutPayment = (paymentRows ?? []).find((payment) =>
+    ['ready', 'pending'].includes(String(payment.provider_status ?? payment.status))
+  )
+  const primaryCta = selectPublicLandingCta({
+    heroCta: hero.cta,
+    checkoutUrl: checkoutPayment?.checkout_url ?? null,
+    providerStatus: checkoutPayment?.provider_status ?? checkoutPayment?.status ?? null,
+  })
 
   const showWaitlistSuccess = waitlist === 'ok'
   const showPaymentSuccess = payment === 'success'
@@ -83,10 +100,10 @@ export default async function LandingPage({ params, searchParams }: Props) {
         </h1>
         <p className="text-xl text-gray-400 mb-10 max-w-xl mx-auto">{hero.subtitle}</p>
         <a
-          href={showWaitlistSuccess ? undefined : '#waitlist'}
+          href={showWaitlistSuccess ? undefined : primaryCta.href}
           className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"
         >
-          {showWaitlistSuccess ? 'Inscrit !' : `${hero.cta} →`}
+          {showWaitlistSuccess ? 'Inscrit !' : `${primaryCta.label} →`}
         </a>
       </section>
 

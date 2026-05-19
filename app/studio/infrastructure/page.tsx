@@ -154,7 +154,13 @@ type ProxmoxVM = {
   netin: number
   netout: number
 }
-type ProxmoxData = { nodes: ProxmoxNode[]; vms: ProxmoxVM[]; fetched_at: string }
+type ProxmoxData = {
+  nodes: ProxmoxNode[]
+  vms: ProxmoxVM[]
+  fetched_at: string
+  error?: string
+  errors?: { scope: string; message: string }[]
+}
 
 function statusColor(ok: boolean | null): string {
   if (ok === null) return amber
@@ -1019,6 +1025,7 @@ export default function InfrastructurePage() {
   const [health, setHealth] = useState<HealthData | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
   const [proxmox, setProxmox] = useState<ProxmoxData | null>(null)
+  const [proxmoxError, setProxmoxError] = useState<string | null>(null)
   const [services, setServices] = useState<InfraService[]>(FALLBACK_SERVICES)
   const isMobile = useIsMobile()
 
@@ -1038,11 +1045,23 @@ export default function InfrastructurePage() {
     async function loadProxmox() {
       try {
         const res = await fetch('/api/studio/infra/proxmox')
-        if (!res.ok) return
-        const data = (await res.json()) as ProxmoxData
-        if (!cancelled) setProxmox(data)
+        const data = (await res.json().catch(() => null)) as ProxmoxData | null
+        if (!cancelled && !res.ok) {
+          setProxmox(null)
+          setProxmoxError(data?.error ?? `Proxmox indisponible: HTTP ${res.status}`)
+          return
+        }
+        if (!cancelled && data) {
+          setProxmox(data)
+          setProxmoxError(
+            data.error ?? data.errors?.map((item) => item.message).join(' · ') ?? null
+          )
+        }
       } catch {
-        /* Proxmox indisponible — silencieux */
+        if (!cancelled) {
+          setProxmox(null)
+          setProxmoxError('Proxmox indisponible: requête réseau échouée')
+        }
       }
     }
     async function loadServices() {
@@ -1187,6 +1206,23 @@ export default function InfrastructurePage() {
             <InfraKpi key={k.label} {...k} />
           ))}
         </div>
+
+        {proxmoxError && (
+          <div
+            style={{
+              padding: '10px 12px',
+              borderRadius: 8,
+              background: `${amber}12`,
+              border: `1px solid ${amber}33`,
+              color: amber,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              lineHeight: 1.5,
+            }}
+          >
+            Proxmox metrics indisponibles · {proxmoxError}
+          </div>
+        )}
 
         {/* Topology + Service inspector */}
         <div

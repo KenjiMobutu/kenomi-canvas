@@ -56,6 +56,7 @@ describe('buildLandingPageInsert', () => {
       venture_id: 'venture-1',
       headline: 'Priorisez vos leads email',
       statut: 'deployed',
+      health_status: 'ready',
       copywriting: {
         hero: {
           headline: 'Priorisez vos leads email',

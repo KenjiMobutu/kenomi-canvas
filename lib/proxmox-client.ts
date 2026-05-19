@@ -41,6 +41,12 @@ export type ProxmoxMetrics = {
   nodes: ProxmoxNodeStatus[]
   vms: ProxmoxVM[]
   fetched_at: string
+  errors?: ProxmoxMetricsError[]
+}
+
+export type ProxmoxMetricsError = {
+  scope: 'node-status' | 'vms'
+  message: string
 }
 
 export type ProxmoxClientSettings = {
@@ -61,6 +67,17 @@ function configuredString(value: string | null | undefined, fallback: string): s
   return typeof value === 'string' && value.length > 0 ? value : fallback
 }
 
+function configuredNode(value: string | null | undefined, envNode: string | undefined): string {
+  const fallback = envNode ?? 'proxmox'
+  const configured = configuredString(value, fallback)
+  if (configured === 'pve' && fallback !== 'pve') return fallback
+  return configured
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 export function resolveProxmoxConfig(
   settings: ProxmoxClientSettings | null | undefined = null,
   env: Partial<NodeJS.ProcessEnv> = process.env
@@ -72,7 +89,7 @@ export function resolveProxmoxConfig(
     ),
     tokenId: env.PROXMOX_TOKEN_ID ?? 'monitoring@pve!kenomi-canvas',
     tokenSecret: env.PROXMOX_TOKEN_SECRET ?? '',
-    node: configuredString(settings?.proxmox_node, env.PROXMOX_NODE ?? 'pve'),
+    node: configuredNode(settings?.proxmox_node, env.PROXMOX_NODE),
   }
 }
 
@@ -158,8 +175,8 @@ export async function getProxmoxVMs(
   node = config.node
 ): Promise<ProxmoxVM[]> {
   const [qemus, lxcs] = await Promise.all([
-    proxmoxFetch<ProxmoxVM[]>(`/nodes/${node}/qemu`, config).catch(() => []),
-    proxmoxFetch<ProxmoxVM[]>(`/nodes/${node}/lxc`, config).catch(() => []),
+    proxmoxFetch<ProxmoxVM[]>(`/nodes/${node}/qemu`, config),
+    proxmoxFetch<ProxmoxVM[]>(`/nodes/${node}/lxc`, config),
   ])
 
   return [
@@ -171,13 +188,16 @@ export async function getProxmoxVMs(
 // ─── Métriques complètes ──────────────────────────────────────────────────────
 
 export async function getProxmoxMetrics(config = resolveProxmoxConfig()): Promise<ProxmoxMetrics> {
+  const errors: ProxmoxMetricsError[] = []
   const [nodeStatus, vms] = await Promise.all([
     getProxmoxNodeStatus(config).catch((err) => {
       logError('proxmox.node-status', err)
+      errors.push({ scope: 'node-status', message: errorMessage(err) })
       return null
     }),
     getProxmoxVMs(config).catch((err) => {
       logError('proxmox.vms', err)
+      errors.push({ scope: 'vms', message: errorMessage(err) })
       return []
     }),
   ])
@@ -186,6 +206,7 @@ export async function getProxmoxMetrics(config = resolveProxmoxConfig()): Promis
     nodes: nodeStatus ? [nodeStatus] : [],
     vms,
     fetched_at: new Date().toISOString(),
+    ...(errors.length > 0 ? { errors } : {}),
   }
 }
 

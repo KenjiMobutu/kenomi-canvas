@@ -8,6 +8,11 @@ import { insertAuditEvent } from '@/lib/audit-log'
 
 const USER_TABLES = [
   'venture_pipeline',
+  'human_approvals',
+  'autonomy_actions',
+  'autonomy_jobs',
+  'campaign_drafts',
+  'venture_events',
   'agent_runs',
   'agent_configs',
   'agent_events',

@@ -1097,7 +1097,7 @@ export default function MarketingPage() {
       actions={headerActions}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Drafts & Approvals depuis venture_pipeline (source de vérité) */}
+        {/* Drafts & Approvals depuis campaign_drafts + human_approvals (sources de vérité) */}
         <div
           style={{
             background: surface,
@@ -1162,6 +1162,17 @@ export default function MarketingPage() {
             >
               <RefreshCw size={14} />
             </button>
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted2,
+              letterSpacing: '.1em',
+              textTransform: 'uppercase',
+            }}
+          >
+            source campaign_drafts · human_approvals
           </div>
 
           {pendingPublishCount > 0 && (

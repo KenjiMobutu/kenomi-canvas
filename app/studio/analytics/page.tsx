@@ -24,6 +24,7 @@ import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { aggregateLive, type LiveVentureMetrics } from '@/lib/metrics/analytics-live'
+import type { MetricSourceContract } from '@/lib/metrics/source-contract'
 import { getMissingAnalyticsEventsAction } from '@/lib/autonomy/supervised-loop-state'
 
 const VENTURE_ACCENTS = [
@@ -620,11 +621,13 @@ export default function AnalyticsPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [mrrSparkSeries, setMrrSparkSeries] = useState<number[]>([])
   const [liveSnapshots, setLiveSnapshots] = useState<LiveVentureMetrics[]>([])
+  const [liveSource, setLiveSource] = useState<MetricSourceContract | null>(null)
   const [liveLoading, setLiveLoading] = useState(true)
   const [llmCost, setLlmCost] = useState<{
     totalUsd: number
     totalTokens: number
     runCount: number
+    source?: MetricSourceContract
   } | null>(null)
 
   useEffect(() => {
@@ -635,6 +638,7 @@ export default function AnalyticsPage() {
         if (cancelled) return
         if (data?.ok && Array.isArray(data.ventures)) {
           setLiveSnapshots(data.ventures as LiveVentureMetrics[])
+          setLiveSource((data.source ?? null) as MetricSourceContract | null)
         }
       })
       .catch(() => {
@@ -659,6 +663,7 @@ export default function AnalyticsPage() {
             totalUsd: Number(data.totalUsd) || 0,
             totalTokens: Number(data.totalTokens) || 0,
             runCount: Number(data.runCount) || 0,
+            source: data.source as MetricSourceContract | undefined,
           })
         }
       })
@@ -670,7 +675,10 @@ export default function AnalyticsPage() {
     }
   }, [])
 
-  const live_metrics = useMemo(() => aggregateLive(liveSnapshots), [liveSnapshots])
+  const live_metrics = useMemo(
+    () => aggregateLive(liveSnapshots, liveSource ?? undefined),
+    [liveSnapshots, liveSource]
+  )
   const firstPublicSlug = liveSnapshots.find((snapshot) => snapshot.slug)?.slug ?? null
   const missingEventsAction = getMissingAnalyticsEventsAction({
     hasEvents: live_metrics.hasData,
@@ -946,7 +954,9 @@ export default function AnalyticsPage() {
                 letterSpacing: '.1em',
               }}
             >
-              page_view · waitlist_signup · payment_succeeded · campaign_spend
+              {live_metrics.source
+                ? `${live_metrics.source.status} · ${live_metrics.source.rowCount} rows`
+                : 'page_view · waitlist_signup · payment_succeeded · campaign_spend'}
             </span>
           </div>
 
@@ -1056,21 +1066,35 @@ export default function AnalyticsPage() {
               textTransform: 'uppercase',
             }}
           >
-            source venture_events · page_view, waitlist_signup, payment_succeeded, campaign_spend
+            source venture_events · {live_metrics.source?.window ?? 'all_visible_events'} ·{' '}
+            {live_metrics.source?.status ?? 'unavailable'}
           </div>
         </div>
 
-        {/* KPI strip (snapshots manuels - legacy, à supprimer une fois live_metrics complètes) */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)',
-            gap: 10,
-          }}
-        >
-          {KPI_LIST.map((k) => (
-            <BigKPI key={k.label} {...k} />
-          ))}
+        {/* KPI snapshots manuels conservés avec source explicite. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)',
+              gap: 10,
+            }}
+          >
+            {KPI_LIST.map((k) => (
+              <BigKPI key={k.label} {...k} />
+            ))}
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted2,
+              letterSpacing: '.1em',
+              textTransform: 'uppercase',
+            }}
+          >
+            source kpi_snapshots · valeurs manuelles legacy · non utilisées pour ROI
+          </div>
         </div>
 
         {/* MRR chart + donut */}

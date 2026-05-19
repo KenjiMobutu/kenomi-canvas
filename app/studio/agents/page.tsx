@@ -1631,6 +1631,9 @@ function AgentInspector({
         }}
       >
         source agent_runs · {runMetric.run_count === 0 ? 'aucun run enregistré' : 'historique réel'}
+        {runMetric.run_count > 0
+          ? ` · ${runMetric.total_tokens.toLocaleString('fr-FR')} tokens · $${runMetric.cost_usd.toFixed(3)}`
+          : ''}
       </div>
 
       {/* Activity sparkline */}
@@ -2278,7 +2281,7 @@ export default function AgentsPage() {
     const supabase = createSupabaseBrowser()
     const { data, error } = await supabase
       .from('agent_runs')
-      .select('id, agent_id, duration_ms, created_at, fallback_triggered')
+      .select('id, agent_id, duration_ms, created_at, fallback_triggered, total_tokens, cost_usd, provider, model')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(500)
@@ -2462,6 +2465,10 @@ export default function AgentsPage() {
       last_run_at: null,
       avg_duration_ms: null,
       fallback_count: 0,
+      total_tokens: 0,
+      cost_usd: 0,
+      providers: [],
+      last_model: null,
     }
   const activity = useMemo(
     () => buildAgentActivitySeries(agentRuns, selectedId),
@@ -2706,7 +2713,7 @@ export default function AgentsPage() {
                       marginTop: 2,
                     }}
                   >
-                    runs reels · dernier run · latence
+                    runs réels · dernier run · latence · source agent_runs
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>

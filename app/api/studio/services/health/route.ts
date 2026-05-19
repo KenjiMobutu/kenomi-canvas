@@ -61,7 +61,7 @@ export async function GET() {
     pingService(urls.coolify),
   ])
 
-  const ollamaHealthy = await checkOllamaHealth()
+  const ollamaHealthy = await checkOllamaHealth(urls.ollama)
   const fallbackActive = !ollamaHealthy
 
   const toHealthResult = (s: ServiceStatus) => ({
@@ -69,8 +69,8 @@ export async function GET() {
     latencyMs: s.latency_ms ?? 0,
   })
 
-  // Ollama est sur le réseau local — en prod le container ne peut pas l'atteindre
-  // directement. On utilise checkOllamaHealth() comme source de vérité.
+  // Ollama peut avoir une URL différente par utilisateur/env. Le statut final
+  // doit suivre l'URL résolue ci-dessus, pas seulement OLLAMA_BASE_URL.
   const ollamaResult = { ok: ollamaHealthy, latencyMs: ollama.latency_ms ?? 0 }
 
   const allOk = ollamaHealthy && [n8n, supabaseHealth, coolify].every((s) => s.status === 'ok')

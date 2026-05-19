@@ -25,14 +25,22 @@ const expectedColumns = [
   ['autonomy_jobs', 'last_error'],
   ['autonomy_jobs', 'status'],
   ['decisions', 'metrics_snapshot'],
+  ['decisions', 'action_status'],
+  ['decisions', 'executed_at'],
+  ['campaign_drafts', 'published_at'],
+  ['campaign_drafts', 'provider_run_id'],
+  ['landing_pages', 'health_status'],
   ['human_approvals', 'action_id'],
   ['human_approvals', 'status'],
   ['payments', 'autonomy_action_id'],
   ['payments', 'checkout_url'],
   ['payments', 'customer_email'],
+  ['payments', 'provider_status'],
   ['venture_events', 'event_type'],
   ['venture_events', 'metadata'],
   ['venture_events', 'value'],
+  ['ventures', 'current_decision'],
+  ['ventures', 'lifecycle_status'],
 ]
 
 function loadEnvFile(path) {

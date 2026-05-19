@@ -51,6 +51,16 @@ export async function GET() {
       })),
     }
 
+    if (metrics.nodes.length === 0 && metrics.vms.length === 0 && metrics.errors?.length) {
+      return NextResponse.json(
+        {
+          ...result,
+          error: `Proxmox indisponible: ${metrics.errors.map((item) => item.message).join(' · ')}`,
+        },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erreur inconnue'

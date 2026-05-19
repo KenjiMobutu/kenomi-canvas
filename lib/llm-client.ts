@@ -71,6 +71,11 @@ function buildOllamaMessages(messages: LLMMessage[], system?: string): LLMMessag
   return [{ role: 'user', content: `[System: ${system}]` }, ...messages]
 }
 
+function ollamaTagsUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, '')
+  return trimmed.endsWith('/api/tags') ? trimmed : `${trimmed}/api/tags`
+}
+
 async function callOllama(
   messages: LLMMessage[],
   config: LLMConfig
@@ -159,11 +164,11 @@ async function callClaude(
 
 // ─── Vérification santé Ollama ────────────────────────────────────────────────
 
-export async function checkOllamaHealth(): Promise<boolean> {
+export async function checkOllamaHealth(baseUrl = OLLAMA_BASE_URL): Promise<boolean> {
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 5000)
-    const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+    const res = await fetch(ollamaTagsUrl(baseUrl), {
       signal: controller.signal,
     })
     clearTimeout(timer)

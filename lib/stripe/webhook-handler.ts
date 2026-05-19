@@ -122,6 +122,7 @@ export async function handleStripeWebhookEvent(input: {
     .from('payments')
     .update({
       status: 'completed',
+      provider_status: 'completed',
       stripe_payment_intent_id: getStringId(session.payment_intent),
       customer_email: getCustomerEmail(session),
       updated_at: nowIso,

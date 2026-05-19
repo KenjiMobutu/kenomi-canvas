@@ -28,4 +28,17 @@ describe('migration ordering', () => {
     expect(migration).toContain('ADD COLUMN IF NOT EXISTS venture_id')
     expect(migration).toContain('ADD COLUMN IF NOT EXISTS metrics_snapshot')
   })
+
+  it('keeps the vision alignment migration idempotent and business-status focused', () => {
+    const migration = readMigration('20260519_vision_alignment_core.sql')
+
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS lifecycle_status')
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS current_decision')
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS health_status')
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS provider_status')
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS published_at')
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS executed_at')
+    expect(migration).toContain('ALTER TABLE public.ventures ENABLE ROW LEVEL SECURITY')
+    expect(migration).toContain('CREATE INDEX IF NOT EXISTS ventures_lifecycle_idx')
+  })
 })

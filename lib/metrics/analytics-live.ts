@@ -1,3 +1,5 @@
+import type { MetricSourceContract } from './source-contract'
+
 export interface LiveVentureMetrics {
   ventureId: string
   name: string
@@ -23,9 +25,13 @@ export interface LiveAggregate {
   roi: number
   ventureCount: number
   hasData: boolean
+  source?: MetricSourceContract
 }
 
-export function aggregateLive(snapshots: LiveVentureMetrics[]): LiveAggregate {
+export function aggregateLive(
+  snapshots: LiveVentureMetrics[],
+  source?: MetricSourceContract
+): LiveAggregate {
   const totalVisits = snapshots.reduce((sum, venture) => sum + venture.metrics.visits, 0)
   const totalSignups = snapshots.reduce((sum, venture) => sum + venture.metrics.signups, 0)
   const revenueCents = snapshots.reduce((sum, venture) => sum + venture.metrics.revenueCents, 0)
@@ -42,5 +48,6 @@ export function aggregateLive(snapshots: LiveVentureMetrics[]): LiveAggregate {
     roi: spendCents > 0 ? profitCents / spendCents : 0,
     ventureCount: snapshots.length,
     hasData: totalVisits + totalSignups + revenueCents + spendCents > 0,
+    source,
   }
 }

@@ -82,7 +82,7 @@ export async function executePublishCampaign(
       venture_id: draft.venture_id,
       event_type: 'campaign_published',
       occurred_at: nowIso,
-      payload: {
+      metadata: {
         external_id: publishResult.externalId,
         url: publishResult.url ?? null,
         channel: draft.channel,
@@ -98,7 +98,7 @@ export async function executePublishCampaign(
         event_type: 'campaign_spend',
         value: Math.round(budgetEur * 100),
         occurred_at: nowIso,
-        payload: {
+        metadata: {
           channel: draft.channel,
           external_id: publishResult.externalId,
           draft_id: draft.id,
@@ -110,6 +110,9 @@ export async function executePublishCampaign(
       .from('campaign_drafts')
       .update({
         status: 'published',
+        published_at: nowIso,
+        provider_run_id: publishResult.externalId,
+        last_error: null,
         metadata: {
           ...(draft.metadata ?? {}),
           external_id: publishResult.externalId,
@@ -131,6 +134,7 @@ export async function executePublishCampaign(
       .from('campaign_drafts')
       .update({
         status: 'failed',
+        last_error: message,
         metadata: { ...(draft.metadata ?? {}), error: message },
         updated_at: nowIso,
       })

@@ -10,6 +10,7 @@ les runbooks specialises.
 
 ```bash
 npm run ops:readiness
+npm run ops:coherence
 npm run typecheck
 npm test
 npm run lint
@@ -81,16 +82,21 @@ AUTONOMY_DRY_RUN=true
 
 ```bash
 npm run ops:readiness
+npm run ops:coherence
 npm run smoke
 npm run supabase:validate
 ```
+
+`npm run ops:coherence` verifie que les pages Studio n'affichent pas des
+compteurs critiques sans source explicite. Si ce check echoue, corriger d'abord
+la source de verite ou le libelle avant de chercher une panne metier.
 
 4. Ne reparer qu'un axe a la fois: auth, base, storage, LLM, automation,
    paiement, deploiement. Noter le symptome, la commande lancee et le resultat.
 
 ## Cadence recommandee
 
-- Quotidien: `ops:readiness`, `typecheck`, `test`, `lint`.
+- Quotidien: `ops:readiness`, `ops:coherence`, `typecheck`, `test`, `lint`.
 - Avant deploy: `format:check`, `build`, `smoke`, `supabase:validate`.
 - Apres incident: ajouter une note au runbook specialise si la procedure a
   manque une etape.

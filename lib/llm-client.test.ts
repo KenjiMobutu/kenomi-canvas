@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest'
-import { computeCostUsd } from './llm-client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { checkOllamaHealth, computeCostUsd } from './llm-client'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('computeCostUsd', () => {
   it('calcule le coût Claude Sonnet (1000 input + 500 output)', () => {
@@ -50,5 +54,19 @@ describe('computeCostUsd', () => {
         total_tokens: 0,
       })
     ).toBe(0)
+  })
+})
+
+describe('checkOllamaHealth', () => {
+  it('uses the configured Ollama base URL for health checks', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(checkOllamaHealth('http://settings-ollama.local:11434')).resolves.toBe(true)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://settings-ollama.local:11434/api/tags',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 })

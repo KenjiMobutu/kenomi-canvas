@@ -135,6 +135,9 @@ async function executeStopVenture(input: {
       .from('ventures')
       .update({
         statut: 'stopped',
+        lifecycle_status: 'stopped',
+        current_decision: 'stop',
+        last_decision_at: input.nowIso,
         stage: 'Stopped',
         next_action: 'Venture arrêtée après approbation humaine',
         decision_at: input.nowIso,
@@ -146,7 +149,7 @@ async function executeStopVenture(input: {
   await update(
     input.supabase
       .from('landing_pages')
-      .update({ statut: 'stopped' })
+      .update({ statut: 'stopped', health_status: 'stopped' })
       .eq('venture_id', input.ventureId)
   )
 
@@ -162,6 +165,13 @@ async function executeStopVenture(input: {
     input.supabase
       .from('campaigns')
       .update({ status: 'rejected' })
+      .eq('venture_id', input.ventureId)
+  )
+
+  await update(
+    input.supabase
+      .from('payments')
+      .update({ status: 'disabled', provider_status: 'disabled' })
       .eq('venture_id', input.ventureId)
   )
 }

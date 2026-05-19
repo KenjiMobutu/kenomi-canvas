@@ -30,7 +30,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   stripe_webhook_secret: '',
   supabase_url: 'https://supabase.kenomi.eu',
   proxmox_base_url: 'https://192.168.0.10:8006',
-  proxmox_node: 'pve',
+  proxmox_node: 'proxmox',
   coolify_url: 'http://192.168.0.19:8000',
   nginx_pm_url: 'https://npm.tailnet.local',
   uptime_kuma_url: 'https://uptime.tailnet.local',

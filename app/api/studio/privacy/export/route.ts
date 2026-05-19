@@ -44,11 +44,31 @@ export async function GET() {
       .eq('user_id', user!.id),
     agent_runs: await supabase
       .from('agent_runs')
-      .select('id, agent_id, model, duration_ms, created_at')
+      .select('id, agent_id, model, provider, total_tokens, cost_usd, duration_ms, created_at')
       .eq('user_id', user!.id),
     agent_events: await supabase
       .from('agent_events')
       .select('id, agent_id, event_type, severity, metadata, created_at')
+      .eq('user_id', user!.id),
+    autonomy_jobs: await supabase
+      .from('autonomy_jobs')
+      .select('id, venture_id, kind, status, attempt_count, next_run_at, last_error, created_at')
+      .eq('user_id', user!.id),
+    autonomy_actions: await supabase
+      .from('autonomy_actions')
+      .select('id, job_id, venture_id, action_type, risk_level, status, input, output, created_at')
+      .eq('user_id', user!.id),
+    human_approvals: await supabase
+      .from('human_approvals')
+      .select('id, action_id, status, approved_at, reason, created_at')
+      .eq('user_id', user!.id),
+    campaign_drafts: await supabase
+      .from('campaign_drafts')
+      .select('id, venture_id, channel, content, status, metadata, published_at, provider_run_id, created_at')
+      .eq('user_id', user!.id),
+    venture_events: await supabase
+      .from('venture_events')
+      .select('id, venture_id, event_type, source, value, metadata, occurred_at')
       .eq('user_id', user!.id),
   }
 
@@ -68,6 +88,11 @@ export async function GET() {
       automation_runs: results.automation_runs.data ?? [],
       agent_runs: results.agent_runs.data ?? [],
       agent_events: results.agent_events.data ?? [],
+      autonomy_jobs: results.autonomy_jobs.data ?? [],
+      autonomy_actions: results.autonomy_actions.data ?? [],
+      human_approvals: results.human_approvals.data ?? [],
+      campaign_drafts: results.campaign_drafts.data ?? [],
+      venture_events: results.venture_events.data ?? [],
     })
   )
 }

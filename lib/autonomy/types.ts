@@ -38,3 +38,40 @@ export interface CampaignDraft {
   created_at: string
   updated_at: string
 }
+
+export type VentureLifecycleStatus =
+  | 'draft'
+  | 'validating'
+  | 'ready'
+  | 'launched'
+  | 'scaling'
+  | 'pivoting'
+  | 'stopped'
+  | 'archived'
+
+export type VentureDecisionVerdict = 'continue' | 'pivot' | 'scale' | 'stop'
+
+export type LandingHealthStatus =
+  | 'unknown'
+  | 'missing'
+  | 'repair_required'
+  | 'ready'
+  | 'deployed'
+  | 'stopped'
+
+export type PaymentProviderStatus =
+  | 'not_configured'
+  | 'approval_required'
+  | 'pending'
+  | 'ready'
+  | 'completed'
+  | 'failed'
+  | 'disabled'
+
+export type DecisionActionStatus =
+  | 'proposed'
+  | 'blocked'
+  | 'approved'
+  | 'executed'
+  | 'rejected'
+  | 'failed'

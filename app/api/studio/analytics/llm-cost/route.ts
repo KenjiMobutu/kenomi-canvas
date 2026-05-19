@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
+import { buildMetricSource } from '@/lib/metrics/source-contract'
 
 interface AgentRunRow {
   agent_id: string
@@ -49,5 +50,10 @@ export async function GET() {
     totalTokens,
     runCount: rows.length,
     byAgent: Array.from(byAgent.values()).sort((a, b) => b.cost_usd - a.cost_usd),
+    source: buildMetricSource({
+      source: 'agent_runs',
+      window: 'all_visible_runs_with_cost',
+      rowCount: rows.length,
+    }),
   })
 }

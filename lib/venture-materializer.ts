@@ -60,6 +60,7 @@ export function buildLandingPageInsert(input: LandingPageInput) {
     venture_id: ventureId,
     headline: builderOutput.headline,
     statut: 'deployed',
+    health_status: 'ready',
     copywriting: {
       hero: {
         headline: builderOutput.headline,

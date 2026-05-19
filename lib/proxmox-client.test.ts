@@ -39,4 +39,21 @@ describe('resolveProxmoxConfig', () => {
     expect(config.baseUrl).toBe('https://env-proxmox.local:8006')
     expect(config.node).toBe('pve')
   })
+
+  it('uses the server node when settings still contain the old pve default', () => {
+    const config = resolveProxmoxConfig(
+      {
+        proxmox_base_url: 'https://192.168.0.10:8006',
+        proxmox_node: 'pve',
+      },
+      {
+        PROXMOX_BASE_URL: 'https://192.168.0.10:8006',
+        PROXMOX_NODE: 'proxmox',
+        PROXMOX_TOKEN_ID: 'monitoring@pve!token',
+        PROXMOX_TOKEN_SECRET: 'secret',
+      }
+    )
+
+    expect(config.node).toBe('proxmox')
+  })
 })

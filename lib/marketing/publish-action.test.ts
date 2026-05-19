@@ -108,9 +108,17 @@ describe('executePublishCampaign', () => {
       user_id: 'u1',
       venture_id: 'v1',
       event_type: 'campaign_published',
+      metadata: {
+        external_id: 'ext-1',
+        url: 'https://mock.local/v1/email',
+        channel: 'email',
+        draft_id: 'd1',
+      },
     })
     expect(supabase.tables.campaign_drafts[0]).toMatchObject({
       status: 'published',
+      provider_run_id: 'ext-1',
+      published_at: '2026-05-18T10:00:00.000Z',
     })
   })
 

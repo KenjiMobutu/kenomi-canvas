@@ -11,8 +11,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "smoke": "node scripts/smoke-app.mjs",
+    "smoke:vision": "node scripts/smoke-vision-loop.mjs",
     "ops:readiness": "node scripts/ops-readiness.mjs",
-    "ops:coherence": "node scripts/audit-studio-coherence.mjs",
+    "ops:coherence": "node scripts/audit-studio-coherence.mjs && node scripts/audit-business-data.mjs",
     "supabase:validate": "node scripts/validate-supabase-remote.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore"

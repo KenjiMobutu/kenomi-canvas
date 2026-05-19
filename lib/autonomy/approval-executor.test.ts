@@ -8,6 +8,7 @@ type TableName =
   | 'landing_pages'
   | 'budget_requests'
   | 'campaigns'
+  | 'payments'
   | 'venture_events'
   | 'campaign_drafts'
 
@@ -31,6 +32,7 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
     landing_pages: seed.landing_pages ?? [],
     budget_requests: seed.budget_requests ?? [],
     campaigns: seed.campaigns ?? [],
+    payments: seed.payments ?? [],
     venture_events: seed.venture_events ?? [],
     campaign_drafts: seed.campaign_drafts ?? [],
   }
@@ -138,6 +140,7 @@ describe('resolveHumanApproval', () => {
       landing_pages: [{ id: 'landing-1', venture_id: 'venture-1', statut: 'deployed' }],
       budget_requests: [{ id: 'budget-1', venture_id: 'venture-1', status: 'pending' }],
       campaigns: [{ id: 'campaign-1', venture_id: 'venture-1', status: 'approved' }],
+      payments: [{ id: 'payment-1', venture_id: 'venture-1', status: 'pending', provider_status: 'ready' }],
     })
 
     const result = await resolveHumanApproval({
@@ -161,13 +164,22 @@ describe('resolveHumanApproval', () => {
     })
     expect(supabase.tables.ventures[0]).toMatchObject({
       statut: 'stopped',
+      lifecycle_status: 'stopped',
       stage: 'Stopped',
+      current_decision: 'stop',
       next_action: 'Venture arrêtée après approbation humaine',
       decision_at: '2026-05-18T12:00:00.000Z',
     })
-    expect(supabase.tables.landing_pages[0]).toMatchObject({ statut: 'stopped' })
+    expect(supabase.tables.landing_pages[0]).toMatchObject({
+      statut: 'stopped',
+      health_status: 'stopped',
+    })
     expect(supabase.tables.budget_requests[0]).toMatchObject({ status: 'rejected' })
     expect(supabase.tables.campaigns[0]).toMatchObject({ status: 'rejected' })
+    expect(supabase.tables.payments[0]).toMatchObject({
+      status: 'disabled',
+      provider_status: 'disabled',
+    })
   })
 
   it('approuve et exécute deploy via Coolify', async () => {

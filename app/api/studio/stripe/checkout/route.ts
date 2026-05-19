@@ -145,6 +145,8 @@ export async function POST(req: NextRequest) {
       amount_eur: payment.price_amount / 100,
       currency: payment.price_currency.toLowerCase(),
       status: 'pending',
+      provider_status: 'ready',
+      provider_session_id: session.id,
       customer_email: session.customer_details?.email ?? null,
       checkout_url: session.url,
       checkout_mode: session.mode,
