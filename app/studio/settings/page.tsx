@@ -21,36 +21,11 @@ import {
 } from '@/lib/ck-vars'
 import { Bot, CreditCard, Database, Download, Save, Server, Trash2, User, Zap } from 'lucide-react'
 import { useIsMobile } from '@/lib/studio-utils'
-
-interface Settings {
-  ollama_base_url: string
-  ollama_model: string
-  n8n_base_url: string
-  n8n_api_key: string
-  claude_api_key: string
-  openai_api_key: string
-  stripe_secret_key: string
-  stripe_webhook_secret: string
-  supabase_url: string
-  display_name: string
-  studio_timezone: string
-  budget_cap_euros: number
-}
-
-const DEFAULTS: Settings = {
-  ollama_base_url: 'http://192.168.0.14:11434',
-  ollama_model: 'qwen3:8b',
-  n8n_base_url: '',
-  n8n_api_key: '',
-  claude_api_key: '',
-  openai_api_key: '',
-  stripe_secret_key: '',
-  stripe_webhook_secret: '',
-  supabase_url: 'https://supabase.kenomi.eu',
-  display_name: 'Kenomi Operator',
-  studio_timezone: 'Europe/Paris',
-  budget_cap_euros: 50,
-}
+import {
+  DEFAULT_USER_SETTINGS,
+  normalizeUserSettings,
+  type UserSettings,
+} from '@/lib/user-settings-normalization'
 
 const MODELS_OLLAMA = ['qwen3:8b', 'qwen3:14b', 'llama3.1:8b', 'mistral:7b', 'codestral:latest']
 
@@ -190,7 +165,7 @@ function SecretInput({
 
 export default function SettingsPage() {
   const { user } = useAuth()
-  const [cfg, setCfg] = useState<Settings>(DEFAULTS)
+  const [cfg, setCfg] = useState<UserSettings>(DEFAULT_USER_SETTINGS)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [section, setSection] = useState<Section>('modeles')
@@ -199,7 +174,7 @@ export default function SettingsPage() {
   const [deleteStep, setDeleteStep] = useState<'idle' | 'confirm' | 'deleting'>('idle')
   const [deleteToken, setDeleteToken] = useState<string | null>(null)
 
-  function patch(partial: Partial<Settings>) {
+  function patch(partial: Partial<UserSettings>) {
     setCfg((prev) => ({ ...prev, ...partial }))
     setDirty(true)
   }
@@ -213,7 +188,7 @@ export default function SettingsPage() {
       .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data }) => {
-        if (data) setCfg({ ...DEFAULTS, ...data })
+        if (data) setCfg(normalizeUserSettings(data))
       })
   }, [user])
 
