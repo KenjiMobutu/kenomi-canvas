@@ -293,13 +293,21 @@ export function StudioSidebar() {
   return (
     <aside
       style={{
-        position: 'relative',
+        position: 'sticky',
+        top: 0,
+        alignSelf: 'flex-start',
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
         width,
         flexShrink: 0,
-        background: SB.bg,
+        background: `
+          linear-gradient(${SB.bg}, ${SB.bg}),
+          linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
+        `,
+        backgroundSize: '100% 100%, 24px 24px, 24px 24px',
+        backgroundBlendMode: 'normal, screen, screen',
         borderRight: `1px solid ${SB.line}`,
       }}
     >
@@ -320,9 +328,11 @@ export function StudioSidebar() {
             height: 32,
             borderRadius: 8,
             flexShrink: 0,
-            background: SB.accent,
+            background:
+              'linear-gradient(135deg, #34d399 0%, #22d3ee 35%, #a78bfa 60%, #fb923c 85%, #fb7185 100%)',
             display: 'grid',
             placeItems: 'center',
+            boxShadow: '0 2px 10px rgba(167, 139, 250, 0.35)',
           }}
         >
           <div
