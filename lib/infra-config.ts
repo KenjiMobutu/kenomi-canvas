@@ -24,6 +24,7 @@ export interface SanitizedInfraService {
 
 export interface UserInfraSettings {
   proxmox_base_url?: string | null
+  proxmox_node?: string | null
   coolify_url?: string | null
   nginx_pm_url?: string | null
   uptime_kuma_url?: string | null
@@ -31,6 +32,13 @@ export interface UserInfraSettings {
   supabase_url?: string | null
   n8n_base_url?: string | null
   ollama_base_url?: string | null
+}
+
+export interface HealthServiceUrls {
+  ollama: string
+  n8n: string
+  supabase: string
+  coolify: string
 }
 
 const PRIVATE_HOST =
@@ -99,6 +107,42 @@ export function applyUserInfraSettings(
           : service.endpoint,
     }
   })
+}
+
+function configuredString(value: string | null | undefined, fallback: string): string {
+  return typeof value === 'string' && value.length > 0 ? value : fallback
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '')
+}
+
+export function resolveHealthServiceUrls(
+  settings: UserInfraSettings | null | undefined,
+  env: Partial<NodeJS.ProcessEnv> = process.env
+): HealthServiceUrls {
+  const ollamaBase = trimTrailingSlash(
+    configuredString(settings?.ollama_base_url, env.OLLAMA_BASE_URL ?? 'http://192.168.0.14:11434')
+  )
+  const n8nBase = trimTrailingSlash(
+    configuredString(settings?.n8n_base_url, env.N8N_BASE_URL ?? 'https://n8n.kenomi.eu')
+  )
+  const supabaseBase = trimTrailingSlash(
+    configuredString(
+      settings?.supabase_url,
+      env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://supabase.kenomi.eu'
+    )
+  )
+  const coolifyBase = trimTrailingSlash(
+    configuredString(settings?.coolify_url, env.COOLIFY_URL ?? 'http://192.168.0.19:8000')
+  )
+
+  return {
+    ollama: `${ollamaBase}/api/tags`,
+    n8n: `${n8nBase}/healthz`,
+    supabase: `${supabaseBase}/rest/v1/`,
+    coolify: `${coolifyBase}/api/v1/version`,
+  }
 }
 
 export const DEFAULT_INFRA_SERVICES: InfraServiceConfig[] = parseInfraServices([

@@ -23,7 +23,9 @@ import { Bot, CreditCard, Database, Download, Save, Server, Trash2, User, Zap } 
 import { useIsMobile } from '@/lib/studio-utils'
 import {
   DEFAULT_USER_SETTINGS,
+  isMissingInfraSettingsColumnError,
   normalizeUserSettings,
+  omitInfraSettings,
   type UserSettings,
 } from '@/lib/user-settings-normalization'
 
@@ -252,6 +254,16 @@ export default function SettingsPage() {
     setSaving(true)
     const supabase = createSupabaseBrowser()
     const { error } = await supabase.from('user_settings').upsert({ user_id: user.id, ...cfg })
+    if (isMissingInfraSettingsColumnError(error)) {
+      const { error: fallbackError } = await supabase
+        .from('user_settings')
+        .upsert({ user_id: user.id, ...omitInfraSettings(cfg) })
+      setSaving(false)
+      if (fallbackError) return toast.error(fallbackError.message)
+      setDirty(false)
+      toast.warning('Paramètres sauvegardés · migration infra requise pour les nouveaux services')
+      return
+    }
     setSaving(false)
     if (error) return toast.error(error.message)
     setDirty(false)

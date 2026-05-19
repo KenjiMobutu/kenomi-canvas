@@ -43,18 +43,44 @@ export type ProxmoxMetrics = {
   fetched_at: string
 }
 
+export type ProxmoxClientSettings = {
+  proxmox_base_url?: string | null
+  proxmox_node?: string | null
+}
+
+export type ProxmoxClientConfig = {
+  baseUrl: string
+  tokenId: string
+  tokenSecret: string
+  node: string
+}
+
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const PROXMOX_BASE_URL = process.env.PROXMOX_BASE_URL ?? 'https://192.168.0.10:8006'
-const PROXMOX_TOKEN_ID = process.env.PROXMOX_TOKEN_ID ?? 'monitoring@pve!kenomi-canvas'
-const PROXMOX_TOKEN_SECRET = process.env.PROXMOX_TOKEN_SECRET ?? ''
-const PROXMOX_NODE = process.env.PROXMOX_NODE ?? 'pve'
+function configuredString(value: string | null | undefined, fallback: string): string {
+  return typeof value === 'string' && value.length > 0 ? value : fallback
+}
+
+export function resolveProxmoxConfig(
+  settings: ProxmoxClientSettings | null | undefined = null,
+  env: Partial<NodeJS.ProcessEnv> = process.env
+): ProxmoxClientConfig {
+  return {
+    baseUrl: configuredString(
+      settings?.proxmox_base_url,
+      env.PROXMOX_BASE_URL ?? 'https://192.168.0.10:8006'
+    ),
+    tokenId: env.PROXMOX_TOKEN_ID ?? 'monitoring@pve!kenomi-canvas',
+    tokenSecret: env.PROXMOX_TOKEN_SECRET ?? '',
+    node: configuredString(settings?.proxmox_node, env.PROXMOX_NODE ?? 'pve'),
+  }
+}
 
 // ─── Fetch avec auth token ────────────────────────────────────────────────────
 
-async function proxmoxFetch<T>(path: string): Promise<T> {
+async function proxmoxFetch<T>(path: string, config: ProxmoxClientConfig): Promise<T> {
   const https = await import('https')
-  const url = new URL(`${PROXMOX_BASE_URL}/api2/json${path}`)
+  const url = new URL(`${config.baseUrl}/api2/json${path}`)
 
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -65,7 +91,7 @@ async function proxmoxFetch<T>(path: string): Promise<T> {
         method: 'GET',
         rejectUnauthorized: false,
         headers: {
-          Authorization: `PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}`,
+          Authorization: `PVEAPIToken=${config.tokenId}=${config.tokenSecret}`,
         },
       },
       (res) => {
@@ -96,13 +122,16 @@ async function proxmoxFetch<T>(path: string): Promise<T> {
 
 // ─── Métriques nœud ──────────────────────────────────────────────────────────
 
-export async function getProxmoxNodeStatus(node = PROXMOX_NODE): Promise<ProxmoxNodeStatus> {
+export async function getProxmoxNodeStatus(
+  config = resolveProxmoxConfig(),
+  node = config.node
+): Promise<ProxmoxNodeStatus> {
   const data = await proxmoxFetch<{
     cpu: number
     memory: { used: number; total: number }
     rootfs: { used: number; total: number }
     uptime: number
-  }>(`/nodes/${node}/status`)
+  }>(`/nodes/${node}/status`, config)
 
   const mem_pct = Math.round((data.memory.used / data.memory.total) * 100)
   const disk_pct = Math.round((data.rootfs.used / data.rootfs.total) * 100)
@@ -124,10 +153,13 @@ export async function getProxmoxNodeStatus(node = PROXMOX_NODE): Promise<Proxmox
 
 // ─── Liste VMs + LXC ─────────────────────────────────────────────────────────
 
-export async function getProxmoxVMs(node = PROXMOX_NODE): Promise<ProxmoxVM[]> {
+export async function getProxmoxVMs(
+  config = resolveProxmoxConfig(),
+  node = config.node
+): Promise<ProxmoxVM[]> {
   const [qemus, lxcs] = await Promise.all([
-    proxmoxFetch<ProxmoxVM[]>(`/nodes/${node}/qemu`).catch(() => []),
-    proxmoxFetch<ProxmoxVM[]>(`/nodes/${node}/lxc`).catch(() => []),
+    proxmoxFetch<ProxmoxVM[]>(`/nodes/${node}/qemu`, config).catch(() => []),
+    proxmoxFetch<ProxmoxVM[]>(`/nodes/${node}/lxc`, config).catch(() => []),
   ])
 
   return [
@@ -138,13 +170,13 @@ export async function getProxmoxVMs(node = PROXMOX_NODE): Promise<ProxmoxVM[]> {
 
 // ─── Métriques complètes ──────────────────────────────────────────────────────
 
-export async function getProxmoxMetrics(): Promise<ProxmoxMetrics> {
+export async function getProxmoxMetrics(config = resolveProxmoxConfig()): Promise<ProxmoxMetrics> {
   const [nodeStatus, vms] = await Promise.all([
-    getProxmoxNodeStatus().catch((err) => {
+    getProxmoxNodeStatus(config).catch((err) => {
       logError('proxmox.node-status', err)
       return null
     }),
-    getProxmoxVMs().catch((err) => {
+    getProxmoxVMs(config).catch((err) => {
       logError('proxmox.vms', err)
       return []
     }),

@@ -3,6 +3,7 @@ import {
   applyUserInfraSettings,
   getSanitizedInfraServices,
   parseInfraServices,
+  resolveHealthServiceUrls,
 } from './infra-config'
 
 describe('infra config', () => {
@@ -88,5 +89,28 @@ describe('infra config', () => {
     expect(configured[0].endpoint).toBe('https://coolify.tailnet.local')
     expect(configured[1].endpoint).toBe('https://npm.tailnet.local')
     expect(getSanitizedInfraServices(configured)[0].endpointLabel).toBe('coolify.tailnet.local')
+  })
+
+  it('resolves health check URLs from saved settings with env fallbacks', () => {
+    const urls = resolveHealthServiceUrls(
+      {
+        ollama_base_url: 'http://ollama.local:11434/',
+        n8n_base_url: '',
+        supabase_url: 'https://supabase.local/',
+        coolify_url: 'https://coolify.local/',
+      },
+      {
+        N8N_BASE_URL: 'https://n8n.env',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://supabase.env',
+        COOLIFY_URL: 'https://coolify.env',
+      }
+    )
+
+    expect(urls).toEqual({
+      ollama: 'http://ollama.local:11434/api/tags',
+      n8n: 'https://n8n.env/healthz',
+      supabase: 'https://supabase.local/rest/v1/',
+      coolify: 'https://coolify.local/api/v1/version',
+    })
   })
 })

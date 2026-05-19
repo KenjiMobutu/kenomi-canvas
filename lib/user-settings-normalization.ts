@@ -41,6 +41,16 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
 }
 
 type RawUserSettings = Partial<Record<keyof UserSettings, string | number | null | undefined>>
+type SettingsErrorLike = { code?: string; message?: string }
+
+const INFRA_SETTINGS_KEYS = [
+  'proxmox_base_url',
+  'proxmox_node',
+  'coolify_url',
+  'nginx_pm_url',
+  'uptime_kuma_url',
+  'vaultwarden_url',
+] as const
 
 function stringOrDefault(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
@@ -80,4 +90,29 @@ export function normalizeUserSettings(raw: RawUserSettings | null | undefined): 
     studio_timezone: stringOrDefault(raw?.studio_timezone, DEFAULT_USER_SETTINGS.studio_timezone),
     budget_cap_euros: validNumber(raw?.budget_cap_euros, DEFAULT_USER_SETTINGS.budget_cap_euros),
   }
+}
+
+export function omitInfraSettings(
+  settings: UserSettings
+): Omit<UserSettings, (typeof INFRA_SETTINGS_KEYS)[number]> {
+  const copy = { ...settings }
+  for (const key of INFRA_SETTINGS_KEYS) {
+    delete copy[key]
+  }
+  return copy
+}
+
+export function isMissingInfraSettingsColumnError(error: SettingsErrorLike | null | undefined) {
+  if (!error) return false
+  const message = error.message ?? ''
+  return error.code === 'PGRST204' && INFRA_SETTINGS_KEYS.some((key) => message.includes(key))
+}
+
+export function unwrapOptionalInfraSettings<T>(
+  data: T | null,
+  error: SettingsErrorLike | null | undefined
+): T | null {
+  if (!error) return data
+  if (isMissingInfraSettingsColumnError(error)) return null
+  throw new Error(error.message ?? 'Erreur Supabase lors du chargement des paramètres infra')
 }

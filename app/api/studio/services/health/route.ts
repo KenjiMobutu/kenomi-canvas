@@ -8,6 +8,8 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { checkOllamaHealth } from '@/lib/llm-client'
 import { requireAllowedUser } from '@/lib/auth-server'
+import { resolveHealthServiceUrls, type UserInfraSettings } from '@/lib/infra-config'
+import { unwrapOptionalInfraSettings } from '@/lib/user-settings-normalization'
 
 type ServiceStatus = {
   status: 'ok' | 'degraded' | 'down'
@@ -40,14 +42,23 @@ async function pingService(url: string, timeoutMs = 5000): Promise<ServiceStatus
 
 export async function GET() {
   const cookieStore = await cookies()
-  const { response } = await requireAllowedUser(cookieStore)
+  const { user, supabase: supabaseClient, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
-  const [ollama, n8n, supabase, coolify] = await Promise.all([
-    pingService(`${process.env.OLLAMA_BASE_URL ?? 'http://192.168.0.14:11434'}/api/tags`),
-    pingService(`${process.env.N8N_BASE_URL ?? 'https://n8n.kenomi.eu'}/healthz`),
-    pingService(`${process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://supabase.kenomi.eu'}/rest/v1/`),
-    pingService(`${process.env.COOLIFY_URL ?? 'http://192.168.0.19:8000'}/api/v1/version`),
+  const { data, error } = await supabaseClient
+    .from('user_settings')
+    .select('ollama_base_url,n8n_base_url,supabase_url,coolify_url')
+    .eq('user_id', user!.id)
+    .maybeSingle()
+  const urls = resolveHealthServiceUrls(
+    unwrapOptionalInfraSettings(data as UserInfraSettings | null, error)
+  )
+
+  const [ollama, n8n, supabaseHealth, coolify] = await Promise.all([
+    pingService(urls.ollama),
+    pingService(urls.n8n),
+    pingService(urls.supabase),
+    pingService(urls.coolify),
   ])
 
   const ollamaHealthy = await checkOllamaHealth()
@@ -62,13 +73,13 @@ export async function GET() {
   // directement. On utilise checkOllamaHealth() comme source de vérité.
   const ollamaResult = { ok: ollamaHealthy, latencyMs: ollama.latency_ms ?? 0 }
 
-  const allOk = ollamaHealthy && [n8n, supabase, coolify].every((s) => s.status === 'ok')
+  const allOk = ollamaHealthy && [n8n, supabaseHealth, coolify].every((s) => s.status === 'ok')
 
   return NextResponse.json(
     {
       ollama: ollamaResult,
       n8n: toHealthResult(n8n),
-      supabase: toHealthResult(supabase),
+      supabase: toHealthResult(supabaseHealth),
       coolify: toHealthResult(coolify),
       _meta: {
         status: allOk ? 'ok' : 'degraded',

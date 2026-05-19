@@ -1,16 +1,30 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
-import { getProxmoxMetrics, formatBytes, formatUptime } from '@/lib/proxmox-client'
+import {
+  getProxmoxMetrics,
+  formatBytes,
+  formatUptime,
+  resolveProxmoxConfig,
+  type ProxmoxClientSettings,
+} from '@/lib/proxmox-client'
 import { logError } from '@/lib/logger'
+import { unwrapOptionalInfraSettings } from '@/lib/user-settings-normalization'
 
 export async function GET() {
   const cookieStore = await cookies()
-  const { response } = await requireAllowedUser(cookieStore)
+  const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
   try {
-    const metrics = await getProxmoxMetrics()
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('proxmox_base_url,proxmox_node')
+      .eq('user_id', user!.id)
+      .maybeSingle()
+    const metrics = await getProxmoxMetrics(
+      resolveProxmoxConfig(unwrapOptionalInfraSettings(data as ProxmoxClientSettings | null, error))
+    )
 
     const result = {
       ...metrics,

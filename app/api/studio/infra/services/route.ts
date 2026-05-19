@@ -7,13 +7,14 @@ import {
   DEFAULT_INFRA_SERVICES,
   type UserInfraSettings,
 } from '@/lib/infra-config'
+import { unwrapOptionalInfraSettings } from '@/lib/user-settings-normalization'
 
 export async function GET() {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('user_settings')
     .select(
       [
@@ -30,7 +31,7 @@ export async function GET() {
     .eq('user_id', user!.id)
     .maybeSingle()
 
-  const settings = data as UserInfraSettings | null
+  const settings = unwrapOptionalInfraSettings(data as UserInfraSettings | null, error)
   const services = applyUserInfraSettings(DEFAULT_INFRA_SERVICES, settings)
 
   return NextResponse.json({ services: getSanitizedInfraServices(services) })

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeUserSettings } from './user-settings-normalization'
+import {
+  isMissingInfraSettingsColumnError,
+  normalizeUserSettings,
+  omitInfraSettings,
+  unwrapOptionalInfraSettings,
+} from './user-settings-normalization'
 
 describe('normalizeUserSettings', () => {
   it('keeps controlled form fields non-null when database values are null', () => {
@@ -74,5 +79,51 @@ describe('normalizeUserSettings', () => {
     expect(settings.display_name).toBe('Ops')
     expect(settings.studio_timezone).toBe('UTC')
     expect(settings.budget_cap_euros).toBe(125)
+  })
+
+  it('can omit infra fields for databases that have not run the latest migration yet', () => {
+    const settings = normalizeUserSettings({
+      coolify_url: 'https://coolify.tailnet.local',
+      proxmox_base_url: 'https://proxmox.tailnet.local:8006',
+    })
+
+    expect(omitInfraSettings(settings)).not.toHaveProperty('coolify_url')
+    expect(omitInfraSettings(settings)).not.toHaveProperty('proxmox_base_url')
+    expect(omitInfraSettings(settings)).toHaveProperty('ollama_base_url')
+  })
+
+  it('detects Supabase missing-column errors for infra settings', () => {
+    expect(
+      isMissingInfraSettingsColumnError({
+        code: 'PGRST204',
+        message: "Could not find the 'coolify_url' column of 'user_settings'",
+      })
+    ).toBe(true)
+
+    expect(isMissingInfraSettingsColumnError({ message: 'duplicate key value' })).toBe(false)
+  })
+
+  it('unwraps optional infra settings when the migration is present', () => {
+    expect(unwrapOptionalInfraSettings({ coolify_url: 'https://coolify.local' }, null)).toEqual({
+      coolify_url: 'https://coolify.local',
+    })
+  })
+
+  it('falls back to null when optional infra columns are not migrated yet', () => {
+    expect(
+      unwrapOptionalInfraSettings(null, {
+        code: 'PGRST204',
+        message: "Could not find the 'proxmox_base_url' column of 'user_settings'",
+      })
+    ).toBeNull()
+  })
+
+  it('throws non-migration Supabase errors for optional infra settings', () => {
+    expect(() =>
+      unwrapOptionalInfraSettings(null, {
+        code: '42501',
+        message: 'permission denied for table user_settings',
+      })
+    ).toThrow('permission denied for table user_settings')
   })
 })

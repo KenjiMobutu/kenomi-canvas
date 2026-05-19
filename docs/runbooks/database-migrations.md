@@ -13,6 +13,12 @@ L'app utilise **Supabase self-hosted déployé via Coolify** (`supabase.kenomi.e
 Il n'y a **pas** de Supabase local sur la machine de dev. Toute validation se
 fait soit en statique (tests), soit directement contre l'instance Coolify.
 
+Important : certains `DATABASE_URL` pointent vers le hostname Postgres interne
+du stack Coolify (`supabase-db-...`). Ce nom n'est résolvable que depuis la VM
+Coolify ou un environnement rattaché au même réseau Docker. Depuis une machine
+de dev externe, `supabase db push --db-url "$DATABASE_URL"` peut donc échouer au
+DNS même si la base fonctionne.
+
 ## Validation des migrations
 
 ### 1. Garde statique (toujours obligatoire)
@@ -43,6 +49,16 @@ Le script vérifie :
 
 ### 3. Appliquer une migration sur Coolify
 
+Depuis la VM Coolify, ou depuis un shell qui voit le réseau interne du stack,
+utiliser de préférence l'historique de migrations Supabase :
+
+```bash
+supabase db push --db-url "$DATABASE_URL"
+```
+
+Si la CLI Supabase n'est pas disponible dans cet environnement, appliquer la
+migration via le endpoint SQL exposé par l'instance self-hosted :
+
 ```bash
 curl -sS -X POST "$NEXT_PUBLIC_SUPABASE_URL/pg/query" \
   -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
@@ -52,6 +68,12 @@ curl -sS -X POST "$NEXT_PUBLIC_SUPABASE_URL/pg/query" \
 ```
 
 Réponse `[]` (array vide) = succès. Toute autre réponse contient l'erreur PG.
+
+Pour la migration settings infra, le fichier attendu est :
+
+```bash
+supabase/migrations/20260519001800_user_settings_infra_endpoints.sql
+```
 
 ### 4. Vérifier l'état après application
 
