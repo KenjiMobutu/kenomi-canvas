@@ -25,6 +25,12 @@ export function createStripeClientFromSecretKey(secretKey: string): Stripe {
   })
 }
 
+export function createStripeWebhookVerifierClient(): Stripe {
+  return new Stripe('sk_webhook_verifier', {
+    apiVersion: '2026-04-22.dahlia',
+  })
+}
+
 export function createStripeClient(env: NodeJS.ProcessEnv = process.env): Stripe {
   return createStripeClientFromSecretKey(getStripeSecretKey(env))
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { createStripeClient, getStripeWebhookSecret } from '@/lib/stripe/server'
+import { createStripeWebhookVerifierClient, getStripeWebhookSecret } from '@/lib/stripe/server'
 import { handleStripeWebhookEvent, type StripeWebhookSupabase } from '@/lib/stripe/webhook-handler'
 
 export const runtime = 'nodejs'
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   let event
 
   try {
-    event = createStripeClient().webhooks.constructEvent(
+    event = createStripeWebhookVerifierClient().webhooks.constructEvent(
       payload,
       signature,
       getStripeWebhookSecret()

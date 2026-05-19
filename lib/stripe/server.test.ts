@@ -1,6 +1,11 @@
 import Stripe from 'stripe'
 import { describe, expect, it } from 'vitest'
-import { createStripeClient, getStripeSecretKey, getStripeWebhookSecret } from './server'
+import {
+  createStripeClient,
+  createStripeWebhookVerifierClient,
+  getStripeSecretKey,
+  getStripeWebhookSecret,
+} from './server'
 
 describe('Stripe server adapter', () => {
   it('requires STRIPE_SECRET_KEY', () => {
@@ -33,5 +38,12 @@ describe('Stripe server adapter', () => {
         STRIPE_WEBHOOK_SECRET: 'whsec_kenomi',
       } as unknown as NodeJS.ProcessEnv)
     ).toBe('whsec_kenomi')
+  })
+
+  it('creates a webhook verifier client without STRIPE_SECRET_KEY', () => {
+    const client = createStripeWebhookVerifierClient()
+
+    expect(client).toBeInstanceOf(Stripe)
+    expect(typeof client.webhooks.constructEvent).toBe('function')
   })
 })
