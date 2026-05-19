@@ -15,7 +15,7 @@ npx vitest run lib/security.test.ts   # Un seul fichier de test
 npx prisma generate  # Regénérer le client Prisma (après modification du schéma)
 ```
 
-Les migrations Supabase s'appliquent manuellement via l'éditeur SQL du dashboard Supabase — il n'y a pas de CLI Supabase local configuré.
+Les migrations Supabase se gèrent depuis la VM Coolify, pas depuis la machine de dev. Le `DATABASE_URL` peut pointer vers un hostname interne Docker (`supabase-db-...`) qui ne se résout que sur cette VM ou sur le même réseau Docker.
 
 ## Architecture générale
 
@@ -42,6 +42,30 @@ L'app coexiste avec deux clients DB distincts — ne pas les confondre :
   - `lib/auth-server.ts` — `requireAllowedUser()` retourne `{ user, supabase, response }` — si `response` est non-null, la renvoyer directement (401/403)
 
 Les migrations Supabase sont dans `supabase/migrations/` (fichiers SQL).
+
+### Supabase sur VM Coolify
+
+Supabase est self-hosted dans Coolify. Pour toute migration ou inspection DB :
+
+1. Se connecter à la VM : `ssh coolify`.
+2. Utiliser le container Postgres Supabase, par ex. `supabase-db-i12k0ju0ok5wk4gnts6uap03`.
+3. Exécuter les migrations avec le rôle propriétaire `supabase_admin`, pas `postgres` si la table appartient à `supabase_admin`.
+
+Commande validée pour appliquer une migration depuis le repo local :
+
+```bash
+ssh -o BatchMode=yes coolify \
+  'docker exec -i supabase-db-i12k0ju0ok5wk4gnts6uap03 psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f -' \
+  < supabase/migrations/<file>.sql
+```
+
+Vérification distante après migration :
+
+```bash
+npm run supabase:validate
+```
+
+Si la validation DNS échoue localement, relancer avec accès réseau autorisé ou depuis la VM Coolify. Ne pas diagnostiquer une panne Supabase tant que le contexte réseau n'a pas été vérifié.
 
 #### Stratégie long terme
 
