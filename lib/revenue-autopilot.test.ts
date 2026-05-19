@@ -83,6 +83,38 @@ describe('buildRevenueAutopilotPlan', () => {
     })
   })
 
+  it('transforme configurer Stripe en retry checkout soumis à approval', () => {
+    const plan = buildRevenueAutopilotPlan({
+      snapshot: {
+        ...baseSnapshot,
+        summary: {
+          ...baseSnapshot.summary,
+          recommendedAction: {
+            type: 'configure_stripe',
+            ventureId: 'venture-1',
+            pipelineId: 'pipeline-1',
+            label: 'Configurer Stripe',
+            loopId: 'loop-1',
+            ventureName: 'NoteFast',
+            priorityScore: 95,
+            blockedRevenueEur: 19.99,
+            reason: 'Clé Stripe manquante',
+          },
+        },
+      },
+      environment: 'production',
+    })
+
+    expect(plan.mode).toBe('approval_required')
+    expect(plan.steps[0]).toMatchObject({
+      kind: 'create_checkout',
+      execution: 'approval',
+      ventureId: 'venture-1',
+      pipelineId: 'pipeline-1',
+      risk: 'medium',
+    })
+  })
+
   it('propose stop_venture si une boucle acquisition est ancienne sans revenu', () => {
     const plan = buildRevenueAutopilotPlan({
       snapshot: {

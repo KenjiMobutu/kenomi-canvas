@@ -113,6 +113,7 @@ describe('buildRevenueLoopSnapshot', () => {
     expect(snapshot.loops[0].nextAction).toMatchObject({
       type: 'configure_stripe',
       label: 'Configurer Stripe',
+      pipelineId: 'pipe-1',
     })
     expect(snapshot.loops[0].stages).toContainEqual({
       key: 'checkout',

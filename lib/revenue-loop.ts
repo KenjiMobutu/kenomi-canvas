@@ -118,7 +118,13 @@ export type RevenueLoopNextAction =
       ventureId?: string | null
       reason?: string | null
     }
-  | { type: 'configure_stripe'; label: string; ventureId?: string | null; reason: string }
+  | {
+      type: 'configure_stripe'
+      label: string
+      pipelineId?: string | null
+      ventureId?: string | null
+      reason: string
+    }
   | { type: 'review_pipeline'; label: string; pipelineId: string; ventureId?: string | null }
   | { type: 'monitor'; label: string; ventureId?: string | null }
 
@@ -410,6 +416,7 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       nextAction = {
         type: 'configure_stripe',
         label: 'Configurer Stripe',
+        pipelineId: pipeline.id,
         ventureId: pipeline.venture_id,
         reason: 'Clé Stripe manquante',
       }

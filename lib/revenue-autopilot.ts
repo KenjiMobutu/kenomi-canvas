@@ -112,6 +112,22 @@ function stepFromNextAction(input: {
     }
   }
 
+  if (action.type === 'configure_stripe') {
+    const production = environment === 'production'
+    return {
+      kind: 'create_checkout',
+      execution: production ? 'approval' : 'auto',
+      risk: 'medium',
+      ventureId: action.ventureId,
+      pipelineId: action.pipelineId,
+      label: 'Retenter le checkout Stripe',
+      reason: production
+        ? 'Retry checkout Stripe après configuration requiert approval'
+        : action.reason,
+      blockedRevenueEur,
+    }
+  }
+
   if (action.type === 'resolve_approval') {
     return {
       kind:

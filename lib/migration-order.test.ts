@@ -41,4 +41,12 @@ describe('migration ordering', () => {
     expect(migration).toContain('ALTER TABLE public.ventures ENABLE ROW LEVEL SECURITY')
     expect(migration).toContain('CREATE INDEX IF NOT EXISTS ventures_lifecycle_idx')
   })
+
+  it('keeps legacy decisions columns compatible with revenue autopilot inserts', () => {
+    const migration = readMigration('20260519_decisions_legacy_compat.sql')
+
+    expect(migration).toContain('ALTER TABLE public.decisions')
+    expect(migration).toContain('ALTER COLUMN agent DROP NOT NULL')
+    expect(migration).toContain('ALTER COLUMN action DROP NOT NULL')
+  })
 })

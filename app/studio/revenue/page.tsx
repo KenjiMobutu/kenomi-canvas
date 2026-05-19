@@ -265,7 +265,7 @@ export default function RevenuePage() {
             prompt: `Continue la revenue loop pour ${loop.ventureName}. Priorité: ${action.label}.`,
           }),
         })
-      } else if (action.type === 'create_checkout') {
+      } else if (action.type === 'create_checkout' || action.type === 'configure_stripe') {
         res = await fetch('/api/studio/stripe/checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -286,7 +286,11 @@ export default function RevenuePage() {
 
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error ?? 'Action impossible')
-      toast.success('Action lancée')
+      if (json?.checkoutUrl && typeof json.checkoutUrl === 'string') {
+        window.location.href = json.checkoutUrl
+        return
+      }
+      toast.success(json?.approvalRequired ? 'Approval checkout créée' : 'Action lancée')
       await Promise.all([load(), loadAudit()])
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Action impossible')
