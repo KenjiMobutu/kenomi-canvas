@@ -66,6 +66,21 @@ type OpsSummaryPayload = {
   actions: OpsSummaryAction[]
 }
 
+type OpsHealthSignal = {
+  id: 'jobs_failed_24h' | 'approvals_pending' | 'last_deploy' | 'disk_root' | 'revenue_today'
+  label: string
+  value: string
+  tone: 'ok' | 'warn' | 'crit' | 'muted'
+  href: string
+  detail?: string
+}
+
+type OpsHealthSummaryPayload = {
+  mode: 'calm' | 'attention'
+  signalsFresh: boolean
+  signals: OpsHealthSignal[]
+}
+
 type RevenueRecommendedAction = {
   type: string
   ventureName: string
@@ -1978,6 +1993,129 @@ function OpsSummaryStrip({
   )
 }
 
+/* ─────────────────────────────────────────────────────────────────
+ * Ops Health — agrégat 5 signaux santé opérationnelle
+ * Source : /api/studio/ops/health
+ * ─────────────────────────────────────────────────────────────── */
+function OpsHealthCard({ summary }: { summary: OpsHealthSummaryPayload | null }) {
+  if (!summary) {
+    return (
+      <section
+        style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14 }}
+      >
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 13, color: text }}>
+          Ops Health
+        </h3>
+        <p style={{ margin: '10px 0 0', color: muted, fontSize: 12 }}>
+          Chargement des signaux opérationnels…
+        </p>
+      </section>
+    )
+  }
+
+  const modeColor = summary.mode === 'attention' ? amber : emerald
+  const modeLabel = summary.mode === 'attention' ? 'Attention' : 'Calme'
+
+  return (
+    <section
+      style={{
+        background: surface,
+        border: `1px solid ${summary.mode === 'attention' ? `${amber}66` : line}`,
+        borderRadius: 14,
+        padding: 14,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 10,
+          marginBottom: 10,
+        }}
+      >
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 13, color: text }}>
+          Ops Health
+        </h3>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            color: modeColor,
+            fontWeight: 700,
+            padding: '2px 7px',
+            borderRadius: 3,
+            background: `${modeColor}1a`,
+            border: `1px solid ${modeColor}30`,
+          }}
+        >
+          ● {modeLabel}
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {summary.signals.map((signal) => {
+          const color =
+            signal.tone === 'crit'
+              ? rose
+              : signal.tone === 'warn'
+                ? amber
+                : signal.tone === 'ok'
+                  ? emerald
+                  : muted2
+          return (
+            <a
+              key={signal.id}
+              href={signal.href}
+              title={signal.detail ?? signal.label}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 10px',
+                borderRadius: 8,
+                background: signal.tone === 'muted' ? 'transparent' : `${color}0d`,
+                border: `1px solid ${signal.tone === 'muted' ? line : `${color}26`}`,
+                textDecoration: 'none',
+                gap: 10,
+                minWidth: 0,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  letterSpacing: '.08em',
+                  textTransform: 'uppercase',
+                  color: muted,
+                  flexShrink: 0,
+                }}
+              >
+                {signal.label}
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  color,
+                  fontWeight: 700,
+                  textAlign: 'right',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {signal.value}
+              </span>
+            </a>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 /* Mission feed / log */
 function MissionFeedCompact() {
   return (
@@ -2525,6 +2663,7 @@ export default function CockpitPage() {
   const [showCmdk, setShowCmdk] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [opsSummary, setOpsSummary] = useState<OpsSummaryPayload | null>(null)
+  const [opsHealth, setOpsHealth] = useState<OpsHealthSummaryPayload | null>(null)
   const [revenueSnapshot, setRevenueSnapshot] = useState<RevenueLoopSnapshotPayload | null>(null)
   const [opsActionState, setOpsActionState] = useState<
     Record<string, 'idle' | 'running' | 'done' | 'error'>
@@ -2593,6 +2732,22 @@ export default function CockpitPage() {
     if (!user) return
     return loadOpsSummary()
   }, [user, loadOpsSummary])
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetch('/api/studio/ops/health', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.ok) setOpsHealth(data.summary as OpsHealthSummaryPayload)
+      })
+      .catch(() => {
+        if (!cancelled) setOpsHealth(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   useEffect(() => {
     if (!user) return
@@ -2772,6 +2927,7 @@ export default function CockpitPage() {
         {!isMobile && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
             <RevenueFirstStrip snapshot={revenueSnapshot} />
+            <OpsHealthCard summary={opsHealth} />
             <TodayRhythm />
             <OpsSummaryStrip
               summary={opsSummary}
