@@ -11,6 +11,7 @@ type TableName =
   | 'payments'
   | 'venture_events'
   | 'campaign_drafts'
+  | 'user_settings'
 
 interface TableRow {
   id?: string
@@ -35,6 +36,7 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
     payments: seed.payments ?? [],
     venture_events: seed.venture_events ?? [],
     campaign_drafts: seed.campaign_drafts ?? [],
+    user_settings: seed.user_settings ?? [],
   }
 
   return {
@@ -301,6 +303,69 @@ describe('resolveHumanApproval', () => {
         stripe_session_id: 'cs_test_123',
         checkout_url: 'https://checkout.stripe.test/session',
       },
+    })
+  })
+
+  it('utilise la clé Stripe stockée dans les settings pour exécuter create_checkout', async () => {
+    const supabase = createFakeSupabase({
+      user_settings: [{ user_id: 'user-1', stripe_secret_key: 'sk_test_settings' }],
+      human_approvals: [
+        { id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' },
+      ],
+      autonomy_actions: [
+        {
+          id: 'action-1',
+          user_id: 'user-1',
+          venture_id: 'venture-1',
+          action_type: 'create_checkout',
+          status: 'blocked',
+          input: {
+            payment: {
+              product_name: 'InboxPulse',
+              price_amount: 1900,
+              price_currency: 'eur',
+              billing: 'one_time',
+              checkout_description: 'Scoring IA des leads email.',
+              trial_days: 0,
+            },
+            successUrl: 'https://kenomi.test/success',
+            cancelUrl: 'https://kenomi.test/cancel',
+          },
+        },
+      ],
+    })
+
+    const stripeClientFactory = vi.fn((secretKey: string) => ({
+      checkout: {
+        sessions: {
+          create: vi.fn(async () => ({
+            id: `cs_${secretKey}`,
+            url: 'https://checkout.stripe.test/settings-session',
+            mode: 'payment',
+            payment_intent: 'pi_settings',
+            customer_details: {},
+          })),
+        },
+      },
+    }))
+
+    const result = await resolveHumanApproval({
+      supabase,
+      userId: 'user-1',
+      approvalId: 'approval-1',
+      decision: 'approved',
+      stripeClientFactory,
+      config: { enabled: true, dryRun: false, globalBudgetCapEur: 1000 },
+      now: () => new Date('2026-05-19T19:00:00.000Z'),
+    })
+
+    expect(result).toMatchObject({ executed: true, actionType: 'create_checkout' })
+    expect(stripeClientFactory).toHaveBeenCalledWith('sk_test_settings')
+    expect(supabase.tables.payments[0]).toMatchObject({
+      stripe_session_id: 'cs_sk_test_settings',
+      stripe_payment_intent_id: 'pi_settings',
+      provider_status: 'ready',
+      checkout_url: 'https://checkout.stripe.test/settings-session',
     })
   })
 

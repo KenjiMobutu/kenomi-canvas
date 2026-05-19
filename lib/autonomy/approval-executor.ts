@@ -7,7 +7,10 @@ import {
   parsePaymentOutputPayload,
   type PaymentOutput,
 } from '@/lib/stripe/checkout-action'
-import { createStripeClient } from '@/lib/stripe/server'
+import {
+  createStripeClientFromSecretKey,
+  getOptionalStripeSecretKey,
+} from '@/lib/stripe/server'
 import {
   executePublishCampaign,
   type ExecutePublishResult,
@@ -22,6 +25,7 @@ interface QueryResult extends PromiseLike<QueryResponse> {}
 interface QueryFilterBuilder extends QueryResult {
   eq(field: string, value: unknown): QueryFilterBuilder
   single(): PromiseLike<QueryResponse>
+  maybeSingle(): PromiseLike<QueryResponse>
 }
 
 interface TableQueryBuilder {
@@ -35,6 +39,7 @@ export interface ApprovalExecutorSupabase {
 }
 
 type ApprovalResolution = 'approved' | 'rejected'
+type StripeClientFactory = (secretKey: string) => CheckoutStripeClient
 
 interface HumanApprovalRow {
   id: string
@@ -113,6 +118,7 @@ export interface ResolveHumanApprovalInput {
   decision: ApprovalResolution
   coolifyClient?: CoolifyClient
   stripeClient?: CheckoutStripeClient
+  stripeClientFactory?: StripeClientFactory
   marketingPublisher?: MarketingPublisher
   now?: () => Date
   config?: AutonomyConfig
@@ -408,6 +414,36 @@ async function executeCreateCheckout(input: {
   }
 }
 
+async function getUserStripeSecretKey(input: {
+  supabase: ApprovalExecutorSupabase
+  userId: string
+}): Promise<string | null> {
+  const { data, error } = await input.supabase
+    .from('user_settings')
+    .select('stripe_secret_key')
+    .eq('user_id', input.userId)
+    .maybeSingle()
+
+  if (error) throw new ApprovalExecutionError(error.message, 500)
+
+  const key = (data as { stripe_secret_key?: unknown } | null)?.stripe_secret_key
+  return typeof key === 'string' && key.trim().length > 0 ? key.trim() : null
+}
+
+async function resolveCheckoutStripeClient(input: {
+  supabase: ApprovalExecutorSupabase
+  userId: string
+  stripeClient?: CheckoutStripeClient
+  stripeClientFactory?: StripeClientFactory
+}): Promise<CheckoutStripeClient> {
+  if (input.stripeClient) return input.stripeClient
+
+  const secretKey = getOptionalStripeSecretKey() ?? (await getUserStripeSecretKey(input))
+  if (!secretKey) throw new ApprovalExecutionError('STRIPE_SECRET_KEY missing', 500)
+
+  return (input.stripeClientFactory ?? createStripeClientFromSecretKey)(secretKey)
+}
+
 export async function resolveHumanApproval(
   input: ResolveHumanApprovalInput
 ): Promise<ResolveHumanApprovalResult> {
@@ -595,7 +631,12 @@ export async function resolveHumanApproval(
     try {
       const checkout = await executeCreateCheckout({
         supabase: input.supabase,
-        stripeClient: input.stripeClient ?? createStripeClient(),
+        stripeClient: await resolveCheckoutStripeClient({
+          supabase: input.supabase,
+          userId: input.userId,
+          stripeClient: input.stripeClient,
+          stripeClientFactory: input.stripeClientFactory,
+        }),
         action,
         nowIso,
       })

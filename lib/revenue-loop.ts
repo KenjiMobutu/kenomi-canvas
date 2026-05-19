@@ -118,6 +118,7 @@ export type RevenueLoopNextAction =
       ventureId?: string | null
       reason?: string | null
     }
+  | { type: 'configure_stripe'; label: string; ventureId?: string | null; reason: string }
   | { type: 'review_pipeline'; label: string; pipelineId: string; ventureId?: string | null }
   | { type: 'monitor'; label: string; ventureId?: string | null }
 
@@ -251,6 +252,9 @@ function priorityFor(input: { nextAction: RevenueLoopNextAction; blockedRevenueE
   if (nextAction.type === 'create_checkout') {
     return { priorityScore: 90, priorityReason: 'Checkout Stripe manquant' }
   }
+  if (nextAction.type === 'configure_stripe') {
+    return { priorityScore: 95, priorityReason: nextAction.reason }
+  }
   if (nextAction.type === 'run_agent' && nextAction.agentId === 'payment') {
     return { priorityScore: 80, priorityReason: 'Offre tarifée manquante' }
   }
@@ -270,6 +274,12 @@ function priorityFor(input: { nextAction: RevenueLoopNextAction; blockedRevenueE
     return { priorityScore: 50, priorityReason: 'Agent requis pour avancer vers le revenu' }
   }
   return { priorityScore: 10, priorityReason: 'Boucle à surveiller' }
+}
+
+function hasMissingStripeSecret(action: RevenueAutonomyActionRow): boolean {
+  if (action.action_type !== 'create_checkout' || action.status !== 'failed') return false
+  const error = action.output?.error
+  return typeof error === 'string' && error.includes('STRIPE_SECRET_KEY missing')
 }
 
 export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSnapshot {
@@ -331,6 +341,7 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       if (action.status !== 'blocked') return false
       return Boolean(pendingApprovalByActionId.get(action.id))
     })
+    const missingStripeAction = ventureActions.find(hasMissingStripeSecret)
     const pendingApproval = blockedAction ? pendingApprovalByActionId.get(blockedAction.id) : null
     const ventureDrafts = pipeline.venture_id
       ? (draftsByVenture.get(pipeline.venture_id) ?? [])
@@ -343,6 +354,8 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
 
     const checkoutStatus: RevenueLoopStageStatus = pendingApproval
       ? 'blocked'
+      : missingStripeAction
+        ? 'blocked'
       : checkoutPayment
         ? 'done'
         : pipeline.payment_output
@@ -392,6 +405,13 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
         actionType: blockedAction.action_type ?? 'unknown',
         ventureId: pipeline.venture_id,
         reason: pendingApproval.reason,
+      }
+    } else if (missingStripeAction) {
+      nextAction = {
+        type: 'configure_stripe',
+        label: 'Configurer Stripe',
+        ventureId: pipeline.venture_id,
+        reason: 'Clé Stripe manquante',
       }
     } else if (pipeline.status === 'pending_validation') {
       nextAction = {
@@ -566,7 +586,9 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       activeLoops: loops.length,
       readyCheckouts: loops.filter((loop) => loop.nextAction.type === 'create_checkout').length,
       pendingApprovals: pendingApprovals.length,
-      blockedLoops: loops.filter((loop) => loop.nextAction.type === 'resolve_approval').length,
+      blockedLoops: loops.filter((loop) =>
+        ['resolve_approval', 'configure_stripe'].includes(loop.nextAction.type)
+      ).length,
       revenueEur,
       paidPayments,
       blockedRevenueEur,

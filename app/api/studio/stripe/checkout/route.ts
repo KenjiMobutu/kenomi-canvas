@@ -11,7 +11,7 @@ import {
   getCheckoutEnvironment,
   parsePaymentOutput,
 } from '@/lib/stripe/checkout-action'
-import { createStripeClient } from '@/lib/stripe/server'
+import { createStripeClientFromSecretKey, getOptionalStripeSecretKey } from '@/lib/stripe/server'
 
 const checkoutRequestSchema = z.object({
   ventureId: z.string().min(1).optional(),
@@ -30,6 +30,25 @@ function defaultCheckoutUrls(origin: string) {
     successUrl: `${origin}/studio/ventures?checkout=success`,
     cancelUrl: `${origin}/studio/ventures?checkout=cancelled`,
   }
+}
+
+async function getStripeSecretKeyForUser(input: {
+  supabase: Awaited<ReturnType<typeof requireAllowedUser>>['supabase']
+  userId: string
+}): Promise<string | null> {
+  const envKey = getOptionalStripeSecretKey()
+  if (envKey) return envKey
+
+  const { data, error } = await input.supabase
+    .from('user_settings')
+    .select('stripe_secret_key')
+    .eq('user_id', input.userId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+
+  const key = data?.stripe_secret_key
+  return typeof key === 'string' && key.trim().length > 0 ? key.trim() : null
 }
 
 export async function POST(req: NextRequest) {
@@ -135,7 +154,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const stripe = createStripeClient()
+    const stripeSecretKey = await getStripeSecretKeyForUser({
+      supabase,
+      userId: user!.id,
+    })
+    if (!stripeSecretKey) throw new Error('STRIPE_SECRET_KEY missing')
+
+    const stripe = createStripeClientFromSecretKey(stripeSecretKey)
     const session = await stripe.checkout.sessions.create(
       buildCheckoutSessionParams({
         payment,

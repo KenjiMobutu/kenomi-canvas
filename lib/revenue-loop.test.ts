@@ -84,6 +84,43 @@ describe('buildRevenueLoopSnapshot', () => {
     })
   })
 
+  it('remonte la configuration Stripe manquante quand un checkout échoue sans clé', () => {
+    const snapshot = buildRevenueLoopSnapshot({
+      pipelines: [basePipeline],
+      ventures: [{ id: 'venture-1', name: 'InboxPulse', stage: 'payment', mrr: '0' }],
+      payments: [],
+      campaignDrafts: [],
+      autonomyActions: [
+        {
+          id: 'action-stripe-missing',
+          venture_id: 'venture-1',
+          action_type: 'create_checkout',
+          status: 'failed',
+          output: { error: 'STRIPE_SECRET_KEY missing' },
+          created_at: '2026-05-19T18:50:00.000Z',
+        },
+      ],
+      approvals: [],
+      decisions: [],
+    })
+
+    expect(snapshot.summary.blockedLoops).toBe(1)
+    expect(snapshot.summary.recommendedAction).toMatchObject({
+      type: 'configure_stripe',
+      ventureName: 'InboxPulse',
+      reason: 'Clé Stripe manquante',
+    })
+    expect(snapshot.loops[0].nextAction).toMatchObject({
+      type: 'configure_stripe',
+      label: 'Configurer Stripe',
+    })
+    expect(snapshot.loops[0].stages).toContainEqual({
+      key: 'checkout',
+      label: 'Checkout',
+      status: 'blocked',
+    })
+  })
+
   it('attribue le revenu encaissé et demande la décision après acquisition', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [{ ...basePipeline, marketing_output: '{}' }],

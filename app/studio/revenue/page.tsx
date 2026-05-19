@@ -582,6 +582,10 @@ export default function RevenuePage() {
                         <Link href="/studio/agents" style={linkButtonStyle()}>
                           <Check size={15} /> Ouvrir
                         </Link>
+                      ) : loop.nextAction.type === 'configure_stripe' ? (
+                        <Link href="/studio/settings" style={linkButtonStyle()}>
+                          <CreditCard size={15} /> Settings
+                        </Link>
                       ) : loop.nextAction.type === 'monitor' ? (
                         <Link href="/studio/analytics" style={linkButtonStyle()}>
                           <TrendingUp size={15} /> Analytics

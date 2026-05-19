@@ -10,10 +10,23 @@ export function getStripeSecretKey(env: NodeJS.ProcessEnv = process.env): string
   return key
 }
 
-export function createStripeClient(env: NodeJS.ProcessEnv = process.env): Stripe {
-  return new Stripe(getStripeSecretKey(env), {
+export function getOptionalStripeSecretKey(env: NodeJS.ProcessEnv = process.env): string | null {
+  const key = env.STRIPE_SECRET_KEY
+  return key && key.trim().length > 0 ? key : null
+}
+
+export function createStripeClientFromSecretKey(secretKey: string): Stripe {
+  if (!secretKey.trim()) {
+    throw new Error('STRIPE_SECRET_KEY missing')
+  }
+
+  return new Stripe(secretKey, {
     apiVersion: '2026-04-22.dahlia',
   })
+}
+
+export function createStripeClient(env: NodeJS.ProcessEnv = process.env): Stripe {
+  return createStripeClientFromSecretKey(getStripeSecretKey(env))
 }
 
 export function getStripeWebhookSecret(env: NodeJS.ProcessEnv = process.env): string {
