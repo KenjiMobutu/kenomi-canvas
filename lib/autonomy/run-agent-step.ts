@@ -45,6 +45,7 @@ export interface RunAgentStepInput {
   supabase: RunAgentStepSupabase
   userId: string
   agentId: string
+  ventureId?: string
   prompt?: string
   llm?: (
     messages: LLMMessage[],
@@ -287,14 +288,18 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
 
   if (cfg?.paused) throw new RunAgentStepError('Agent en pause', 409)
 
+  let pipelineQuery = supabase
+    .from('venture_pipeline')
+    .select('*')
+    .eq('user_id', userId)
+    .not('status', 'eq', 'rejected')
+
+  if (input.ventureId) {
+    pipelineQuery = pipelineQuery.eq('venture_id', input.ventureId)
+  }
+
   const pipeline = await maybeSingle<PipelineRow>(
-    supabase
-      .from('venture_pipeline')
-      .select('*')
-      .eq('user_id', userId)
-      .not('status', 'eq', 'rejected')
-      .order('created_at', { ascending: false })
-      .limit(1)
+    pipelineQuery.order('created_at', { ascending: false }).limit(1)
   )
 
   if (!isAgentUnlocked(agentId, pipeline)) {

@@ -572,4 +572,71 @@ describe('runAgentStep', () => {
     expect(approvals).toHaveLength(4)
     expect(approvals.every((a) => a.status === 'pending')).toBe(true)
   })
+
+  it('cible le pipeline de la venture demandée quand ventureId est fourni', async () => {
+    const supabase = createFakeSupabase({
+      venture_pipeline: [
+        {
+          id: 'pipeline-old',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'OldPulse',
+          idea_niche: 'agences',
+          idea_problem: 'ancien problème',
+          idea_solution: 'ancienne solution',
+          idea_market: 'ancien marché',
+          validation_output: 'ok',
+          builder_output: null,
+          payment_output: null,
+          marketing_output: null,
+          decision_output: null,
+          venture_id: 'venture-old',
+        },
+        {
+          id: 'pipeline-target',
+          user_id: 'user-1',
+          status: 'approved',
+          idea_title: 'InboxPulse',
+          idea_niche: 'agences B2B',
+          idea_problem: 'priorisation',
+          idea_solution: 'scoring',
+          idea_market: 'outbound',
+          validation_output: 'ok',
+          builder_output: null,
+          payment_output: null,
+          marketing_output: null,
+          decision_output: null,
+          venture_id: 'venture-target',
+        },
+      ],
+    })
+    const llm = async (): Promise<LLMResponse> => ({
+      content: JSON.stringify({
+        headline: 'Priorisez vos leads email',
+        subline: 'Scoring IA pour équipes sales.',
+        cta: 'Rejoindre la beta',
+        features: ['Score automatique'],
+        pricing: '29 EUR/mois',
+      }),
+      provider: 'ollama',
+      model: 'qwen3:8b',
+      fallback_triggered: false,
+    })
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'builder',
+      ventureId: 'venture-target',
+      llm,
+      now: () => new Date('2026-05-18T10:00:00.000Z'),
+    })
+
+    expect(supabase.tables.venture_pipeline[0].builder_output).toBeNull()
+    expect(supabase.tables.venture_pipeline[1].builder_output).toContain('Priorisez vos leads')
+    expect(supabase.tables.landing_pages[0]).toMatchObject({
+      venture_id: 'venture-target',
+      headline: 'Priorisez vos leads email',
+    })
+  })
 })

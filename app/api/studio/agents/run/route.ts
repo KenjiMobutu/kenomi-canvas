@@ -20,10 +20,12 @@ export async function POST(req: NextRequest) {
 
   let agentId: string
   let prompt: string
+  let ventureId: string | undefined
   try {
     const body = await req.json()
     agentId = body.agentId ?? ''
     prompt = body.prompt ?? ''
+    ventureId = typeof body.ventureId === 'string' ? body.ventureId : undefined
   } catch {
     return apiError('JSON invalide', 400)
   }
@@ -34,6 +36,7 @@ export async function POST(req: NextRequest) {
       userId: user!.id,
       agentId,
       prompt,
+      ventureId,
     })
 
     return NextResponse.json({

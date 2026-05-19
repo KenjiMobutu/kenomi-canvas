@@ -9,6 +9,7 @@ export interface SupervisedLoopRepairAction {
   label: string
   detail: string
   href: string
+  agentId?: 'builder' | 'marketing'
   tone: 'warn' | 'muted' | 'ok'
 }
 
@@ -23,6 +24,7 @@ export function getMissingLandingAction(input: {
     label: 'Lancer Builder',
     detail: `Aucune landing publique matérialisée pour ${input.ventureName}.`,
     href: '/studio/agents',
+    agentId: 'builder',
     tone: 'warn',
   }
 }
@@ -38,6 +40,7 @@ export function getMissingMarketingDraftsAction(input: {
     label: 'Lancer Marketing',
     detail: 'Aucun draft marketing généré.',
     href: '/studio/agents',
+    agentId: 'marketing',
     tone: 'warn',
   }
 }

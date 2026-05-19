@@ -27,7 +27,7 @@ import {
   useTick,
   useIsMobile,
 } from '@/lib/studio-utils'
-import { CheckCircle2, RefreshCw, Send, XCircle } from 'lucide-react'
+import { CheckCircle2, Play, RefreshCw, Send, XCircle } from 'lucide-react'
 import { getStatusColor } from '@/components/studio/StatusBadge'
 import { EmptyState } from '@/components/studio/EmptyState'
 import { getMissingMarketingDraftsAction } from '@/lib/autonomy/supervised-loop-state'
@@ -951,6 +951,7 @@ export default function MarketingPage() {
   const [publishApprovals, setPublishApprovals] = useState<PublishApprovalRow[]>([])
   const [draftsLoading, setDraftsLoading] = useState(true)
   const [resolvingKey, setResolvingKey] = useState<string | null>(null)
+  const [repairRunning, setRepairRunning] = useState(false)
 
   const refresh = useCallback(async () => {
     setDraftsLoading(true)
@@ -1002,6 +1003,30 @@ export default function MarketingPage() {
       await refresh()
     } finally {
       setResolvingKey(null)
+    }
+  }
+
+  async function runMarketingRepair() {
+    if (!missingDraftAction?.agentId) return
+    setRepairRunning(true)
+    try {
+      const res = await fetch('/api/studio/agents/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: missingDraftAction.agentId,
+          prompt: `Répare le flux marketing : ${missingDraftAction.detail}`,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error ?? 'Impossible de lancer Marketing')
+        return
+      }
+      toast.success(`Marketing lancé (${data.durationMs ?? 0}ms)`)
+      await refresh()
+    } finally {
+      setRepairRunning(false)
     }
   }
 
@@ -1283,17 +1308,30 @@ export default function MarketingPage() {
             <EmptyState>
               <span>{missingDraftAction?.detail ?? 'Aucun draft généré pour l’instant.'}</span>{' '}
               {missingDraftAction ? (
-                <a
-                  href={missingDraftAction.href}
+                <button
+                  type="button"
+                  onClick={runMarketingRepair}
+                  disabled={repairRunning}
                   style={{
+                    appearance: 'none',
+                    background: 'transparent',
+                    border: 0,
+                    padding: 0,
                     color: cyan,
                     fontWeight: 800,
-                    textDecoration: 'none',
                     borderBottom: `1px solid ${cyan}66`,
+                    fontFamily: 'inherit',
+                    fontSize: 'inherit',
+                    cursor: repairRunning ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    opacity: repairRunning ? 0.65 : 1,
                   }}
                 >
-                  {missingDraftAction.label}
-                </a>
+                  <Play size={11} />
+                  {repairRunning ? 'Run...' : missingDraftAction.label}
+                </button>
               ) : (
                 <span style={{ color: cyan }}>Valider les approbations en attente</span>
               )}

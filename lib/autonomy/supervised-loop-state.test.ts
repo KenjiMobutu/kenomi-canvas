@@ -12,6 +12,7 @@ describe('supervised loop repair actions', () => {
       label: 'Lancer Builder',
       detail: 'Aucune landing publique matérialisée pour InboxPulse.',
       href: '/studio/agents',
+      agentId: 'builder',
       tone: 'warn',
     })
   })
@@ -26,6 +27,7 @@ describe('supervised loop repair actions', () => {
       label: 'Lancer Marketing',
       detail: 'Aucun draft marketing généré.',
       href: '/studio/agents',
+      agentId: 'marketing',
       tone: 'warn',
     })
   })

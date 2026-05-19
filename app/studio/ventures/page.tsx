@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import { surface, surface2, line, line2, text, muted, muted2, accent, bg } from '@/lib/ck-vars'
 import { agentById, makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
+import { Play } from 'lucide-react'
 import {
   getMissingLandingAction,
   type SupervisedLoopRepairAction,
@@ -306,6 +307,7 @@ function VentureInspector({
   onDelete,
   onOpen,
   onBrief,
+  onRepairAction,
 }: {
   v: DV | null
   repairAction?: SupervisedLoopRepairAction | null
@@ -313,9 +315,11 @@ function VentureInspector({
   onDelete: (id: string) => Promise<void>
   onOpen: () => void
   onBrief: () => void
+  onRepairAction?: (action: SupervisedLoopRepairAction) => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [repairRunning, setRepairRunning] = useState(false)
   const [form, setForm] = useState<EditForm>({
     name: '',
     niche: '',
@@ -385,6 +389,16 @@ function VentureInspector({
     if (!v) return
     if (!confirmDel) return setConfirmDel(true)
     await onDelete(v.id)
+  }
+
+  async function handleRepairAction(action: SupervisedLoopRepairAction) {
+    if (!onRepairAction || !action.agentId) return
+    setRepairRunning(true)
+    try {
+      await onRepairAction(action)
+    } finally {
+      setRepairRunning(false)
+    }
   }
 
   const history = [{ day: 0, action: v.status, color: sc, by: 'decision' }]
@@ -505,23 +519,52 @@ function VentureInspector({
               {repairAction.detail}
             </div>
           </div>
-          <a
-            href={repairAction.href}
-            style={{
-              padding: '8px 10px',
-              borderRadius: 7,
-              background: am,
-              color: '#0b0d12',
-              border: `1px solid ${am}66`,
-              fontFamily: 'var(--font-display)',
-              fontWeight: 800,
-              fontSize: 11,
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {repairAction.label}
-          </a>
+          {repairAction.agentId ? (
+            <button
+              type="button"
+              onClick={() => handleRepairAction(repairAction)}
+              disabled={repairRunning}
+              style={{
+                minHeight: 34,
+                padding: '8px 10px',
+                borderRadius: 7,
+                background: am,
+                color: '#0b0d12',
+                border: `1px solid ${am}66`,
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: 11,
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                cursor: repairRunning ? 'not-allowed' : 'pointer',
+                opacity: repairRunning ? 0.65 : 1,
+              }}
+            >
+              <Play size={12} />
+              {repairRunning ? 'Run...' : repairAction.label}
+            </button>
+          ) : (
+            <a
+              href={repairAction.href}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 7,
+                background: am,
+                color: '#0b0d12',
+                border: `1px solid ${am}66`,
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: 11,
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {repairAction.label}
+            </a>
+          )}
         </div>
       )}
 
@@ -1134,6 +1177,26 @@ export default function VenturesPage() {
     await reload()
   }
 
+  async function runRepairAgent(action: SupervisedLoopRepairAction) {
+    if (!selected || !action.agentId) return
+    const res = await fetch('/api/studio/agents/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId: action.agentId,
+        ventureId: selected.id,
+        prompt: `Répare la venture "${selected.name}" : ${action.detail}`,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error ?? 'Impossible de lancer la réparation')
+      return
+    }
+    toast.success(`${action.label} lancé (${data.durationMs ?? 0}ms)`)
+    await reload()
+  }
+
   const selected = items.find((v) => v.id === selectedId) ?? null
   const selectedRepairAction = selected
     ? getMissingLandingAction({
@@ -1560,6 +1623,7 @@ export default function VenturesPage() {
                 .then(() => toast.success('Brief copié dans le presse-papier'))
                 .catch(() => toast.error('Impossible de copier'))
             }}
+            onRepairAction={runRepairAgent}
           />
         )}
       </div>
