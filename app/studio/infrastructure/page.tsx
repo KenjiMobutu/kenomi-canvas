@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useEffect, useState } from 'react'
+import { useCallback, useMemo, useEffect, useState } from 'react'
 import { CkShell } from '@/components/CkShell'
 import {
   bg,
@@ -189,6 +189,14 @@ type InfraDiagnostics = {
   }
   services: DiagnosticLine[]
   proxmox: DiagnosticLine
+}
+type DiagnosticActionId = 'recheck' | 'record_incident'
+type DiagnosticActionResult = {
+  ok: boolean
+  code: string
+  message: string
+  targetId: string
+  checkedAt: string
 }
 
 function statusColor(ok: boolean | null): string {
@@ -1059,10 +1067,18 @@ function DiagnosticsPanel({
   diagnostics,
   error,
   isMobile,
+  pendingAction,
+  actionResult,
+  actionError,
+  onAction,
 }: {
   diagnostics: InfraDiagnostics | null
   error: string | null
   isMobile: boolean
+  pendingAction: string | null
+  actionResult: DiagnosticActionResult | null
+  actionError: string | null
+  onAction: (targetId: string, action: DiagnosticActionId) => void
 }) {
   const rows = diagnostics ? [...diagnostics.services, diagnostics.proxmox] : []
   const summaryColor = diagnostics?.summary.ok ? emerald : diagnostics ? amber : muted
@@ -1165,6 +1181,23 @@ function DiagnosticsPanel({
         </div>
       )}
 
+      {(actionResult || actionError) && (
+        <div
+          style={{
+            padding: '9px 10px',
+            borderRadius: 7,
+            background: actionError ? `${rose}12` : `${emerald}12`,
+            border: `1px solid ${actionError ? rose : emerald}30`,
+            color: actionError ? rose : emerald,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10.5,
+            lineHeight: 1.5,
+          }}
+        >
+          Action · {actionError ?? actionResult?.message}
+        </div>
+      )}
+
       {diagnostics && (
         <>
           <div
@@ -1226,7 +1259,7 @@ function DiagnosticsPanel({
                   key={row.id}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: isMobile ? '1fr' : '120px 1fr 90px 90px',
+                    gridTemplateColumns: isMobile ? '1fr' : '120px 1fr 90px 90px 150px',
                     gap: isMobile ? 5 : 10,
                     alignItems: 'center',
                     padding: '8px 10px',
@@ -1310,6 +1343,59 @@ function DiagnosticsPanel({
                   >
                     {row.source} · {row.latencyMs}ms
                   </span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 6,
+                      justifyContent: isMobile ? 'flex-start' : 'flex-end',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    {(
+                      [
+                        { id: 'recheck' as const, label: 'Recheck', visible: true },
+                        {
+                          id: 'record_incident' as const,
+                          label: 'Tracer',
+                          visible: row.status !== 'ok',
+                        },
+                      ] satisfies { id: DiagnosticActionId; label: string; visible: boolean }[]
+                    )
+                      .filter((action) => action.visible)
+                      .map((action) => {
+                        const pending = pendingAction === `${row.id}:${action.id}`
+                        const isTrace = action.id === 'record_incident'
+                        const actionColor = isTrace ? amber : cyan
+                        return (
+                          <button
+                            key={action.id}
+                            type="button"
+                            disabled={pending}
+                            onClick={() => onAction(row.id, action.id)}
+                            style={{
+                              minHeight: 26,
+                              padding: '4px 8px',
+                              borderRadius: 5,
+                              border: `1px solid ${actionColor}35`,
+                              background: pending ? surface2 : `${actionColor}12`,
+                              color: pending ? muted2 : actionColor,
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 9,
+                              letterSpacing: '.1em',
+                              textTransform: 'uppercase',
+                              cursor: pending ? 'wait' : 'pointer',
+                            }}
+                            title={
+                              action.id === 'recheck'
+                                ? `Relancer le check ${row.label}`
+                                : `Tracer un incident ${row.label}`
+                            }
+                          >
+                            {pending ? '...' : action.label}
+                          </button>
+                        )
+                      })}
+                  </div>
                 </div>
               )
             })}
@@ -1328,8 +1414,63 @@ export default function InfrastructurePage() {
   const [proxmoxError, setProxmoxError] = useState<string | null>(null)
   const [diagnostics, setDiagnostics] = useState<InfraDiagnostics | null>(null)
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null)
+  const [diagnosticActionPending, setDiagnosticActionPending] = useState<string | null>(null)
+  const [diagnosticActionResult, setDiagnosticActionResult] =
+    useState<DiagnosticActionResult | null>(null)
+  const [diagnosticActionError, setDiagnosticActionError] = useState<string | null>(null)
   const [services, setServices] = useState<InfraService[]>(FALLBACK_SERVICES)
   const isMobile = useIsMobile()
+
+  const loadDiagnostics = useCallback(async () => {
+    try {
+      const res = await fetch('/api/studio/infra/diagnostics')
+      const data = (await res.json().catch(() => null)) as InfraDiagnostics | null
+      if (data) {
+        setDiagnostics(data)
+        setDiagnosticsError(null)
+        return
+      }
+      setDiagnosticsError(`HTTP ${res.status}`)
+    } catch {
+      setDiagnosticsError('requête réseau échouée')
+    }
+  }, [])
+
+  const runDiagnosticAction = useCallback(
+    async (targetId: string, action: DiagnosticActionId) => {
+      const pendingKey = `${targetId}:${action}`
+      setDiagnosticActionPending(pendingKey)
+      setDiagnosticActionError(null)
+      setDiagnosticActionResult(null)
+      try {
+        const res = await fetch('/api/studio/infra/diagnostics/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetId, action }),
+        })
+        const data = (await res.json().catch(() => null)) as {
+          action?: DiagnosticActionResult
+          diagnostics?: InfraDiagnostics
+          error?: string
+        } | null
+        if (!res.ok || !data?.action) {
+          throw new Error(data?.error ?? `HTTP ${res.status}`)
+        }
+        setDiagnosticActionResult(data.action)
+        if (data.diagnostics) {
+          setDiagnostics(data.diagnostics)
+          setDiagnosticsError(null)
+        } else {
+          await loadDiagnostics()
+        }
+      } catch (error) {
+        setDiagnosticActionError(error instanceof Error ? error.message : 'action échouée')
+      } finally {
+        setDiagnosticActionPending(null)
+      }
+    },
+    [loadDiagnostics]
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -1376,21 +1517,6 @@ export default function InfrastructurePage() {
         if (!cancelled) setServices(FALLBACK_SERVICES)
       }
     }
-    async function loadDiagnostics() {
-      try {
-        const res = await fetch('/api/studio/infra/diagnostics')
-        const data = (await res.json().catch(() => null)) as InfraDiagnostics | null
-        if (!cancelled && data) {
-          setDiagnostics(data)
-          setDiagnosticsError(null)
-        }
-        if (!cancelled && !data) {
-          setDiagnosticsError(`HTTP ${res.status}`)
-        }
-      } catch {
-        if (!cancelled) setDiagnosticsError('requête réseau échouée')
-      }
-    }
     loadServices()
     loadHealth()
     loadProxmox()
@@ -1404,7 +1530,7 @@ export default function InfrastructurePage() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [])
+  }, [loadDiagnostics])
 
   const selected = services.find((s) => s.id === selectedId) ?? services[0] ?? FALLBACK_SERVICES[0]
 
@@ -1543,7 +1669,15 @@ export default function InfrastructurePage() {
           </div>
         )}
 
-        <DiagnosticsPanel diagnostics={diagnostics} error={diagnosticsError} isMobile={isMobile} />
+        <DiagnosticsPanel
+          diagnostics={diagnostics}
+          error={diagnosticsError}
+          isMobile={isMobile}
+          pendingAction={diagnosticActionPending}
+          actionResult={diagnosticActionResult}
+          actionError={diagnosticActionError}
+          onAction={runDiagnosticAction}
+        />
 
         {/* Topology + Service inspector */}
         <div
