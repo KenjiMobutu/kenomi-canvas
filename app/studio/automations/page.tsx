@@ -22,6 +22,10 @@ import { makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import {
+  buildAutomationRunMetrics,
+  type AutomationRunMetricInput,
+} from '@/lib/automation-run-metrics'
 
 interface DbWorkflow {
   id: string
@@ -316,6 +320,32 @@ function WorkflowDAG({ workflow, runs }: { workflow: DbWorkflow | null; runs: Au
         <AuStatBox label="Avg dur" value={avgDur !== null ? `${avgDur}ms` : '—'} color={cyan} />
         <AuStatBox label="Last" value={lastRunLabel} color={violet} />
       </div>
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9.5,
+          color: muted2,
+          letterSpacing: '.1em',
+          textTransform: 'uppercase',
+        }}
+      >
+        source automation_runs · {workflow.run_count === 0 ? 'aucun run enregistré' : 'historique réel'}
+      </div>
+      {workflow.run_count === 0 && (
+        <div
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            border: `1px dashed ${line2}`,
+            background: surface2,
+            color: muted,
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          Aucun run réel pour ce workflow. Déclenchez-le pour créer une ligne dans automation_runs.
+        </div>
+      )}
 
       <div style={{ flex: 1, minHeight: 160 }}>
         <svg
@@ -1173,7 +1203,41 @@ export default function AutomationsPage() {
       toast.error(error.message)
       return
     }
-    setDbWorkflows((data as DbWorkflow[]) || [])
+    const workflows = ((data as DbWorkflow[]) || []).map((workflow) => ({
+      ...workflow,
+      run_count: 0,
+      last_run_at: null,
+    }))
+    if (workflows.length === 0) {
+      setDbWorkflows([])
+      return
+    }
+
+    const { data: runRows, error: runsError } = await supabase
+      .from('automation_runs')
+      .select('workflow_id, status, duration_ms, triggered_at')
+      .eq('user_id', user.id)
+      .in(
+        'workflow_id',
+        workflows.map((workflow) => workflow.id)
+      )
+    if (runsError) {
+      toast.error(runsError.message)
+      setDbWorkflows(workflows)
+      return
+    }
+
+    const metrics = buildAutomationRunMetrics(
+      (runRows ?? []) as AutomationRunMetricInput[],
+      workflows.map((workflow) => workflow.id)
+    )
+    setDbWorkflows(
+      workflows.map((workflow) => ({
+        ...workflow,
+        run_count: metrics[workflow.id]?.run_count ?? 0,
+        last_run_at: metrics[workflow.id]?.last_run_at ?? null,
+      }))
+    )
   }
   useEffect(() => {
     if (user) loadWorkflows()
@@ -1353,6 +1417,17 @@ export default function AutomationsPage() {
           {KPI_LIST.map((k) => (
             <AuKpi key={k.label} {...k} />
           ))}
+        </div>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: muted2,
+            letterSpacing: '.1em',
+            textTransform: 'uppercase',
+          }}
+        >
+          source automation_runs · {totalRuns === 0 ? 'aucun run enregistré' : 'historique réel'}
         </div>
 
         {/* DAG + workflows list */}

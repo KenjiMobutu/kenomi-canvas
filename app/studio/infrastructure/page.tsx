@@ -30,6 +30,8 @@ type InfraService = {
   endpointLabel: string
   healthKey: keyof HealthServices | null
   kind: 'host' | 'service' | 'edge' | 'external'
+  checkedAt?: string | null
+  repairHref?: string
 }
 
 const FALLBACK_SERVICES: InfraService[] = [
@@ -157,6 +159,15 @@ type ProxmoxData = { nodes: ProxmoxNode[]; vms: ProxmoxVM[]; fetched_at: string 
 function statusColor(ok: boolean | null): string {
   if (ok === null) return amber
   return ok ? emerald : rose
+}
+
+function minutesAgo(iso: string): string {
+  const ts = Date.parse(iso)
+  if (!Number.isFinite(ts)) return '—'
+  const diffMin = Math.max(0, Math.round((Date.now() - ts) / 60_000))
+  if (diffMin < 1) return '<1m'
+  if (diffMin < 60) return `${diffMin}m`
+  return `${Math.round(diffMin / 60)}h`
 }
 
 function InfraKpi({
@@ -778,6 +789,24 @@ function ServiceInspector({
           }}
         >
           → {svc.endpointLabel}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2 }}>
+            {svc.checkedAt ? `check ${minutesAgo(svc.checkedAt)}` : 'check —'}
+          </span>
+          <a
+            href={svc.repairHref ?? '/studio/settings'}
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: isLive === false ? amber : muted2,
+              letterSpacing: '.1em',
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+            }}
+          >
+            réparer
+          </a>
         </div>
       </div>
 

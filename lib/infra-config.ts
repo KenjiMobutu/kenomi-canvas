@@ -20,6 +20,8 @@ export interface SanitizedInfraService {
   color: string
   vmid: number | null
   kind: 'host' | 'service' | 'edge' | 'external'
+  checkedAt?: string | null
+  repairHref?: string
 }
 
 export interface UserInfraSettings {

@@ -19,10 +19,11 @@ import {
   violet,
   fuchsia,
 } from '@/lib/ck-vars'
-import { AGENTS_DATA, makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
+import { makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import { aggregateLive, type LiveVentureMetrics } from '@/lib/metrics/analytics-live'
 
 const VENTURE_ACCENTS = [
   '#22d3ee',
@@ -211,136 +212,35 @@ function StackedArea({ series }: { series: { v: VentureAN; values: number[] }[] 
   )
 }
 
-function AgentContributionChart({ totalMrr }: { totalMrr: string }) {
-  const n = AGENTS_DATA.length
-  const equal = Math.floor(100 / n)
-  const contrib = AGENTS_DATA.map((a) => ({ agent: a, pct: equal }))
-  const total = contrib.reduce((s, i) => s + i.pct, 0)
-  const r = 60,
-    c = 2 * Math.PI * r
-  const segments = contrib.reduce<
-    Array<(typeof contrib)[number] & { offset: number; length: number }>
-  >((items, item) => {
-    const previous = items.reduce((sum, segment) => sum + segment.pct, 0)
-    return [
-      ...items,
-      {
-        ...item,
-        offset: (previous / total) * c,
-        length: (item.pct / total) * c,
-      },
-    ]
-  }, [])
-  const maxPct = Math.max(...contrib.map((x) => x.pct))
+function AgentContributionChart() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10, flex: 1 }}>
-      <div style={{ display: 'grid', placeItems: 'center', position: 'relative', height: 160 }}>
-        <svg width="160" height="160" viewBox="0 0 160 160">
-          {segments.map((it) => (
-            <circle
-              key={it.agent.id}
-              cx="80"
-              cy="80"
-              r={r}
-              fill="none"
-              stroke={it.agent.color}
-              strokeWidth="14"
-              strokeDasharray={`${it.length - 2} ${c - it.length + 2}`}
-              strokeDashoffset={-it.offset}
-              transform="rotate(-90 80 80)"
-            />
-          ))}
-          <circle cx="80" cy="80" r={r - 14} fill={surface} />
-        </svg>
-        <div style={{ position: 'absolute', textAlign: 'center' }}>
-          <div
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 22,
-              fontWeight: 800,
-              color: text,
-            }}
-          >
-            {totalMrr}
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              color: muted2,
-              letterSpacing: '.14em',
-            }}
-          >
-            MRR / 30j
-          </div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {contrib.map((it) => (
-          <div
-            key={it.agent.id}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'auto 1fr auto',
-              gap: 8,
-              alignItems: 'center',
-            }}
-          >
-            <span
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: 4,
-                border: `1px solid ${it.agent.color}`,
-                background: `${it.agent.color}10`,
-                display: 'grid',
-                placeItems: 'center',
-                fontFamily: 'var(--font-display)',
-                fontWeight: 800,
-                fontSize: 10,
-                color: it.agent.color,
-              }}
-            >
-              {it.agent.sigil}
-            </span>
-            <div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: text }}>{it.agent.name}</div>
-              <div
-                style={{
-                  height: 3,
-                  borderRadius: 2,
-                  background: surface2,
-                  marginTop: 2,
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    width: `${(it.pct / maxPct) * 100}%`,
-                    height: '100%',
-                    background: it.agent.color,
-                  }}
-                />
-              </div>
-            </div>
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: it.agent.color,
-                fontWeight: 700,
-              }}
-            >
-              {it.pct}%
-            </span>
-          </div>
-        ))}
+    <div style={{ flex: 1, display: 'grid', placeItems: 'center', marginTop: 14 }}>
+      <div style={{ textAlign: 'center', color: muted2, fontSize: 12, lineHeight: 1.6 }}>
+        Aucune attribution agent fiable
+        <br />
+        <span style={{ fontSize: 10, color: muted, letterSpacing: '.1em' }}>
+          Connectez une source d&apos;attribution MRR avant d&apos;afficher une répartition
+        </span>
       </div>
     </div>
   )
 }
 
 function CohortHeatmap({ data }: { data: (number | null)[][] }) {
+  if (data.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'grid', placeItems: 'center', marginTop: 14 }}>
+        <div style={{ textAlign: 'center', color: muted2, fontSize: 12, lineHeight: 1.6 }}>
+          Aucune cohorte calculée
+          <br />
+          <span style={{ fontSize: 10, color: muted, letterSpacing: '.1em' }}>
+            Les données de rétention seront affichées après instrumentation des cohortes
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ flex: 1, marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div
@@ -709,52 +609,6 @@ const DEFAULT_KPI: KpiSnapshot = {
   runway_delta: '—',
 }
 
-interface LiveVentureMetrics {
-  ventureId: string
-  name: string
-  slug: string
-  metrics: {
-    visits: number
-    signups: number
-    signupRate: number
-    revenueCents: number
-    spendCents: number
-    profitCents: number
-    roi: number
-  }
-}
-
-interface LiveAggregate {
-  totalVisits: number
-  totalSignups: number
-  signupRate: number
-  revenueEur: number
-  spendEur: number
-  profitEur: number
-  roi: number
-  ventureCount: number
-  hasData: boolean
-}
-
-function aggregateLive(snapshots: LiveVentureMetrics[]): LiveAggregate {
-  const totalVisits = snapshots.reduce((s, v) => s + v.metrics.visits, 0)
-  const totalSignups = snapshots.reduce((s, v) => s + v.metrics.signups, 0)
-  const revenueCents = snapshots.reduce((s, v) => s + v.metrics.revenueCents, 0)
-  const spendCents = snapshots.reduce((s, v) => s + v.metrics.spendCents, 0)
-  const profitCents = revenueCents - spendCents
-  return {
-    totalVisits,
-    totalSignups,
-    signupRate: totalVisits > 0 ? totalSignups / totalVisits : 0,
-    revenueEur: revenueCents / 100,
-    spendEur: spendCents / 100,
-    profitEur: profitCents / 100,
-    roi: spendCents > 0 ? profitCents / spendCents : 0,
-    ventureCount: snapshots.length,
-    hasData: totalVisits + totalSignups + revenueCents + spendCents > 0,
-  }
-}
-
 export default function AnalyticsPage() {
   const { user } = useAuth()
   const isMobile = useIsMobile()
@@ -933,18 +787,7 @@ export default function AnalyticsPage() {
     [ventures]
   )
 
-  const cohort = useMemo(
-    () =>
-      Array.from({ length: 8 }).map((_, row) =>
-        Array.from({ length: 8 }).map((_, col) => {
-          if (col > 7 - row) return null
-          const decay = Math.exp(-col * 0.18)
-          const r = (0.8 + Math.sin(row * 0.7 + col * 0.4) * 0.18) * decay
-          return r
-        })
-      ),
-    []
-  )
+  const cohort = useMemo<(number | null)[][]>(() => [], [])
 
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1176,6 +1019,17 @@ export default function AnalyticsPage() {
               ))}
             </div>
           )}
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted2,
+              letterSpacing: '.1em',
+              textTransform: 'uppercase',
+            }}
+          >
+            source venture_events · page_view, waitlist_signup, payment_succeeded, campaign_spend
+          </div>
         </div>
 
         {/* KPI strip (snapshots manuels - legacy, à supprimer une fois live_metrics complètes) */}
@@ -1307,9 +1161,9 @@ export default function AnalyticsPage() {
                 marginTop: 2,
               }}
             >
-              attribution MRR · 30j
+              attribution MRR · source réelle
             </div>
-            <AgentContributionChart totalMrr={live.revenue} />
+            <AgentContributionChart />
           </div>
         </div>
 
@@ -1357,7 +1211,7 @@ export default function AnalyticsPage() {
                     marginTop: 2,
                   }}
                 >
-                  8 cohortes · 8 mois
+                  source cohortes · rétention
                 </div>
               </div>
               <span
@@ -1368,7 +1222,7 @@ export default function AnalyticsPage() {
                   letterSpacing: '.14em',
                 }}
               >
-                M3 avg 38%
+                —
               </span>
             </div>
             <CohortHeatmap data={cohort} />

@@ -30,6 +30,34 @@ interface KpiRow {
   retention_delta: string
 }
 
+type OpsSummaryCard = {
+  label: string
+  value: string
+  tone: 'ok' | 'warn' | 'muted'
+  source: {
+    source: string
+    checkedAt: string | null
+    freshness: 'fresh' | 'stale' | 'missing'
+    repairHref: string
+    emptyLabel: string
+  }
+}
+
+type OpsSummaryAction = {
+  id: string
+  label: string
+  detail: string
+  href: string
+  tone: 'ok' | 'warn' | 'muted'
+}
+
+type OpsSummaryPayload = {
+  mode: 'calm' | 'attention'
+  primaryRepairHref: string
+  cards: OpsSummaryCard[]
+  actions: OpsSummaryAction[]
+}
+
 /* ─── Static design data ─────────────────────────────────────── */
 const AGENTS_STATIC = [
   {
@@ -1542,6 +1570,187 @@ function KpiGrid({ kpi }: { kpi: KpiRow | null }) {
   )
 }
 
+function OpsSummaryStrip({ summary }: { summary: OpsSummaryPayload | null }) {
+  const cards = summary?.cards ?? []
+
+  if (cards.length === 0) {
+    return (
+      <section
+        style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14 }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-display)',
+            fontSize: 13,
+            color: text,
+          }}
+        >
+          Operations
+        </h3>
+        <p style={{ margin: '10px 0 0', color: muted, fontSize: 12 }}>
+          Résumé opérationnel indisponible.
+        </p>
+      </section>
+    )
+  }
+  const resolvedSummary = summary!
+
+  return (
+    <section
+      style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14 }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 10,
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-display)',
+            fontSize: 13,
+            color: text,
+          }}
+        >
+          Operations
+        </h3>
+        <a
+          href={resolvedSummary.primaryRepairHref}
+          style={{
+            color: resolvedSummary.mode === 'attention' ? amber : emerald,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.12em',
+            textTransform: 'uppercase',
+            textDecoration: 'none',
+          }}
+        >
+          {resolvedSummary.mode === 'attention' ? 'Voir action' : 'Calme'}
+        </a>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, 1fr)',
+          gap: 8,
+          marginTop: 10,
+        }}
+      >
+        {cards.map((card) => {
+          const color = card.tone === 'warn' ? amber : card.tone === 'ok' ? emerald : muted2
+          return (
+            <a
+              key={card.label}
+              href={card.source.repairHref}
+              style={{
+                textDecoration: 'none',
+                padding: 10,
+                borderRadius: 8,
+                border: `1px solid ${line}`,
+                background: surface2,
+                color: text,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9.5,
+                  color: muted,
+                  letterSpacing: '.12em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {card.label}
+              </div>
+              <div
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 22,
+                  fontWeight: 800,
+                  marginTop: 4,
+                  color,
+                }}
+              >
+                {card.value}
+              </div>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: muted2,
+                  marginTop: 4,
+                  letterSpacing: '.04em',
+                }}
+              >
+                {card.source.source} · {card.source.freshness}
+              </div>
+            </a>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+        {resolvedSummary.actions.slice(0, 3).map((action) => {
+          const color = action.tone === 'warn' ? amber : action.tone === 'ok' ? emerald : muted2
+          return (
+            <a
+              key={action.id}
+              href={action.href}
+              style={{
+                display: 'block',
+                textDecoration: 'none',
+                padding: '9px 10px',
+                borderRadius: 8,
+                border: `1px solid ${color}33`,
+                background: `${color}10`,
+                color: text,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    color,
+                    letterSpacing: '.12em',
+                    textTransform: 'uppercase',
+                    fontWeight: 800,
+                  }}
+                >
+                  {action.label}
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    letterSpacing: '.08em',
+                  }}
+                >
+                  ouvrir
+                </span>
+              </div>
+              <div style={{ marginTop: 4, fontSize: 11.5, color: muted, lineHeight: 1.45 }}>
+                {action.detail}
+              </div>
+            </a>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 /* Mission feed / log */
 function MissionFeedCompact() {
   return (
@@ -2088,6 +2297,7 @@ export default function CockpitPage() {
   const [confirmedIds, setConfirmedIds] = useState<string[]>([])
   const [showCmdk, setShowCmdk] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [opsSummary, setOpsSummary] = useState<OpsSummaryPayload | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -2131,6 +2341,22 @@ export default function CockpitPage() {
     }
     load()
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetch('/api/studio/ops/summary')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.ok) setOpsSummary(data.summary as OpsSummaryPayload)
+      })
+      .catch(() => {
+        if (!cancelled) setOpsSummary(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   /* Keyboard shortcuts */
   useEffect(() => {
@@ -2246,6 +2472,7 @@ export default function CockpitPage() {
         {!isMobile && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
             <TodayRhythm />
+            <OpsSummaryStrip summary={opsSummary} />
             <KpiGrid kpi={kpi} />
             <MissionFeedCompact />
           </div>

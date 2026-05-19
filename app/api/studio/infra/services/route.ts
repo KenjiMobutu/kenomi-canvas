@@ -33,6 +33,13 @@ export async function GET() {
 
   const settings = unwrapOptionalInfraSettings(data as UserInfraSettings | null, error)
   const services = applyUserInfraSettings(DEFAULT_INFRA_SERVICES, settings)
+  const checkedAt = new Date().toISOString()
 
-  return NextResponse.json({ services: getSanitizedInfraServices(services) })
+  return NextResponse.json({
+    services: getSanitizedInfraServices(services).map((service) => ({
+      ...service,
+      checkedAt,
+      repairHref: service.id === 'proxmox' ? '/studio/infrastructure' : '/studio/settings',
+    })),
+  })
 }

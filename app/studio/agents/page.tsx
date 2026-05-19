@@ -39,6 +39,12 @@ import {
   getAgentCommandRefreshPlan,
   type AgentCommandRefreshTrigger,
 } from '@/lib/agent-command-refresh'
+import {
+  buildAgentActivitySeries,
+  buildAgentRunMetrics,
+  type AgentRunMetric,
+  type AgentRunMetricInput,
+} from '@/lib/agent-run-metrics'
 
 interface AgentConfig {
   model: string
@@ -56,8 +62,6 @@ const DEFAULT_CONFIG: AgentConfig = {
 const MODELS = ['qwen3:8b', 'qwen3:14b', 'claude-sonnet-4-6', 'gpt-4o-mini']
 
 interface DbAgentState {
-  run_count: number
-  last_run_at: string | null
   paused: boolean
 }
 
@@ -1269,6 +1273,7 @@ function AgentInspector({
   queue,
   pipeline,
   setPipeline,
+  runMetric,
   onRunComplete,
 }: {
   agent: AgentData
@@ -1276,6 +1281,7 @@ function AgentInspector({
   queue: string[]
   pipeline: PipelineRow | null
   setPipeline: React.Dispatch<React.SetStateAction<PipelineRow | null>>
+  runMetric: AgentRunMetric
   onRunComplete?: () => void
 }) {
   const { user } = useAuth()
@@ -1287,8 +1293,6 @@ function AgentInspector({
   >([])
   const [running, setRunning] = useState(false)
   const [dbState, setDbState] = useState<DbAgentState>({
-    run_count: 0,
-    last_run_at: null,
     paused: false,
   })
 
@@ -1297,18 +1301,16 @@ function AgentInspector({
     const supabase = createSupabaseBrowser()
     supabase
       .from('agent_configs')
-      .select('run_count, last_run_at, paused')
+      .select('paused')
       .eq('user_id', user.id)
       .eq('agent_id', agent.id)
       .maybeSingle()
       .then(({ data }) => {
         if (data)
           setDbState({
-            run_count: data.run_count ?? 0,
-            last_run_at: data.last_run_at,
             paused: data.paused ?? false,
           })
-        else setDbState({ run_count: 0, last_run_at: null, paused: false })
+        else setDbState({ paused: false })
       })
   }, [agent.id, user])
 
@@ -1325,11 +1327,6 @@ function AgentInspector({
         toast.error(data.error || 'Erreur run agent')
       } else {
         toast.success(`${agent.name} — mission complète (${data.durationMs}ms)`)
-        setDbState((s) => ({
-          ...s,
-          run_count: s.run_count + 1,
-          last_run_at: new Date().toISOString(),
-        }))
         if (agent.id === 'scout' && data.pipeline) {
           setPipeline(data.pipeline as PipelineRow)
         }
@@ -1544,7 +1541,7 @@ function AgentInspector({
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-        <StatBox label="Runs" value={String(dbState.run_count)} color={agent.color} />
+        <StatBox label="Runs" value={String(runMetric.run_count)} color={agent.color} />
         <StatBox
           label="Status"
           value={dbState.paused ? 'PAUSÉ' : 'ACTIF'}
@@ -1552,10 +1549,21 @@ function AgentInspector({
         />
         <StatBox
           label="Last"
-          value={dbState.last_run_at ? minutesAgo(dbState.last_run_at) : '—'}
+          value={runMetric.last_run_at ? minutesAgo(runMetric.last_run_at) : '—'}
           color={cyan}
         />
         <StatBox label="LV" value={String(agent.level)} color={violet} />
+      </div>
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9.5,
+          color: muted2,
+          letterSpacing: '.1em',
+          textTransform: 'uppercase',
+        }}
+      >
+        source agent_runs · {runMetric.run_count === 0 ? 'aucun run enregistré' : 'historique réel'}
       </div>
 
       {/* Activity sparkline */}
@@ -1570,10 +1578,10 @@ function AgentInspector({
               textTransform: 'uppercase',
             }}
           >
-            Activity · 48h
+            Activity · 24h
           </span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: agent.color }}>
-            +{Math.round(agent.xp * 60)} runs
+            {runMetric.runs_24h} runs
           </span>
         </div>
         <svg
@@ -1663,6 +1671,22 @@ function AgentInspector({
           )}
         </div>
       </div>
+
+      {runMetric.run_count === 0 && (
+        <div
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            border: `1px dashed ${line2}`,
+            background: surface2,
+            color: muted,
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          Aucun run réel pour cet agent. Lancez une mission pour créer une ligne dans agent_runs.
+        </div>
+      )}
 
       {/* Controls */}
       <div style={{ display: 'flex', gap: 8 }}>
@@ -2080,15 +2104,18 @@ function AddAgentTile() {
   )
 }
 
-function RunsTimeline({ tick }: { tick: number }) {
-  const rows = AGENTS_DATA.map((a, i) => {
-    const items = Array.from({ length: 18 }).map((_, j) => {
-      const seed = (i + 1) * 17 + (j + 1) * 5 + tick
-      const r = Math.abs(Math.sin(seed)) * 0.9 + 0.05
-      const dur = 4 + r * 18
-      return { id: j, w: dur, ok: r > 0.18 }
-    })
-    return { agent: a, items }
+function RunsTimeline({ runs }: { runs: AgentRunMetricInput[] }) {
+  const rows = AGENTS_DATA.map((agent) => {
+    const items = runs
+      .filter((run) => run.agent_id === agent.id)
+      .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+      .slice(-18)
+      .map((run) => ({
+        id: run.id ?? `${run.agent_id}-${run.created_at}`,
+        w: Math.max(4, Math.min(22, (run.duration_ms ?? 400) / 100)),
+        ok: !run.fallback_triggered,
+      }))
+    return { agent, items }
   })
 
   return (
@@ -2135,17 +2162,28 @@ function RunsTimeline({ tick }: { tick: number }) {
             </span>
           </span>
           <div style={{ height: 12, display: 'flex', gap: 3, alignItems: 'stretch' }}>
-            {row.items.map((it, j) => (
+            {row.items.length === 0 ? (
               <div
-                key={j}
                 style={{
-                  flex: it.w,
-                  background: it.ok ? row.agent.color : rose,
-                  opacity: it.ok ? 0.4 + (it.w / 22) * 0.6 : 0.6,
+                  flex: 1,
+                  border: `1px dashed ${line}`,
                   borderRadius: 2,
+                  opacity: 0.6,
                 }}
               />
-            ))}
+            ) : (
+              row.items.map((it) => (
+                <div
+                  key={it.id}
+                  style={{
+                    flex: it.w,
+                    background: it.ok ? row.agent.color : rose,
+                    opacity: it.ok ? 0.4 + (it.w / 22) * 0.6 : 0.6,
+                    borderRadius: 2,
+                  }}
+                />
+              ))
+            )}
           </div>
         </div>
       ))}
@@ -2157,8 +2195,8 @@ export default function AgentsPage() {
   const { user } = useAuth()
   const isMobile = useIsMobile()
   const [selectedId, setSelectedId] = useState('scout')
-  const [logTick, setLogTick] = useState(0)
   const [pipeline, setPipeline] = useState<PipelineRow | null>(null)
+  const [agentRuns, setAgentRuns] = useState<AgentRunMetricInput[]>([])
   const [orchestration, setOrchestration] = useState<OrchestrationStatus | null>(null)
   const [autonomyJobs, setAutonomyJobs] = useState<AutonomyJobView[]>([])
   const [autonomyActions, setAutonomyActions] = useState<AutonomyActionView[]>([])
@@ -2167,10 +2205,25 @@ export default function AgentsPage() {
   const [resolvingApprovalKey, setResolvingApprovalKey] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
 
+  const loadAgentRuns = useCallback(async () => {
+    if (!user) return
+    const supabase = createSupabaseBrowser()
+    const { data, error } = await supabase
+      .from('agent_runs')
+      .select('id, agent_id, duration_ms, created_at, fallback_triggered')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (error) {
+      toast.error(error.message)
+      return
+    }
+    setAgentRuns((data ?? []) as AgentRunMetricInput[])
+  }, [user])
+
   useEffect(() => {
-    const i = setInterval(() => setLogTick((t) => t + 1), 1600)
-    return () => clearInterval(i)
-  }, [])
+    void loadAgentRuns()
+  }, [loadAgentRuns])
 
   useEffect(() => {
     let cancelled = false
@@ -2303,7 +2356,23 @@ export default function AgentsPage() {
   }
 
   const selected = AGENTS_DATA.find((a) => a.id === selectedId) ?? AGENTS_DATA[0]
-  const activity = useMemo(() => makeSpark(48, 50, 22, selectedId.length * 7), [selectedId])
+  const runMetrics = useMemo(
+    () => buildAgentRunMetrics(agentRuns, AGENTS_DATA.map((agent) => agent.id)),
+    [agentRuns]
+  )
+  const selectedRunMetric =
+    runMetrics[selected.id] ?? {
+      agent_id: selected.id,
+      run_count: 0,
+      runs_24h: 0,
+      last_run_at: null,
+      avg_duration_ms: null,
+      fallback_count: 0,
+    }
+  const activity = useMemo(
+    () => buildAgentActivitySeries(agentRuns, selectedId),
+    [agentRuns, selectedId]
+  )
   const queue = QUEUE[selectedId] ?? []
   const approvalQueue = useMemo(
     () =>
@@ -2315,13 +2384,19 @@ export default function AgentsPage() {
   )
   const pendingApprovalCount = approvalQueue.filter((item) => item.isPending).length
 
-  const throughput = AGENTS_DATA.map((a) => ({
-    ...a,
-    runs: 0,
-    win: 0,
-    avg: '—',
-  }))
-  const maxRuns = Math.max(...throughput.map((t) => t.runs))
+  const throughput = AGENTS_DATA.map((a) => {
+    const metric = runMetrics[a.id]
+    return {
+      ...a,
+      runs: metric?.run_count ?? 0,
+      last: metric?.last_run_at ? minutesAgo(metric.last_run_at) : '—',
+      avg:
+        metric?.avg_duration_ms !== null && metric?.avg_duration_ms !== undefined
+          ? `${Math.round((metric.avg_duration_ms ?? 0) / 100) / 10}s`
+          : '—',
+    }
+  })
+  const maxRuns = Math.max(1, ...throughput.map((t) => t.runs))
 
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -2432,7 +2507,11 @@ export default function AgentsPage() {
             queue={queue}
             pipeline={pipeline}
             setPipeline={setPipeline}
-            onRunComplete={() => refreshCommandState('manual-evaluate')}
+            runMetric={selectedRunMetric}
+            onRunComplete={() => {
+              void loadAgentRuns()
+              void refreshCommandState('manual-evaluate')
+            }}
           />
 
           {/* Right: Roster + Throughput */}
@@ -2531,7 +2610,7 @@ export default function AgentsPage() {
                       marginTop: 2,
                     }}
                   >
-                    runs · win rate · latency
+                    runs reels · dernier run · latence
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -2641,11 +2720,11 @@ export default function AgentsPage() {
                       style={{
                         fontFamily: 'var(--font-mono)',
                         fontSize: 11,
-                        color: emerald,
+                        color: muted,
                         textAlign: 'right',
                       }}
                     >
-                      {row.win}%
+                      {row.last}
                     </span>
                     <span
                       style={{
@@ -2655,7 +2734,7 @@ export default function AgentsPage() {
                         textAlign: 'right',
                       }}
                     >
-                      {row.avg}s
+                      {row.avg}
                     </span>
                   </div>
                 ))}
@@ -2709,7 +2788,7 @@ export default function AgentsPage() {
               ))}
             </div>
           </div>
-          <RunsTimeline tick={logTick} />
+          <RunsTimeline runs={agentRuns} />
         </div>
       </div>
     </CkShell>
