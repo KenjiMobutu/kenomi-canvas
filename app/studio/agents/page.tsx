@@ -35,6 +35,10 @@ import {
   buildJobList,
   type AutonomyJobView,
 } from '@/lib/autonomy/action-view-model'
+import {
+  getAgentCommandRefreshPlan,
+  type AgentCommandRefreshTrigger,
+} from '@/lib/agent-command-refresh'
 
 interface AgentConfig {
   model: string
@@ -2213,14 +2217,21 @@ export default function AgentsPage() {
     }
   }, [])
 
-  const refreshCommandState = useCallback(async () => {
-    await Promise.all([loadOrchestration(), loadAutonomyState()])
-  }, [loadAutonomyState, loadOrchestration])
+  const refreshCommandState = useCallback(
+    async (trigger: AgentCommandRefreshTrigger) => {
+      const plan = getAgentCommandRefreshPlan(trigger)
+      await Promise.all([
+        plan.runOrchestration ? loadOrchestration() : Promise.resolve(),
+        plan.loadAutonomyState ? loadAutonomyState() : Promise.resolve(),
+      ])
+    },
+    [loadAutonomyState, loadOrchestration]
+  )
 
   useEffect(() => {
     if (!user) return
     const timeout = window.setTimeout(() => {
-      void refreshCommandState()
+      void refreshCommandState('initial-load')
     }, 0)
     return () => window.clearTimeout(timeout)
   }, [refreshCommandState, user])
@@ -2383,6 +2394,28 @@ export default function AgentsPage() {
           approvalQueue={approvalQueue}
         />
 
+        <button
+          type="button"
+          onClick={() => refreshCommandState('manual-evaluate')}
+          style={{
+            alignSelf: 'flex-start',
+            minHeight: 34,
+            padding: '7px 11px',
+            borderRadius: 8,
+            border: `1px solid ${cyan}45`,
+            background: `${cyan}12`,
+            color: cyan,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            letterSpacing: '.12em',
+            textTransform: 'uppercase',
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          Évaluer schedules
+        </button>
+
         {/* Main 2-col */}
         <div
           style={{
@@ -2399,7 +2432,7 @@ export default function AgentsPage() {
             queue={queue}
             pipeline={pipeline}
             setPipeline={setPipeline}
-            onRunComplete={refreshCommandState}
+            onRunComplete={() => refreshCommandState('manual-evaluate')}
           />
 
           {/* Right: Roster + Throughput */}
