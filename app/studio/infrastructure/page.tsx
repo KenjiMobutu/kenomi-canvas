@@ -145,11 +145,13 @@ type ProxmoxVM = {
   type: 'qemu' | 'lxc'
   cpu_pct: number
   mem_pct: number
-  disk_pct: number
+  disk_pct: number | null
   mem_fmt: string
   maxmem_fmt: string
   disk_used_fmt: string
   maxdisk_fmt: string
+  disk_source?: 'qemu_guest_agent' | 'proxmox_lxc' | 'unavailable'
+  disk_error?: string | null
   uptime_fmt: string
   netin: number
   netout: number
@@ -346,14 +348,19 @@ function ArcGauge({
   max,
   color,
   unit,
+  detail,
+  unavailableText = 'non disponible',
 }: {
   label: string
-  value: number
+  value: number | null
   max: number
   color: string
   unit?: string
+  detail?: string
+  unavailableText?: string
 }) {
-  const pct = Math.min(1, value / max)
+  const hasValue = typeof value === 'number' && Number.isFinite(value)
+  const pct = hasValue ? Math.min(1, value / max) : 0
   const c = Math.PI * 28
   return (
     <div
@@ -398,7 +405,7 @@ function ArcGauge({
             color,
           }}
         >
-          {value === 0 ? '—' : `${value}${unit ?? '%'}`}
+          {hasValue ? `${value}${unit ?? '%'}` : '—'}
         </div>
       </div>
       <div>
@@ -422,7 +429,7 @@ function ArcGauge({
             marginTop: 2,
           }}
         >
-          {value === 0 ? 'non disponible' : `${Math.round(pct * 100)}% of ${max}${unit ?? ''}`}
+          {hasValue ? (detail ?? `${Math.round(pct * 100)}% of ${max}${unit ?? ''}`) : unavailableText}
         </div>
       </div>
     </div>
@@ -798,8 +805,23 @@ function ServiceInspector({
   // Valeurs des jauges
   const cpuPct = isProxmoxNode ? (pxNode?.cpu_pct ?? 0) : (vm?.cpu_pct ?? 0)
   const memPct = isProxmoxNode ? (pxNode?.mem_pct ?? 0) : (vm?.mem_pct ?? 0)
-  const diskPct = isProxmoxNode ? (pxNode?.disk_pct ?? 0) : (vm?.disk_pct ?? 0)
+  const diskPct = isProxmoxNode ? (pxNode?.disk_pct ?? null) : (vm?.disk_pct ?? null)
   const uptimeFmt = isProxmoxNode ? (pxNode?.uptime_fmt ?? '—') : (vm?.uptime_fmt ?? '—')
+  const diskDetail = isProxmoxNode
+    ? pxNode
+      ? `${pxNode.disk_used_fmt} / ${pxNode.disk_total_fmt}`
+      : undefined
+    : vm && vm.disk_pct !== null
+      ? `${vm.disk_used_fmt} / ${vm.maxdisk_fmt}${
+          vm.disk_source === 'qemu_guest_agent' ? ' · guest' : ' · proxmox'
+        }`
+      : undefined
+  const diskUnavailableText =
+    vm?.type === 'qemu'
+      ? vm.disk_error
+        ? vm.disk_error
+        : 'guest disk indisponible'
+      : 'non disponible'
 
   // 4ème jauge : VMs actives pour le nœud, Net I/O (Mo) pour les VMs
   const vmRunning = proxmox ? proxmox.vms.filter((v) => v.status === 'running').length : 0
@@ -901,7 +923,14 @@ function ServiceInspector({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <ArcGauge label="CPU" value={cpuPct} max={100} color={cyan} />
           <ArcGauge label="RAM" value={memPct} max={100} color={emerald} />
-          <ArcGauge label="Disk" value={diskPct} max={100} color={violet} />
+          <ArcGauge
+            label="Disk"
+            value={diskPct}
+            max={100}
+            color={violet}
+            detail={diskDetail}
+            unavailableText={diskUnavailableText}
+          />
           {isProxmoxNode ? (
             <ArcGauge
               label="VMs"

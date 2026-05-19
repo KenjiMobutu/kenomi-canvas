@@ -11,6 +11,15 @@ import {
 import { logError } from '@/lib/logger'
 import { unwrapOptionalInfraSettings } from '@/lib/user-settings-normalization'
 
+function sanitizeGuestDiskError(error: string | null | undefined): string | null {
+  if (!error) return null
+  if (error.includes('VM.Monitor')) return 'Permission Proxmox VM.Monitor requise'
+  if (error.includes('guest agent') || error.includes('QEMU guest agent')) {
+    return 'QEMU guest agent indisponible'
+  }
+  return 'Disque guest indisponible'
+}
+
 export async function GET() {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
@@ -36,19 +45,41 @@ export async function GET() {
         disk_total_fmt: formatBytes(n.disk_total),
         uptime_fmt: formatUptime(n.uptime),
       })),
-      vms: metrics.vms.map((vm) => ({
-        ...vm,
-        mem_fmt: formatBytes(vm.mem),
-        maxmem_fmt: formatBytes(vm.maxmem),
-        disk_used_fmt: formatBytes(vm.disk),
-        maxdisk_fmt: formatBytes(vm.maxdisk),
-        uptime_fmt: formatUptime(vm.uptime),
-        cpu_pct: Math.round(vm.cpu * 100),
-        mem_pct: vm.maxmem > 0 ? Math.round((vm.mem / vm.maxmem) * 100) : 0,
-        disk_pct: vm.maxdisk > 0 ? Math.round((vm.disk / vm.maxdisk) * 100) : 0,
-        netin: vm.netin ?? 0,
-        netout: vm.netout ?? 0,
-      })),
+      vms: metrics.vms.map((vm) => {
+        const guestDiskError = sanitizeGuestDiskError(vm.guest_disk_error)
+        return {
+          ...vm,
+          guest_disk_error: guestDiskError,
+          mem_fmt: formatBytes(vm.mem),
+          maxmem_fmt: formatBytes(vm.maxmem),
+          disk_used_fmt:
+            vm.type === 'qemu' && vm.guest_disk_used != null
+              ? formatBytes(vm.guest_disk_used)
+              : formatBytes(vm.disk),
+          maxdisk_fmt:
+            vm.type === 'qemu' && vm.guest_disk_total != null
+              ? formatBytes(vm.guest_disk_total)
+              : formatBytes(vm.maxdisk),
+          uptime_fmt: formatUptime(vm.uptime),
+          cpu_pct: Math.round(vm.cpu * 100),
+          mem_pct: vm.maxmem > 0 ? Math.round((vm.mem / vm.maxmem) * 100) : 0,
+          disk_pct:
+            vm.type === 'qemu'
+              ? vm.guest_disk_pct
+              : vm.maxdisk > 0
+                ? Math.round((vm.disk / vm.maxdisk) * 100)
+                : null,
+          disk_source:
+            vm.type === 'qemu'
+              ? vm.guest_disk_pct != null
+                ? 'qemu_guest_agent'
+                : 'unavailable'
+              : 'proxmox_lxc',
+          disk_error: vm.type === 'qemu' ? guestDiskError : null,
+          netin: vm.netin ?? 0,
+          netout: vm.netout ?? 0,
+        }
+      }),
     }
 
     if (metrics.nodes.length === 0 && metrics.vms.length === 0 && metrics.errors?.length) {

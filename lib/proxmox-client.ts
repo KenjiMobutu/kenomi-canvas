@@ -35,6 +35,11 @@ export type ProxmoxVM = {
   node: string
   netin: number
   netout: number
+  guest_disk_used?: number | null
+  guest_disk_total?: number | null
+  guest_disk_pct?: number | null
+  guest_disk_mountpoint?: string | null
+  guest_disk_error?: string | null
 }
 
 export type ProxmoxMetrics = {
@@ -95,7 +100,11 @@ export function resolveProxmoxConfig(
 
 // ─── Fetch avec auth token ────────────────────────────────────────────────────
 
-async function proxmoxFetch<T>(path: string, config: ProxmoxClientConfig): Promise<T> {
+async function proxmoxFetch<T>(
+  path: string,
+  config: ProxmoxClientConfig,
+  timeoutMs = 10_000
+): Promise<T> {
   const https = await import('https')
   const url = new URL(`${config.baseUrl}/api2/json${path}`)
 
@@ -130,11 +139,71 @@ async function proxmoxFetch<T>(path: string, config: ProxmoxClientConfig): Promi
       }
     )
     req.on('error', reject)
-    req.setTimeout(10_000, () => {
+    req.setTimeout(timeoutMs, () => {
       req.destroy(new Error('Proxmox timeout'))
     })
     req.end()
   })
+}
+
+type ProxmoxGuestFilesystem = {
+  name?: string
+  mountpoint?: string
+  type?: string
+  'used-bytes'?: number
+  'total-bytes'?: number
+}
+
+type ProxmoxGuestFsInfoResponse =
+  | ProxmoxGuestFilesystem[]
+  | {
+      result?: ProxmoxGuestFilesystem[]
+    }
+
+export type ProxmoxGuestDiskUsage = {
+  used: number
+  total: number
+  pct: number
+  mountpoint: string
+}
+
+export function selectGuestRootFilesystem(
+  response: ProxmoxGuestFsInfoResponse
+): ProxmoxGuestDiskUsage | null {
+  const filesystems = Array.isArray(response) ? response : (response.result ?? [])
+  const usable = filesystems.filter((fs) => {
+    const total = fs['total-bytes']
+    const used = fs['used-bytes']
+    if (typeof total !== 'number' || typeof used !== 'number' || total <= 0 || used < 0) return false
+    return !['devtmpfs', 'tmpfs', 'squashfs', 'overlay'].includes(fs.type ?? '')
+  })
+  const root =
+    usable.find((fs) => fs.mountpoint === '/') ??
+    usable.find((fs) => fs.name === '/') ??
+    usable.sort((a, b) => (b['total-bytes'] ?? 0) - (a['total-bytes'] ?? 0))[0]
+
+  if (!root) return null
+  const used = root['used-bytes']!
+  const total = root['total-bytes']!
+  return {
+    used,
+    total,
+    pct: Math.round((used / total) * 100),
+    mountpoint: root.mountpoint ?? root.name ?? 'guest',
+  }
+}
+
+export async function getProxmoxQemuGuestDiskUsage(
+  config = resolveProxmoxConfig(),
+  vmid: number,
+  node = config.node
+): Promise<ProxmoxGuestDiskUsage | null> {
+  const data = await proxmoxFetch<ProxmoxGuestFsInfoResponse>(
+    `/nodes/${node}/qemu/${vmid}/agent/get-fsinfo`,
+    config,
+    3_000
+  )
+  return selectGuestRootFilesystem(data)
 }
 
 // ─── Métriques nœud ──────────────────────────────────────────────────────────
@@ -201,10 +270,35 @@ export async function getProxmoxMetrics(config = resolveProxmoxConfig()): Promis
       return []
     }),
   ])
+  const vmsWithGuestDisk = await Promise.all(
+    vms.map(async (vm) => {
+      if (vm.type !== 'qemu') return vm
+      try {
+        const guestDisk = await getProxmoxQemuGuestDiskUsage(config, vm.vmid, vm.node)
+        return {
+          ...vm,
+          guest_disk_used: guestDisk?.used ?? null,
+          guest_disk_total: guestDisk?.total ?? null,
+          guest_disk_pct: guestDisk?.pct ?? null,
+          guest_disk_mountpoint: guestDisk?.mountpoint ?? null,
+          guest_disk_error: guestDisk ? null : 'QEMU guest agent ne retourne pas de filesystem utilisable',
+        }
+      } catch (err) {
+        return {
+          ...vm,
+          guest_disk_used: null,
+          guest_disk_total: null,
+          guest_disk_pct: null,
+          guest_disk_mountpoint: null,
+          guest_disk_error: errorMessage(err),
+        }
+      }
+    })
+  )
 
   return {
     nodes: nodeStatus ? [nodeStatus] : [],
-    vms,
+    vms: vmsWithGuestDisk,
     fetched_at: new Date().toISOString(),
     ...(errors.length > 0 ? { errors } : {}),
   }

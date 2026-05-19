@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveProxmoxConfig } from './proxmox-client'
+import { resolveProxmoxConfig, selectGuestRootFilesystem } from './proxmox-client'
 
 describe('resolveProxmoxConfig', () => {
   it('uses saved endpoint and node while keeping tokens server-side', () => {
@@ -55,5 +55,53 @@ describe('resolveProxmoxConfig', () => {
     )
 
     expect(config.node).toBe('proxmox')
+  })
+})
+
+describe('selectGuestRootFilesystem', () => {
+  it('returns the root filesystem usage from qemu guest agent fsinfo', () => {
+    const disk = selectGuestRootFilesystem({
+      result: [
+        {
+          mountpoint: '/run',
+          type: 'tmpfs',
+          'used-bytes': 1024,
+          'total-bytes': 4096,
+        },
+        {
+          mountpoint: '/',
+          type: 'ext4',
+          'used-bytes': 39 * 1024 ** 3,
+          'total-bytes': 97 * 1024 ** 3,
+        },
+      ],
+    })
+
+    expect(disk).toEqual({
+      used: 39 * 1024 ** 3,
+      total: 97 * 1024 ** 3,
+      pct: 40,
+      mountpoint: '/',
+    })
+  })
+
+  it('falls back to the largest usable filesystem when root is not explicit', () => {
+    const disk = selectGuestRootFilesystem([
+      {
+        mountpoint: '/boot',
+        type: 'ext4',
+        'used-bytes': 512,
+        'total-bytes': 2048,
+      },
+      {
+        mountpoint: '/var',
+        type: 'ext4',
+        'used-bytes': 8_000,
+        'total-bytes': 10_000,
+      },
+    ])
+
+    expect(disk?.mountpoint).toBe('/var')
+    expect(disk?.pct).toBe(80)
   })
 })
