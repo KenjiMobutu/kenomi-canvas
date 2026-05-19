@@ -19,6 +19,32 @@ import { apiError } from '@/lib/api-response'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { insertAuditEvent } from '@/lib/audit-log'
 import { getCheckoutEnvironment, parsePaymentOutput } from '@/lib/stripe/checkout-action'
+import { buildAcquisitionRoi, type AcquisitionEventRow } from '@/lib/metrics/acquisition-roi'
+import { buildRevenueDailyCycleAudit } from '@/lib/revenue-daily-cycle'
+
+function normalizeCycleActions(actions: RevenueAutonomyActionRow[]) {
+  return actions.map((action) => ({
+    id: action.id,
+    action_type: action.action_type ?? 'unknown',
+    risk_level: action.risk_level ?? null,
+    status: action.status ?? 'unknown',
+  }))
+}
+
+function normalizeCycleApprovals(approvals: RevenueApprovalRow[]) {
+  return approvals.map((approval) => ({
+    id: approval.id,
+    action_id: approval.action_id ?? null,
+    status: approval.status ?? 'unknown',
+  }))
+}
+
+function normalizeCycleDecisions(decisions: RevenueDecisionRow[]) {
+  return decisions.map((decision) => ({
+    decision: decision.decision ?? null,
+    created_at: decision.created_at ?? null,
+  }))
+}
 
 type QueryResult<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 
@@ -28,70 +54,15 @@ async function readTable<T>(query: QueryResult<T>): Promise<T[]> {
   return data ?? []
 }
 
-async function loadRevenueSnapshot(input: {
-  supabase: any
-  userId: string
-}): Promise<RevenueLoopSnapshot> {
+async function loadRevenueContext(input: { supabase: any; userId: string }): Promise<{
+  snapshot: RevenueLoopSnapshot
+  autonomyActions: RevenueAutonomyActionRow[]
+  approvals: RevenueApprovalRow[]
+  decisions: RevenueDecisionRow[]
+  ventureEvents: AcquisitionEventRow[]
+}> {
   const userId = input.userId
-  const [pipelines, ventures, payments, campaignDrafts, autonomyActions, approvals, decisions] =
-    await Promise.all([
-      readTable<RevenuePipelineRow>(
-        input.supabase
-          .from('venture_pipeline')
-          .select('*')
-          .eq('user_id', userId)
-          .order('updated_at', { ascending: false })
-          .limit(50)
-      ),
-      readTable<RevenueVentureRow>(
-        input.supabase
-          .from('ventures')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(100)
-      ),
-      readTable<RevenuePaymentRow>(
-        input.supabase
-          .from('payments')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(200)
-      ),
-      readTable<RevenueCampaignDraftRow>(
-        input.supabase
-          .from('campaign_drafts')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(200)
-      ),
-      readTable<RevenueAutonomyActionRow>(
-        input.supabase
-          .from('autonomy_actions')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(200)
-      ),
-      readTable<RevenueApprovalRow>(
-        input.supabase
-          .from('human_approvals')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(200)
-      ),
-      readTable<RevenueDecisionRow>(
-        input.supabase
-          .from('decisions')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(200)
-      ),
-    ])
-
-  return buildRevenueLoopSnapshot({
+  const [
     pipelines,
     ventures,
     payments,
@@ -99,7 +70,87 @@ async function loadRevenueSnapshot(input: {
     autonomyActions,
     approvals,
     decisions,
-  })
+    ventureEvents,
+  ] = await Promise.all([
+    readTable<RevenuePipelineRow>(
+      input.supabase
+        .from('venture_pipeline')
+        .select('*')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(50)
+    ),
+    readTable<RevenueVentureRow>(
+      input.supabase
+        .from('ventures')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(100)
+    ),
+    readTable<RevenuePaymentRow>(
+      input.supabase
+        .from('payments')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200)
+    ),
+    readTable<RevenueCampaignDraftRow>(
+      input.supabase
+        .from('campaign_drafts')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(200)
+    ),
+    readTable<RevenueAutonomyActionRow>(
+      input.supabase
+        .from('autonomy_actions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(200)
+    ),
+    readTable<RevenueApprovalRow>(
+      input.supabase
+        .from('human_approvals')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(200)
+    ),
+    readTable<RevenueDecisionRow>(
+      input.supabase
+        .from('decisions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200)
+    ),
+    readTable<AcquisitionEventRow>(
+      input.supabase
+        .from('venture_events')
+        .select('venture_id, event_type, value, metadata, occurred_at')
+        .eq('user_id', userId)
+        .order('occurred_at', { ascending: false })
+        .limit(500)
+    ),
+  ])
+
+  return {
+    snapshot: buildRevenueLoopSnapshot({
+      pipelines,
+      ventures,
+      payments,
+      campaignDrafts,
+      autonomyActions,
+      approvals,
+      decisions,
+    }),
+    autonomyActions,
+    approvals,
+    decisions,
+    ventureEvents,
+  }
 }
 
 function isCronAuthorized(req: NextRequest): boolean {
@@ -282,19 +333,44 @@ async function buildPlanForRequest(req: NextRequest) {
   if (response) return { response }
   if (!user?.id) return { response: apiError('Utilisateur autopilot manquant', 500) }
 
-  const snapshot = await loadRevenueSnapshot({ supabase, userId: user.id })
+  const context = await loadRevenueContext({ supabase, userId: user.id })
   const plan = buildRevenueAutopilotPlan({
-    snapshot,
+    snapshot: context.snapshot,
     environment: getCheckoutEnvironment(),
   })
-  return { user, supabase, cronAuthorized, snapshot, plan }
+  const acquisition = buildAcquisitionRoi(context.ventureEvents)
+  const cycle = buildRevenueDailyCycleAudit({
+    plan,
+    acquisition,
+    events: context.ventureEvents,
+    actions: normalizeCycleActions(context.autonomyActions),
+    approvals: normalizeCycleApprovals(context.approvals),
+    decisions: normalizeCycleDecisions(context.decisions),
+    executed: [],
+  })
+  return {
+    user,
+    supabase,
+    cronAuthorized,
+    context,
+    snapshot: context.snapshot,
+    plan,
+    acquisition,
+    cycle,
+  }
 }
 
 export async function GET(req: NextRequest) {
   try {
     const result = await buildPlanForRequest(req)
     if ('response' in result && result.response) return result.response
-    return NextResponse.json({ ok: true, plan: result.plan, snapshot: result.snapshot })
+    return NextResponse.json({
+      ok: true,
+      plan: result.plan,
+      snapshot: result.snapshot,
+      acquisition: result.acquisition,
+      cycle: result.cycle,
+    })
   } catch (error) {
     return apiError(error instanceof Error ? error.message : 'Autopilot indisponible', 500)
   }
@@ -342,7 +418,46 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, plan: result.plan, executed })
+    const postContext = await loadRevenueContext({
+      supabase: result.supabase,
+      userId: result.user.id,
+    })
+    const postAcquisition = buildAcquisitionRoi(postContext.ventureEvents)
+    const cycle = buildRevenueDailyCycleAudit({
+      plan: result.plan,
+      acquisition: postAcquisition,
+      events: postContext.ventureEvents,
+      actions: normalizeCycleActions(postContext.autonomyActions),
+      approvals: normalizeCycleApprovals(postContext.approvals),
+      decisions: normalizeCycleDecisions(postContext.decisions),
+      executed,
+      now: new Date(nowIso),
+    })
+
+    await insertAuditEvent(result.supabase, {
+      user_id: result.user.id,
+      event_type: 'revenue.daily_cycle.completed',
+      severity: cycle.mode === 'attention' ? 'warn' : 'info',
+      metadata: {
+        mode: cycle.mode,
+        summary: cycle.summary,
+        stages: cycle.stages.map((stage) => ({
+          key: stage.key,
+          status: stage.status,
+          source: stage.source,
+          risk: stage.risk ?? null,
+        })),
+        cron_authorized: result.cronAuthorized,
+      },
+    })
+
+    return NextResponse.json({
+      ok: true,
+      plan: result.plan,
+      acquisition: postAcquisition,
+      cycle,
+      executed,
+    })
   } catch (error) {
     return apiError(error instanceof Error ? error.message : 'Autopilot revenue échoué', 500)
   }

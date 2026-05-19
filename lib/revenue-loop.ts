@@ -60,6 +60,7 @@ export interface RevenueAutonomyActionRow {
   id: string
   venture_id?: string | null
   action_type?: string | null
+  risk_level?: string | null
   status?: string | null
   input?: Record<string, unknown> | null
   output?: Record<string, unknown> | null

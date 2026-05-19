@@ -42,6 +42,17 @@ console.log(
       mode: body?.plan?.mode,
       revenueEur: body?.plan?.revenueEur,
       blockedRevenueEur: body?.plan?.blockedRevenueEur,
+      cycle: body?.cycle
+        ? {
+            mode: body.cycle.mode,
+            summary: body.cycle.summary,
+            stages: body.cycle.stages?.map((stage) => ({
+              key: stage.key,
+              status: stage.status,
+              source: stage.source,
+            })),
+          }
+        : null,
       steps: body?.plan?.steps?.map((step) => ({
         kind: step.kind,
         execution: step.execution,

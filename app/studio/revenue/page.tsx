@@ -24,6 +24,24 @@ import type {
   RevenueLoopStageStatus,
 } from '@/lib/revenue-loop'
 
+type RevenueAuditEvent = {
+  id: string
+  event_type: string
+  severity: string
+  created_at: string
+  metadata?: {
+    mode?: string
+    summary?: {
+      revenueEur?: number
+      spendEur?: number
+      profitEur?: number
+      recommendedBudgetEur?: number
+      pendingApprovalCount?: number
+    }
+    stages?: Array<{ key: string; status: string; source?: string }>
+  }
+}
+
 const C = {
   bg: '#07090d',
   panel: '#0e1118',
@@ -154,6 +172,7 @@ export default function RevenuePage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [autopilotBusy, setAutopilotBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [cycleAudit, setCycleAudit] = useState<RevenueAuditEvent[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -169,9 +188,18 @@ export default function RevenuePage() {
     setLoading(false)
   }, [])
 
+  const loadAudit = useCallback(async () => {
+    const res = await fetch('/api/studio/revenue/audit', { cache: 'no-store' })
+    const json = await res.json().catch(() => null)
+    if (res.ok && Array.isArray(json?.events)) {
+      setCycleAudit(json.events as RevenueAuditEvent[])
+    }
+  }, [])
+
   useEffect(() => {
     load()
-  }, [load])
+    loadAudit()
+  }, [load, loadAudit])
 
   const loops = useMemo(() => snapshot?.loops ?? [], [snapshot])
   const recommendedLoop = useMemo(() => {
@@ -236,7 +264,7 @@ export default function RevenuePage() {
           ? `Autopilot revenue: ${executedCount} action lancée`
           : 'Autopilot revenue évalué'
       )
-      await load()
+      await Promise.all([load(), loadAudit()])
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Autopilot impossible')
     } finally {
@@ -601,6 +629,79 @@ export default function RevenuePage() {
               </div>
             ))
           )}
+          <div
+            style={{ borderTop: `1px solid ${C.line}`, paddingTop: 14, display: 'grid', gap: 10 }}
+          >
+            <h2 style={{ margin: 0, fontSize: 16, letterSpacing: 0 }}>Audit quotidien</h2>
+            {cycleAudit.length === 0 ? (
+              <div style={{ color: C.muted, fontSize: 14 }}>Aucun cycle revenue audité.</div>
+            ) : (
+              cycleAudit.slice(0, 3).map((event) => (
+                <div
+                  key={event.id}
+                  style={{
+                    border: `1px solid ${event.severity === 'warn' ? `${C.warn}55` : C.line}`,
+                    background: C.panel2,
+                    borderRadius: 8,
+                    padding: 12,
+                    display: 'grid',
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <strong style={{ color: event.severity === 'warn' ? C.warn : C.good }}>
+                      {event.metadata?.mode ?? event.severity}
+                    </strong>
+                    <span style={{ color: C.muted2, fontSize: 12 }}>
+                      {new Date(event.created_at).toLocaleString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                  {event.metadata?.summary && (
+                    <div style={{ color: C.muted, fontSize: 12 }}>
+                      revenu {euro(event.metadata.summary.revenueEur ?? 0)} · profit{' '}
+                      {euro(event.metadata.summary.profitEur ?? 0)} · budget{' '}
+                      {euro(event.metadata.summary.recommendedBudgetEur ?? 0)}
+                    </div>
+                  )}
+                  <div style={{ display: 'grid', gap: 5 }}>
+                    {(event.metadata?.stages ?? []).slice(0, 8).map((stage) => (
+                      <div
+                        key={`${event.id}:${stage.key}`}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          color: C.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        <span>{stage.key.replaceAll('_', ' ')}</span>
+                        <span
+                          style={{
+                            color:
+                              stage.status === 'done'
+                                ? C.good
+                                : stage.status === 'blocked'
+                                  ? C.bad
+                                  : C.muted2,
+                            fontFamily: 'var(--font-mono)',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {stage.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </aside>
       </section>
     </main>
