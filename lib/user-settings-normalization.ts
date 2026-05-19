@@ -8,6 +8,12 @@ export interface UserSettings {
   stripe_secret_key: string
   stripe_webhook_secret: string
   supabase_url: string
+  proxmox_base_url: string
+  proxmox_node: string
+  coolify_url: string
+  nginx_pm_url: string
+  uptime_kuma_url: string
+  vaultwarden_url: string
   display_name: string
   studio_timezone: string
   budget_cap_euros: number
@@ -23,6 +29,12 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   stripe_secret_key: '',
   stripe_webhook_secret: '',
   supabase_url: 'https://supabase.kenomi.eu',
+  proxmox_base_url: 'https://192.168.0.10:8006',
+  proxmox_node: 'pve',
+  coolify_url: 'http://192.168.0.19:8000',
+  nginx_pm_url: 'https://npm.tailnet.local',
+  uptime_kuma_url: 'https://uptime.tailnet.local',
+  vaultwarden_url: 'https://vault.tailnet.local',
   display_name: 'Kenomi Operator',
   studio_timezone: 'Europe/Paris',
   budget_cap_euros: 50,
@@ -55,6 +67,15 @@ export function normalizeUserSettings(raw: RawUserSettings | null | undefined): 
       DEFAULT_USER_SETTINGS.stripe_webhook_secret
     ),
     supabase_url: stringOrDefault(raw?.supabase_url, DEFAULT_USER_SETTINGS.supabase_url),
+    proxmox_base_url: stringOrDefault(
+      raw?.proxmox_base_url,
+      DEFAULT_USER_SETTINGS.proxmox_base_url
+    ),
+    proxmox_node: stringOrDefault(raw?.proxmox_node, DEFAULT_USER_SETTINGS.proxmox_node),
+    coolify_url: stringOrDefault(raw?.coolify_url, DEFAULT_USER_SETTINGS.coolify_url),
+    nginx_pm_url: stringOrDefault(raw?.nginx_pm_url, DEFAULT_USER_SETTINGS.nginx_pm_url),
+    uptime_kuma_url: stringOrDefault(raw?.uptime_kuma_url, DEFAULT_USER_SETTINGS.uptime_kuma_url),
+    vaultwarden_url: stringOrDefault(raw?.vaultwarden_url, DEFAULT_USER_SETTINGS.vaultwarden_url),
     display_name: stringOrDefault(raw?.display_name, DEFAULT_USER_SETTINGS.display_name),
     studio_timezone: stringOrDefault(raw?.studio_timezone, DEFAULT_USER_SETTINGS.studio_timezone),
     budget_cap_euros: validNumber(raw?.budget_cap_euros, DEFAULT_USER_SETTINGS.budget_cap_euros),

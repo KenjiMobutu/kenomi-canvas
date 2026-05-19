@@ -486,6 +486,92 @@ export default function SettingsPage() {
               </div>
             </SectionCard>
 
+            <SectionCard title="Proxmox VE" icon={<Server size={16} />}>
+              <Field
+                label="Base URL Proxmox"
+                hint="Adresse du cluster Proxmox utilisée comme repère opérationnel. Les tokens restent côté serveur."
+              >
+                <input
+                  value={cfg.proxmox_base_url}
+                  onChange={(e) => patch({ proxmox_base_url: e.target.value })}
+                  placeholder="https://192.168.0.10:8006"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+              <Field
+                label="Nœud par défaut"
+                hint="Nom du node Proxmox interrogé pour les métriques VM/LXC."
+              >
+                <input
+                  value={cfg.proxmox_node}
+                  onChange={(e) => patch({ proxmox_node: e.target.value })}
+                  placeholder="pve"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+            </SectionCard>
+
+            <SectionCard title="Coolify — Déploiements" icon={<Server size={16} />}>
+              <Field
+                label="URL Coolify"
+                hint="Console de déploiement self-hosted. Le token API reste dans l'environnement serveur."
+              >
+                <input
+                  value={cfg.coolify_url}
+                  onChange={(e) => patch({ coolify_url: e.target.value })}
+                  placeholder="http://192.168.0.19:8000"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: emerald + '14',
+                  border: `1px solid ${emerald}30`,
+                  fontSize: 11,
+                  color: muted,
+                  lineHeight: 1.5,
+                }}
+              >
+                <span style={{ color: emerald, fontWeight: 700 }}>Secret attendu :</span>{' '}
+                COOLIFY_TOKEN dans l&apos;environnement serveur, pas dans le formulaire navigateur.
+              </div>
+            </SectionCard>
+
+            <SectionCard title="Edge & observabilité" icon={<Server size={16} />}>
+              <Field label="Nginx Proxy Manager" hint="Reverse proxy et certificats SSL.">
+                <input
+                  value={cfg.nginx_pm_url}
+                  onChange={(e) => patch({ nginx_pm_url: e.target.value })}
+                  placeholder="https://npm.tailnet.local"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+              <Field label="Uptime Kuma" hint="Monitoring et pages de statut.">
+                <input
+                  value={cfg.uptime_kuma_url}
+                  onChange={(e) => patch({ uptime_kuma_url: e.target.value })}
+                  placeholder="https://uptime.tailnet.local"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+              <Field label="Vaultwarden" hint="Coffre d'identifiants opérationnels.">
+                <input
+                  value={cfg.vaultwarden_url}
+                  onChange={(e) => patch({ vaultwarden_url: e.target.value })}
+                  placeholder="https://vault.tailnet.local"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+            </SectionCard>
+
             <SectionCard title="Budget pub" icon={<Zap size={16} />}>
               <Field
                 label="Plafond pub / test (€)"

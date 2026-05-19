@@ -22,8 +22,30 @@ export interface SanitizedInfraService {
   kind: 'host' | 'service' | 'edge' | 'external'
 }
 
+export interface UserInfraSettings {
+  proxmox_base_url?: string | null
+  coolify_url?: string | null
+  nginx_pm_url?: string | null
+  uptime_kuma_url?: string | null
+  vaultwarden_url?: string | null
+  supabase_url?: string | null
+  n8n_base_url?: string | null
+  ollama_base_url?: string | null
+}
+
 const PRIVATE_HOST =
   /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|fc00:|fd[0-9a-f]{2}:)/i
+
+const SERVICE_ENDPOINT_KEYS: Record<string, keyof UserInfraSettings> = {
+  proxmox: 'proxmox_base_url',
+  coolify: 'coolify_url',
+  nginx: 'nginx_pm_url',
+  uptime: 'uptime_kuma_url',
+  vault: 'vaultwarden_url',
+  supabase: 'supabase_url',
+  n8n: 'n8n_base_url',
+  ollama: 'ollama_base_url',
+}
 
 export function parseInfraServices(services: InfraServiceConfig[]): InfraServiceConfig[] {
   return services.map((service) => ({
@@ -60,6 +82,23 @@ export function getSanitizedInfraServices(services: InfraServiceConfig[]): Sanit
     vmid: service.vmid,
     kind: service.kind,
   }))
+}
+
+export function applyUserInfraSettings(
+  services: InfraServiceConfig[],
+  settings: UserInfraSettings | null | undefined
+): InfraServiceConfig[] {
+  return services.map((service) => {
+    const settingsKey = SERVICE_ENDPOINT_KEYS[service.id]
+    const configuredEndpoint = settingsKey ? settings?.[settingsKey] : null
+    return {
+      ...service,
+      endpoint:
+        typeof configuredEndpoint === 'string' && configuredEndpoint.length > 0
+          ? configuredEndpoint
+          : service.endpoint,
+    }
+  })
 }
 
 export const DEFAULT_INFRA_SERVICES: InfraServiceConfig[] = parseInfraServices([
