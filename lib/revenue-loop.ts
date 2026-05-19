@@ -133,7 +133,18 @@ export interface RevenueLoopItem {
   blockedAction?: RevenueAutonomyActionRow | null
   stages: RevenueLoopStage[]
   nextAction: RevenueLoopNextAction
+  priorityScore: number
+  priorityReason: string
+  blockedRevenueEur: number
   updatedAt?: string | null
+}
+
+export type RevenueLoopRecommendedAction = RevenueLoopNextAction & {
+  loopId: string
+  ventureName: string
+  priorityScore: number
+  blockedRevenueEur: number
+  reason: string
 }
 
 export interface RevenueLoopSnapshot {
@@ -144,6 +155,8 @@ export interface RevenueLoopSnapshot {
     blockedLoops: number
     revenueEur: number
     paidPayments: number
+    blockedRevenueEur: number
+    recommendedAction: RevenueLoopRecommendedAction | null
   }
   loops: RevenueLoopItem[]
   agentRevenueAttribution: Array<{
@@ -195,6 +208,69 @@ function stage(key: RevenueLoopStageKey, status: RevenueLoopStageStatus): Revenu
   return { key, label: STAGE_LABELS[key], status }
 }
 
+function parsePaymentOutputAmount(raw: string | null | undefined): number {
+  if (!raw) return 0
+  try {
+    const parsed = JSON.parse(raw) as { price_amount?: unknown }
+    const cents = Number(parsed.price_amount)
+    if (!Number.isFinite(cents) || cents <= 0) return 0
+    return cents / 100
+  } catch {
+    return 0
+  }
+}
+
+function estimateBlockedRevenueEur(input: {
+  pipeline?: RevenuePipelineRow
+  payments: RevenuePaymentRow[]
+  revenueEur: number
+}): number {
+  if (input.revenueEur > 0) return 0
+  const pendingPayment = byDateDesc(input.payments).find(
+    (payment) => toNumber(payment.amount_eur) > 0
+  )
+  if (pendingPayment) return toNumber(pendingPayment.amount_eur)
+  return parsePaymentOutputAmount(input.pipeline?.payment_output)
+}
+
+function priorityFor(input: { nextAction: RevenueLoopNextAction; blockedRevenueEur: number }): {
+  priorityScore: number
+  priorityReason: string
+} {
+  const { nextAction, blockedRevenueEur } = input
+  if (nextAction.type === 'resolve_approval') {
+    return {
+      priorityScore: 100,
+      priorityReason:
+        nextAction.actionType === 'create_checkout'
+          ? 'Approval checkout bloque le revenu'
+          : 'Approval humaine bloque la boucle',
+    }
+  }
+  if (nextAction.type === 'create_checkout') {
+    return { priorityScore: 90, priorityReason: 'Checkout Stripe manquant' }
+  }
+  if (nextAction.type === 'run_agent' && nextAction.agentId === 'payment') {
+    return { priorityScore: 80, priorityReason: 'Offre tarifée manquante' }
+  }
+  if (nextAction.type === 'run_agent' && nextAction.agentId === 'marketing') {
+    return {
+      priorityScore: blockedRevenueEur > 0 ? 75 : 65,
+      priorityReason: 'Distribution manquante',
+    }
+  }
+  if (nextAction.type === 'run_agent' && nextAction.agentId === 'decision') {
+    return { priorityScore: 70, priorityReason: 'Décision post-revenu manquante' }
+  }
+  if (nextAction.type === 'review_pipeline') {
+    return { priorityScore: 60, priorityReason: 'Idée à valider avant monétisation' }
+  }
+  if (nextAction.type === 'run_agent') {
+    return { priorityScore: 50, priorityReason: 'Agent requis pour avancer vers le revenu' }
+  }
+  return { priorityScore: 10, priorityReason: 'Boucle à surveiller' }
+}
+
 export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSnapshot {
   const venturesById = new Map(input.ventures.map((venture) => [venture.id, venture]))
   const actionsById = new Map(input.autonomyActions.map((action) => [action.id, action]))
@@ -242,7 +318,7 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
     const venture = pipeline.venture_id ? venturesById.get(pipeline.venture_id) : undefined
     const ventureName = venture?.name ?? pipeline.idea_title ?? 'Venture sans nom'
     const venturePayments = pipeline.venture_id
-      ? paymentsByVenture.get(pipeline.venture_id) ?? []
+      ? (paymentsByVenture.get(pipeline.venture_id) ?? [])
       : []
     const paidPayments = venturePayments.filter(isPaid)
     const revenueEur = paidPayments.reduce((sum, payment) => sum + toNumber(payment.amount_eur), 0)
@@ -255,10 +331,13 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       return Boolean(pendingApprovalByActionId.get(action.id))
     })
     const pendingApproval = blockedAction ? pendingApprovalByActionId.get(blockedAction.id) : null
-    const ventureDrafts = pipeline.venture_id ? draftsByVenture.get(pipeline.venture_id) ?? [] : []
+    const ventureDrafts = pipeline.venture_id
+      ? (draftsByVenture.get(pipeline.venture_id) ?? [])
+      : []
     const publishedDraft = ventureDrafts.find((draft) => draft.status === 'published')
     const hasDecision = Boolean(
-      pipeline.decision_output || (pipeline.venture_id && decisionsByVenture.get(pipeline.venture_id)?.length)
+      pipeline.decision_output ||
+      (pipeline.venture_id && decisionsByVenture.get(pipeline.venture_id)?.length)
     )
 
     const checkoutStatus: RevenueLoopStageStatus = pendingApproval
@@ -279,8 +358,14 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
         'validation',
         pipeline.validation_output ? 'done' : pipeline.status === 'approved' ? 'ready' : 'idle'
       ),
-      stage('landing', pipeline.builder_output ? 'done' : pipeline.validation_output ? 'ready' : 'idle'),
-      stage('payment', pipeline.payment_output ? 'done' : pipeline.builder_output ? 'ready' : 'idle'),
+      stage(
+        'landing',
+        pipeline.builder_output ? 'done' : pipeline.validation_output ? 'ready' : 'idle'
+      ),
+      stage(
+        'payment',
+        pipeline.payment_output ? 'done' : pipeline.builder_output ? 'ready' : 'idle'
+      ),
       stage('checkout', checkoutStatus),
       stage(
         'marketing',
@@ -364,6 +449,13 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       }
     }
 
+    const blockedRevenueEur = estimateBlockedRevenueEur({
+      pipeline,
+      payments: venturePayments,
+      revenueEur,
+    })
+    const priority = priorityFor({ nextAction, blockedRevenueEur })
+
     return {
       id: pipeline.id,
       pipelineId: pipeline.id,
@@ -377,6 +469,8 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       blockedAction,
       stages,
       nextAction,
+      ...priority,
+      blockedRevenueEur,
       updatedAt: pipeline.updated_at ?? pipeline.created_at ?? null,
     }
   })
@@ -389,7 +483,21 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
     .map((venture) => {
       const venturePayments = paymentsByVenture.get(venture.id) ?? []
       const paidPayments = venturePayments.filter(isPaid)
-      const revenueEur = paidPayments.reduce((sum, payment) => sum + toNumber(payment.amount_eur), 0)
+      const revenueEur = paidPayments.reduce(
+        (sum, payment) => sum + toNumber(payment.amount_eur),
+        0
+      )
+      const nextAction: RevenueLoopNextAction = {
+        type: 'run_agent',
+        label: 'Lancer Scout',
+        agentId: 'scout',
+        ventureId: venture.id,
+      }
+      const blockedRevenueEur = estimateBlockedRevenueEur({
+        payments: venturePayments,
+        revenueEur,
+      })
+      const priority = priorityFor({ nextAction, blockedRevenueEur })
       return {
         id: `venture-${venture.id}`,
         ventureId: venture.id,
@@ -410,19 +518,35 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
           stage('revenue', revenueEur > 0 ? 'done' : 'idle'),
           stage('decision', 'idle'),
         ],
-        nextAction: {
-          type: 'run_agent',
-          label: 'Lancer Scout',
-          agentId: 'scout',
-          ventureId: venture.id,
-        },
+        nextAction,
+        ...priority,
+        blockedRevenueEur,
         updatedAt: venture.updated_at ?? venture.created_at ?? null,
       }
     })
 
-  const loops = [...pipelineLoops, ...ventureOnlyLoops]
+  const loops = [...pipelineLoops, ...ventureOnlyLoops].sort((a, b) => {
+    if (b.priorityScore !== a.priorityScore) return b.priorityScore - a.priorityScore
+    if (b.blockedRevenueEur !== a.blockedRevenueEur)
+      return b.blockedRevenueEur - a.blockedRevenueEur
+    const bd = Date.parse(b.updatedAt ?? '') || 0
+    const ad = Date.parse(a.updatedAt ?? '') || 0
+    return bd - ad
+  })
   const revenueEur = loops.reduce((sum, loop) => sum + loop.revenueEur, 0)
   const paidPayments = loops.reduce((sum, loop) => sum + loop.paidPayments, 0)
+  const blockedRevenueEur = loops.reduce((sum, loop) => sum + loop.blockedRevenueEur, 0)
+  const topLoop = loops[0]
+  const recommendedAction: RevenueLoopRecommendedAction | null = topLoop
+    ? {
+        ...topLoop.nextAction,
+        loopId: topLoop.id,
+        ventureName: topLoop.ventureName,
+        priorityScore: topLoop.priorityScore,
+        blockedRevenueEur: topLoop.blockedRevenueEur,
+        reason: topLoop.priorityReason,
+      }
+    : null
 
   const agentRevenueAttribution = loops
     .filter((loop): loop is RevenueLoopItem & { ventureId: string } =>
@@ -444,6 +568,8 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       blockedLoops: loops.filter((loop) => loop.nextAction.type === 'resolve_approval').length,
       revenueEur,
       paidPayments,
+      blockedRevenueEur,
+      recommendedAction,
     },
     loops,
     agentRevenueAttribution,

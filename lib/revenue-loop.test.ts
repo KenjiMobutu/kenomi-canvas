@@ -115,4 +115,100 @@ describe('buildRevenueLoopSnapshot', () => {
       label: 'Lancer Decision',
     })
   })
+
+  it('priorise la prochaine action qui débloque le revenu le plus directement', () => {
+    const snapshot = buildRevenueLoopSnapshot({
+      pipelines: [
+        {
+          ...basePipeline,
+          id: 'pipe-payment-ready',
+          venture_id: 'venture-ready',
+          idea_title: 'ReadyMoney',
+        },
+        {
+          ...basePipeline,
+          id: 'pipe-needs-builder',
+          venture_id: 'venture-builder',
+          idea_title: 'SlowMoney',
+          builder_output: null,
+          payment_output: null,
+        },
+      ],
+      ventures: [
+        { id: 'venture-ready', name: 'ReadyMoney', stage: 'payment', mrr: '0' },
+        { id: 'venture-builder', name: 'SlowMoney', stage: 'build', mrr: '0' },
+      ],
+      payments: [],
+      campaignDrafts: [],
+      autonomyActions: [],
+      approvals: [],
+      decisions: [],
+    })
+
+    expect(snapshot.summary.blockedRevenueEur).toBe(29)
+    expect(snapshot.summary.recommendedAction).toMatchObject({
+      type: 'create_checkout',
+      ventureId: 'venture-ready',
+      ventureName: 'ReadyMoney',
+      blockedRevenueEur: 29,
+      reason: 'Checkout Stripe manquant',
+    })
+    expect(snapshot.loops.map((loop) => loop.ventureName)).toEqual(['ReadyMoney', 'SlowMoney'])
+  })
+
+  it('place une approval revenue en tête même si une autre boucle est plus récente', () => {
+    const snapshot = buildRevenueLoopSnapshot({
+      pipelines: [
+        {
+          ...basePipeline,
+          id: 'pipe-new',
+          venture_id: 'venture-new',
+          idea_title: 'NewLoop',
+          created_at: '2026-05-18T12:00:00.000Z',
+          updated_at: '2026-05-18T12:00:00.000Z',
+        },
+        {
+          ...basePipeline,
+          id: 'pipe-approval',
+          venture_id: 'venture-approval',
+          idea_title: 'BlockedCheckout',
+          created_at: '2026-05-18T08:00:00.000Z',
+          updated_at: '2026-05-18T08:00:00.000Z',
+        },
+      ],
+      ventures: [
+        { id: 'venture-new', name: 'NewLoop', stage: 'payment', mrr: '0' },
+        { id: 'venture-approval', name: 'BlockedCheckout', stage: 'payment', mrr: '0' },
+      ],
+      payments: [],
+      campaignDrafts: [],
+      autonomyActions: [
+        {
+          id: 'action-approval',
+          venture_id: 'venture-approval',
+          action_type: 'create_checkout',
+          status: 'blocked',
+          created_at: '2026-05-18T08:05:00.000Z',
+        },
+      ],
+      approvals: [
+        {
+          id: 'approval-approval',
+          action_id: 'action-approval',
+          status: 'pending',
+          reason: 'Création Stripe Checkout en production',
+          created_at: '2026-05-18T08:06:00.000Z',
+        },
+      ],
+      decisions: [],
+    })
+
+    expect(snapshot.loops[0].ventureName).toBe('BlockedCheckout')
+    expect(snapshot.summary.recommendedAction).toMatchObject({
+      type: 'resolve_approval',
+      ventureName: 'BlockedCheckout',
+      actionType: 'create_checkout',
+      priorityScore: 100,
+    })
+  })
 })

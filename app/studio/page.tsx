@@ -66,6 +66,25 @@ type OpsSummaryPayload = {
   actions: OpsSummaryAction[]
 }
 
+type RevenueRecommendedAction = {
+  type: string
+  ventureName: string
+  reason: string
+  priorityScore: number
+  blockedRevenueEur: number
+}
+
+type RevenueLoopSnapshotPayload = {
+  summary: {
+    activeLoops: number
+    readyCheckouts: number
+    pendingApprovals: number
+    revenueEur: number
+    blockedRevenueEur: number
+    recommendedAction: RevenueRecommendedAction | null
+  }
+}
+
 /* ─── Static design data ─────────────────────────────────────── */
 const AGENTS_STATIC = [
   {
@@ -1578,6 +1597,155 @@ function KpiGrid({ kpi }: { kpi: KpiRow | null }) {
   )
 }
 
+function formatEuro(value: number) {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: value % 1 === 0 ? 0 : 2,
+  }).format(value)
+}
+
+function RevenueFirstStrip({ snapshot }: { snapshot: RevenueLoopSnapshotPayload | null }) {
+  const summary = snapshot?.summary
+  const action = summary?.recommendedAction
+  return (
+    <section
+      style={{
+        background: surface,
+        border: `1px solid ${summary?.blockedRevenueEur ? `${accent}66` : line}`,
+        borderRadius: 14,
+        padding: 14,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 10,
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-display)',
+            fontSize: 13,
+            color: text,
+          }}
+        >
+          Revenue first
+        </h3>
+        <a
+          href="/studio/revenue"
+          style={{
+            color: accent,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.12em',
+            textTransform: 'uppercase',
+            textDecoration: 'none',
+          }}
+        >
+          Ouvrir
+        </a>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+        <div
+          style={{
+            padding: 10,
+            borderRadius: 8,
+            border: `1px solid ${line}`,
+            background: surface2,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted,
+              textTransform: 'uppercase',
+            }}
+          >
+            Revenu prouvé
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 22,
+              fontWeight: 800,
+              color: emerald,
+              marginTop: 4,
+            }}
+          >
+            {formatEuro(summary?.revenueEur ?? 0)}
+          </div>
+        </div>
+        <div
+          style={{
+            padding: 10,
+            borderRadius: 8,
+            border: `1px solid ${line}`,
+            background: surface2,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted,
+              textTransform: 'uppercase',
+            }}
+          >
+            Argent bloqué
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 22,
+              fontWeight: 800,
+              color: summary?.blockedRevenueEur ? amber : emerald,
+              marginTop: 4,
+            }}
+          >
+            {formatEuro(summary?.blockedRevenueEur ?? 0)}
+          </div>
+        </div>
+      </div>
+      <a
+        href="/studio/revenue"
+        style={{
+          display: 'block',
+          marginTop: 10,
+          textDecoration: 'none',
+          padding: '9px 10px',
+          borderRadius: 8,
+          border: `1px solid ${action ? `${accent}44` : line}`,
+          background: action ? `${accent}12` : surface2,
+          color: text,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: action ? accent : muted2,
+            letterSpacing: '.12em',
+            textTransform: 'uppercase',
+            fontWeight: 800,
+          }}
+        >
+          {action ? `Priorité score ${action.priorityScore}` : 'Aucune priorité'}
+        </div>
+        <div style={{ marginTop: 4, fontSize: 11.5, color: muted, lineHeight: 1.45 }}>
+          {action
+            ? `${action.ventureName} · ${action.reason}`
+            : 'Aucune boucle revenue active à débloquer.'}
+        </div>
+      </a>
+    </section>
+  )
+}
+
 function OpsSummaryStrip({
   summary,
   actionState,
@@ -2357,6 +2525,7 @@ export default function CockpitPage() {
   const [showCmdk, setShowCmdk] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [opsSummary, setOpsSummary] = useState<OpsSummaryPayload | null>(null)
+  const [revenueSnapshot, setRevenueSnapshot] = useState<RevenueLoopSnapshotPayload | null>(null)
   const [opsActionState, setOpsActionState] = useState<
     Record<string, 'idle' | 'running' | 'done' | 'error'>
   >({})
@@ -2424,6 +2593,22 @@ export default function CockpitPage() {
     if (!user) return
     return loadOpsSummary()
   }, [user, loadOpsSummary])
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetch('/api/studio/revenue/loop', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.ok) setRevenueSnapshot(data.snapshot as RevenueLoopSnapshotPayload)
+      })
+      .catch(() => {
+        if (!cancelled) setRevenueSnapshot(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   const runOpsAction = useCallback(
     async (action: OpsSummaryAction) => {
@@ -2547,6 +2732,7 @@ export default function CockpitPage() {
         <div
           style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, minHeight: 0 }}
         >
+          {isMobile && <RevenueFirstStrip snapshot={revenueSnapshot} />}
           {loading && (
             <div
               style={{
@@ -2585,6 +2771,7 @@ export default function CockpitPage() {
         {/* Right rail — en bas sur mobile */}
         {!isMobile && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+            <RevenueFirstStrip snapshot={revenueSnapshot} />
             <TodayRhythm />
             <OpsSummaryStrip
               summary={opsSummary}

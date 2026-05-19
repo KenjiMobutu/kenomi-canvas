@@ -11,6 +11,7 @@ import {
   Play,
   RefreshCw,
   ShieldCheck,
+  Target,
   TrendingUp,
   X,
 } from 'lucide-react'
@@ -116,7 +117,8 @@ function Metric({
   value: string
   tone?: 'good' | 'warn' | 'bad'
 }) {
-  const color = tone === 'good' ? C.good : tone === 'warn' ? C.warn : tone === 'bad' ? C.bad : C.text
+  const color =
+    tone === 'good' ? C.good : tone === 'warn' ? C.warn : tone === 'bad' ? C.bad : C.text
   return (
     <div
       style={{
@@ -170,6 +172,10 @@ export default function RevenuePage() {
   }, [load])
 
   const loops = useMemo(() => snapshot?.loops ?? [], [snapshot])
+  const recommendedLoop = useMemo(() => {
+    const loopId = snapshot?.summary.recommendedAction?.loopId
+    return loopId ? (loops.find((loop) => loop.id === loopId) ?? null) : null
+  }, [loops, snapshot?.summary.recommendedAction?.loopId])
 
   async function callAction(loop: RevenueLoopItem, decision?: 'approved' | 'rejected') {
     const action = loop.nextAction
@@ -294,6 +300,11 @@ export default function RevenuePage() {
         }}
       >
         <Metric label="Revenu prouvé" value={euro(snapshot?.summary.revenueEur ?? 0)} tone="good" />
+        <Metric
+          label="Revenu bloqué"
+          value={euro(snapshot?.summary.blockedRevenueEur ?? 0)}
+          tone={(snapshot?.summary.blockedRevenueEur ?? 0) > 0 ? 'bad' : 'good'}
+        />
         <Metric label="Boucles actives" value={String(snapshot?.summary.activeLoops ?? 0)} />
         <Metric
           label="Checkouts prêts"
@@ -306,6 +317,51 @@ export default function RevenuePage() {
           tone={snapshot?.summary.pendingApprovals ? 'bad' : 'good'}
         />
       </section>
+
+      {snapshot?.summary.recommendedAction && recommendedLoop && (
+        <section
+          style={{
+            background: `linear-gradient(135deg, ${C.accent}18, ${C.panel})`,
+            border: `1px solid ${C.accent}66`,
+            borderRadius: 8,
+            padding: 16,
+            marginBottom: 18,
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) auto',
+            gap: 14,
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                color: C.accent,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                textTransform: 'uppercase',
+                marginBottom: 8,
+              }}
+            >
+              Action revenu #1 · score {snapshot.summary.recommendedAction.priorityScore}
+            </div>
+            <h2 style={{ margin: 0, fontSize: 20, letterSpacing: 0 }}>
+              {snapshot.summary.recommendedAction.ventureName}
+            </h2>
+            <div style={{ color: C.muted, marginTop: 6, fontSize: 14 }}>
+              {snapshot.summary.recommendedAction.reason} ·{' '}
+              {euro(snapshot.summary.recommendedAction.blockedRevenueEur)} bloqué
+            </div>
+          </div>
+          <button
+            onClick={() => callAction(recommendedLoop)}
+            disabled={busy?.startsWith(recommendedLoop.id)}
+            style={buttonStyle('primary')}
+          >
+            <Target size={15} />
+            Lancer priorité
+          </button>
+        </section>
+      )}
 
       <section
         style={{
@@ -370,6 +426,15 @@ export default function RevenuePage() {
                         }}
                       >
                         {loop.status} · {actionKind(loop.nextAction)}
+                      </div>
+                      <div
+                        style={{
+                          color: loop.blockedRevenueEur > 0 ? C.warn : C.muted2,
+                          fontSize: 12,
+                          marginTop: 6,
+                        }}
+                      >
+                        {loop.priorityReason} · {euro(loop.blockedRevenueEur)} bloqué
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
