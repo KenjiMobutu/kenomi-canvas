@@ -50,6 +50,30 @@ type RevenueCadenceStatus = {
   detail: string
 }
 
+type RevenueProofAudit = {
+  generatedAt: string
+  roiDecision: {
+    decision: 'scale' | 'cut' | 'hold'
+    reason: string
+  }
+  facts: {
+    payments: number
+    completedPayments: number
+    checkouts: number
+    publishedCampaigns: number
+    trackingEvents: number
+    pendingApprovals: number
+    completedActions: number
+  }
+  stages: Array<{
+    key: string
+    label: string
+    status: 'done' | 'blocked' | 'waiting'
+    detail: string
+    source: string
+  }>
+}
+
 const C = {
   bg: '#07090d',
   panel: '#0e1118',
@@ -179,8 +203,10 @@ export default function RevenuePage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [autopilotBusy, setAutopilotBusy] = useState(false)
+  const [proofBusy, setProofBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cycleAudit, setCycleAudit] = useState<RevenueAuditEvent[]>([])
+  const [proofAudit, setProofAudit] = useState<RevenueProofAudit | null>(null)
   const [cadence, setCadence] = useState<RevenueCadenceStatus>({
     status: 'missing',
     lastRunAt: null,
@@ -209,6 +235,7 @@ export default function RevenuePage() {
     if (res.ok && Array.isArray(json?.events)) {
       setCycleAudit(json.events as RevenueAuditEvent[])
       if (json.cadence) setCadence(json.cadence as RevenueCadenceStatus)
+      if (json.proof) setProofAudit(json.proof as RevenueProofAudit)
     }
   }, [])
 
@@ -260,7 +287,7 @@ export default function RevenuePage() {
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error ?? 'Action impossible')
       toast.success('Action lancée')
-      await load()
+      await Promise.all([load(), loadAudit()])
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Action impossible')
     } finally {
@@ -285,6 +312,31 @@ export default function RevenuePage() {
       toast.error(err instanceof Error ? err.message : 'Autopilot impossible')
     } finally {
       setAutopilotBusy(false)
+    }
+  }
+
+  async function runProofAction(
+    action: 'publish_controlled_campaign' | 'record_controlled_tracking'
+  ) {
+    setProofBusy(action)
+    try {
+      const res = await fetch('/api/studio/revenue/proof', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error ?? 'Preuve revenue impossible')
+      toast.success(
+        action === 'publish_controlled_campaign'
+          ? 'Campagne mock publiée'
+          : 'Tracking revenue injecté'
+      )
+      await Promise.all([load(), loadAudit()])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Preuve revenue impossible')
+    } finally {
+      setProofBusy(null)
     }
   }
 
@@ -331,6 +383,24 @@ export default function RevenuePage() {
           >
             <Zap size={15} />
             Autopilot
+          </button>
+          <button
+            onClick={() => runProofAction('publish_controlled_campaign')}
+            disabled={Boolean(proofBusy)}
+            style={buttonStyle('secondary')}
+            title="Publier une campagne mock contrôlée"
+          >
+            <Target size={15} />
+            Campagne mock
+          </button>
+          <button
+            onClick={() => runProofAction('record_controlled_tracking')}
+            disabled={Boolean(proofBusy)}
+            style={buttonStyle('secondary')}
+            title="Injecter page_view, waitlist_signup et campaign_spend"
+          >
+            <TrendingUp size={15} />
+            Tracking test
           </button>
           <button
             onClick={load}
@@ -707,6 +777,105 @@ export default function RevenuePage() {
                 </div>
               )}
             </div>
+            <h2 style={{ margin: 0, fontSize: 16, letterSpacing: 0 }}>Audit complet</h2>
+            {!proofAudit ? (
+              <div style={{ color: C.muted, fontSize: 14 }}>Audit revenue indisponible.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                <div
+                  style={{
+                    border: `1px solid ${
+                      proofAudit.roiDecision.decision === 'scale'
+                        ? `${C.good}55`
+                        : proofAudit.roiDecision.decision === 'cut'
+                          ? `${C.bad}55`
+                          : C.line
+                    }`,
+                    background: C.panel2,
+                    borderRadius: 8,
+                    padding: 12,
+                    display: 'grid',
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <strong style={{ color: C.text }}>Décision ROI</strong>
+                    <span
+                      style={{
+                        color:
+                          proofAudit.roiDecision.decision === 'scale'
+                            ? C.good
+                            : proofAudit.roiDecision.decision === 'cut'
+                              ? C.bad
+                              : C.warn,
+                        fontFamily: 'var(--font-mono)',
+                        textTransform: 'uppercase',
+                        fontSize: 12,
+                      }}
+                    >
+                      {proofAudit.roiDecision.decision}
+                    </span>
+                  </div>
+                  <div style={{ color: C.muted, fontSize: 12 }}>
+                    {proofAudit.roiDecision.reason}
+                  </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                      gap: 6,
+                      color: C.muted2,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                    }}
+                  >
+                    <span>pay {proofAudit.facts.completedPayments}</span>
+                    <span>chk {proofAudit.facts.checkouts}</span>
+                    <span>camp {proofAudit.facts.publishedCampaigns}</span>
+                    <span>evt {proofAudit.facts.trackingEvents}</span>
+                  </div>
+                </div>
+                {proofAudit.stages.map((stage) => (
+                  <div
+                    key={stage.key}
+                    style={{
+                      border: `1px solid ${
+                        stage.status === 'done'
+                          ? `${C.good}33`
+                          : stage.status === 'blocked'
+                            ? `${C.bad}55`
+                            : C.line
+                      }`,
+                      borderRadius: 8,
+                      padding: 10,
+                      display: 'grid',
+                      gap: 5,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                      <strong style={{ color: C.text, fontSize: 13 }}>{stage.label}</strong>
+                      <span
+                        style={{
+                          color:
+                            stage.status === 'done'
+                              ? C.good
+                              : stage.status === 'blocked'
+                                ? C.bad
+                                : C.muted2,
+                          fontFamily: 'var(--font-mono)',
+                          textTransform: 'uppercase',
+                          fontSize: 11,
+                        }}
+                      >
+                        {stage.status}
+                      </span>
+                    </div>
+                    <div style={{ color: C.muted, fontSize: 12 }}>{stage.detail}</div>
+                    <div style={{ color: C.muted2, fontSize: 11 }}>{stage.source}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             <h2 style={{ margin: 0, fontSize: 16, letterSpacing: 0 }}>Audit quotidien</h2>
             {cycleAudit.length === 0 ? (
               <div style={{ color: C.muted, fontSize: 14 }}>Aucun cycle revenue audité.</div>

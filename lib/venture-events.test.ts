@@ -48,6 +48,7 @@ describe('isVentureEventType', () => {
   it('accepte uniquement les événements business connus', () => {
     expect(isVentureEventType('page_view')).toBe(true)
     expect(isVentureEventType('waitlist_signup')).toBe(true)
+    expect(isVentureEventType('campaign_spend')).toBe(true)
     expect(isVentureEventType('unknown')).toBe(false)
   })
 })

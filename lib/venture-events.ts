@@ -7,6 +7,7 @@ export const VENTURE_EVENT_TYPES = [
   'checkout_started',
   'payment_succeeded',
   'campaign_published',
+  'campaign_spend',
   'decision',
 ] as const
 

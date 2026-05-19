@@ -22,6 +22,7 @@ import { insertAuditEvent } from '@/lib/audit-log'
 import { getCheckoutEnvironment, parsePaymentOutput } from '@/lib/stripe/checkout-action'
 import { buildAcquisitionRoi, type AcquisitionEventRow } from '@/lib/metrics/acquisition-roi'
 import { buildRevenueDailyCycleAudit } from '@/lib/revenue-daily-cycle'
+import { deriveRevenueRoiDecision } from '@/lib/revenue-proof'
 
 function normalizeCycleActions(actions: RevenueAutonomyActionRow[]) {
   return actions.map((action) => ({
@@ -48,6 +49,7 @@ function normalizeCycleDecisions(decisions: RevenueDecisionRow[]) {
 }
 
 type QueryResult<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+type RevenueRouteSupabase = Awaited<ReturnType<typeof requireAllowedUser>>['supabase']
 
 async function readTable<T>(query: QueryResult<T>): Promise<T[]> {
   const { data, error } = await query
@@ -55,7 +57,7 @@ async function readTable<T>(query: QueryResult<T>): Promise<T[]> {
   return data ?? []
 }
 
-async function loadRevenueContext(input: { supabase: any; userId: string }): Promise<{
+async function loadRevenueContext(input: { supabase: RevenueRouteSupabase; userId: string }): Promise<{
   snapshot: RevenueLoopSnapshot
   autonomyActions: RevenueAutonomyActionRow[]
   approvals: RevenueApprovalRow[]
@@ -199,7 +201,7 @@ async function getContext(req: NextRequest) {
 }
 
 async function createAutopilotApproval(input: {
-  supabase: any
+  supabase: RevenueRouteSupabase
   userId: string
   step: RevenueAutopilotStep
   nowIso: string
@@ -282,7 +284,7 @@ async function createAutopilotApproval(input: {
 }
 
 async function executeAutopilotStep(input: {
-  supabase: any
+  supabase: RevenueRouteSupabase
   userId: string
   step: RevenueAutopilotStep
   nowIso: string
@@ -348,6 +350,88 @@ async function executeAutopilotStep(input: {
   }
 
   return { status: 'held', actionType: input.step.kind, reason: input.step.reason }
+}
+
+async function recordRoiDecision(input: {
+  supabase: RevenueRouteSupabase
+  userId: string
+  snapshot: RevenueLoopSnapshot
+  acquisition: ReturnType<typeof buildAcquisitionRoi>
+  events: AcquisitionEventRow[]
+  nowIso: string
+}): Promise<RevenueDecisionRow | null> {
+  const ventureId =
+    input.events.find((event) => event.venture_id)?.venture_id ??
+    input.snapshot.loops.find((loop) => loop.ventureId)?.ventureId ??
+    null
+
+  if (!ventureId) return null
+
+  const roiDecision = deriveRevenueRoiDecision(input.acquisition.summary)
+  const actionStatus = roiDecision.decision === 'hold' ? 'executed' : 'proposed'
+  const metricsSnapshot = {
+    source: 'revenue_autopilot',
+    decision: roiDecision.decision,
+    reason: roiDecision.reason,
+    revenue_cents: input.acquisition.summary.revenueCents,
+    spend_cents: input.acquisition.summary.spendCents,
+    profit_cents: input.acquisition.summary.profitCents,
+    roi: input.acquisition.summary.roi,
+    recommended_budget_eur: input.acquisition.summary.recommendedBudgetEur,
+  }
+
+  const { data: latestDecision, error: latestError } = await input.supabase
+    .from('decisions')
+    .select('decision, created_at')
+    .eq('venture_id', ventureId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (latestError) throw new Error(latestError.message)
+
+  const latestAt = Date.parse(latestDecision?.created_at ?? '')
+  const alreadyCurrent =
+    latestDecision?.decision === roiDecision.decision &&
+    Number.isFinite(latestAt) &&
+    input.nowIso.slice(0, 10) === new Date(latestAt).toISOString().slice(0, 10)
+
+  if (!alreadyCurrent) {
+    const { error: decisionError } = await input.supabase.from('decisions').insert({
+      venture_id: ventureId,
+      decision: roiDecision.decision,
+      reason: roiDecision.reason,
+      metrics_snapshot: metricsSnapshot,
+      action_status: actionStatus,
+      created_at: input.nowIso,
+      executed_at: roiDecision.decision === 'hold' ? input.nowIso : null,
+    })
+    if (decisionError) throw new Error(decisionError.message)
+  }
+
+  await input.supabase
+    .from('ventures')
+    .update({
+      current_decision: roiDecision.ventureDecision,
+      last_decision_at: input.nowIso,
+      next_action:
+        roiDecision.decision === 'scale'
+          ? 'Valider ou exécuter le scale budget proposé.'
+          : roiDecision.decision === 'cut'
+            ? 'Valider le cut avant arrêt ou pivot.'
+            : 'Hold: attendre un signal revenu/spend plus dur.',
+      updated_at: input.nowIso,
+    })
+    .eq('id', ventureId)
+    .eq('user_id', input.userId)
+
+  return {
+    id: `roi-${input.nowIso}`,
+    venture_id: ventureId,
+    decision: roiDecision.decision,
+    reason: roiDecision.reason,
+    created_at: input.nowIso,
+  }
 }
 
 async function buildPlanForRequest(req: NextRequest) {
@@ -445,13 +529,23 @@ export async function POST(req: NextRequest) {
       userId: result.user.id,
     })
     const postAcquisition = buildAcquisitionRoi(postContext.ventureEvents)
+    const roiDecision = await recordRoiDecision({
+      supabase: result.supabase,
+      userId: result.user.id,
+      snapshot: postContext.snapshot,
+      acquisition: postAcquisition,
+      events: postContext.ventureEvents,
+      nowIso,
+    })
     const cycle = buildRevenueDailyCycleAudit({
       plan: result.plan,
       acquisition: postAcquisition,
       events: postContext.ventureEvents,
       actions: normalizeCycleActions(postContext.autonomyActions),
       approvals: normalizeCycleApprovals(postContext.approvals),
-      decisions: normalizeCycleDecisions(postContext.decisions),
+      decisions: normalizeCycleDecisions(
+        roiDecision ? [roiDecision, ...postContext.decisions] : postContext.decisions
+      ),
       executed,
       now: new Date(nowIso),
     })
@@ -477,6 +571,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       plan: result.plan,
       acquisition: postAcquisition,
+      roiDecision,
       cycle,
       executed,
     })
