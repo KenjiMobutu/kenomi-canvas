@@ -42,6 +42,14 @@ type RevenueAuditEvent = {
   }
 }
 
+type RevenueCadenceStatus = {
+  status: 'live' | 'stale' | 'missing'
+  lastRunAt: string | null
+  nextExpectedAt: string | null
+  hoursSinceLastRun: number | null
+  detail: string
+}
+
 const C = {
   bg: '#07090d',
   panel: '#0e1118',
@@ -173,6 +181,13 @@ export default function RevenuePage() {
   const [autopilotBusy, setAutopilotBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cycleAudit, setCycleAudit] = useState<RevenueAuditEvent[]>([])
+  const [cadence, setCadence] = useState<RevenueCadenceStatus>({
+    status: 'missing',
+    lastRunAt: null,
+    nextExpectedAt: null,
+    hoursSinceLastRun: null,
+    detail: 'Aucun daily cycle revenue audité.',
+  })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -193,6 +208,7 @@ export default function RevenuePage() {
     const json = await res.json().catch(() => null)
     if (res.ok && Array.isArray(json?.events)) {
       setCycleAudit(json.events as RevenueAuditEvent[])
+      if (json.cadence) setCadence(json.cadence as RevenueCadenceStatus)
     }
   }, [])
 
@@ -632,6 +648,61 @@ export default function RevenuePage() {
           <div
             style={{ borderTop: `1px solid ${C.line}`, paddingTop: 14, display: 'grid', gap: 10 }}
           >
+            <div
+              style={{
+                border: `1px solid ${
+                  cadence?.status === 'live'
+                    ? `${C.good}55`
+                    : cadence?.status === 'stale'
+                      ? `${C.warn}66`
+                      : `${C.bad}55`
+                }`,
+                background: C.panel2,
+                borderRadius: 8,
+                padding: 12,
+                display: 'grid',
+                gap: 8,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <strong
+                  style={{
+                    color:
+                      cadence?.status === 'live'
+                        ? C.good
+                        : cadence?.status === 'stale'
+                          ? C.warn
+                          : C.bad,
+                  }}
+                >
+                  Cadence quotidienne
+                </strong>
+                <span
+                  style={{
+                    color: C.muted2,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 12,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {cadence?.status ?? 'missing'}
+                </span>
+              </div>
+              <div style={{ color: C.muted, fontSize: 12 }}>
+                {cadence?.detail ?? 'Aucun statut cadence disponible.'}
+              </div>
+              {cadence?.nextExpectedAt && (
+                <div style={{ color: C.muted2, fontSize: 12 }}>
+                  prochain attendu{' '}
+                  {new Date(cadence.nextExpectedAt).toLocaleString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </div>
+              )}
+            </div>
             <h2 style={{ margin: 0, fontSize: 16, letterSpacing: 0 }}>Audit quotidien</h2>
             {cycleAudit.length === 0 ? (
               <div style={{ color: C.muted, fontSize: 14 }}>Aucun cycle revenue audité.</div>

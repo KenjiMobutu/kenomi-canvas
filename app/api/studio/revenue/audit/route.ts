@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { requireAllowedUser } from '@/lib/auth-server'
+import { buildRevenueCadenceStatus } from '@/lib/revenue-cadence'
 
 export async function GET() {
   const { user, supabase, response } = await requireAllowedUser(await cookies())
@@ -18,5 +19,9 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, events: data ?? [] })
+  return NextResponse.json({
+    ok: true,
+    events: data ?? [],
+    cadence: buildRevenueCadenceStatus({ events: data ?? [] }),
+  })
 }

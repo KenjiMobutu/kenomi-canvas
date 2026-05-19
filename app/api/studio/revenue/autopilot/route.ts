@@ -13,6 +13,7 @@ import {
   type RevenueVentureRow,
 } from '@/lib/revenue-loop'
 import { getAutonomyConfig } from '@/lib/autonomy/config'
+import { resolveCronUserId } from '@/lib/autonomy/cron-user'
 import { runAgentStep, type RunAgentStepSupabase } from '@/lib/autonomy/run-agent-step'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { apiError } from '@/lib/api-response'
@@ -161,14 +162,35 @@ function isCronAuthorized(req: NextRequest): boolean {
 
 async function getContext(req: NextRequest) {
   if (isCronAuthorized(req)) {
-    const userId = process.env.AGENT_ORCHESTRATOR_USER_ID
-    return {
-      user: userId ? { id: userId } : null,
-      supabase: supabaseAdmin,
-      response: userId
-        ? null
-        : NextResponse.json({ error: 'AGENT_ORCHESTRATOR_USER_ID requis' }, { status: 500 }),
-      cronAuthorized: true,
+    try {
+      const userId = await resolveCronUserId({
+        explicitUserId: process.env.AGENT_ORCHESTRATOR_USER_ID,
+        allowedEmail: process.env.ALLOWED_EMAIL,
+        listUsers: async () => {
+          const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+            page: 1,
+            perPage: 100,
+          })
+          if (error) throw new Error(error.message)
+          return data.users.map((user) => ({ id: user.id, email: user.email }))
+        },
+      })
+      return {
+        user: { id: userId },
+        supabase: supabaseAdmin,
+        response: null,
+        cronAuthorized: true,
+      }
+    } catch (error) {
+      return {
+        user: null,
+        supabase: supabaseAdmin,
+        response: NextResponse.json(
+          { error: error instanceof Error ? error.message : 'Utilisateur autopilot introuvable' },
+          { status: 500 }
+        ),
+        cronAuthorized: true,
+      }
     }
   }
 
