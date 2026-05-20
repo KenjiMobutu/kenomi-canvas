@@ -85,6 +85,7 @@ function pendingRiskApprovals(input: BuildRevenueDailyCycleAuditInput) {
   return input.approvals.filter((approval) => {
     if (approval.status !== 'pending') return false
     const action = approval.action_id ? actionsById.get(approval.action_id) : null
+    if (action?.action_type === 'create_checkout') return false
     return !action || action.risk_level === 'high' || action.status === 'blocked'
   })
 }

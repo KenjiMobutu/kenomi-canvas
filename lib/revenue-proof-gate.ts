@@ -8,6 +8,7 @@ export interface RevenueProofGateInput {
   campaignSpendEvents: number
   pageViewEvents: number
   waitlistSignupEvents: number
+  completedFulfillments: number
   decisions: number
 }
 
@@ -32,6 +33,7 @@ export function evaluateRevenueProofGate(input: RevenueProofGateInput): RevenueP
   if (missing(input.campaignSpendEvents)) failures.push('campaign_spend_event_missing')
   if (missing(input.pageViewEvents)) failures.push('page_view_event_missing')
   if (missing(input.waitlistSignupEvents)) failures.push('waitlist_signup_event_missing')
+  if (missing(input.completedFulfillments)) failures.push('fulfillment_missing')
   if (missing(input.decisions)) failures.push('decision_missing')
 
   return { ok: failures.length === 0, failures }

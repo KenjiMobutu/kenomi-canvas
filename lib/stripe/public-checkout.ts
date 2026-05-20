@@ -52,6 +52,12 @@ export interface CreatePublicCheckoutSessionInput {
   origin: string
   envStripeSecretKey?: string | null
   customerEmail?: string | null
+  attribution?: {
+    utm_source?: string | null
+    utm_medium?: string | null
+    utm_campaign?: string | null
+    utm_content?: string | null
+  }
   now?: () => Date
 }
 
@@ -82,6 +88,17 @@ function getPaymentIntentId(value: unknown): string | null {
     return typeof id === 'string' ? id : null
   }
   return null
+}
+
+function cleanAttribution(
+  attribution: CreatePublicCheckoutSessionInput['attribution']
+): Record<string, string> {
+  const entries = Object.entries(attribution ?? {}).flatMap(([key, value]) => {
+    if (typeof value !== 'string') return []
+    const cleaned = value.trim()
+    return cleaned ? [[key, cleaned] as const] : []
+  })
+  return Object.fromEntries(entries)
 }
 
 export async function createPublicCheckoutSession(
@@ -135,6 +152,7 @@ export async function createPublicCheckoutSession(
   const payment = parsePaymentOutput(pipeline.payment_output)
   const urls = publicCheckoutUrls(input.origin, input.slug)
   const stripe = input.stripeClientFactory(stripeSecretKey)
+  const attribution = cleanAttribution(input.attribution)
   const session = await stripe.checkout.sessions.create(
     buildCheckoutSessionParams({
       payment,
@@ -146,6 +164,7 @@ export async function createPublicCheckoutSession(
         source: 'public_landing',
         slug: input.slug,
         pipeline_id: pipeline.id,
+        ...attribution,
       },
     })
   )
@@ -184,6 +203,7 @@ export async function createPublicCheckoutSession(
       checkout_url: session.url,
       pipeline_id: pipeline.id,
       slug: input.slug,
+      ...attribution,
     },
     occurred_at: nowIso,
   })

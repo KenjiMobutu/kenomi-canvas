@@ -13,6 +13,7 @@
     "smoke": "node scripts/smoke-app.mjs",
     "smoke:vision": "node scripts/smoke-vision-loop.mjs",
     "smoke:revenue-proof": "node scripts/smoke-revenue-proof.mjs",
+    "smoke:revenue-cadence": "node scripts/smoke-revenue-cadence.mjs",
     "revenue:autopilot": "node scripts/revenue-autopilot-cron.mjs",
     "ops:readiness": "node scripts/ops-readiness.mjs",
     "ops:coherence": "node scripts/audit-studio-coherence.mjs && node scripts/audit-business-data.mjs",

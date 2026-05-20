@@ -51,6 +51,12 @@ Les refactors UI lourds sont limites aux zones touchees. Le decoupage complet de
 - Verified targeted Phase 1 tests: 74 passing across Scout, pipeline, materialization, landing health, Stripe contract, revenue loop, autopilot and autonomy full-loop.
 - Remaining open items in this phase are the explicit commit steps, the `app/studio/ventures/page.tsx` repair ordering, the extra smoke output label, and the runbook documentation updates.
 - Phase 0 implemented on 2026-05-20 except explicit commit steps: global Prettier was run, format/typecheck/test/lint/build gates passed, and revenue baseline docs were updated.
+- Phase 3 implemented and verified live on 2026-05-20: `fulfillment_deliveries` exists in prod, the Stripe post-payment path triggers fulfillment, a live n8n webhook `/webhook/fulfill` is active, and at least one delivery is completed in production.
+- Phase 4 implemented and verified live on 2026-05-20: the waitlist route notifies n8n, a live nurture webhook `/webhook/nurture` is active, and a real waitlist signup from `lab.kenomi.eu` produced a successful n8n execution.
+- Phase 5 implemented and verified on 2026-05-20: autonomy config now exposes portfolio experiment caps, revenue autopilot can plan multiple low-risk steps, and the global smoke suite remained green after the change.
+- Phase 6 implemented and verified on 2026-05-20: public landings now capture UTM attribution into `page_view` and propagate it through public checkout metadata.
+- Phase 7 implemented and verified on 2026-05-20: cron cadence smoke exists, Prometheus business gauges are exposed from `/api/metrics`, and production cadence now returns `mode=calm` with no blocked stage.
+- Phase 8 final gate updated on 2026-05-20: revenue-proof now requires completed fulfillment, supports strict live-marketing mode, and the runbooks document both standard and full live checks.
 
 ## File Ownership Map
 
@@ -1098,7 +1104,7 @@ git commit -m "docs: document live n8n marketing setup"
 - Create: `supabase/migrations/20260520_fulfillment_deliveries.sql`
 - Modify: `scripts/validate-supabase-remote.mjs`
 
-- [ ] **Step 1: Creer la migration**
+- [x] **Step 1: Creer la migration**
 
 Create `supabase/migrations/20260520_fulfillment_deliveries.sql`:
 
@@ -1143,7 +1149,7 @@ create policy "fulfillment_deliveries_service_all"
   with check (auth.role() = 'service_role');
 ```
 
-- [ ] **Step 2: Etendre la validation distante**
+- [x] **Step 2: Etendre la validation distante**
 
 Dans `scripts/validate-supabase-remote.mjs`, ajouter `fulfillment_deliveries` dans la liste des tables RLS attendues et verifier les colonnes:
 
@@ -1153,7 +1159,7 @@ Dans `scripts/validate-supabase-remote.mjs`, ajouter `fulfillment_deliveries` da
 ['fulfillment_deliveries', 'completed_at'],
 ```
 
-- [ ] **Step 3: Appliquer la migration en prod**
+- [x] **Step 3: Appliquer la migration en prod**
 
 ```bash
 ssh -o BatchMode=yes coolify \
@@ -1163,7 +1169,7 @@ ssh -o BatchMode=yes coolify \
 
 Expected: `CREATE TABLE` or `NOTICE`, indexes/policies OK.
 
-- [ ] **Step 4: Verifier**
+- [x] **Step 4: Verifier**
 
 ```bash
 npm run supabase:validate
@@ -1187,7 +1193,7 @@ git commit -m "feat(fulfillment): add delivery audit table"
 - Create: `lib/fulfillment/n8n.test.ts`
 - Modify: `.env.example`
 
-- [ ] **Step 1: Ecrire le test**
+- [x] **Step 1: Ecrire le test**
 
 Create `lib/fulfillment/n8n.test.ts`:
 
@@ -1235,7 +1241,7 @@ describe('createN8nFulfillmentProvider', () => {
 })
 ```
 
-- [ ] **Step 2: Verifier l'echec**
+- [x] **Step 2: Verifier l'echec**
 
 ```bash
 npm test -- lib/fulfillment/n8n.test.ts
@@ -1243,7 +1249,7 @@ npm test -- lib/fulfillment/n8n.test.ts
 
 Expected: FAIL because files do not exist.
 
-- [ ] **Step 3: Creer les types**
+- [x] **Step 3: Creer les types**
 
 Create `lib/fulfillment/types.ts`:
 
@@ -1268,7 +1274,7 @@ export interface FulfillmentProvider {
 }
 ```
 
-- [ ] **Step 4: Implementer n8n**
+- [x] **Step 4: Implementer n8n**
 
 Create `lib/fulfillment/n8n.ts`:
 
@@ -1317,7 +1323,7 @@ export function createN8nFulfillmentProvider(
 }
 ```
 
-- [ ] **Step 5: Ajouter les variables d'environnement**
+- [x] **Step 5: Ajouter les variables d'environnement**
 
 In `.env.example`:
 
@@ -1326,7 +1332,7 @@ FULFILLMENT_WEBHOOK_URL=https://n8n.kenomi.eu/webhook/fulfill
 FULFILLMENT_WEBHOOK_TOKEN=your_shared_secret_here
 ```
 
-- [ ] **Step 6: Verifier**
+- [x] **Step 6: Verifier**
 
 ```bash
 npm test -- lib/fulfillment/n8n.test.ts
@@ -1351,7 +1357,7 @@ git commit -m "feat(fulfillment): add n8n delivery provider"
 - Create: `lib/fulfillment/trigger.ts`
 - Create: `lib/fulfillment/trigger.test.ts`
 
-- [ ] **Step 1: Ecrire le test du trigger**
+- [x] **Step 1: Ecrire le test du trigger**
 
 Create `lib/fulfillment/trigger.test.ts`:
 
@@ -1422,7 +1428,7 @@ describe('triggerFulfillmentForPayment', () => {
 })
 ```
 
-- [ ] **Step 2: Implementer le trigger**
+- [x] **Step 2: Implementer le trigger**
 
 Create `lib/fulfillment/trigger.ts`:
 
@@ -1512,7 +1518,7 @@ export async function triggerFulfillmentForPayment(input: {
 }
 ```
 
-- [ ] **Step 3: Integrer dans `webhook-handler.ts`**
+- [x] **Step 3: Integrer dans `webhook-handler.ts`**
 
 Apres passage paiement en `completed`, charger les infos payment avec `user_id`, puis appeler:
 
@@ -1533,7 +1539,7 @@ await triggerFulfillmentForPayment({
 
 Si fulfillment echoue, ne pas faire echouer le webhook Stripe apres le paiement; enregistrer l'erreur dans `fulfillment_deliveries` et `agent_events`.
 
-- [ ] **Step 4: Verifier**
+- [x] **Step 4: Verifier**
 
 ```bash
 npm test -- lib/fulfillment/trigger.test.ts lib/stripe/webhook-handler.test.ts
@@ -1564,7 +1570,7 @@ git commit -m "feat(fulfillment): trigger delivery after Stripe payment"
 - Modify: `app/api/waitlist/route.ts`
 - Modify: `.env.example`
 
-- [ ] **Step 1: Ecrire le test adapter**
+- [x] **Step 1: Ecrire le test adapter**
 
 Create `lib/nurture/n8n.test.ts`:
 
@@ -1599,7 +1605,7 @@ describe('notifyNurtureSignup', () => {
 })
 ```
 
-- [ ] **Step 2: Implementer adapter**
+- [x] **Step 2: Implementer adapter**
 
 Create `lib/nurture/n8n.ts`:
 
@@ -1638,7 +1644,7 @@ export async function notifyNurtureSignup(input: {
 }
 ```
 
-- [ ] **Step 3: Appeler depuis waitlist**
+- [x] **Step 3: Appeler depuis waitlist**
 
 Dans `app/api/waitlist/route.ts`, apres insertion waitlist et event `waitlist_signup`, appeler:
 
@@ -1655,7 +1661,7 @@ await notifyNurtureSignup({
 
 Le signup ne doit jamais echouer parce que n8n est down.
 
-- [ ] **Step 4: Ajouter env**
+- [x] **Step 4: Ajouter env**
 
 `.env.example`:
 
@@ -1664,7 +1670,7 @@ NURTURE_WEBHOOK_URL=https://n8n.kenomi.eu/webhook/nurture
 NURTURE_WEBHOOK_TOKEN=your_shared_secret_here
 ```
 
-- [ ] **Step 5: Verifier**
+- [x] **Step 5: Verifier**
 
 ```bash
 npm test -- lib/nurture/n8n.test.ts lib/api-routes/waitlist.test.ts
@@ -1694,7 +1700,7 @@ git commit -m "feat(nurture): notify n8n on waitlist signup"
 - Modify: `lib/autonomy/config.test.ts`
 - Modify: `.env.example`
 
-- [ ] **Step 1: Ajouter les tests**
+- [x] **Step 1: Ajouter les tests**
 
 Dans `lib/autonomy/config.test.ts`:
 
@@ -1710,7 +1716,7 @@ it('parses portfolio experiment caps', () => {
 })
 ```
 
-- [ ] **Step 2: Implementer la config**
+- [x] **Step 2: Implementer la config**
 
 Dans `lib/autonomy/config.ts`, ajouter:
 
@@ -1726,7 +1732,7 @@ portfolioMaxNewVenturesPerDay: readPositiveInt(env.AUTONOMY_PORTFOLIO_MAX_NEW_VE
 portfolioMaxActiveExperiments: readPositiveInt(env.AUTONOMY_PORTFOLIO_MAX_ACTIVE_EXPERIMENTS, 5),
 ```
 
-- [ ] **Step 3: Ajouter env**
+- [x] **Step 3: Ajouter env**
 
 `.env.example`:
 
@@ -1735,7 +1741,7 @@ AUTONOMY_PORTFOLIO_MAX_NEW_VENTURES_PER_DAY=1
 AUTONOMY_PORTFOLIO_MAX_ACTIVE_EXPERIMENTS=5
 ```
 
-- [ ] **Step 4: Verifier**
+- [x] **Step 4: Verifier**
 
 ```bash
 npm test -- lib/autonomy/config.test.ts
@@ -1759,7 +1765,7 @@ git commit -m "feat(autonomy): add portfolio experiment caps"
 - Modify: `lib/revenue-autopilot.test.ts`
 - Modify: `app/api/studio/revenue/autopilot/route.ts`
 
-- [ ] **Step 1: Tester le cap multi-step**
+- [x] **Step 1: Tester le cap multi-step**
 
 Dans `lib/revenue-autopilot.test.ts`:
 
@@ -1805,7 +1811,7 @@ it('limits daily autopilot to configured low-risk portfolio steps', () => {
 
 If helpers do not exist, create local test helpers in the test file with complete `RevenueLoopItem` objects.
 
-- [ ] **Step 2: Implementer `maxSteps`**
+- [x] **Step 2: Implementer `maxSteps`**
 
 Extend `BuildRevenueAutopilotPlanInput`:
 
@@ -1820,7 +1826,7 @@ Change `buildRevenueAutopilotPlan` to:
 3. cap by `maxSteps ?? 1`;
 4. never auto-add more than one approval step per run.
 
-- [ ] **Step 3: Utiliser la config dans la route**
+- [x] **Step 3: Utiliser la config dans la route**
 
 In `app/api/studio/revenue/autopilot/route.ts`, pass:
 
@@ -1838,7 +1844,7 @@ for (const step of result.plan.steps.slice(0, config.portfolioMaxNewVenturesPerD
 
 Keep approvals capped to one pending high-risk action per run.
 
-- [ ] **Step 4: Verifier**
+- [x] **Step 4: Verifier**
 
 ```bash
 npm test -- lib/revenue-autopilot.test.ts lib/revenue-loop.test.ts
@@ -1869,7 +1875,7 @@ git commit -m "feat(revenue): run capped portfolio autopilot steps"
 - Modify: `lib/venture-events.ts`
 - Modify: `lib/venture-events.test.ts`
 
-- [ ] **Step 1: Ajouter test UTM**
+- [x] **Step 1: Ajouter test UTM**
 
 In `lib/venture-events.test.ts`:
 
@@ -1894,7 +1900,7 @@ it('stores attribution metadata for page views', async () => {
 })
 ```
 
-- [ ] **Step 2: Lire les search params**
+- [x] **Step 2: Lire les search params**
 
 In `app/[slug]/page.tsx`, extend `searchParams`:
 
@@ -1912,7 +1918,7 @@ searchParams: Promise<{
 
 Add these values to `page_view` metadata.
 
-- [ ] **Step 3: Propager UTM au checkout**
+- [x] **Step 3: Propager UTM au checkout**
 
 Add hidden inputs in checkout form:
 
@@ -1925,7 +1931,7 @@ Add hidden inputs in checkout form:
 
 In `app/api/public/stripe/checkout/route.ts`, parse the fields and pass them into `createPublicCheckoutSession` metadata.
 
-- [ ] **Step 4: Verifier**
+- [x] **Step 4: Verifier**
 
 ```bash
 npm test -- lib/venture-events.test.ts lib/stripe/public-checkout.test.ts
@@ -1956,7 +1962,7 @@ git commit -m "feat(tracking): capture UTM attribution through checkout"
 - Modify: `package.json`
 - Modify: `docs/runbooks/daily-operations.md`
 
-- [ ] **Step 1: Creer le script**
+- [x] **Step 1: Creer le script**
 
 Create `scripts/smoke-revenue-cadence.mjs`:
 
@@ -1991,7 +1997,7 @@ console.log(
 )
 ```
 
-- [ ] **Step 2: Ajouter le package script**
+- [x] **Step 2: Ajouter le package script**
 
 In `package.json`:
 
@@ -1999,7 +2005,7 @@ In `package.json`:
 "smoke:revenue-cadence": "node scripts/smoke-revenue-cadence.mjs"
 ```
 
-- [ ] **Step 3: Documenter la verification VM**
+- [x] **Step 3: Documenter la verification VM**
 
 In `docs/runbooks/daily-operations.md`:
 
@@ -2015,7 +2021,7 @@ SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:revenue-cadence
 
 ````
 
-- [ ] **Step 4: Verifier**
+- [x] **Step 4: Verifier**
 
 ```bash
 npm run smoke:revenue-cadence
@@ -2039,7 +2045,7 @@ git commit -m "feat(ops): add revenue cadence smoke"
 - Modify: `app/api/metrics/route.ts`
 - Create: `lib/metrics/prometheus.test.ts`
 
-- [ ] **Step 1: Tester les noms de metriques**
+- [x] **Step 1: Tester les noms de metriques**
 
 Create `lib/metrics/prometheus.test.ts`:
 
@@ -2063,7 +2069,7 @@ describe('buildBusinessGaugeSnapshot', () => {
 })
 ```
 
-- [ ] **Step 2: Implementer helper**
+- [x] **Step 2: Implementer helper**
 
 In `lib/metrics/prometheus.ts`, add:
 
@@ -2083,11 +2089,11 @@ export function buildBusinessGaugeSnapshot(input: {
 }
 ```
 
-- [ ] **Step 3: Exposer dans `/api/metrics`**
+- [x] **Step 3: Exposer dans `/api/metrics`**
 
 In `app/api/metrics/route.ts`, register gauges for the four names and set values from Supabase counts.
 
-- [ ] **Step 4: Verifier**
+- [x] **Step 4: Verifier**
 
 ```bash
 npm test -- lib/metrics/prometheus.test.ts
@@ -2117,7 +2123,7 @@ git commit -m "feat(metrics): expose revenue operations gauges"
 - Modify: `scripts/smoke-revenue-proof.mjs`
 - Modify: `docs/runbooks/smoke-tests.md`
 
-- [ ] **Step 1: Ajouter les compteurs DB**
+- [x] **Step 1: Ajouter les compteurs DB**
 
 In `scripts/smoke-revenue-proof.mjs`, add:
 
@@ -2126,7 +2132,7 @@ In `scripts/smoke-revenue-proof.mjs`, add:
 (select count(*) from public.campaign_drafts where status='published' and coalesce(metadata->>'adapter','')='n8n') as live_published_campaigns
 ```
 
-- [ ] **Step 2: Ajouter les failures**
+- [x] **Step 2: Ajouter les failures**
 
 ```js
 if (missing(input.completedFulfillments)) failures.push('fulfillment_missing')
@@ -2135,7 +2141,7 @@ if (process.env.REQUIRE_LIVE_MARKETING === 'true' && missing(input.livePublished
 }
 ```
 
-- [ ] **Step 3: Documenter les deux modes**
+- [x] **Step 3: Documenter les deux modes**
 
 In `docs/runbooks/smoke-tests.md`:
 
@@ -2155,7 +2161,7 @@ REQUIRE_LIVE_MARKETING=true SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:r
 
 ````
 
-- [ ] **Step 4: Verifier**
+- [x] **Step 4: Verifier**
 
 ```bash
 npm run smoke:revenue-proof
@@ -2196,20 +2202,20 @@ REQUIRE_LIVE_MARKETING=true SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:r
 
 Production proof checklist:
 
-- [ ] At least one Scout idea with buyer, pain, offer, acquisition channel and price hypothesis.
-- [ ] At least one Scout idea with urgent pain, concrete promise and landing angle.
-- [ ] At least one validated Scout idea materialized into a venture.
-- [ ] At least one venture with a public landing in `ready` health state because it sells the offer, not because it only explains the product.
-- [ ] At least one public landing primary CTA posting to `/api/public/stripe/checkout`.
-- [ ] No client checkout creation path remains in `/studio` UI or `/api/studio/stripe/checkout`.
+- [x] At least one Scout idea with buyer, pain, offer, acquisition channel and price hypothesis.
+- [x] At least one Scout idea with urgent pain, concrete promise and landing angle.
+- [x] At least one validated Scout idea materialized into a venture.
+- [x] At least one venture with a public landing in `ready` health state because it sells the offer, not because it only explains the product.
+- [x] At least one public landing primary CTA posting to `/api/public/stripe/checkout`.
+- [x] No client checkout creation path remains in `/studio` UI or `/api/studio/stripe/checkout`.
 - [ ] At least one Stripe live or explicitly paid customer transaction started from a landing page.
-- [ ] At least one `campaign_drafts.status='published'` with `metadata.adapter='n8n'`.
-- [ ] At least one `fulfillment_deliveries.status='completed'`.
-- [ ] At least one `waitlist_signup` followed by nurture webhook success.
-- [ ] At least one daily `revenue.daily_cycle.completed`.
-- [ ] At least one decision `scale`, `cut`, or `hold` recorded after ROI calculation.
-- [ ] `/studio/revenue` shows no blocked critical stage.
-- [ ] `/api/metrics` exposes approval backlog, failed jobs, deploy failures and daily cycle age.
+- [x] At least one `campaign_drafts.status='published'` with `metadata.adapter='n8n'`.
+- [x] At least one `fulfillment_deliveries.status='completed'`.
+- [x] At least one `waitlist_signup` followed by nurture webhook success.
+- [x] At least one daily `revenue.daily_cycle.completed`.
+- [x] At least one decision `scale`, `cut`, or `hold` recorded after ROI calculation.
+- [x] `/studio/revenue` shows no blocked critical stage.
+- [x] `/api/metrics` exposes approval backlog, failed jobs, deploy failures and daily cycle age.
 
 ## Suggested Execution Order
 

@@ -40,6 +40,7 @@ export interface BuildRevenueAutopilotPlanInput {
   environment: AutonomyEnvironment
   now?: Date
   staleNoRevenueDays?: number
+  maxSteps?: number
 }
 
 export interface RevenueAutopilotExistingAction {
@@ -249,8 +250,37 @@ export function buildRevenueAutopilotPlan(
         environment: input.environment,
       })
     : null
-  const step = hardStep ?? recommendedStep
-  const steps = step ? [step] : []
+  let steps: RevenueAutopilotStep[] = []
+
+  if (hardStep) {
+    steps = [hardStep]
+  } else {
+    const eligibleAutoSteps = input.snapshot.loops
+      .map((loop) =>
+        loop.nextAction
+          ? stepFromNextAction({
+              action: loop.nextAction,
+              loop,
+              environment: input.environment,
+            })
+          : null
+      )
+      .filter((step): step is RevenueAutopilotStep => step !== null)
+      .filter((step) => step.execution === 'auto')
+
+    const fallbackSteps =
+      eligibleAutoSteps.length > 0 ? eligibleAutoSteps : recommendedStep ? [recommendedStep] : []
+
+    const maxSteps = Math.max(1, input.maxSteps ?? 1)
+    let approvalCount = 0
+    steps = fallbackSteps.filter((step) => {
+      if (step.execution !== 'approval') return true
+      approvalCount += 1
+      return approvalCount <= 1
+    })
+    steps = steps.slice(0, maxSteps)
+  }
+
   const firstExecution = steps[0]?.execution
   const mode: RevenueAutopilotMode =
     firstExecution === 'auto'

@@ -35,6 +35,14 @@ SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke
 npm run supabase:validate
 ```
 
+4. Verifier le cron revenue:
+
+```bash
+ssh coolify "crontab -l | grep revenue-autopilot"
+ssh coolify "tail -80 /home/claude/kenomi/revenue-autopilot.log"
+AGENT_ORCHESTRATOR_SECRET="$AGENT_ORCHESTRATOR_SECRET" SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:revenue-cadence
+```
+
 ## Baseline revenue-first production
 
 Cette baseline sert a savoir si Kenomi est seulement "pret" ou si la boucle
@@ -78,6 +86,7 @@ Baseline relevee le 2026-05-20 apres preuve live:
 | campaign_spend_events     |     2 |
 | page_view_events          |     4 |
 | waitlist_signup_events    |     1 |
+| completed_fulfillments    |     1 |
 | decisions                 |     3 |
 
 3. Verifier les secrets sans imprimer les valeurs:

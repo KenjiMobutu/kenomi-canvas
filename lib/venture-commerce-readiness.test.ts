@@ -5,7 +5,7 @@ import {
 } from './venture-commerce-readiness'
 
 describe('venture commerce readiness', () => {
-  it('marks a validated venture ready only when it owns a slug, landing, payment config, and checkout', () => {
+  it('marks a validated venture ready when it owns a slug, landing, and payment config', () => {
     const readiness = evaluateVentureCommerceReadiness({
       venture: {
         id: 'venture-1',
@@ -68,12 +68,7 @@ describe('venture commerce readiness', () => {
     })
 
     expect(readiness.status).toBe('repair_required')
-    expect(readiness.reasons).toEqual([
-      'missing_slug',
-      'missing_landing',
-      'missing_payment_config',
-      'missing_checkout',
-    ])
+    expect(readiness.reasons).toEqual(['missing_slug', 'missing_landing', 'missing_payment_config'])
     expect(getNextCommercialRepairAction({ ventureName: 'InvoicePilot', readiness })).toEqual({
       id: 'run-builder',
       label: 'Créer landing',
@@ -84,7 +79,7 @@ describe('venture commerce readiness', () => {
     })
   })
 
-  it('requires checkout creation after payment config exists', () => {
+  it('does not require a pre-created checkout after payment config exists', () => {
     const readiness = evaluateVentureCommerceReadiness({
       venture: {
         id: 'venture-3',
@@ -104,12 +99,8 @@ describe('venture commerce readiness', () => {
       payments: [],
     })
 
-    expect(getNextCommercialRepairAction({ ventureName: 'ClientBrief', readiness })).toEqual({
-      id: 'create-checkout',
-      label: 'Créer checkout',
-      detail: 'Payment agent prêt, mais aucun checkout Stripe dédié.',
-      href: '/studio/revenue',
-      tone: 'warn',
-    })
+    expect(readiness.status).toBe('ready')
+    expect(readiness.reasons).toEqual([])
+    expect(getNextCommercialRepairAction({ ventureName: 'ClientBrief', readiness })).toBeNull()
   })
 })

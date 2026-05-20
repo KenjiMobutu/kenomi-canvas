@@ -189,10 +189,7 @@ export function buildRevenueProofAudit(input: {
       {
         key: 'checkout_created',
         label: 'Checkout Stripe réel',
-        status:
-          checkouts > 0 || hasCompletedAction(input.actions, 'create_checkout')
-            ? 'done'
-            : 'waiting',
+        status: checkouts > 0 ? 'done' : 'waiting',
         detail:
           checkouts > 0
             ? `${checkouts} checkout${checkouts > 1 ? 's' : ''} disponible${checkouts > 1 ? 's' : ''}.`

@@ -152,6 +152,7 @@ Le script vérifie:
   - un event `campaign_spend`,
   - un event `page_view`,
   - un event `waitlist_signup`,
+  - une livraison `fulfillment_deliveries.status='completed'`,
   - une décision `scale`, `cut` ou `hold`.
 
 Le smoke revenue-proof prouve la boucle applicative. Il ne prouve pas que
@@ -162,6 +163,18 @@ declarer "revenu reel", verifier aussi:
 - `MARKETING_ADAPTER=n8n`;
 - un `provider_run_id` externe non mock pour au moins une campagne;
 - une livraison post-paiement en statut `completed`.
+
+Mode standard:
+
+```bash
+SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:revenue-proof
+```
+
+Mode revenu reel complet:
+
+```bash
+REQUIRE_LIVE_MARKETING=true SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:revenue-proof
+```
 
 ### Résultat attendu avant preuve live
 

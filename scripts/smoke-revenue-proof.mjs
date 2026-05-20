@@ -36,6 +36,9 @@ function evalGate(input) {
   if (missing(input.pageViewEvents)) failures.push('page_view_event_missing')
   if (missing(input.waitlistSignupEvents)) failures.push('waitlist_signup_event_missing')
   if (missing(input.completedFulfillments)) failures.push('fulfillment_missing')
+  if (process.env.REQUIRE_LIVE_MARKETING === 'true' && missing(input.livePublishedCampaigns)) {
+    failures.push('live_marketing_missing')
+  }
   if (missing(input.decisions)) failures.push('decision_missing')
 
   return { ok: failures.length === 0, failures }
@@ -135,7 +138,7 @@ for (const [key, value] of Object.entries(counts)) {
   write(`proof ${key}=${value}`)
 }
 
-if (missing(counts.livePublishedCampaigns)) {
+if (process.env.REQUIRE_LIVE_MARKETING !== 'true' && missing(counts.livePublishedCampaigns)) {
   write('warn marketing live proof missing: campaigns are mock-controlled')
 }
 

@@ -81,6 +81,12 @@ describe('createPublicCheckoutSession', () => {
       slug: 'notefast',
       origin: 'https://lab.kenomi.eu',
       customerEmail: 'buyer@test.local',
+      attribution: {
+        utm_source: 'linkedin',
+        utm_medium: 'social',
+        utm_campaign: 'audit-may',
+        utm_content: 'hero-cta',
+      },
       now: () => new Date('2026-05-19T21:40:00.000Z'),
     })
 
@@ -100,6 +106,10 @@ describe('createPublicCheckoutSession', () => {
           source: 'public_landing',
           slug: 'notefast',
           pipeline_id: 'pipeline-1',
+          utm_source: 'linkedin',
+          utm_medium: 'social',
+          utm_campaign: 'audit-may',
+          utm_content: 'hero-cta',
         },
       })
     )
@@ -119,6 +129,12 @@ describe('createPublicCheckoutSession', () => {
       event_type: 'checkout_started',
       source: 'public_landing',
       value: 1999,
+      metadata: expect.objectContaining({
+        utm_source: 'linkedin',
+        utm_medium: 'social',
+        utm_campaign: 'audit-may',
+        utm_content: 'hero-cta',
+      }),
     })
   })
 

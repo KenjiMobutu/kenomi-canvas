@@ -11,7 +11,15 @@ export const dynamic = 'force-dynamic'
 
 interface Props {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ waitlist?: string; payment?: string; checkout?: string }>
+  searchParams: Promise<{
+    waitlist?: string
+    payment?: string
+    checkout?: string
+    utm_source?: string
+    utm_medium?: string
+    utm_campaign?: string
+    utm_content?: string
+  }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -26,7 +34,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function LandingPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { waitlist, payment, checkout } = await searchParams
+  const { waitlist, payment, checkout, utm_source, utm_medium, utm_campaign, utm_content } =
+    await searchParams
   const data = await getLandingPage(slug)
   if (!data) notFound()
 
@@ -37,8 +46,12 @@ export default async function LandingPage({ params, searchParams }: Props) {
     source: 'landing',
     metadata: {
       path: `/${slug}`,
-      referer: headerStore.get('referer') ?? '',
+      referrer: headerStore.get('referer') ?? '',
       user_agent: headerStore.get('user-agent') ?? '',
+      utm_source: utm_source ?? '',
+      utm_medium: utm_medium ?? '',
+      utm_campaign: utm_campaign ?? '',
+      utm_content: utm_content ?? '',
     },
   })
 
@@ -102,6 +115,10 @@ export default async function LandingPage({ params, searchParams }: Props) {
         {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
           <form action={primaryCta.href} method="POST" className="inline-flex">
             <input type="hidden" name="slug" value={slug} />
+            <input type="hidden" name="utm_source" value={utm_source ?? ''} />
+            <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
+            <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
+            <input type="hidden" name="utm_content" value={utm_content ?? ''} />
             <button
               type="submit"
               className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"

@@ -7,6 +7,8 @@ describe('getAutonomyConfig', () => {
       enabled: true,
       dryRun: false,
       globalBudgetCapEur: 100,
+      portfolioMaxNewVenturesPerDay: 1,
+      portfolioMaxActiveExperiments: 5,
     })
   })
 
@@ -28,5 +30,15 @@ describe('getAutonomyConfig', () => {
     expect(getAutonomyConfig({ AUTONOMY_GLOBAL_BUDGET_CAP_EUR: 'abc' }).globalBudgetCapEur).toBe(
       100
     )
+  })
+
+  it('parses portfolio experiment caps', () => {
+    const config = getAutonomyConfig({
+      AUTONOMY_PORTFOLIO_MAX_NEW_VENTURES_PER_DAY: '3',
+      AUTONOMY_PORTFOLIO_MAX_ACTIVE_EXPERIMENTS: '12',
+    })
+
+    expect(config.portfolioMaxNewVenturesPerDay).toBe(3)
+    expect(config.portfolioMaxActiveExperiments).toBe(12)
   })
 })

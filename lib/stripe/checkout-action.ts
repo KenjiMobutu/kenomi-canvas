@@ -76,6 +76,8 @@ export function buildCheckoutSessionParams(input: {
   metadata?: Record<string, string>
 }): Stripe.Checkout.SessionCreateParams {
   const mode = input.payment.billing === 'one_time' ? 'payment' : 'subscription'
+  const allowTrials = process.env.KENOMI_ALLOW_STRIPE_TRIALS === 'true'
+  const effectiveTrialDays = allowTrials ? input.payment.trial_days : 0
 
   const priceData: NonNullable<
     NonNullable<Stripe.Checkout.SessionCreateParams['line_items']>[number]['price_data']
@@ -106,8 +108,8 @@ export function buildCheckoutSessionParams(input: {
         price_data: priceData,
       },
     ],
-    ...(mode === 'subscription' && input.payment.trial_days > 0
-      ? { subscription_data: { trial_period_days: input.payment.trial_days } }
+    ...(mode === 'subscription' && effectiveTrialDays > 0
+      ? { subscription_data: { trial_period_days: effectiveTrialDays } }
       : {}),
   }
 }

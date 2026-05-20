@@ -157,6 +157,8 @@ async function approveAction(input: {
       enabled: true,
       dryRun: input.dryRun ?? false,
       globalBudgetCapEur: 500,
+      portfolioMaxNewVenturesPerDay: 1,
+      portfolioMaxActiveExperiments: 5,
     },
     now: () => new Date('2026-05-18T12:00:00.000Z'),
   })

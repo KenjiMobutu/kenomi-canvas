@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { requiresApproval } from '@/lib/autonomy/policy'
 import {
   buildCheckoutAutonomyAction,
@@ -19,6 +19,10 @@ const payment: PaymentOutput = {
 }
 
 describe('buildCheckoutSessionParams', () => {
+  afterEach(() => {
+    delete process.env.KENOMI_ALLOW_STRIPE_TRIALS
+  })
+
   it('builds subscription Checkout params from payment output', () => {
     const params = buildCheckoutSessionParams({
       payment,
@@ -36,6 +40,19 @@ describe('buildCheckoutSessionParams', () => {
     expect(params.line_items?.[0]?.price_data?.recurring).toEqual({
       interval: 'month',
     })
+    expect(params.subscription_data).toBeUndefined()
+  })
+
+  it('can explicitly enable Stripe trials when needed', () => {
+    process.env.KENOMI_ALLOW_STRIPE_TRIALS = 'true'
+    const params = buildCheckoutSessionParams({
+      payment,
+      ventureId: 'venture_123',
+      successUrl: 'https://kenomi.test/success',
+      cancelUrl: 'https://kenomi.test/cancel',
+    })
+
+    expect(params.mode).toBe('subscription')
     expect(params.subscription_data).toEqual({ trial_period_days: 7 })
   })
 

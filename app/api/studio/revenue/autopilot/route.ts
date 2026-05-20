@@ -445,9 +445,11 @@ async function buildPlanForRequest(req: NextRequest) {
   if (!user?.id) return { response: apiError('Utilisateur autopilot manquant', 500) }
 
   const context = await loadRevenueContext({ supabase, userId: user.id })
+  const config = getAutonomyConfig()
   const rawPlan = buildRevenueAutopilotPlan({
     snapshot: context.snapshot,
     environment: getCheckoutEnvironment(),
+    maxSteps: config.portfolioMaxNewVenturesPerDay,
   })
   const plan = filterDuplicateDailyAutopilotSteps({
     plan: rawPlan,
@@ -515,7 +517,7 @@ export async function POST(req: NextRequest) {
 
     const nowIso = new Date().toISOString()
     const executed = []
-    for (const step of result.plan.steps.slice(0, 1)) {
+    for (const step of result.plan.steps.slice(0, config.portfolioMaxNewVenturesPerDay)) {
       executed.push(
         await executeAutopilotStep({
           supabase: result.supabase,

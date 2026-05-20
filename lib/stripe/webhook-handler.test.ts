@@ -44,7 +44,10 @@ function createFakeSupabase(seed?: { paymentStatus?: string; revenue?: number })
 
       const execute = async () => {
         if (state.insertRow) {
-          const inserted = { id: `row-${(tables[table] as Record<string, unknown>[]).length + 1}`, ...state.insertRow }
+          const inserted = {
+            id: `row-${(tables[table] as Record<string, unknown>[]).length + 1}`,
+            ...state.insertRow,
+          }
           ;(tables[table] as Record<string, unknown>[]).push(inserted)
           return { data: inserted, error: null }
         }

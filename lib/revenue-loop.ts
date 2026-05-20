@@ -286,10 +286,7 @@ function priorityFor(input: { nextAction: RevenueLoopNextAction; blockedRevenueE
   if (nextAction.type === 'resolve_approval') {
     return {
       priorityScore: 100,
-      priorityReason:
-        nextAction.actionType === 'create_checkout'
-          ? 'Approval checkout bloque le revenu'
-          : 'Approval humaine bloque la boucle',
+      priorityReason: 'Approval humaine bloque la boucle',
     }
   }
   if (nextAction.type === 'configure_stripe') {
@@ -330,9 +327,8 @@ function priorityFor(input: { nextAction: RevenueLoopNextAction; blockedRevenueE
 }
 
 function hasMissingStripeSecret(action: RevenueAutonomyActionRow): boolean {
-  if (action.action_type !== 'create_checkout' || action.status !== 'failed') return false
-  const error = action.output?.error
-  return typeof error === 'string' && error.includes('STRIPE_SECRET_KEY missing')
+  void action
+  return false
 }
 
 export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSnapshot {
@@ -392,6 +388,7 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       : []
     const blockedAction = ventureActions.find((action) => {
       if (action.status !== 'blocked') return false
+      if (action.action_type === 'create_checkout') return false
       return Boolean(pendingApprovalByActionId.get(action.id))
     })
     const missingStripeAction = ventureActions.find(hasMissingStripeSecret)

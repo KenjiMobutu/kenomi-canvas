@@ -13,6 +13,7 @@
 ### Task 1: Timeline and Parity Model
 
 **Files:**
+
 - Create: `lib/infra-ops-timeline.ts`
 - Create: `lib/infra-ops-timeline.test.ts`
 
@@ -23,6 +24,7 @@
 ### Task 2: History API
 
 **Files:**
+
 - Create: `app/api/studio/infra/diagnostics/history/route.ts`
 
 - [x] **Step 1: Require an allowed user.**
@@ -32,6 +34,7 @@
 ### Task 3: Action Audit Enrichment
 
 **Files:**
+
 - Modify: `lib/infra-diagnostic-actions.ts`
 - Modify: `lib/infra-diagnostic-actions.test.ts`
 
@@ -41,6 +44,7 @@
 ### Task 4: Infrastructure UI Completion
 
 **Files:**
+
 - Modify: `app/studio/infrastructure/page.tsx`
 
 - [x] **Step 1: Fetch history alongside diagnostics.**
@@ -50,6 +54,7 @@
 ### Task 5: Settings Endpoint Verification
 
 **Files:**
+
 - Modify: `app/studio/settings/page.tsx`
 
 - [x] **Step 1: Add a saved-endpoints verification action to the Infrastructure settings tab.**
@@ -58,6 +63,7 @@
 ### Task 6: Deployment Source Traceability
 
 **Files:**
+
 - Modify: `Dockerfile`
 - Modify: `.env.example`
 - Modify: `README.md`
@@ -69,6 +75,7 @@
 ### Task 7: Verification
 
 **Commands:**
+
 - [x] `npm test -- lib/infra-ops-timeline.test.ts lib/infra-diagnostic-actions.test.ts`
 - [x] `npm test`
 - [x] `npm run typecheck`

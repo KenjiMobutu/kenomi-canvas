@@ -2,11 +2,10 @@ export type VentureCommerceReadinessReason =
   | 'missing_slug'
   | 'missing_landing'
   | 'missing_payment_config'
-  | 'missing_checkout'
 
 export type VentureCommerceReadinessStatus = 'ready' | 'repair_required'
 
-export type CommercialRepairActionId = 'run-builder' | 'run-payment' | 'create-checkout'
+export type CommercialRepairActionId = 'run-builder' | 'run-payment'
 
 export interface CommercialRepairAction {
   id: CommercialRepairActionId
@@ -105,8 +104,6 @@ export function evaluateVentureCommerceReadiness(input: {
   if (!hasSlug) reasons.push('missing_slug')
   if (!hasLanding) reasons.push('missing_landing')
   if (!hasPaymentConfig) reasons.push('missing_payment_config')
-  if (!hasCheckout) reasons.push('missing_checkout')
-
   return {
     status: reasons.length === 0 ? 'ready' : 'repair_required',
     reasons,
@@ -145,16 +142,5 @@ export function getNextCommercialRepairAction(input: {
       tone: 'warn',
     }
   }
-
-  if (!readiness.hasCheckout) {
-    return {
-      id: 'create-checkout',
-      label: 'Créer checkout',
-      detail: 'Payment agent prêt, mais aucun checkout Stripe dédié.',
-      href: '/studio/revenue',
-      tone: 'warn',
-    }
-  }
-
   return null
 }

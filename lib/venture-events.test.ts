@@ -96,6 +96,28 @@ describe('recordVentureEventBySlug', () => {
     })
   })
 
+  it('stores attribution metadata for page views', async () => {
+    const supabase = createFakeSupabase()
+
+    const result = await recordVentureEventBySlug(supabase as unknown as VentureEventSupabase, {
+      slug: 'inbox-pulse',
+      eventType: 'page_view',
+      source: 'landing',
+      metadata: {
+        utm_source: 'linkedin',
+        utm_campaign: 'audit-may',
+        referrer: 'https://linkedin.com',
+      },
+    })
+
+    expect(result).toEqual({ ok: true, ventureId: 'venture-1' })
+    expect(supabase.inserted[0]?.metadata).toMatchObject({
+      utm_source: 'linkedin',
+      utm_campaign: 'audit-may',
+      referrer: 'https://linkedin.com',
+    })
+  })
+
   it('retourne ok=false si le slug ne correspond à aucune venture', async () => {
     const supabase = createFakeSupabase()
 

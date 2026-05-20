@@ -30,6 +30,7 @@
 ### Task 1: Shared Source Status Model
 
 **Files:**
+
 - Create: `lib/ops/source-status.ts`
 - Create: `lib/ops/source-status.test.ts`
 
@@ -138,6 +139,7 @@ git commit -m "feat: add source status model"
 ### Task 2: Cockpit Operations Summary API
 
 **Files:**
+
 - Create: `lib/ops/studio-ops-summary.ts`
 - Create: `lib/ops/studio-ops-summary.test.ts`
 - Create: `app/api/studio/ops/summary/route.ts`
@@ -259,7 +261,12 @@ export function buildStudioOpsSummary(input: {
       {
         label: 'Automations',
         value: String(input.automationRunCount),
-        tone: input.failedAutomationRunCount > 0 ? 'warn' : input.automationRunCount > 0 ? 'ok' : 'muted',
+        tone:
+          input.failedAutomationRunCount > 0
+            ? 'warn'
+            : input.automationRunCount > 0
+              ? 'ok'
+              : 'muted',
         source: makeSourceStatus({
           source: 'automation_runs',
           checkedAt: input.latestAutomationRunAt,
@@ -312,12 +319,7 @@ export async function GET() {
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
-  const [
-    agentRuns,
-    automationRuns,
-    pendingApprovals,
-    failedAutomationRuns,
-  ] = await Promise.all([
+  const [agentRuns, automationRuns, pendingApprovals, failedAutomationRuns] = await Promise.all([
     supabase
       .from('agent_runs')
       .select('created_at', { count: 'exact' })
@@ -391,6 +393,7 @@ git commit -m "feat: add studio operations summary"
 ### Task 3: Cockpit Becomes The Daily Operations Surface
 
 **Files:**
+
 - Modify: `app/studio/page.tsx`
 
 - [ ] **Step 1: Add summary state and loader**
@@ -448,7 +451,9 @@ function OpsSummaryStrip({ summary }: { summary: OpsSummaryPayload | null }) {
   const cards = summary?.cards ?? []
   if (cards.length === 0) {
     return (
-      <section style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14 }}>
+      <section
+        style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14 }}
+      >
         <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 13, color: text }}>
           Operations
         </h3>
@@ -460,16 +465,30 @@ function OpsSummaryStrip({ summary }: { summary: OpsSummaryPayload | null }) {
   }
 
   return (
-    <section style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+    <section
+      style={{ background: surface, border: `1px solid ${line}`, borderRadius: 14, padding: 14 }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 10,
+        }}
+      >
         <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 13, color: text }}>
           Operations
         </h3>
-        <a href={summary.primaryRepairHref} style={{ color: summary.mode === 'attention' ? amber : emerald, fontSize: 11 }}>
+        <a
+          href={summary.primaryRepairHref}
+          style={{ color: summary.mode === 'attention' ? amber : emerald, fontSize: 11 }}
+        >
           {summary.mode === 'attention' ? 'Voir action' : 'Calme'}
         </a>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 10 }}>
+      <div
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 10 }}
+      >
         {cards.map((card) => (
           <a
             key={card.label}
@@ -483,13 +502,29 @@ function OpsSummaryStrip({ summary }: { summary: OpsSummaryPayload | null }) {
               color: text,
             }}
           >
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted, letterSpacing: '.12em' }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                color: muted,
+                letterSpacing: '.12em',
+              }}
+            >
               {card.label}
             </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, marginTop: 4 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 22,
+                fontWeight: 800,
+                marginTop: 4,
+              }}
+            >
               {card.value}
             </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, marginTop: 4 }}>
+            <div
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, marginTop: 4 }}
+            >
               {card.source.source} · {card.source.freshness}
             </div>
           </a>
@@ -517,6 +552,7 @@ Run: `npm run dev`
 Open: `http://localhost:3001/studio`
 
 Expected:
+
 - Operations section appears.
 - Cards link to Agents, Automations, and Infrastructure.
 - Empty states say the source is missing instead of implying fake activity.
@@ -533,6 +569,7 @@ git commit -m "feat: make cockpit operations summary-driven"
 ### Task 4: Agents Page Repairability
 
 **Files:**
+
 - Modify: `app/studio/agents/page.tsx`
 - Modify: `lib/agent-run-metrics.ts`
 - Modify: `lib/agent-run-metrics.test.ts`
@@ -586,21 +623,23 @@ Under the stats grid in `AgentInspector`, add:
 Near the existing `Run mission` button, render:
 
 ```tsx
-{runMetric.run_count === 0 && (
-  <div
-    style={{
-      padding: '10px 12px',
-      borderRadius: 8,
-      border: `1px dashed ${line2}`,
-      background: surface2,
-      color: muted,
-      fontSize: 12,
-      lineHeight: 1.5,
-    }}
-  >
-    Aucun run réel pour cet agent. Lancez une mission pour créer une ligne dans agent_runs.
-  </div>
-)}
+{
+  runMetric.run_count === 0 && (
+    <div
+      style={{
+        padding: '10px 12px',
+        borderRadius: 8,
+        border: `1px dashed ${line2}`,
+        background: surface2,
+        color: muted,
+        fontSize: 12,
+        lineHeight: 1.5,
+      }}
+    >
+      Aucun run réel pour cet agent. Lancez une mission pour créer une ligne dans agent_runs.
+    </div>
+  )
+}
 ```
 
 - [ ] **Step 5: Browser verify**
@@ -608,6 +647,7 @@ Near the existing `Run mission` button, render:
 Open: `http://localhost:3001/studio/agents`
 
 Expected:
+
 - No `+43 runs`.
 - Source label mentions `agent_runs`.
 - Scout with no user runs shows repair guidance.
@@ -624,6 +664,7 @@ git commit -m "feat: expose agent run source and repair hint"
 ### Task 5: Infrastructure Service Cards Get Repair Actions
 
 **Files:**
+
 - Modify: `app/studio/infrastructure/page.tsx`
 - Modify: `app/api/studio/infra/services/route.ts`
 
@@ -668,7 +709,11 @@ Inside each service card, add:
   </span>
   <a
     href={service.repairHref ?? '/studio/settings'}
-    style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: service.status === 'ok' ? muted2 : amber }}
+    style={{
+      fontFamily: 'var(--font-mono)',
+      fontSize: 9,
+      color: service.status === 'ok' ? muted2 : amber,
+    }}
   >
     réparer
   </a>
@@ -680,6 +725,7 @@ Inside each service card, add:
 Open: `http://localhost:3001/studio/infrastructure`
 
 Expected:
+
 - Each service card shows check freshness.
 - Non-ok service has an obvious repair link.
 - Supabase remains treated as self-hosted via Coolify settings.
@@ -696,6 +742,7 @@ git commit -m "feat: add infrastructure repair links"
 ### Task 6: Analytics Source Labels And Instrumentation Backlog
 
 **Files:**
+
 - Modify: `app/studio/analytics/page.tsx`
 - Create: `lib/metrics/analytics-source-status.test.ts`
 
@@ -727,7 +774,9 @@ Expected: if `aggregateLive` is not exported, TypeScript fails; then move it as 
 In the Live KPIs block, add below the KPI grid:
 
 ```tsx
-<div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.1em' }}>
+<div
+  style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2, letterSpacing: '.1em' }}
+>
   source venture_events · page_view, waitlist_signup, payment_succeeded, campaign_spend
 </div>
 ```
@@ -748,6 +797,7 @@ Aucune étape de funnel
 Open: `http://localhost:3001/studio/analytics`
 
 Expected:
+
 - No equal fake `14%` attribution list.
 - No generated `M3 avg 38%`.
 - Live KPIs cite `venture_events`.
@@ -764,6 +814,7 @@ git commit -m "feat: expose analytics data sources"
 ### Task 7: Coherence Audit Script
 
 **Files:**
+
 - Create: `scripts/audit-studio-coherence.mjs`
 - Modify: `package.json`
 
@@ -773,10 +824,7 @@ git commit -m "feat: expose analytics data sources"
 import { readFileSync } from 'node:fs'
 import { globSync } from 'node:fs'
 
-const files = [
-  ...globSync('app/studio/**/*.tsx'),
-  ...globSync('app/studio/*.tsx'),
-]
+const files = [...globSync('app/studio/**/*.tsx'), ...globSync('app/studio/*.tsx')]
 
 const forbiddenPatterns = [
   { pattern: /\\+\\{Math\\.round\\([^}]+\\)\\} runs/, label: 'computed fake run badge' },
@@ -829,6 +877,7 @@ git commit -m "test: add studio coherence audit"
 ### Task 8: Final Verification Sweep
 
 **Files:**
+
 - No new files unless fixes are required.
 
 - [ ] **Step 1: Run automated verification**
@@ -862,6 +911,7 @@ Open each page on `http://localhost:3001`:
 ```
 
 Expected:
+
 - No login redirect while connected.
 - No fake run badge.
 - No fake equal attribution.

@@ -355,7 +355,13 @@ describe('resolveHumanApproval', () => {
       approvalId: 'approval-1',
       decision: 'approved',
       stripeClientFactory,
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 1000 },
+      config: {
+        enabled: true,
+        dryRun: false,
+        globalBudgetCapEur: 1000,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
       now: () => new Date('2026-05-19T19:00:00.000Z'),
     })
 
@@ -435,7 +441,13 @@ describe('resolveHumanApproval — dry-run', () => {
       approvalId: 'app-1',
       decision: 'approved',
       coolifyClient: coolifyMock,
-      config: { enabled: true, dryRun: true, globalBudgetCapEur: 100 },
+      config: {
+        enabled: true,
+        dryRun: true,
+        globalBudgetCapEur: 100,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
     })
     expect(coolifyMock.triggerDeploy).not.toHaveBeenCalled()
     expect(result.executed).toBe(false)
@@ -467,7 +479,13 @@ describe('resolveHumanApproval — dry-run', () => {
       approvalId: 'app-2',
       decision: 'approved',
       coolifyClient: coolifyMock,
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100 },
+      config: {
+        enabled: true,
+        dryRun: false,
+        globalBudgetCapEur: 100,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
     })
     expect(coolifyMock.triggerDeploy).toHaveBeenCalledOnce()
     expect(result.executed).toBe(true)
@@ -492,7 +510,13 @@ describe('resolveHumanApproval — dry-run', () => {
       userId: 'u1',
       approvalId: 'app-3',
       decision: 'approved',
-      config: { enabled: true, dryRun: true, globalBudgetCapEur: 100 },
+      config: {
+        enabled: true,
+        dryRun: true,
+        globalBudgetCapEur: 100,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
     })
     expect(result.executed).toBe(true)
     expect(fakeSupabase.tables.ventures[0].statut).toBe('stopped')
@@ -523,7 +547,13 @@ describe('resolveHumanApproval — budget policy', () => {
       userId: 'u1',
       approvalId: 'app-b1',
       decision: 'approved',
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100 },
+      config: {
+        enabled: true,
+        dryRun: false,
+        globalBudgetCapEur: 100,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
     })
     expect(result.executed).toBe(false)
     const action = fakeSupabase.tables.autonomy_actions[0]
@@ -552,7 +582,13 @@ describe('resolveHumanApproval — budget policy', () => {
       userId: 'u1',
       approvalId: 'app-b2',
       decision: 'approved',
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+      config: {
+        enabled: true,
+        dryRun: false,
+        globalBudgetCapEur: 100000,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
     })
     expect(result.executed).toBe(false)
     expect(
@@ -591,7 +627,13 @@ describe('resolveHumanApproval — budget policy', () => {
       userId: 'u1',
       approvalId: 'app-b3',
       decision: 'approved',
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100 },
+      config: {
+        enabled: true,
+        dryRun: false,
+        globalBudgetCapEur: 100,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
     })
     expect(result.executed).toBe(false)
     expect(fakeSupabase.tables.autonomy_actions[0].status).toBe('blocked')
@@ -638,7 +680,13 @@ describe('resolveHumanApproval — publish_campaign', () => {
       approvalId: 'app-p1',
       decision: 'approved',
       marketingPublisher: publisher,
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+      config: {
+        enabled: true,
+        dryRun: false,
+        globalBudgetCapEur: 100000,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
     })
 
     expect(result.executed).toBe(true)
@@ -683,7 +731,13 @@ describe('resolveHumanApproval — publish_campaign', () => {
       approvalId: 'app-p2',
       decision: 'approved',
       marketingPublisher: publisher,
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+      config: {
+        enabled: true,
+        dryRun: false,
+        globalBudgetCapEur: 100000,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
     })
 
     expect(result.executed).toBe(false)
@@ -712,7 +766,13 @@ describe('resolveHumanApproval — publish_campaign', () => {
         approvalId: 'app-p3',
         decision: 'approved',
         marketingPublisher: { publish: vi.fn() },
-        config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+        config: {
+          enabled: true,
+          dryRun: false,
+          globalBudgetCapEur: 100000,
+          portfolioMaxNewVenturesPerDay: 1,
+          portfolioMaxActiveExperiments: 5,
+        },
       })
     ).rejects.toThrow(/draft_id manquant/)
   })
@@ -746,7 +806,13 @@ describe('resolveHumanApproval — scale_budget', () => {
       userId: 'u1',
       approvalId: 'app-s1',
       decision: 'approved',
-      config: { enabled: true, dryRun: false, globalBudgetCapEur: 100000 },
+      config: {
+        enabled: true,
+        dryRun: false,
+        globalBudgetCapEur: 100000,
+        portfolioMaxNewVenturesPerDay: 1,
+        portfolioMaxActiveExperiments: 5,
+      },
       now: () => new Date('2026-05-19T09:00:00.000Z'),
     })
 

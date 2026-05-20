@@ -13,6 +13,7 @@
 ### Task 1: Diagnostics Contract
 
 **Files:**
+
 - Create: `lib/infra-diagnostics.ts`
 - Create: `lib/infra-diagnostics.test.ts`
 
@@ -23,6 +24,7 @@
 ### Task 2: Protected Diagnostics API
 
 **Files:**
+
 - Create: `app/api/studio/infra/diagnostics/route.ts`
 
 - [x] **Step 1: Require an allowed user with the existing auth guard.**
@@ -32,6 +34,7 @@
 ### Task 3: Infrastructure UI Panel
 
 **Files:**
+
 - Modify: `app/studio/infrastructure/page.tsx`
 
 - [x] **Step 1: Add diagnostics state and polling.**
@@ -41,6 +44,7 @@
 ### Task 4: Verification
 
 **Commands:**
+
 - [x] `npm test -- lib/infra-diagnostics.test.ts`
 - [x] `npm test`
 - [x] `npm run typecheck`

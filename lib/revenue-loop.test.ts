@@ -127,7 +127,7 @@ describe('buildRevenueLoopSnapshot', () => {
     })
   })
 
-  it('met en avant une approval bloquante avant toute autre action', () => {
+  it('ignore les approvals legacy create_checkout dans la boucle revenue publique', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [basePipeline],
       ventures: [{ id: 'venture-1', name: 'InboxPulse', stage: 'payment', mrr: '0' }],
@@ -155,15 +155,15 @@ describe('buildRevenueLoopSnapshot', () => {
     })
 
     expect(snapshot.summary.pendingApprovals).toBe(1)
-    expect(snapshot.summary.blockedLoops).toBe(1)
+    expect(snapshot.summary.blockedLoops).toBe(0)
     expect(snapshot.loops[0].nextAction).toMatchObject({
-      type: 'resolve_approval',
-      approvalId: 'approval-1',
-      actionId: 'action-1',
+      type: 'run_agent',
+      agentId: 'marketing',
+      ventureId: 'venture-1',
     })
   })
 
-  it('remonte la configuration Stripe manquante quand un checkout échoue sans clé', () => {
+  it('ignore un failed create_checkout legacy quand la landing publique reste la surface canonique', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [basePipeline],
       ventures: [{ id: 'venture-1', name: 'InboxPulse', stage: 'payment', mrr: '0' }],
@@ -183,21 +183,11 @@ describe('buildRevenueLoopSnapshot', () => {
       decisions: [],
     })
 
-    expect(snapshot.summary.blockedLoops).toBe(1)
-    expect(snapshot.summary.recommendedAction).toMatchObject({
-      type: 'configure_stripe',
-      ventureName: 'InboxPulse',
-      reason: 'Clé Stripe manquante',
-    })
+    expect(snapshot.summary.blockedLoops).toBe(0)
     expect(snapshot.loops[0].nextAction).toMatchObject({
-      type: 'configure_stripe',
-      label: 'Configurer Stripe',
-      pipelineId: 'pipe-1',
-    })
-    expect(snapshot.loops[0].stages).toContainEqual({
-      key: 'checkout',
-      label: 'Checkout',
-      status: 'blocked',
+      type: 'run_agent',
+      agentId: 'marketing',
+      ventureId: 'venture-1',
     })
   })
 
@@ -304,7 +294,7 @@ describe('buildRevenueLoopSnapshot', () => {
     expect(snapshot.loops.map((loop) => loop.ventureName)).toEqual(['ReadyMoney', 'SlowMoney'])
   })
 
-  it('place une approval revenue en tête même si une autre boucle est plus récente', () => {
+  it('ne laisse plus une approval legacy create_checkout prendre la tête sur une boucle active', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [
         {
@@ -351,12 +341,11 @@ describe('buildRevenueLoopSnapshot', () => {
       decisions: [],
     })
 
-    expect(snapshot.loops[0].ventureName).toBe('BlockedCheckout')
+    expect(snapshot.loops[0].ventureName).toBe('NewLoop')
     expect(snapshot.summary.recommendedAction).toMatchObject({
-      type: 'resolve_approval',
-      ventureName: 'BlockedCheckout',
-      actionType: 'create_checkout',
-      priorityScore: 100,
+      type: 'run_agent',
+      ventureName: 'NewLoop',
+      agentId: 'marketing',
     })
   })
 })

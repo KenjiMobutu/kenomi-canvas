@@ -22,6 +22,7 @@
 ### Task 1: Add Summary Actions
 
 **Files:**
+
 - Modify: `lib/ops/studio-ops-summary.ts`
 - Modify: `lib/ops/studio-ops-summary.test.ts`
 
@@ -113,6 +114,7 @@ Expected: pass.
 ### Task 2: Render Actions In Cockpit
 
 **Files:**
+
 - Modify: `app/studio/page.tsx`
 
 - [ ] **Step 1: Extend payload types**
@@ -128,6 +130,7 @@ Inside `OpsSummaryStrip`, below the card grid, render the first three actions as
 Open `http://localhost:3001/studio`.
 
 Expected:
+
 - `Operations` still appears.
 - At least one action appears.
 - Links point to `/studio/agents`, `/studio/automations`, `/studio/infrastructure`, or `/studio`.
@@ -137,6 +140,7 @@ Expected:
 ### Task 3: Final Verification
 
 **Files:**
+
 - No new files unless fixes are required.
 
 - [ ] **Step 1: Run commands**
@@ -153,5 +157,6 @@ npm run build
 Verify `/studio` in the connected browser.
 
 Expected:
+
 - Cockpit has operational cards and action rows.
 - No fake run or analytics signals return.

@@ -13,6 +13,7 @@ describe('evaluateRevenueProofGate', () => {
       campaignSpendEvents: 1,
       pageViewEvents: 1,
       waitlistSignupEvents: 1,
+      completedFulfillments: 1,
       decisions: 1,
     })
 
@@ -31,6 +32,7 @@ describe('evaluateRevenueProofGate', () => {
       campaignSpendEvents: 0,
       pageViewEvents: 0,
       waitlistSignupEvents: 0,
+      completedFulfillments: 0,
       decisions: 0,
     })
 
@@ -43,6 +45,7 @@ describe('evaluateRevenueProofGate', () => {
       'campaign_spend_event_missing',
       'page_view_event_missing',
       'waitlist_signup_event_missing',
+      'fulfillment_missing',
       'decision_missing',
     ])
   })

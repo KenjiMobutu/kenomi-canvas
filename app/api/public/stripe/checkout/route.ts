@@ -13,6 +13,10 @@ import {
 const checkoutSchema = z.object({
   slug: z.string().min(1),
   email: z.string().optional().nullable(),
+  utm_source: z.string().optional().nullable(),
+  utm_medium: z.string().optional().nullable(),
+  utm_campaign: z.string().optional().nullable(),
+  utm_content: z.string().optional().nullable(),
   formRequest: z.boolean().optional(),
 })
 
@@ -26,6 +30,10 @@ async function parseRequest(req: NextRequest) {
     return {
       slug: String(form.get('slug') ?? ''),
       email: form.get('email') ? String(form.get('email')) : null,
+      utm_source: form.get('utm_source') ? String(form.get('utm_source')) : null,
+      utm_medium: form.get('utm_medium') ? String(form.get('utm_medium')) : null,
+      utm_campaign: form.get('utm_campaign') ? String(form.get('utm_campaign')) : null,
+      utm_content: form.get('utm_content') ? String(form.get('utm_content')) : null,
       formRequest: true,
     }
   }
@@ -50,6 +58,12 @@ export async function POST(req: NextRequest) {
   const slug = parsed.data.slug.trim().toLowerCase()
   const email = parsed.data.email?.trim() || null
   const isFormRequest = Boolean(parsed.data.formRequest)
+  const attribution = {
+    utm_source: parsed.data.utm_source?.trim() || null,
+    utm_medium: parsed.data.utm_medium?.trim() || null,
+    utm_campaign: parsed.data.utm_campaign?.trim() || null,
+    utm_content: parsed.data.utm_content?.trim() || null,
+  }
 
   if (!isValidSlug(slug)) return apiError('slug invalide', 400)
   if (email && !isValidEmail(email)) return apiError('Format email invalide', 400)
@@ -67,6 +81,7 @@ export async function POST(req: NextRequest) {
       origin: appOrigin(req),
       envStripeSecretKey: getOptionalStripeSecretKey(),
       customerEmail: email,
+      attribution,
     })
 
     if (isFormRequest) {

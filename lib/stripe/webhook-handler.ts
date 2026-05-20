@@ -185,7 +185,8 @@ export async function handleStripeWebhookEvent(input: {
         user_id: venture.user_id,
         venture_id: venture.id,
         customer_email: getCustomerEmail(session) ?? payment.customer_email ?? null,
-        amount_eur: collectedAmountEur || Number(payment.collected_amount_eur ?? payment.amount_eur ?? 0),
+        amount_eur:
+          collectedAmountEur || Number(payment.collected_amount_eur ?? payment.amount_eur ?? 0),
       },
       offerName: input.fulfillmentOfferName ?? 'Kenomi delivery',
       now: input.now,

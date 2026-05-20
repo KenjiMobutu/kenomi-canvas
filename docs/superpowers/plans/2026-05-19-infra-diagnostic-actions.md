@@ -13,6 +13,7 @@
 ### Task 1: Pure Action Model
 
 **Files:**
+
 - Create: `lib/infra-diagnostic-actions.ts`
 - Create: `lib/infra-diagnostic-actions.test.ts`
 
@@ -23,6 +24,7 @@
 ### Task 2: Shared Diagnostics Collector
 
 **Files:**
+
 - Create: `lib/infra-diagnostics-runner.ts`
 - Modify: `app/api/studio/infra/diagnostics/route.ts`
 
@@ -32,6 +34,7 @@
 ### Task 3: Protected Action API
 
 **Files:**
+
 - Create: `app/api/studio/infra/diagnostics/actions/route.ts`
 
 - [x] **Step 1: Require an allowed user and rate limit action calls.**
@@ -41,6 +44,7 @@
 ### Task 4: UI Controls
 
 **Files:**
+
 - Modify: `app/studio/infrastructure/page.tsx`
 
 - [x] **Step 1: Add action state and a shared diagnostics loader.**
@@ -50,6 +54,7 @@
 ### Task 5: Verification
 
 **Commands:**
+
 - [x] `npm test -- lib/infra-diagnostic-actions.test.ts`
 - [x] `npm test`
 - [x] `npm run typecheck`

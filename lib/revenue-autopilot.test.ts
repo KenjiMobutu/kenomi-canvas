@@ -232,6 +232,81 @@ describe('buildRevenueAutopilotPlan', () => {
       recommendedBudgetEur: 26,
     })
   })
+
+  it('limits daily autopilot to configured low-risk portfolio steps', () => {
+    const plan = buildRevenueAutopilotPlan({
+      snapshot: {
+        ...baseSnapshot,
+        loops: [
+          {
+            id: 'loop-1',
+            pipelineId: 'pipeline-1',
+            ventureId: 'v1',
+            ventureName: 'V1',
+            status: 'approved',
+            revenueEur: 0,
+            paidPayments: 0,
+            stages: [],
+            nextAction: {
+              type: 'run_agent',
+              label: 'Lancer Validation',
+              agentId: 'validation',
+              ventureId: 'v1',
+            },
+            priorityScore: 90,
+            priorityReason: 'Validation manquante',
+            blockedRevenueEur: 0,
+            updatedAt: '2026-05-20T00:00:00.000Z',
+          },
+          {
+            id: 'loop-2',
+            pipelineId: 'pipeline-2',
+            ventureId: 'v2',
+            ventureName: 'V2',
+            status: 'approved',
+            revenueEur: 0,
+            paidPayments: 0,
+            stages: [],
+            nextAction: {
+              type: 'run_agent',
+              label: 'Lancer Builder',
+              agentId: 'builder',
+              ventureId: 'v2',
+            },
+            priorityScore: 80,
+            priorityReason: 'Landing manquante',
+            blockedRevenueEur: 0,
+            updatedAt: '2026-05-20T00:00:00.000Z',
+          },
+          {
+            id: 'loop-3',
+            pipelineId: 'pipeline-3',
+            ventureId: 'v3',
+            ventureName: 'V3',
+            status: 'approved',
+            revenueEur: 0,
+            paidPayments: 0,
+            stages: [],
+            nextAction: {
+              type: 'monitor',
+              label: 'Surveiller landing checkout',
+              ventureId: 'v3',
+            },
+            priorityScore: 70,
+            priorityReason: 'Monitor',
+            blockedRevenueEur: 0,
+            updatedAt: '2026-05-20T00:00:00.000Z',
+          },
+        ],
+        summary: { ...baseSnapshot.summary, recommendedAction: null },
+      },
+      environment: 'development',
+      maxSteps: 2,
+    })
+
+    expect(plan.steps).toHaveLength(2)
+    expect(plan.steps.every((step) => step.execution === 'auto')).toBe(true)
+  })
 })
 
 describe('stepFromRoiDecision', () => {
