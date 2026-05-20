@@ -4,8 +4,7 @@ import { execFileSync } from 'node:child_process'
 
 const baseUrl = process.env.SMOKE_BASE_URL ?? 'https://lab.kenomi.eu'
 const sshHost = process.env.REVENUE_PROOF_SSH_HOST ?? 'coolify'
-const dbContainer =
-  process.env.REVENUE_PROOF_DB_CONTAINER ?? 'supabase-db-i12k0ju0ok5wk4gnts6uap03'
+const dbContainer = process.env.REVENUE_PROOF_DB_CONTAINER ?? 'supabase-db-i12k0ju0ok5wk4gnts6uap03'
 
 function write(line) {
   process.stdout.write(`${line}\n`)
@@ -26,7 +25,6 @@ async function status(path, init) {
 
 function evalGate(input) {
   const failures = []
-  const missing = (count) => !Number.isFinite(count) || count <= 0
 
   if (!input.healthOk) failures.push('health_not_ok')
   if (!input.routeProtected) failures.push('revenue_proof_route_not_protected')
@@ -42,6 +40,10 @@ function evalGate(input) {
   return { ok: failures.length === 0, failures }
 }
 
+function missing(count) {
+  return !Number.isFinite(count) || count <= 0
+}
+
 function shQuote(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`
 }
@@ -49,14 +51,16 @@ function shQuote(value) {
 function queryProofCounts() {
   const sql = [
     'select',
-    "(select count(*) from public.payments where checkout_url is not null) as payments_with_checkout,",
+    '(select count(*) from public.payments where checkout_url is not null) as payments_with_checkout,',
     "(select count(*) from public.payments where status='completed' or provider_status='completed') as completed_payments,",
     "(select count(*) from public.venture_events where event_type='payment_succeeded') as payment_succeeded_events,",
     "(select count(*) from public.venture_events where event_type='campaign_published') as campaign_published_events,",
     "(select count(*) from public.venture_events where event_type='campaign_spend') as campaign_spend_events,",
     "(select count(*) from public.venture_events where event_type='page_view') as page_view_events,",
     "(select count(*) from public.venture_events where event_type='waitlist_signup') as waitlist_signup_events,",
-    "(select count(*) from public.decisions where decision in ('scale','cut','hold')) as decisions",
+    "(select count(*) from public.decisions where decision in ('scale','cut','hold')) as decisions,",
+    "(select count(*) from public.campaign_drafts where status='published' and coalesce(metadata->>'adapter','')='n8n') as live_published_campaigns,",
+    "(select count(*) from public.campaign_drafts where status='published' and coalesce(metadata->>'adapter','')='mock') as mock_published_campaigns",
   ].join(' ')
   const remote = [
     'docker',
@@ -88,6 +92,8 @@ function queryProofCounts() {
     pageViewEvents: values[5] ?? 0,
     waitlistSignupEvents: values[6] ?? 0,
     decisions: values[7] ?? 0,
+    livePublishedCampaigns: values[8] ?? 0,
+    mockPublishedCampaigns: values[9] ?? 0,
   }
 }
 
@@ -124,6 +130,10 @@ const result = evalGate({
 
 for (const [key, value] of Object.entries(counts)) {
   write(`proof ${key}=${value}`)
+}
+
+if (missing(counts.livePublishedCampaigns)) {
+  write('warn marketing live proof missing: campaigns are mock-controlled')
 }
 
 if (!result.ok) {

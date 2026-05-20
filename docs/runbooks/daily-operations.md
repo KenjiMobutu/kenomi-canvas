@@ -113,6 +113,50 @@ Minimum attendu:
 - `venture_events.waitlist_signup` > 0
 - `decisions.decision in ('scale', 'cut', 'hold')` > 0
 
+## Preuve marketing live n8n
+
+Le mock controle prouve que la boucle applicative fonctionne, mais il ne prouve
+pas qu'une campagne sort sur un canal public. Pour verifier la preuve marketing
+live, commencer par confirmer les variables Coolify sans imprimer les secrets:
+
+```bash
+ssh coolify "docker inspect <app-container> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(MARKETING_ADAPTER|N8N_PUBLISH_WEBHOOK_URL|N8N_PUBLISH_TOKEN|TRUSTED_PRIVATE_HOSTS)=' | sed 's/=.*/=yes/'"
+```
+
+Production attendue:
+
+```text
+MARKETING_ADAPTER=yes
+N8N_PUBLISH_WEBHOOK_URL=yes
+N8N_PUBLISH_TOKEN=yes
+TRUSTED_PRIVATE_HOSTS=yes
+```
+
+Valeurs attendues cote application:
+
+```text
+MARKETING_ADAPTER=n8n
+N8N_PUBLISH_WEBHOOK_URL=https://n8n.kenomi.eu/webhook/publish
+N8N_PUBLISH_TOKEN=<secret>
+TRUSTED_PRIVATE_HOSTS=n8n.kenomi.eu
+```
+
+Apres redeploiement, verifier:
+
+```bash
+SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke
+npm run supabase:validate
+SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:revenue-proof
+```
+
+La preuve live est acquise seulement si au moins une campagne publiee a
+`metadata->>'adapter' = 'n8n'` et un `provider_run_id` externe qui ne commence
+pas par `mock-`:
+
+```bash
+ssh coolify "docker exec supabase-db-i12k0ju0ok5wk4gnts6uap03 psql -U supabase_admin -d postgres -c \"select status, provider_run_id, metadata from public.campaign_drafts where status='published' order by published_at desc limit 5;\""
+```
+
 ## Avant deploy
 
 1. Confirmer que les gates locales passent:

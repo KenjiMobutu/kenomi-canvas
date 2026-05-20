@@ -846,6 +846,8 @@ git commit -m "test(smoke): guard scout to landing revenue loop"
 
 **Goal:** faire sortir au moins une campagne via n8n live et rendre le mock impossible a confondre avec du revenu live.
 
+**Implementation status 2026-05-20:** Task 1.1 is implemented and verified. Task 1.2 is partially implemented in docs/env, but live publication is blocked by production configuration: Coolify currently exposes `MARKETING_ADAPTER` and `TRUSTED_PRIVATE_HOSTS`, but not `N8N_PUBLISH_WEBHOOK_URL` or `N8N_PUBLISH_TOKEN` in the inspected app container.
+
 ### Task 1.1: Ajouter un statut preuve marketing live
 
 **Files:**
@@ -855,7 +857,7 @@ git commit -m "test(smoke): guard scout to landing revenue loop"
 - Create: `lib/marketing/live-proof.test.ts`
 - Modify: `scripts/smoke-revenue-proof.mjs`
 
-- [ ] **Step 1: Creer le test de preuve live**
+- [x] **Step 1: Creer le test de preuve live**
 
 Create `lib/marketing/live-proof.test.ts`:
 
@@ -902,7 +904,7 @@ describe('buildMarketingLiveProof', () => {
 })
 ```
 
-- [ ] **Step 2: Verifier l'echec**
+- [x] **Step 2: Verifier l'echec**
 
 ```bash
 npm test -- lib/marketing/live-proof.test.ts
@@ -910,7 +912,7 @@ npm test -- lib/marketing/live-proof.test.ts
 
 Expected: FAIL because `lib/marketing/live-proof.ts` does not exist.
 
-- [ ] **Step 3: Implementer le helper**
+- [x] **Step 3: Implementer le helper**
 
 Create `lib/marketing/live-proof.ts`:
 
@@ -974,7 +976,7 @@ export function buildMarketingLiveProof(input: {
 }
 ```
 
-- [ ] **Step 4: Etendre le smoke revenue-proof**
+- [x] **Step 4: Etendre le smoke revenue-proof**
 
 Dans `scripts/smoke-revenue-proof.mjs`, ajouter une requete qui compte:
 
@@ -998,7 +1000,7 @@ if (missing(result.livePublishedCampaigns)) {
 }
 ```
 
-- [ ] **Step 5: Verifier**
+- [x] **Step 5: Verifier**
 
 ```bash
 npm test -- lib/marketing/live-proof.test.ts
@@ -1021,7 +1023,7 @@ git commit -m "feat(marketing): distinguish live revenue proof from mock"
 - Modify: `.env.example`
 - Modify: `docs/runbooks/daily-operations.md`
 
-- [ ] **Step 1: Verifier les variables**
+- [x] **Step 1: Verifier les variables**
 
 Sur la VM Coolify:
 
@@ -1076,7 +1078,7 @@ ssh coolify "docker exec supabase-db-i12k0ju0ok5wk4gnts6uap03 psql -U supabase_a
 
 Expected: at least one row with `metadata->>'adapter' = 'n8n'`.
 
-- [ ] **Step 6: Commit docs**
+- [x] **Step 6: Commit docs**
 
 ```bash
 git add .env.example docs/runbooks/daily-operations.md
