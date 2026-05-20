@@ -136,6 +136,17 @@ describe('createPublicCheckoutSession', () => {
         utm_content: 'hero-cta',
       }),
     })
+    expect(supabase.tables.venture_events[1]).toMatchObject({
+      user_id: 'user-1',
+      venture_id: 'venture-1',
+      event_type: 'high_intent_lead',
+      source: 'public_landing',
+      value: 1999,
+      metadata: expect.objectContaining({
+        customer_email: 'buyer@test.local',
+        utm_source: 'linkedin',
+      }),
+    })
   })
 
   it('échoue clairement si aucune configuration paiement publique existe', async () => {

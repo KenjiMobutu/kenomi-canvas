@@ -209,6 +209,23 @@ export async function createPublicCheckoutSession(
   })
   if (insertEvent.error) throw new Error(insertEvent.error.message)
 
+  const insertHighIntent = await input.supabase.from('venture_events').insert({
+    user_id: venture.user_id,
+    venture_id: venture.id,
+    event_type: 'high_intent_lead',
+    source: 'public_landing',
+    value: payment.price_amount,
+    metadata: {
+      stripe_session_id: session.id,
+      slug: input.slug,
+      pipeline_id: pipeline.id,
+      customer_email: input.customerEmail ?? session.customer_details?.email ?? null,
+      ...attribution,
+    },
+    occurred_at: nowIso,
+  })
+  if (insertHighIntent.error) throw new Error(insertHighIntent.error.message)
+
   return {
     checkoutUrl: session.url,
     stripeSessionId: session.id,

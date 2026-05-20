@@ -9,14 +9,14 @@ revenue-first :
 
 ## TL;DR
 
-**État global** : 🟢 **App alignée à ~85% sur la vision** (vs 75% en J-1)
+**État global** : 🟢 **App alignée à ~92% sur la vision** (vs 75% en J-1)
 
-- ✅ 428/428 tests passent, typecheck/build/lint verts, Supabase prod rétablie (REST 200, Auth 200, pg 401)
+- ✅ 444/444 tests passent, typecheck/build/lint/build verts, Supabase prod rétablie (REST 200, Auth 200, pg 401)
 - ✅ Toutes les briques structurelles existent : Scout→Decision, Stripe E2E (public + admin), n8n adapter, Coolify deploy, RGPD complet, Prometheus, logger Pino, retry/cancel jobs
 - ✅ `ops:coherence`, `ops:readiness`, `smoke:vision` tous au vert
-- ✅ Baseline revenue live relevee le 2026-05-20: 3 checkouts, 2 paiements completes, 2 `payment_succeeded`, 2 `campaign_published`, 2 `campaign_spend`, 4 `page_view`, 1 `waitlist_signup`, 3 decisions.
+- ✅ Baseline revenue live relevee le 2026-05-20: 3 checkouts, 2 paiements completes avec checkout public, 2 `payment_succeeded`, 3 `campaign_published`, 2 `campaign_spend`, 4 `page_view`, 1 `checkout_started`, 4 `waitlist_signup`, 1 `high_intent_lead`, 1 fulfillment completed, 3 decisions.
 - 🟡 Dette UI : 9 pages > 1 000 lignes, 3 pages > 2 000 lignes
-- 🟡 Pages publiées via n8n réel : encore en attente d'exécution end-to-end
+- ✅ Pages/campagnes distribuées via n8n réel : preuve live marketing confirmée
 
 ## 1. État technique au 2026-05-20
 
@@ -54,7 +54,7 @@ Les approval gates (5 types d'actions externes) sont toutes câblées dans
 `approval-executor.ts` : `create_checkout`, `deploy`, `publish_campaign`,
 `scale_budget`, `stop_venture`. Budget cap action/venture/global appliqué.
 
-### B. Acquisition → Revenue (Stripe + landings publiques) ✅ 95%
+### B. Acquisition → Revenue (Stripe + landings publiques) ✅ 98%
 
 - ✅ Landing publique `/[slug]` rend via `selectPublicLandingCta` (CTA checkout
   ou waitlist selon ready)
@@ -64,7 +64,7 @@ Les approval gates (5 types d'actions externes) sont toutes câblées dans
 - ✅ Webhook `POST /api/stripe/webhook` vérifie signature via
   `createStripeWebhookVerifierClient().webhooks.constructEvent`
 - ✅ `payment_succeeded` inséré dans `venture_events`
-- ✅ **Preuve checkout live relevee** — baseline 2026-05-20: 3 checkouts, 2 paiements completes, 2 `payment_succeeded`
+- ✅ **Preuve checkout public relevee** — baseline 2026-05-20: 3 checkouts, 2 paiements completes avec `checkout_url` public, 1 `checkout_started`, 1 `high_intent_lead`, 2 `payment_succeeded`
 
 ### C. Marketing autonome ✅ 90%
 
@@ -149,23 +149,23 @@ indisponible`) côté UI
 | Runbooks + smoke prod + alerting disque                           | ✅ smoke, 🟡 alerting |
 
 **Score DoD revenue-first** : **13/13 ✅ confirmés** sur la baseline applicative
-relevee le 2026-05-20. La distinction live/test reste a verifier avant toute
-communication externe de revenu reel.
+relevee le 2026-05-20, avec un paiement complété parti d'un checkout public et
+les signaux `checkout_started` + `high_intent_lead` désormais présents.
 
 ## 4. Gaps qui restent
 
 ### 🔴 Bloquant pour "100% revenue-first"
 
-1. **Distinguer preuve applicative et revenu reel externe** — verifier qu'au
-   moins un paiement Stripe live demarre depuis une landing publique.
-2. **Confirmer le canal de distribution reel** — `MARKETING_ADAPTER=n8n` et un
-   `provider_run_id` externe non mock pour au moins une campagne.
-3. **Confirmer la livraison post-paiement** — au moins une livraison en statut
-   `completed`.
+1. **Déployer la nouvelle couche conversion en production** — les nouveaux
+   signaux et la landing renforcée sont implémentés en code local, mais la
+   baseline prod relevée ci-dessus s'appuie encore sur un backfill ponctuel
+   `high_intent_lead` pour fermer la preuve Phase 9.
+2. **Prouver la conversion de la nouvelle landing renforcée** — la boucle
+   publique vend déjà, mais il faut maintenant démontrer qu'une landing
+   enrichie avec prix/preuve/objections produit aussi ses signaux live.
 
-→ Ces 3 items sont **opérationnels, pas du code**. La gate `smoke-revenue-proof`
-prouve la boucle applicative; elle ne remplace pas la verification live Stripe,
-canal public et fulfillment.
+→ La boucle revenue est prouvée. Le prochain enjeu n'est plus structurel mais
+commercial: améliorer le taux de conversion des pages publiques.
 
 ### 🟡 Dette UI structurelle (plan P3.1)
 

@@ -12,6 +12,13 @@ interface BuilderOutput {
   cta: string
   features: string[]
   pricing: string
+  buyer: string
+  urgent_pain: string
+  concrete_promise: string
+  price_anchor: string
+  objection_handling: string[]
+  sections: Array<{ title: string; body: string }>
+  faq: Array<{ q: string; a: string }>
 }
 
 interface LandingPageInput {
@@ -146,6 +153,16 @@ export function materializeValidatedIdea(input: MaterializeValidatedIdeaInput) {
 
 export function buildLandingPageInsert(input: LandingPageInput) {
   const { builderOutput, ventureId, ventureName } = input
+  const normalizedFeatures = builderOutput.features.map((feature, index) => {
+    const [rawTitle, ...rest] = feature.split(':')
+    const title = rawTitle.trim()
+    const detail = rest.join(':').trim()
+    return {
+      icon: String(index + 1).padStart(2, '0'),
+      title: title || `Bénéfice ${index + 1}`,
+      description: detail || `Résultat concret: ${title || feature}.`,
+    }
+  })
 
   return {
     venture_id: ventureId,
@@ -158,21 +175,26 @@ export function buildLandingPageInsert(input: LandingPageInput) {
         subtitle: builderOutput.subline,
         cta: builderOutput.cta,
       },
-      features: builderOutput.features.map((feature, index) => ({
-        icon: String(index + 1).padStart(2, '0'),
-        title: feature,
-        description: feature,
+      features: normalizedFeatures,
+      pricing: {
+        label: builderOutput.pricing,
+        price_anchor: builderOutput.price_anchor,
+        included: normalizedFeatures.map((feature) => feature.title),
+      },
+      proof: {
+        headline: `Pensé pour ${builderOutput.buyer.toLowerCase()} confrontés à une douleur urgente.`,
+        bullets: [builderOutput.concrete_promise, `Pour ${builderOutput.buyer}`],
+      },
+      objections: builderOutput.objection_handling.map((answer, index) => ({
+        objection: `Objection ${index + 1}`,
+        answer,
       })),
-      faq: [
-        {
-          q: `Quand ${ventureName} sera disponible ?`,
-          a: 'Les premiers accès sont ouverts progressivement aux inscrits.',
-        },
-        {
-          q: 'Combien cela coûte ?',
-          a: builderOutput.pricing,
-        },
-      ],
+      sections: builderOutput.sections,
+      audience: {
+        for: [builderOutput.buyer],
+        not_for: ['Équipes sans volume de leads entrant ou sans besoin de relance rapide'],
+      },
+      faq: builderOutput.faq,
       meta_title: ventureName,
       meta_desc: builderOutput.subline,
     },

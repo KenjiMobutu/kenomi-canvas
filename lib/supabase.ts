@@ -8,6 +8,27 @@ export const supabase = createClient(supabaseUrl, supabaseKey)
 export interface Copywriting {
   hero: { headline: string; subtitle: string; cta: string }
   features: { icon: string; title: string; description: string }[]
+  pricing?: {
+    label: string
+    price_anchor: string
+    included: string[]
+  }
+  proof?: {
+    headline: string
+    bullets: string[]
+  }
+  objections?: {
+    objection: string
+    answer: string
+  }[]
+  sections?: {
+    title: string
+    body: string
+  }[]
+  audience?: {
+    for: string[]
+    not_for: string[]
+  }
   faq: { q: string; a: string }[]
   meta_title?: string
   meta_desc?: string

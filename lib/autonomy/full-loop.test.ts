@@ -228,10 +228,27 @@ describe('full autonomy loop with fakes', () => {
       agentId: 'builder',
       llm: llm({
         headline: 'Priorisez vos leads email',
-        subline: 'Un scoring IA pour vos conversations commerciales.',
-        cta: 'Rejoindre la beta',
-        features: ['Score automatique', 'Alertes chaudes', 'Résumé quotidien'],
+        subline: 'Un scoring IA pour vos conversations commerciales les plus chaudes.',
+        cta: 'Acheter maintenant',
+        features: [
+          'Score automatique: classe les leads à traiter en premier',
+          'Alertes chaudes: remonte les conversations du jour',
+          'Résumé quotidien: prépare les relances avant 9h',
+        ],
         pricing: '29 EUR/mois',
+        buyer: 'Agences B2B avec leads email entrants',
+        urgent_pain: 'Les leads chauds sont traités trop tard et se refroidissent.',
+        concrete_promise: 'Prioriser les leads les plus proches de l achat chaque matin.',
+        price_anchor: 'Moins qu une heure perdue sur un lead tiède.',
+        objection_handling: ['Vous gardez votre CRM.', 'Aucun setup lourd.'],
+        sections: [
+          { title: 'Comment ça marche', body: 'Priorisez puis relancez.' },
+          { title: 'Pourquoi maintenant', body: 'Chaque heure compte.' },
+        ],
+        faq: [
+          { q: 'Pour qui ?', a: 'Agences B2B.' },
+          { q: 'Quel prix ?', a: '29 EUR/mois.' },
+        ],
       }),
     })
 
@@ -242,7 +259,7 @@ describe('full autonomy loop with fakes', () => {
       copywriting: expect.objectContaining({
         hero: expect.objectContaining({
           headline: 'Priorisez vos leads email',
-          cta: 'Rejoindre la beta',
+          cta: 'Acheter maintenant',
         }),
       }),
     })

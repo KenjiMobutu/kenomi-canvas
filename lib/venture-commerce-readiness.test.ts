@@ -103,4 +103,38 @@ describe('venture commerce readiness', () => {
     expect(readiness.reasons).toEqual([])
     expect(getNextCommercialRepairAction({ ventureName: 'ClientBrief', readiness })).toBeNull()
   })
+
+  it('flags a deployed landing that is still commercially weak', () => {
+    const readiness = evaluateVentureCommerceReadiness({
+      venture: {
+        id: 'venture-4',
+        name: 'ProposalFast',
+        slug: 'proposalfast',
+        stage: 'launch',
+        statut: 'actif',
+      },
+      landingPages: [
+        {
+          venture_id: 'venture-4',
+          statut: 'deployed',
+          health_status: 'repair_required',
+          health_reasons: ['missing_price_anchor', 'missing_believability'],
+        },
+      ],
+      pipelines: [{ venture_id: 'venture-4', payment_output: '{"price_amount":2900}' }],
+      payments: [],
+    })
+
+    expect(readiness.status).toBe('repair_required')
+    expect(readiness.reasons).toEqual(['missing_price_anchor', 'missing_believability'])
+    expect(getNextCommercialRepairAction({ ventureName: 'ProposalFast', readiness })).toEqual({
+      id: 'repair-landing',
+      label: 'Renforcer page publique',
+      detail:
+        'La landing de ProposalFast existe mais reste trop faible pour convertir du trafic froid.',
+      href: '/studio/agents',
+      agentId: 'builder',
+      tone: 'warn',
+    })
+  })
 })

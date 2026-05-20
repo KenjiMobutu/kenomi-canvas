@@ -3,10 +3,16 @@ import { isAllowedWebhookUrl } from '@/lib/security'
 export async function notifyNurtureSignup(input: {
   env?: Record<string, string | undefined>
   payload: {
+    eventType?: 'waitlist_signup' | 'checkout_abandoned' | 'high_intent_lead'
     slug: string
     ventureId: string | null
-    email: string
+    email?: string | null
     source: string
+    utm_source?: string | null
+    utm_medium?: string | null
+    utm_campaign?: string | null
+    utm_content?: string | null
+    pricingLabel?: string | null
   }
 }): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
   const env = input.env ?? (process.env as Record<string, string | undefined>)

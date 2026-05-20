@@ -165,8 +165,15 @@ describe('parseAgentOutput', () => {
             title: 'Built for urgent follow-up',
             body: 'Paste call notes and get a polished proposal while the opportunity is still warm.',
           },
+          {
+            title: 'Why buy now',
+            body: 'The faster you send a clean proposal, the less likely the deal goes cold.',
+          },
         ],
-        faq: [{ q: 'Who is this for?', a: 'Solo consultants with active client opportunities.' }],
+        faq: [
+          { q: 'Who is this for?', a: 'Solo consultants with active client opportunities.' },
+          { q: 'How is it priced?', a: '29 EUR one-time for one urgent proposal workflow.' },
+        ],
       })
     )
 
@@ -175,6 +182,25 @@ describe('parseAgentOutput', () => {
       buyer: 'Solo consultants selling 1k-10k EUR services',
       price_anchor: expect.stringContaining('1,500 EUR'),
     })
+  })
+
+  it('rejects Builder output that lacks pricing anchor, objections, sections and faq', () => {
+    expect(() =>
+      parseAgentOutput(
+        'builder',
+        JSON.stringify({
+          headline: 'Win the deal before the client forgets the call',
+          subline:
+            'For solo consultants: turn messy call notes into a stronger proposal in 10 minutes.',
+          cta: 'Buy now',
+          features: ['Proposal cleanup', 'Fast turnaround'],
+          pricing: '29 EUR one-time',
+          buyer: 'Solo consultants selling 1k-10k EUR services',
+          urgent_pain: 'Proposal delay causes warm leads to go cold.',
+          concrete_promise: 'Client-ready proposal in 10 minutes.',
+        })
+      )
+    ).toThrow('Invalid builder output')
   })
 
   it('valide une sortie Decision actionnable', () => {

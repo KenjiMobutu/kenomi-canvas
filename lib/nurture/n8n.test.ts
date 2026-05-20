@@ -24,5 +24,12 @@ describe('notifyNurtureSignup', () => {
 
     expect(result.ok).toBe(true)
     expect(fetchSpy).toHaveBeenCalledOnce()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://n8n.kenomi.eu/webhook/nurture',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ authorization: 'Bearer secret' }),
+      })
+    )
   })
 })

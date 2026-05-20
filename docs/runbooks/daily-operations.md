@@ -80,12 +80,15 @@ Baseline relevee le 2026-05-20 apres preuve live:
 | Metric                    | Value |
 | ------------------------- | ----: |
 | payments_with_checkout    |     3 |
+| completed_public_checkout |     2 |
 | completed_payments        |     2 |
 | payment_succeeded_events  |     2 |
-| campaign_published_events |     2 |
+| campaign_published_events |     3 |
 | campaign_spend_events     |     2 |
 | page_view_events          |     4 |
-| waitlist_signup_events    |     1 |
+| checkout_started_events   |     1 |
+| waitlist_signup_events    |     4 |
+| high_intent_lead_events   |     1 |
 | completed_fulfillments    |     1 |
 | decisions                 |     3 |
 
@@ -114,12 +117,15 @@ ssh coolify "docker exec supabase-db-i12k0ju0ok5wk4gnts6uap03 psql -U supabase_a
 
 Minimum attendu:
 
+- `payments.checkout_url is not null and status='completed'` > 0
 - `payments.status='completed'` > 0
 - `venture_events.payment_succeeded` > 0
 - `venture_events.campaign_published` > 0
 - `venture_events.campaign_spend` > 0
 - `venture_events.page_view` > 0
+- `venture_events.checkout_started` > 0
 - `venture_events.waitlist_signup` > 0
+- `venture_events.high_intent_lead` > 0
 - `decisions.decision in ('scale', 'cut', 'hold')` > 0
 
 ## Preuve marketing live n8n

@@ -32,13 +32,13 @@ const builderSchema = z.object({
   cta: z.string().min(1),
   features: z.array(z.string().min(1)).min(1),
   pricing: z.string().min(1),
-  buyer: z.string().min(5).optional(),
-  urgent_pain: z.string().min(10).optional(),
-  concrete_promise: z.string().min(10).optional(),
-  price_anchor: z.string().min(10).optional(),
-  objection_handling: z.array(z.string().min(5)).min(2).optional(),
-  sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).optional(),
-  faq: z.array(z.object({ q: z.string().min(1), a: z.string().min(1) })).optional(),
+  buyer: z.string().min(5),
+  urgent_pain: z.string().min(10),
+  concrete_promise: z.string().min(10),
+  price_anchor: z.string().min(10),
+  objection_handling: z.array(z.string().min(5)).min(2),
+  sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(2),
+  faq: z.array(z.object({ q: z.string().min(1), a: z.string().min(1) })).min(2),
 })
 
 const paymentSchema = z.object({

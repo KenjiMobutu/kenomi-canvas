@@ -1,11 +1,16 @@
 export type VentureCommerceReadinessReason =
   | 'missing_slug'
   | 'missing_landing'
+  | 'missing_price_anchor'
+  | 'missing_objection_handling'
+  | 'missing_believability'
+  | 'missing_offer_stack'
+  | 'missing_sales_sections'
   | 'missing_payment_config'
 
 export type VentureCommerceReadinessStatus = 'ready' | 'repair_required'
 
-export type CommercialRepairActionId = 'run-builder' | 'run-payment'
+export type CommercialRepairActionId = 'run-builder' | 'repair-landing' | 'run-payment'
 
 export interface CommercialRepairAction {
   id: CommercialRepairActionId
@@ -29,6 +34,7 @@ export interface CommerceLandingPageRow {
   venture_id?: string | null
   statut?: string | null
   health_status?: string | null
+  health_reasons?: string[] | null
 }
 
 export interface CommercePipelineRow {
@@ -83,12 +89,25 @@ export function evaluateVentureCommerceReadiness(input: {
 }): VentureCommerceReadiness {
   const ventureId = input.venture.id
   const hasSlug = hasText(input.venture.slug)
-  const hasLanding = input.landingPages.some(
+  const ventureLandings = input.landingPages.filter((landing) => landing.venture_id === ventureId)
+  const conversionReasons = ventureLandings.flatMap((landing) =>
+    Array.isArray(landing.health_reasons)
+      ? landing.health_reasons.filter((reason): reason is VentureCommerceReadinessReason =>
+          [
+            'missing_price_anchor',
+            'missing_objection_handling',
+            'missing_believability',
+            'missing_offer_stack',
+            'missing_sales_sections',
+          ].includes(reason)
+        )
+      : []
+  )
+  const hasLanding = ventureLandings.some(
     (landing) =>
-      landing.venture_id === ventureId &&
-      (landing.health_status === 'ready' ||
-        landing.health_status === 'deployed' ||
-        landing.statut === 'deployed')
+      landing.health_status === 'ready' ||
+      (landing.health_status === 'deployed' && conversionReasons.length === 0) ||
+      (landing.statut === 'deployed' && conversionReasons.length === 0)
   )
   const hasPaymentConfig = input.pipelines.some(
     (pipeline) => pipeline.venture_id === ventureId && hasText(pipeline.payment_output)
@@ -102,11 +121,12 @@ export function evaluateVentureCommerceReadiness(input: {
 
   const reasons: VentureCommerceReadinessReason[] = []
   if (!hasSlug) reasons.push('missing_slug')
-  if (!hasLanding) reasons.push('missing_landing')
+  if (ventureLandings.length === 0) reasons.push('missing_landing')
+  reasons.push(...conversionReasons)
   if (!hasPaymentConfig) reasons.push('missing_payment_config')
   return {
     status: reasons.length === 0 ? 'ready' : 'repair_required',
-    reasons,
+    reasons: [...new Set(reasons)],
     hasSlug,
     hasLanding,
     hasPaymentConfig,
@@ -120,6 +140,27 @@ export function getNextCommercialRepairAction(input: {
 }): CommercialRepairAction | null {
   const { readiness, ventureName } = input
   if (readiness.status === 'ready') return null
+
+  if (
+    readiness.reasons.some((reason) =>
+      [
+        'missing_price_anchor',
+        'missing_objection_handling',
+        'missing_believability',
+        'missing_offer_stack',
+        'missing_sales_sections',
+      ].includes(reason)
+    )
+  ) {
+    return {
+      id: 'repair-landing',
+      label: 'Renforcer page publique',
+      detail: `La landing de ${ventureName} existe mais reste trop faible pour convertir du trafic froid.`,
+      href: '/studio/agents',
+      agentId: 'builder',
+      tone: 'warn',
+    }
+  }
 
   if (!readiness.hasSlug || !readiness.hasLanding) {
     return {

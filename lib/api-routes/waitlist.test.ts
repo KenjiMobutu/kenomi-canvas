@@ -77,7 +77,12 @@ describe('POST /api/waitlist', () => {
 
   it('302 redirect si payload valide', async () => {
     const res = await POST(
-      makeJsonRequest({ slug: 'my-venture', email: 'jean@kenomi.eu' }) as never
+      makeJsonRequest({
+        slug: 'my-venture',
+        email: 'jean@kenomi.eu',
+        utm_source: 'linkedin',
+        utm_campaign: 'launch',
+      }) as never
     )
     expect(res.status).toBe(302)
     expect(mockedUpsert).toHaveBeenCalledOnce()
@@ -86,10 +91,15 @@ describe('POST /api/waitlist', () => {
     expect(location).toContain('waitlist=ok')
     expect(mockedNotifyNurtureSignup).toHaveBeenCalledWith({
       payload: {
+        eventType: 'waitlist_signup',
         slug: 'my-venture',
         ventureId: 'v-1',
         email: 'jean@kenomi.eu',
         source: 'waitlist',
+        utm_source: 'linkedin',
+        utm_medium: '',
+        utm_campaign: 'launch',
+        utm_content: '',
       },
     })
   })

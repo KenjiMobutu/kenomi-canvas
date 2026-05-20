@@ -661,9 +661,26 @@ describe('runAgentStep', () => {
       content: JSON.stringify({
         headline: 'Priorisez vos leads email',
         subline: 'Scoring IA pour équipes sales.',
-        cta: 'Rejoindre la beta',
-        features: ['Score automatique'],
+        cta: 'Acheter maintenant',
+        features: [
+          'Score automatique: classe les leads à traiter en premier',
+          'Alertes chaudes: remonte les conversations du jour',
+          'Résumé quotidien: prépare les relances avant 9h',
+        ],
         pricing: '29 EUR/mois',
+        buyer: 'Agences B2B avec leads entrants',
+        urgent_pain: 'Les leads chauds sont traités trop tard et se refroidissent.',
+        concrete_promise: 'Prioriser les leads les plus proches de l achat chaque matin.',
+        price_anchor: 'Moins qu une heure perdue sur un lead tiède.',
+        objection_handling: ['Vous gardez votre CRM.', 'Aucun setup lourd.'],
+        sections: [
+          { title: 'Comment ça marche', body: 'Priorisez puis relancez.' },
+          { title: 'Pourquoi maintenant', body: 'Chaque heure compte.' },
+        ],
+        faq: [
+          { q: 'Pour qui ?', a: 'Agences B2B.' },
+          { q: 'Quel prix ?', a: '29 EUR/mois.' },
+        ],
       }),
       provider: 'ollama',
       model: 'qwen3:8b',

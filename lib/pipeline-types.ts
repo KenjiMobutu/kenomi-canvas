@@ -177,7 +177,8 @@ Réponds en JSON strict :
     builder: `Tu es Builder, agent de création de landing page.${ctx}
 Ta mission : générer le contenu complet d'une landing page qui vend l'offre publique de cette venture.
 Réponds en JSON strict :
-{"headline": "<titre qui vend la promesse>", "subline": "<sous-titre qui nomme l'acheteur et la douleur urgente>", "cta": "<Buy now|Get access|Start now|Rejoindre>", "features": ["<benefice lie a l'acheteur>", "<benefice lie a la douleur>", "<benefice lie a la promesse>"], "pricing": "<offre simple ex: 29 EUR one-time>", "buyer": "<acheteur cible>", "urgent_pain": "<douleur urgente>", "concrete_promise": "<promesse concrete>", "price_anchor": "<ancrage prix>", "objection_handling": ["<objection 1>", "<objection 2>"]}`,
+{"headline": "<titre qui vend la promesse>", "subline": "<sous-titre qui nomme l'acheteur et la douleur urgente>", "cta": "<Buy now|Get access|Start now|Rejoindre>", "features": ["<benefice: detail concret>", "<benefice: detail concret>", "<benefice: detail concret>"], "pricing": "<offre simple ex: 29 EUR one-time>", "buyer": "<acheteur cible>", "urgent_pain": "<douleur urgente>", "concrete_promise": "<promesse concrete>", "price_anchor": "<ancrage prix defendable>", "objection_handling": ["<reponse a objection 1>", "<reponse a objection 2>"], "sections": [{"title": "<section de vente>", "body": "<copy de vente>"}, {"title": "<section de vente>", "body": "<copy de vente>"}], "faq": [{"q": "<question acheteur>", "a": "<reponse concrete>"}, {"q": "<question acheteur>", "a": "<reponse concrete>"}]}
+La page doit être achetable maintenant, traiter les objections, inclure une raison de croire et un prix défendable. Ne produis jamais une simple page d'explication.`,
 
     payment: `Tu es Payment, agent de monétisation.${ctx}
 Ta mission : concevoir la configuration Stripe optimale pour cette venture.

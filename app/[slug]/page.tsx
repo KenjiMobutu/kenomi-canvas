@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
 import { selectPublicLandingCta } from '@/lib/public-landing-cta'
+import { notifyNurtureSignup } from '@/lib/nurture/n8n'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,7 +56,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
     },
   })
 
-  const { hero, features, faq } = data.copywriting
+  const { hero, features, faq, pricing, proof, objections, sections, audience } = data.copywriting
   const { data: checkoutPipelines } = await supabaseAdmin
     .from('venture_pipeline')
     .select('id')
@@ -76,15 +77,45 @@ export default async function LandingPage({ params, searchParams }: Props) {
   const showPaymentCancel = payment === 'cancelled'
   const showCheckoutError = checkout === 'error'
 
+  if (showPaymentCancel || showCheckoutError) {
+    await recordVentureEventBySlugSafely(supabaseAdmin as unknown as VentureEventSupabase, {
+      slug,
+      eventType: 'checkout_abandoned',
+      source: 'landing',
+      metadata: {
+        path: `/${slug}`,
+        reason: showPaymentCancel ? 'payment_cancelled' : 'checkout_error',
+        utm_source: utm_source ?? '',
+        utm_medium: utm_medium ?? '',
+        utm_campaign: utm_campaign ?? '',
+        utm_content: utm_content ?? '',
+      },
+    })
+
+    await notifyNurtureSignup({
+      payload: {
+        eventType: 'checkout_abandoned',
+        slug,
+        ventureId: data.venture_id,
+        email: null,
+        source: 'landing',
+        utm_source: utm_source ?? '',
+        utm_medium: utm_medium ?? '',
+        utm_campaign: utm_campaign ?? '',
+        utm_content: utm_content ?? '',
+        pricingLabel: pricing?.label ?? null,
+      },
+    }).catch(() => undefined)
+  }
+
   return (
-    <main className="min-h-screen">
-      {/* BANNIÈRE CONFIRMATION */}
+    <main className="min-h-screen bg-neutral-950 text-neutral-50">
       {(showWaitlistSuccess || showPaymentSuccess || showPaymentCancel || showCheckoutError) && (
         <div
-          className={`px-4 py-3 text-center text-sm font-medium ${
+          className={`border-b px-4 py-3 text-center text-sm font-medium ${
             showPaymentCancel || showCheckoutError
-              ? 'bg-yellow-900/50 border-b border-yellow-800 text-yellow-300'
-              : 'bg-green-900/50 border-b border-green-800 text-green-300'
+              ? 'border-amber-800 bg-amber-950/70 text-amber-200'
+              : 'border-emerald-800 bg-emerald-950/70 text-emerald-200'
           }`}
         >
           {showWaitlistSuccess &&
@@ -95,87 +126,312 @@ export default async function LandingPage({ params, searchParams }: Props) {
         </div>
       )}
 
-      {/* NAV */}
-      <nav className="px-6 py-4 flex items-center justify-between max-w-5xl mx-auto">
-        <Link href="/" className="text-gray-500 text-sm hover:text-white transition-colors">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+        <Link href="/" className="text-sm text-neutral-500 transition-colors hover:text-white">
           ← Kenomi
         </Link>
+        <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+          Vente publique autonome
+        </div>
       </nav>
 
-      {/* HERO */}
-      <section className="max-w-3xl mx-auto px-6 pt-20 pb-24 text-center">
-        <div className="inline-flex items-center gap-2 bg-violet-950 border border-violet-800 rounded-full px-4 py-1 text-violet-300 text-sm mb-8">
-          <span className="w-2 h-2 bg-violet-400 rounded-full animate-pulse" />
-          Nouveau projet Kenomi
+      <section className="border-b border-neutral-900">
+        <div className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] lg:items-start lg:py-20">
+          <div className="max-w-3xl">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-900 bg-emerald-950/60 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-emerald-200">
+              Offre live
+            </div>
+            <h1 className="max-w-3xl text-4xl font-semibold leading-tight md:text-6xl">
+              {hero.headline}
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-neutral-300">{hero.subtitle}</p>
+
+            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
+              {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
+                <form action={primaryCta.href} method="POST" className="inline-flex">
+                  <input type="hidden" name="slug" value={slug} />
+                  <input type="hidden" name="utm_source" value={utm_source ?? ''} />
+                  <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
+                  <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
+                  <input type="hidden" name="utm_content" value={utm_content ?? ''} />
+                  <button
+                    type="submit"
+                    className="inline-flex min-w-[220px] items-center justify-center rounded-lg bg-emerald-500 px-6 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-emerald-400"
+                  >
+                    {primaryCta.label}
+                  </button>
+                </form>
+              ) : (
+                <a
+                  href={showWaitlistSuccess ? undefined : primaryCta.href}
+                  className="inline-flex min-w-[220px] items-center justify-center rounded-lg bg-emerald-500 px-6 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-emerald-400"
+                >
+                  {showWaitlistSuccess ? 'Inscrit' : primaryCta.label}
+                </a>
+              )}
+              <a
+                href="#waitlist"
+                className="inline-flex min-w-[220px] items-center justify-center rounded-lg border border-neutral-800 px-6 py-3 text-base font-medium text-neutral-200 transition-colors hover:border-neutral-700 hover:bg-neutral-900"
+              >
+                Recevoir le lancement
+              </a>
+            </div>
+
+            <dl className="mt-10 grid gap-6 sm:grid-cols-3">
+              <div>
+                <dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">Acheteur</dt>
+                <dd className="mt-2 text-sm leading-6 text-neutral-200">
+                  {audience?.for?.[0] ?? data.nom}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">Offre</dt>
+                <dd className="mt-2 text-sm leading-6 text-neutral-200">
+                  {pricing?.label ?? 'Offre sur demande'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                  Raison d acheter
+                </dt>
+                <dd className="mt-2 text-sm leading-6 text-neutral-200">
+                  {proof?.bullets?.[0] ?? hero.subtitle}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <aside className="rounded-xl border border-neutral-900 bg-neutral-900 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+            <div className="text-sm text-neutral-400">Offre publique</div>
+            <div className="mt-3 text-3xl font-semibold text-white">
+              {pricing?.label ?? 'Tarification en préparation'}
+            </div>
+            {pricing?.price_anchor ? (
+              <p className="mt-3 text-sm leading-6 text-neutral-300">{pricing.price_anchor}</p>
+            ) : null}
+
+            {pricing?.included?.length ? (
+              <div className="mt-6 border-t border-neutral-900 pt-6">
+                <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">Inclus</div>
+                <ul className="mt-4 space-y-3 text-sm text-neutral-200">
+                  {pricing.included.map((item) => (
+                    <li key={item} className="flex items-start gap-3">
+                      <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="mt-6 border-t border-neutral-900 pt-6">
+              <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                Pourquoi croire cette offre
+              </div>
+              <p className="mt-3 text-sm leading-6 text-neutral-300">
+                {proof?.headline ?? hero.subtitle}
+              </p>
+            </div>
+          </aside>
         </div>
-        <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
-          {hero.headline}
-        </h1>
-        <p className="text-xl text-gray-400 mb-10 max-w-xl mx-auto">{hero.subtitle}</p>
-        {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
-          <form action={primaryCta.href} method="POST" className="inline-flex">
-            <input type="hidden" name="slug" value={slug} />
-            <input type="hidden" name="utm_source" value={utm_source ?? ''} />
-            <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
-            <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
-            <input type="hidden" name="utm_content" value={utm_content ?? ''} />
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"
-            >
-              {primaryCta.label} →
-            </button>
-          </form>
-        ) : (
-          <a
-            href={showWaitlistSuccess ? undefined : primaryCta.href}
-            className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-colors"
-          >
-            {showWaitlistSuccess ? 'Inscrit !' : `${primaryCta.label} →`}
-          </a>
-        )}
       </section>
 
-      {/* FEATURES */}
+      {sections?.length ? (
+        <section className="border-b border-neutral-900">
+          <div className="mx-auto max-w-6xl px-6 py-16">
+            <div className="grid gap-8 lg:grid-cols-2">
+              {sections.map((section) => (
+                <div key={section.title} className="border-b border-neutral-900 pb-6 lg:border-b-0">
+                  <h2 className="text-2xl font-semibold text-white">{section.title}</h2>
+                  <p className="mt-4 max-w-xl text-base leading-7 text-neutral-300">
+                    {section.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {features?.length > 0 && (
-        <section className="max-w-5xl mx-auto px-6 py-20">
-          <h2 className="text-3xl font-bold text-center mb-12">Pourquoi choisir {data.nom} ?</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            {features.map((f, i) => (
-              <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <div className="text-3xl mb-4">{f.icon}</div>
-                <h3 className="font-semibold text-lg mb-2">{f.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{f.description}</p>
-              </div>
-            ))}
+        <section className="border-b border-neutral-900">
+          <div className="mx-auto max-w-6xl px-6 py-16">
+            <div className="mb-10 max-w-2xl">
+              <h2 className="text-3xl font-semibold text-white">Ce que vous achetez réellement</h2>
+              <p className="mt-4 text-base leading-7 text-neutral-300">
+                Une offre structurée pour réduire le délai entre un signal d achat et votre action
+                commerciale.
+              </p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-3">
+              {features.map((f, i) => (
+                <article
+                  key={i}
+                  className="rounded-lg border border-neutral-900 bg-neutral-900 p-6"
+                >
+                  <div className="text-xs uppercase tracking-[0.18em] text-emerald-300">
+                    {f.icon}
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-white">{f.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-neutral-300">{f.description}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
       )}
 
-      {/* WAITLIST */}
-      <section id="waitlist" className="max-w-xl mx-auto px-6 py-20 text-center">
+      {(audience?.for?.length || audience?.not_for?.length) && (
+        <section className="border-b border-neutral-900">
+          <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-2">
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Pour qui</h2>
+              <ul className="mt-5 space-y-3 text-sm leading-6 text-neutral-300">
+                {(audience?.for ?? []).map((item) => (
+                  <li key={item} className="flex items-start gap-3">
+                    <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Quand ne pas l acheter</h2>
+              <ul className="mt-5 space-y-3 text-sm leading-6 text-neutral-300">
+                {(audience?.not_for ?? []).map((item) => (
+                  <li key={item} className="flex items-start gap-3">
+                    <span className="mt-1 h-2 w-2 rounded-full bg-neutral-500" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {(proof?.headline || proof?.bullets?.length) && (
+        <section className="border-b border-neutral-900">
+          <div className="mx-auto max-w-6xl px-6 py-16">
+            <div className="max-w-3xl">
+              <h2 className="text-2xl font-semibold text-white">
+                Pourquoi cette offre est crédible
+              </h2>
+              <p className="mt-4 text-base leading-7 text-neutral-300">
+                {proof?.headline ?? hero.subtitle}
+              </p>
+            </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              {(proof?.bullets ?? []).map((item) => (
+                <div
+                  key={item}
+                  className="rounded-lg border border-neutral-900 bg-neutral-900 p-5 text-sm leading-6 text-neutral-200"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {objections?.length ? (
+        <section className="border-b border-neutral-900">
+          <div className="mx-auto max-w-6xl px-6 py-16">
+            <div className="max-w-2xl">
+              <h2 className="text-2xl font-semibold text-white">Objections traitées avant achat</h2>
+              <p className="mt-4 text-base leading-7 text-neutral-300">
+                La page doit lever les doutes principaux avant de demander un paiement ou un email.
+              </p>
+            </div>
+            <div className="mt-8 grid gap-6 md:grid-cols-2">
+              {objections.map((item, index) => (
+                <article
+                  key={`${item.objection}-${index}`}
+                  className="rounded-lg border border-neutral-900 bg-neutral-900 p-6"
+                >
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                    {item.objection}
+                  </h3>
+                  <p className="mt-4 text-sm leading-6 text-neutral-200">{item.answer}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="border-b border-neutral-900">
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <div className="rounded-xl border border-emerald-900 bg-emerald-950/30 p-8 lg:flex lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <h2 className="text-2xl font-semibold text-white">
+                Passez à l achat ou demandez le lancement
+              </h2>
+              <p className="mt-4 text-base leading-7 text-neutral-300">
+                La voie principale est le checkout public. Si vous n êtes pas prêt maintenant,
+                laissez votre email pour relance ciblée.
+              </p>
+            </div>
+            <div className="mt-6 lg:mt-0">
+              {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
+                <form action={primaryCta.href} method="POST" className="inline-flex">
+                  <input type="hidden" name="slug" value={slug} />
+                  <input type="hidden" name="utm_source" value={utm_source ?? ''} />
+                  <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
+                  <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
+                  <input type="hidden" name="utm_content" value={utm_content ?? ''} />
+                  <button
+                    type="submit"
+                    className="inline-flex min-w-[220px] items-center justify-center rounded-lg bg-emerald-400 px-6 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-emerald-300"
+                  >
+                    {primaryCta.label}
+                  </button>
+                </form>
+              ) : (
+                <a
+                  href={showWaitlistSuccess ? undefined : primaryCta.href}
+                  className="inline-flex min-w-[220px] items-center justify-center rounded-lg bg-emerald-400 px-6 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-emerald-300"
+                >
+                  {showWaitlistSuccess ? 'Inscrit' : primaryCta.label}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="waitlist" className="mx-auto max-w-xl px-6 py-20 text-center">
         {showWaitlistSuccess ? (
-          <div className="bg-green-900/30 border border-green-800 rounded-2xl p-8">
-            <div className="text-4xl mb-4">✅</div>
-            <h2 className="text-2xl font-bold mb-2 text-green-300">Vous êtes sur la liste !</h2>
-            <p className="text-gray-400">On vous contacte dès que {data.nom} est disponible.</p>
+          <div className="rounded-xl border border-emerald-900 bg-emerald-950/30 p-8">
+            <h2 className="text-2xl font-semibold text-emerald-200">Vous êtes sur la liste</h2>
+            <p className="mt-3 text-neutral-300">
+              On vous contacte dès que {data.nom} est disponible.
+            </p>
           </div>
         ) : (
           <>
-            <h2 className="text-3xl font-bold mb-4">Rejoignez la liste d&apos;attente</h2>
-            <p className="text-gray-400 mb-8">Soyez parmi les premiers à accéder à {data.nom}.</p>
-            <form action="/api/waitlist" method="POST" className="flex gap-3 max-w-md mx-auto">
+            <h2 className="text-3xl font-semibold text-white">Recevoir le lancement</h2>
+            <p className="mt-4 text-base leading-7 text-neutral-300">
+              Si vous n achetez pas maintenant, laissez un email pour la relance et les offres de
+              lancement.
+            </p>
+            <form action="/api/waitlist" method="POST" className="mx-auto mt-8 flex max-w-md gap-3">
               <input type="hidden" name="slug" value={slug} />
+              <input type="hidden" name="utm_source" value={utm_source ?? ''} />
+              <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
+              <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
+              <input type="hidden" name="utm_content" value={utm_content ?? ''} />
               <input
                 type="email"
                 name="email"
                 placeholder="votre@email.com"
                 required
-                className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+                className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-white placeholder-neutral-500 focus:border-emerald-500 focus:outline-none"
               />
               <button
                 type="submit"
-                className="bg-violet-600 hover:bg-violet-500 text-white font-semibold px-6 py-3 rounded-xl transition-colors whitespace-nowrap"
+                className="whitespace-nowrap rounded-lg bg-white px-6 py-3 font-semibold text-neutral-950 transition-colors hover:bg-neutral-200"
               >
                 S&apos;inscrire
               </button>
@@ -184,25 +440,23 @@ export default async function LandingPage({ params, searchParams }: Props) {
         )}
       </section>
 
-      {/* FAQ */}
       {faq?.length > 0 && (
-        <section className="max-w-2xl mx-auto px-6 py-16">
-          <h2 className="text-2xl font-bold text-center mb-10">Questions fréquentes</h2>
-          <div className="space-y-4">
+        <section className="mx-auto max-w-3xl px-6 py-16">
+          <h2 className="text-center text-2xl font-semibold text-white">Questions fréquentes</h2>
+          <div className="mt-10 space-y-4">
             {faq.map((item, i) => (
-              <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-semibold mb-2">{item.q}</h3>
-                <p className="text-gray-400 text-sm">{item.a}</p>
+              <div key={i} className="rounded-lg border border-neutral-900 bg-neutral-900 p-6">
+                <h3 className="font-semibold text-white">{item.q}</h3>
+                <p className="mt-3 text-sm leading-6 text-neutral-300">{item.a}</p>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* FOOTER */}
-      <footer className="border-t border-gray-900 py-8 text-center text-gray-600 text-sm">
+      <footer className="border-t border-neutral-900 py-8 text-center text-sm text-neutral-600">
         Propulsé par{' '}
-        <Link href="/" className="text-gray-400 hover:text-white">
+        <Link href="/" className="text-neutral-400 hover:text-white">
           Kenomi
         </Link>
       </footer>

@@ -19,6 +19,10 @@ export async function POST(req: NextRequest) {
 
   try {
     let slug: string, email: string
+    let utm_source = ''
+    let utm_medium = ''
+    let utm_campaign = ''
+    let utm_content = ''
 
     const contentType = req.headers.get('content-type') ?? ''
 
@@ -29,10 +33,18 @@ export async function POST(req: NextRequest) {
       const form = await req.formData()
       slug = (form.get('slug') as string) ?? ''
       email = (form.get('email') as string) ?? ''
+      utm_source = String(form.get('utm_source') ?? '')
+      utm_medium = String(form.get('utm_medium') ?? '')
+      utm_campaign = String(form.get('utm_campaign') ?? '')
+      utm_content = String(form.get('utm_content') ?? '')
     } else {
       const body = await req.json()
       slug = body.slug ?? ''
       email = body.email ?? ''
+      utm_source = body.utm_source ?? ''
+      utm_medium = body.utm_medium ?? ''
+      utm_campaign = body.utm_campaign ?? ''
+      utm_content = body.utm_content ?? ''
     }
 
     if (!slug || !email) {
@@ -59,15 +71,37 @@ export async function POST(req: NextRequest) {
       source: 'waitlist',
       metadata: {
         email_domain: email.split('@')[1] ?? '',
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        utm_content,
+      },
+    })
+
+    await recordVentureEventBySlugSafely(supabaseAdmin as unknown as VentureEventSupabase, {
+      slug,
+      eventType: 'high_intent_lead',
+      source: 'waitlist',
+      metadata: {
+        email_domain: email.split('@')[1] ?? '',
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        utm_content,
       },
     })
 
     await notifyNurtureSignup({
       payload: {
+        eventType: 'waitlist_signup',
         slug,
         ventureId: venture?.id ?? null,
         email,
         source: 'waitlist',
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        utm_content,
       },
     }).catch(() => undefined)
 

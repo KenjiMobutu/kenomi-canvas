@@ -88,6 +88,46 @@ describe('buildRevenueLoopSnapshot', () => {
     })
   })
 
+  it('demande de régénérer la copy de vente quand la landing publique existe mais ne convertira pas', () => {
+    const snapshot = buildRevenueLoopSnapshot({
+      pipelines: [basePipeline],
+      ventures: [
+        {
+          id: 'venture-1',
+          name: 'InboxPulse',
+          slug: 'inboxpulse',
+          stage: 'launch',
+          statut: 'actif',
+          mrr: '0',
+        },
+      ],
+      landingPages: [
+        {
+          venture_id: 'venture-1',
+          statut: 'deployed',
+          health_status: 'repair_required',
+          health_reasons: ['missing_price_anchor', 'missing_objection_handling'],
+        },
+      ],
+      payments: [],
+      campaignDrafts: [],
+      autonomyActions: [],
+      approvals: [],
+      decisions: [],
+    })
+
+    expect(snapshot.loops[0].stages).toContainEqual({
+      key: 'landing',
+      label: 'Landing',
+      status: 'blocked',
+    })
+    expect(snapshot.loops[0].nextAction).toMatchObject({
+      type: 'run_agent',
+      agentId: 'builder',
+      label: 'Regenerer copy de vente',
+    })
+  })
+
   it('bloque une venture validée sans système de paiement dédié après la landing', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [{ ...basePipeline, payment_output: null }],

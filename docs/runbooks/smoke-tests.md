@@ -146,12 +146,15 @@ Le script vérifie:
 - `/api/studio/revenue/proof` est protégé en POST sans session.
 - Supabase prod contient au moins:
   - un checkout,
+  - un paiement complété avec `checkout_url` public,
   - un paiement complété,
   - un event `payment_succeeded`,
   - un event `campaign_published`,
   - un event `campaign_spend`,
   - un event `page_view`,
+  - un event `checkout_started`,
   - un event `waitlist_signup`,
+  - un event `high_intent_lead`,
   - une livraison `fulfillment_deliveries.status='completed'`,
   - une décision `scale`, `cut` ou `hold`.
 
@@ -163,6 +166,14 @@ declarer "revenu reel", verifier aussi:
 - `MARKETING_ADAPTER=n8n`;
 - un `provider_run_id` externe non mock pour au moins une campagne;
 - une livraison post-paiement en statut `completed`.
+
+Lecture minimale du funnel:
+
+- `page_view` : trafic réel sur landing publique
+- `checkout_started` : intention d'achat réelle depuis la landing
+- `high_intent_lead` : lead chaud capturé via checkout public ou waitlist
+- `waitlist_signup` : fallback de capture quand l'achat immédiat n'a pas lieu
+- `completed_payments_with_checkout` : preuve qu'au moins un paiement terminé est parti d'un checkout public
 
 Mode standard:
 

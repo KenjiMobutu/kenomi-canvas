@@ -511,7 +511,17 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
     ) {
       nextAction = {
         type: 'run_agent',
-        label: 'Créer landing dédiée',
+        label: commercialReadiness!.reasons.some((reason) =>
+          [
+            'missing_price_anchor',
+            'missing_objection_handling',
+            'missing_believability',
+            'missing_offer_stack',
+            'missing_sales_sections',
+          ].includes(reason)
+        )
+          ? 'Regenerer copy de vente'
+          : 'Créer landing dédiée',
         agentId: 'builder',
         ventureId: pipeline.venture_id,
       }

@@ -8,6 +8,11 @@ export type PublicLandingHealthReason =
   | 'missing_headline'
   | 'missing_sales_copy'
   | 'missing_cta'
+  | 'missing_price_anchor'
+  | 'missing_objection_handling'
+  | 'missing_believability'
+  | 'missing_offer_stack'
+  | 'missing_sales_sections'
   | 'tracking_missing'
 
 export interface PublicLandingSellableOffer {
@@ -31,6 +36,23 @@ export interface PublicLandingHealthInput {
         cta?: string | null
       } | null
       features?: Array<unknown> | null
+      pricing?: {
+        label?: string | null
+        price_anchor?: string | null
+        included?: Array<unknown> | null
+      } | null
+      proof?: {
+        headline?: string | null
+        bullets?: Array<unknown> | null
+      } | null
+      objections?: Array<{
+        objection?: string | null
+        answer?: string | null
+      }> | null
+      sections?: Array<{
+        title?: string | null
+        body?: string | null
+      }> | null
     } | null
   } | null
   hasTracking: boolean
@@ -97,6 +119,65 @@ function hasSellableOffer(
   )
 }
 
+function hasNonEmptyArray(value: unknown): value is unknown[] {
+  return Array.isArray(value) && value.length > 0
+}
+
+function hasOfferStack(
+  pricing:
+    | {
+        included?: Array<unknown> | null
+      }
+    | null
+    | undefined,
+  features: Array<unknown> | null | undefined
+): boolean {
+  return hasNonEmptyArray(pricing?.included) || (Array.isArray(features) && features.length >= 2)
+}
+
+function hasBelievability(
+  proof:
+    | {
+        headline?: string | null
+        bullets?: Array<unknown> | null
+      }
+    | null
+    | undefined
+): boolean {
+  return hasText(proof?.headline) && hasNonEmptyArray(proof?.bullets)
+}
+
+function hasObjectionHandling(
+  objections:
+    | Array<{
+        objection?: string | null
+        answer?: string | null
+      }>
+    | null
+    | undefined
+): boolean {
+  return (
+    Array.isArray(objections) &&
+    objections.some((item) => hasText(item?.objection) && hasText(item?.answer))
+  )
+}
+
+function hasSalesSections(
+  sections:
+    | Array<{
+        title?: string | null
+        body?: string | null
+      }>
+    | null
+    | undefined
+): boolean {
+  return (
+    Array.isArray(sections) &&
+    sections.length > 0 &&
+    sections.every((item) => hasText(item?.title) && hasText(item?.body))
+  )
+}
+
 export function evaluatePublicLandingHealth(input: PublicLandingHealthInput): PublicLandingHealth {
   const reasons: PublicLandingHealthReason[] = []
 
@@ -118,6 +199,26 @@ export function evaluatePublicLandingHealth(input: PublicLandingHealthInput): Pu
   if (input.landing && !isActionCta(input.landing.copywriting?.hero?.cta)) {
     reasons.push('missing_cta')
   }
+  if (input.landing && !hasText(input.landing.copywriting?.pricing?.label)) {
+    reasons.push('missing_price_anchor')
+  } else if (input.landing && !hasText(input.landing.copywriting?.pricing?.price_anchor)) {
+    reasons.push('missing_price_anchor')
+  }
+  if (input.landing && !hasObjectionHandling(input.landing.copywriting?.objections)) {
+    reasons.push('missing_objection_handling')
+  }
+  if (input.landing && !hasBelievability(input.landing.copywriting?.proof)) {
+    reasons.push('missing_believability')
+  }
+  if (
+    input.landing &&
+    !hasOfferStack(input.landing.copywriting?.pricing, input.landing.copywriting?.features)
+  ) {
+    reasons.push('missing_offer_stack')
+  }
+  if (input.landing && !hasSalesSections(input.landing.copywriting?.sections)) {
+    reasons.push('missing_sales_sections')
+  }
   if (!input.hasTracking) reasons.push('tracking_missing')
 
   if (reasons.length === 0) {
@@ -132,7 +233,7 @@ export function evaluatePublicLandingHealth(input: PublicLandingHealthInput): Pu
     status: reasons.includes('missing_landing') ? 'missing' : 'repair_required',
     reasons,
     repairAction: {
-      label: 'Lancer Builder',
+      label: 'Regenerer la landing de vente',
       agentId: 'builder',
     },
   }

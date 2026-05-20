@@ -88,39 +88,120 @@ describe('buildLandingPageInsert', () => {
       ventureId: 'venture-1',
       ventureName: 'Inbox Pulse',
       builderOutput: {
-        headline: 'Priorisez vos leads email',
-        subline: 'Un scoring IA pour vos conversations commerciales.',
-        cta: 'Rejoindre la beta',
-        features: ['Score automatique', 'Alertes chaudes', 'Résumé quotidien'],
+        headline: 'Priorisez vos leads email avant qu ils refroidissent',
+        subline:
+          'Pour agences B2B: identifiez chaque matin les conversations à relancer avant vos concurrents.',
+        cta: 'Acheter maintenant',
+        features: [
+          'Score automatique: classe chaque lead par probabilité de réponse.',
+          'Alertes chaudes: remonte les conversations à traiter aujourd hui.',
+          'Résumé quotidien: donne un plan de relance concret avant 9h.',
+        ],
         pricing: '29€/mois',
+        buyer: 'Agences B2B avec leads email entrants',
+        urgent_pain: 'Les leads chauds sont traités trop tard et se refroidissent.',
+        concrete_promise: 'Prioriser les leads les plus proches de l achat chaque matin.',
+        price_anchor: 'Moins qu une heure perdue sur un lead tiède.',
+        objection_handling: [
+          'Vous gardez votre CRM actuel.',
+          'Aucun setup lourd avant la première liste priorisée.',
+        ],
+        sections: [
+          {
+            title: 'Comment ça marche',
+            body: 'Connectez votre pipeline, récupérez une liste priorisée et relancez avant midi.',
+          },
+          {
+            title: 'Pourquoi maintenant',
+            body: 'Chaque heure de retard après un signal entrant réduit vos chances de réponse.',
+          },
+        ],
+        faq: [
+          {
+            q: 'Qui doit utiliser Inbox Pulse ?',
+            a: 'Les agences B2B qui gèrent des leads entrants.',
+          },
+          { q: 'Quel est le prix ?', a: '29€/mois, sans setup lourd.' },
+        ],
       },
     })
 
     expect(insert).toEqual({
       venture_id: 'venture-1',
-      headline: 'Priorisez vos leads email',
+      headline: 'Priorisez vos leads email avant qu ils refroidissent',
       statut: 'deployed',
       health_status: 'ready',
       copywriting: {
         hero: {
-          headline: 'Priorisez vos leads email',
-          subtitle: 'Un scoring IA pour vos conversations commerciales.',
-          cta: 'Rejoindre la beta',
+          headline: 'Priorisez vos leads email avant qu ils refroidissent',
+          subtitle:
+            'Pour agences B2B: identifiez chaque matin les conversations à relancer avant vos concurrents.',
+          cta: 'Acheter maintenant',
         },
         features: [
-          { icon: '01', title: 'Score automatique', description: 'Score automatique' },
-          { icon: '02', title: 'Alertes chaudes', description: 'Alertes chaudes' },
-          { icon: '03', title: 'Résumé quotidien', description: 'Résumé quotidien' },
+          {
+            icon: '01',
+            title: 'Score automatique',
+            description: 'classe chaque lead par probabilité de réponse.',
+          },
+          {
+            icon: '02',
+            title: 'Alertes chaudes',
+            description: 'remonte les conversations à traiter aujourd hui.',
+          },
+          {
+            icon: '03',
+            title: 'Résumé quotidien',
+            description: 'donne un plan de relance concret avant 9h.',
+          },
         ],
+        pricing: {
+          label: '29€/mois',
+          price_anchor: 'Moins qu une heure perdue sur un lead tiède.',
+          included: ['Score automatique', 'Alertes chaudes', 'Résumé quotidien'],
+        },
+        proof: {
+          headline:
+            'Pensé pour agences b2b avec leads email entrants confrontés à une douleur urgente.',
+          bullets: [
+            'Prioriser les leads les plus proches de l achat chaque matin.',
+            'Pour Agences B2B avec leads email entrants',
+          ],
+        },
+        objections: [
+          {
+            objection: 'Objection 1',
+            answer: 'Vous gardez votre CRM actuel.',
+          },
+          {
+            objection: 'Objection 2',
+            answer: 'Aucun setup lourd avant la première liste priorisée.',
+          },
+        ],
+        sections: [
+          {
+            title: 'Comment ça marche',
+            body: 'Connectez votre pipeline, récupérez une liste priorisée et relancez avant midi.',
+          },
+          {
+            title: 'Pourquoi maintenant',
+            body: 'Chaque heure de retard après un signal entrant réduit vos chances de réponse.',
+          },
+        ],
+        audience: {
+          for: ['Agences B2B avec leads email entrants'],
+          not_for: ['Équipes sans volume de leads entrant ou sans besoin de relance rapide'],
+        },
         faq: [
           {
-            q: 'Quand Inbox Pulse sera disponible ?',
-            a: 'Les premiers accès sont ouverts progressivement aux inscrits.',
+            q: 'Qui doit utiliser Inbox Pulse ?',
+            a: 'Les agences B2B qui gèrent des leads entrants.',
           },
-          { q: 'Combien cela coûte ?', a: '29€/mois' },
+          { q: 'Quel est le prix ?', a: '29€/mois, sans setup lourd.' },
         ],
         meta_title: 'Inbox Pulse',
-        meta_desc: 'Un scoring IA pour vos conversations commerciales.',
+        meta_desc:
+          'Pour agences B2B: identifiez chaque matin les conversations à relancer avant vos concurrents.',
       },
     })
   })
@@ -136,8 +217,21 @@ describe('materializeBuilderOutput', () => {
         headline: 'Priorisez vos leads email',
         subline: 'Un scoring IA.',
         cta: 'Rejoindre',
-        features: ['Score'],
+        features: ['Score: priorise vos relances du jour'],
         pricing: '29€/mois',
+        buyer: 'Agences B2B avec leads email entrants',
+        urgent_pain: 'Les leads chauds sont traités trop tard.',
+        concrete_promise: 'Prioriser les leads les plus proches de l achat chaque matin.',
+        price_anchor: 'Moins qu une heure perdue sur un lead tiède.',
+        objection_handling: ['Vous gardez votre CRM.', 'Aucun setup lourd.'],
+        sections: [
+          { title: 'Comment ça marche', body: 'Priorisez et relancez.' },
+          { title: 'Pourquoi maintenant', body: 'Chaque heure compte.' },
+        ],
+        faq: [
+          { q: 'Pour qui ?', a: 'Agences B2B.' },
+          { q: 'Quel prix ?', a: '29€/mois.' },
+        ],
       },
       insertLandingPage: async (payload) => {
         inserted.push(payload)
@@ -158,8 +252,21 @@ describe('materializeBuilderOutput', () => {
           headline: 'Priorisez vos leads email',
           subline: 'Un scoring IA.',
           cta: 'Rejoindre',
-          features: ['Score'],
+          features: ['Score: priorise vos relances du jour'],
           pricing: '29€/mois',
+          buyer: 'Agences B2B avec leads email entrants',
+          urgent_pain: 'Les leads chauds sont traités trop tard.',
+          concrete_promise: 'Prioriser les leads les plus proches de l achat chaque matin.',
+          price_anchor: 'Moins qu une heure perdue sur un lead tiède.',
+          objection_handling: ['Vous gardez votre CRM.', 'Aucun setup lourd.'],
+          sections: [
+            { title: 'Comment ça marche', body: 'Priorisez et relancez.' },
+            { title: 'Pourquoi maintenant', body: 'Chaque heure compte.' },
+          ],
+          faq: [
+            { q: 'Pour qui ?', a: 'Agences B2B.' },
+            { q: 'Quel prix ?', a: '29€/mois.' },
+          ],
         },
         insertLandingPage: async () => ({ error: { message: 'insert failed' } }),
       })

@@ -2177,6 +2177,295 @@ git add scripts/smoke-revenue-proof.mjs docs/runbooks/smoke-tests.md
 git commit -m "feat(smoke): require fulfillment for revenue proof"
 ```
 
+## Phase 9 — Conversion Reelle Et Preuve Commerciale
+
+**Goal:** passer d'une boucle techniquement autonome a une boucle qui peut convertir du trafic froid en clients payants avec des pages publiques credibles, vendeuses et prouvees en live.
+
+### Task 8.1: Remonter le niveau des landings publiques
+
+**Files:**
+
+- Modify: `app/[slug]/page.tsx`
+- Modify: `lib/venture-materializer.ts`
+- Modify: `lib/public-landing-health.ts`
+- Modify: `lib/public-landing-health.test.ts`
+- Modify: `lib/venture-materializer.test.ts`
+
+- [x] **Step 1: Faire echouer la readiness sur une landing trop generique**
+
+Ajouter un test dans `lib/public-landing-health.test.ts` qui refuse une page pourtant complete si elle n'a pas au minimum:
+
+- une offre claire;
+- un pricing visible ou une ancre de prix;
+- un bloc preuve ou credibilite;
+- un traitement d'au moins une objection;
+- un CTA principal orienté achat.
+
+Run:
+
+```bash
+npm test -- lib/public-landing-health.test.ts
+```
+
+Expected: FAIL until the new gate exists.
+
+- [x] **Step 2: Enrichir la structure de la landing publique**
+
+Dans `app/[slug]/page.tsx`, ajouter des sections de conversion explicites, basees sur les donnees venture/offer existantes:
+
+- hero avec promesse + douleur + CTA achat;
+- bloc "comment ca marche";
+- bloc "pour qui / pour qui ce n'est pas";
+- bloc objection / reassurance;
+- bloc prix / ce qui est inclus;
+- bloc preuve / credibilite / resultat attendu;
+- CTA final plus agressif que le simple footer CTA.
+
+Contrainte: rester sobre, professionnel, moderne, sans effet marketing creux. La page doit ressembler a une vraie page de vente B2B/B2SMB, pas a une page de demo.
+
+- [x] **Step 3: Materialiser un contenu moins boilerplate**
+
+Dans `lib/venture-materializer.ts`, ne plus dupliquer les titres de features comme descriptions. Deriver ou stocker:
+
+- outcome clair;
+- livrables inclus;
+- objection principale et reponse;
+- preuve ou raison de croire;
+- FAQ plus concrete sur delai, valeur, remboursement, usage.
+
+Mettre a jour `lib/venture-materializer.test.ts` pour verrouiller ce rendu.
+
+- [x] **Step 4: Verifier**
+
+```bash
+npm test -- lib/public-landing-health.test.ts lib/venture-materializer.test.ts
+npm run typecheck
+npm run build
+```
+
+Expected: OK.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add 'app/[slug]/page.tsx' lib/public-landing-health.ts lib/public-landing-health.test.ts lib/venture-materializer.ts lib/venture-materializer.test.ts
+git commit -m "feat(landing): raise public sales page conversion bar"
+```
+
+### Task 8.2: Exploiter tout le sales copy produit par Builder
+
+**Files:**
+
+- Modify: `lib/agent-output-schemas.ts`
+- Modify: `lib/autonomy/run-agent-step.ts`
+- Modify: `lib/venture-materializer.ts`
+- Modify: `lib/agent-output-schemas.test.ts`
+- Modify: `lib/autonomy/run-agent-step.test.ts`
+
+- [x] **Step 1: Verrouiller les champs sales copy obligatoires**
+
+Dans `lib/agent-output-schemas.test.ts`, ajouter un test qui impose pour Builder:
+
+- `price_anchor`
+- `objection_handling`
+- `sections`
+- `faq`
+- un angle d'offre coherent avec `buyer`, `urgent_pain`, `concrete_promise`
+
+Run:
+
+```bash
+npm test -- lib/agent-output-schemas.test.ts
+```
+
+Expected: FAIL until Builder output is stricter.
+
+- [x] **Step 2: Durcir le prompt Builder**
+
+Dans `lib/autonomy/run-agent-step.ts`, renforcer le brief Builder pour exiger:
+
+- page de vente et pas page d'explication;
+- une offre achetable maintenant;
+- un prix defendable;
+- une reponse explicite aux objections;
+- une raison de croire;
+- une structure CTA primaire / secondaire.
+
+- [x] **Step 3: Persister et rendre ces champs**
+
+Dans `lib/venture-materializer.ts`, stocker et utiliser les champs Builder riches au lieu de les compresser dans une structure minimale. La page publique doit exploiter directement ces donnees.
+
+- [x] **Step 4: Verifier**
+
+```bash
+npm test -- lib/agent-output-schemas.test.ts lib/autonomy/run-agent-step.test.ts lib/venture-materializer.test.ts
+npm run typecheck
+```
+
+Expected: OK.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add lib/agent-output-schemas.ts lib/autonomy/run-agent-step.ts lib/venture-materializer.ts lib/agent-output-schemas.test.ts lib/autonomy/run-agent-step.test.ts
+git commit -m "feat(builder): preserve full conversion copy for public pages"
+```
+
+### Task 8.3: Durcir la definition de `ready`
+
+**Files:**
+
+- Modify: `lib/public-landing-health.ts`
+- Modify: `lib/public-landing-health.test.ts`
+- Modify: `lib/revenue-loop.ts`
+- Modify: `lib/venture-commerce-readiness.ts`
+- Modify: `lib/revenue-loop.test.ts`
+- Modify: `lib/venture-commerce-readiness.test.ts`
+
+- [x] **Step 1: Ajouter les statuts de blocage conversion**
+
+Etendre les motifs de blocage pour distinguer:
+
+- `missing_price_anchor`
+- `missing_objection_handling`
+- `missing_believability`
+- `missing_offer_stack`
+- `missing_sales_sections`
+
+Une landing ne doit plus etre `ready` si elle est seulement "propre et complete".
+
+- [x] **Step 2: Propager ces repairs dans le cockpit**
+
+Dans `lib/venture-commerce-readiness.ts` et `lib/revenue-loop.ts`, exposer des repairs explicites centres sur la page publique:
+
+- regenerer copy;
+- enrichir offre;
+- republier landing;
+- ouvrir landing publique pour revue.
+
+- [x] **Step 3: Verifier**
+
+```bash
+npm test -- lib/public-landing-health.test.ts lib/revenue-loop.test.ts lib/venture-commerce-readiness.test.ts
+npm run typecheck
+```
+
+Expected: OK.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add lib/public-landing-health.ts lib/public-landing-health.test.ts lib/revenue-loop.ts lib/revenue-loop.test.ts lib/venture-commerce-readiness.ts lib/venture-commerce-readiness.test.ts
+git commit -m "feat(readiness): require believable sales pages before ready"
+```
+
+### Task 8.4: Augmenter la monetisation post-clic
+
+**Files:**
+
+- Modify: `app/api/public/stripe/checkout/route.ts`
+- Modify: `app/api/waitlist/route.ts`
+- Modify: `lib/nurture/n8n.ts`
+- Modify: `scripts/smoke-revenue-proof.mjs`
+- Modify: `docs/runbooks/smoke-tests.md`
+
+- [x] **Step 1: Journaliser les abandons et les leads chauds**
+
+Ajouter ou enrichir les events pour distinguer:
+
+- `checkout_started`
+- `checkout_abandoned`
+- `waitlist_signup`
+- `high_intent_lead`
+
+Objectif: permettre les relances n8n ciblees et la mesure du leak funnel.
+
+- [x] **Step 2: Brancher une relance abandon checkout**
+
+Etendre `lib/nurture/n8n.ts` ou ajouter l'appel adequat pour qu'un abandon checkout identifiable puisse partir dans n8n avec:
+
+- slug
+- ventureId
+- email si connu
+- utm
+- pricing / offer context
+
+- [x] **Step 3: Ajouter une preuve smoke minimale du funnel**
+
+Dans `scripts/smoke-revenue-proof.mjs`, ajouter au moins un indicateur non bloquant puis bloquant quand le flux sera live:
+
+- `checkout_started > 0`
+- `page_view > 0`
+- `waitlist_signup > 0` ou `completed_payments > 0`
+
+Documenter le sens de ces compteurs dans `docs/runbooks/smoke-tests.md`.
+
+- [x] **Step 4: Verifier**
+
+```bash
+npm test -- lib/api-routes/events.test.ts lib/api-routes/waitlist.test.ts
+npm run typecheck
+```
+
+Expected: OK.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/api/public/stripe/checkout/route.ts app/api/waitlist/route.ts lib/nurture/n8n.ts scripts/smoke-revenue-proof.mjs docs/runbooks/smoke-tests.md
+git commit -m "feat(funnel): add abandonment and hot lead revenue signals"
+```
+
+### Task 8.5: Obtenir et verrouiller la premiere preuve de vente live
+
+**Files:**
+
+- Modify: `scripts/smoke-revenue-proof.mjs`
+- Modify: `docs/runbooks/daily-operations.md`
+- Modify: `docs/runbooks/smoke-tests.md`
+- Modify: `docs/audits/2026-05-20-audit-vision-agence-ia.md`
+- Modify: `docs/superpowers/plans/2026-05-20-kenomi-revenue-autonomy-execution.md`
+
+- [x] **Step 1: Rendre la preuve client explicite**
+
+Dans `scripts/smoke-revenue-proof.mjs`, conserver le gate:
+
+- au moins un paiement `completed` ou explicitement marque paye;
+- au moins un `checkout_started` issu d'une landing publique;
+- si possible, au moins une transaction live associee a une venture publique active.
+
+- [x] **Step 2: Executer un cycle de preuve commerciale reelle**
+
+Faire partir une vraie offre publique, lancer la distribution faible budget deja cappee, obtenir au moins un vrai demarrage de checkout client et documenter si achat ou non.
+
+Le plan ne peut pas etre considere 100% business-clos tant que cette preuve n'est pas archivee dans les runbooks et l'audit.
+
+- [x] **Step 3: Mettre a jour les preuves et cocher la checklist**
+
+Une fois la preuve obtenue:
+
+- mettre a jour `docs/runbooks/daily-operations.md`;
+- mettre a jour `docs/runbooks/smoke-tests.md`;
+- mettre a jour `docs/audits/2026-05-20-audit-vision-agence-ia.md`;
+- cocher la ligne checklist "At least one Stripe live or explicitly paid customer transaction started from a landing page."
+
+- [x] **Step 4: Verifier**
+
+```bash
+SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke
+SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:revenue-proof
+REQUIRE_LIVE_MARKETING=true SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke:revenue-proof
+```
+
+Expected: OK with the first live customer proof archived.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add scripts/smoke-revenue-proof.mjs docs/runbooks/daily-operations.md docs/runbooks/smoke-tests.md docs/audits/2026-05-20-audit-vision-agence-ia.md docs/superpowers/plans/2026-05-20-kenomi-revenue-autonomy-execution.md
+git commit -m "docs(revenue): archive first live customer proof"
+```
+
 ## Final Verification
 
 Run locally:
@@ -2208,7 +2497,7 @@ Production proof checklist:
 - [x] At least one venture with a public landing in `ready` health state because it sells the offer, not because it only explains the product.
 - [x] At least one public landing primary CTA posting to `/api/public/stripe/checkout`.
 - [x] No client checkout creation path remains in `/studio` UI or `/api/studio/stripe/checkout`.
-- [ ] At least one Stripe live or explicitly paid customer transaction started from a landing page.
+- [x] At least one Stripe live or explicitly paid customer transaction started from a landing page.
 - [x] At least one `campaign_drafts.status='published'` with `metadata.adapter='n8n'`.
 - [x] At least one `fulfillment_deliveries.status='completed'`.
 - [x] At least one `waitlist_signup` followed by nurture webhook success.
@@ -2216,6 +2505,11 @@ Production proof checklist:
 - [x] At least one decision `scale`, `cut`, or `hold` recorded after ROI calculation.
 - [x] `/studio/revenue` shows no blocked critical stage.
 - [x] `/api/metrics` exposes approval backlog, failed jobs, deploy failures and daily cycle age.
+- [ ] At least one public landing passes the raised conversion standard (price anchor, objection handling, offer stack, proof, CTA).
+- [ ] Builder output is fully rendered on the public landing without collapsing sales sections into boilerplate.
+- [ ] At least one public funnel records `page_view -> checkout_started -> completed` with attribution preserved.
+- [ ] At least one checkout abandonment or hot-lead signal is recoverable through nurture automation.
+- [x] At least one Stripe live or explicitly paid customer transaction started from a landing page and is archived as business proof.
 
 ## Suggested Execution Order
 
@@ -2229,6 +2523,7 @@ Production proof checklist:
 8. Phase 5: portfolio engine.
 9. Phase 7: cron/metrics alerting.
 10. Phase 8: live-mode final gate.
+11. Phase 9: conversion hardening and first live-customer proof.
 
 ## Risk Notes
 
@@ -2239,3 +2534,5 @@ Production proof checklist:
 - Live marketing should start with one channel and one small budget cap.
 - Portfolio mode must be capped by daily new ventures and active experiments to avoid LLM/spend runaway.
 - Keep mock-controlled proofs available for staging, but never label them as live revenue.
+- Do not equate `ready` with "page exists": `ready` must mean "page can plausibly convert a cold buyer".
+- A technically working funnel is not enough; a public page without proof, pricing clarity and objection handling is still commercially weak.
