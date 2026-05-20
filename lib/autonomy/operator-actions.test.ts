@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { cancelAutonomyJob, retryAutonomyJob, type OperatorSupabase } from './operator-actions'
+import {
+  cancelAutonomyJob,
+  deleteApprovalGate,
+  retryAutonomyJob,
+  type OperatorSupabase,
+} from './operator-actions'
 
 interface JobRow {
   id: string
@@ -12,19 +17,40 @@ interface JobRow {
   updated_at: string
 }
 
-function fakeSupabase(seed: JobRow[]) {
-  const rows = seed.map((row) => ({ ...row }))
+interface ApprovalRow {
+  id: string
+  user_id: string
+  action_id: string
+  status: string
+  reason?: string | null
+}
+
+function fakeSupabase(seed: JobRow[] | { autonomy_jobs?: JobRow[]; human_approvals?: ApprovalRow[] }) {
+  const tables = Array.isArray(seed)
+    ? { autonomy_jobs: seed.map((row) => ({ ...row })), human_approvals: [] as ApprovalRow[] }
+    : {
+        autonomy_jobs: (seed.autonomy_jobs ?? []).map((row) => ({ ...row })),
+        human_approvals: (seed.human_approvals ?? []).map((row) => ({ ...row })),
+      }
 
   return {
-    rows,
+    rows: tables.autonomy_jobs,
+    tables,
     from(table: string) {
-      if (table !== 'autonomy_jobs') throw new Error(`unexpected table ${table}`)
-      let patch: Partial<JobRow> | null = null
+      if (table !== 'autonomy_jobs' && table !== 'human_approvals')
+        throw new Error(`unexpected table ${table}`)
+      const rows = tables[table]
+      let patch: Record<string, unknown> | null = null
+      let shouldDelete = false
       const filters: Array<[string, unknown]> = []
       const builder = {
         select: () => builder,
-        update: (row: Partial<JobRow>) => {
+        update: (row: Record<string, unknown>) => {
           patch = row
+          return builder
+        },
+        delete: () => {
+          shouldDelete = true
           return builder
         },
         eq: (field: string, value: unknown) => {
@@ -32,11 +58,13 @@ function fakeSupabase(seed: JobRow[]) {
           return builder
         },
         maybeSingle: async <T = unknown>() => {
-          const current = rows.find((row) =>
-            filters.every(([field, value]) => row[field as keyof JobRow] === value)
+          const index = rows.findIndex((row) =>
+            filters.every(([field, value]) => row[field as keyof typeof row] === value)
           )
+          const current = index >= 0 ? rows[index] : null
           if (!current) return { data: null, error: null }
           if (patch) Object.assign(current, patch)
+          if (shouldDelete) rows.splice(index, 1)
           return { data: current as T, error: null }
         },
       }
@@ -111,5 +139,22 @@ describe('operator autonomy actions', () => {
       message: 'Impossible de retry un job running.',
     })
     expect(supabase.rows[0]?.status).toBe('running')
+  })
+
+  it('deletes an approval gate owned by the user', async () => {
+    const supabase = fakeSupabase({
+      human_approvals: [
+        { id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' },
+      ],
+    })
+
+    const result = await deleteApprovalGate({
+      supabase: supabase as unknown as OperatorSupabase,
+      userId: 'user-1',
+      approvalId: 'approval-1',
+    })
+
+    expect(result).toMatchObject({ ok: true, code: 'approval_deleted' })
+    expect(supabase.tables.human_approvals).toEqual([])
   })
 })

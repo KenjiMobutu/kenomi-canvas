@@ -20,6 +20,11 @@ import {
 import { materializeBuilderOutput } from '@/lib/venture-materializer'
 import { buildCampaignDrafts, type MarketingOutputShape } from '@/lib/marketing/campaign-drafts'
 import { agentRunsTotal, agentRunCostUsdTotal } from '@/lib/metrics/prometheus'
+import {
+  buildScoutSourceBrief,
+  collectFreeScoutSignals,
+  type ScoutSourceCollection,
+} from '@/lib/scout/free-sources'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -61,6 +66,7 @@ export interface RunAgentStepInput {
       max_tokens: number
     }
   ) => Promise<LLMResponse>
+  scoutSourceCollector?: (input: { query: string; now: () => Date }) => Promise<ScoutSourceCollection>
   now?: () => Date
 }
 
@@ -343,12 +349,21 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     agentId === 'decision'
       ? await getDecisionMetricsBundle(supabase, pipeline)
       : { context: '', metrics: null }
-  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}`
   const userPrompt =
     input.prompt ||
     (agentId === 'scout'
       ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
       : 'Exécute ta mission.')
+  const scoutSourceContext =
+    agentId === 'scout'
+      ? `\n\n${buildScoutSourceBrief(
+          await (input.scoutSourceCollector ?? collectFreeScoutSignals)({
+            query: userPrompt,
+            now,
+          })
+        )}`
+      : ''
+  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}${scoutSourceContext}`
 
   const startMs = now().getTime()
 

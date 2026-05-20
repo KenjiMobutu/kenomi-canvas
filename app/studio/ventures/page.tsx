@@ -8,10 +8,13 @@ import { CkShell } from '@/components/CkShell'
 import { surface, surface2, line, line2, text, muted, muted2, accent, bg } from '@/lib/ck-vars'
 import { agentById, makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
 import { Play } from 'lucide-react'
+import { findAvailableSlug } from '@/lib/venture-materializer'
 import {
-  getMissingLandingAction,
-  type SupervisedLoopRepairAction,
-} from '@/lib/autonomy/supervised-loop-state'
+  evaluateVentureCommerceReadiness,
+  getNextCommercialRepairAction,
+  type CommercialRepairAction,
+  type VentureCommerceReadiness,
+} from '@/lib/venture-commerce-readiness'
 
 const em = '#34d399',
   am = '#fbbf24',
@@ -46,6 +49,8 @@ interface Venture {
   id: string
   name: string
   slug?: string | null
+  statut?: string | null
+  lifecycle_status?: string | null
   niche: string
   stage: string
   score: number
@@ -303,6 +308,7 @@ function generateBrief(v: DV): string {
 function VentureInspector({
   v,
   repairAction,
+  commerceReadiness,
   onSave,
   onDelete,
   onOpen,
@@ -310,12 +316,13 @@ function VentureInspector({
   onRepairAction,
 }: {
   v: DV | null
-  repairAction?: SupervisedLoopRepairAction | null
+  repairAction?: CommercialRepairAction | null
+  commerceReadiness?: VentureCommerceReadiness | null
   onSave: (id: string, form: EditForm) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onOpen: () => void
   onBrief: () => void
-  onRepairAction?: (action: SupervisedLoopRepairAction) => Promise<void>
+  onRepairAction?: (action: CommercialRepairAction) => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -391,7 +398,7 @@ function VentureInspector({
     await onDelete(v.id)
   }
 
-  async function handleRepairAction(action: SupervisedLoopRepairAction) {
+  async function handleRepairAction(action: CommercialRepairAction) {
     if (!onRepairAction || !action.agentId) return
     setRepairRunning(true)
     try {
@@ -707,6 +714,57 @@ function VentureInspector({
       {/* Stats */}
       {!editing && (
         <>
+          {commerceReadiness && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 8,
+              }}
+            >
+              {[
+                ['Slug', commerceReadiness.hasSlug],
+                ['Landing', commerceReadiness.hasLanding],
+                ['Payment', commerceReadiness.hasPaymentConfig],
+                ['Checkout', commerceReadiness.hasCheckout],
+              ].map(([label, ok]) => (
+                <div
+                  key={String(label)}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    background: ok ? `${em}10` : `${am}10`,
+                    border: `1px solid ${ok ? `${em}44` : `${am}44`}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 8.5,
+                      color: muted2,
+                      letterSpacing: '.14em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {label}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 2,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: ok ? em : am,
+                      fontWeight: 800,
+                      letterSpacing: '.12em',
+                    }}
+                  >
+                    {ok ? 'READY' : 'MISSING'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
             {(
               [
@@ -1054,32 +1112,72 @@ export default function VenturesPage() {
   const isMobile = useIsMobile()
   const [items, setItems] = useState<DV[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [landingVentureIds, setLandingVentureIds] = useState<Set<string>>(new Set())
+  const [commerceReadinessByVenture, setCommerceReadinessByVenture] = useState<
+    Map<string, VentureCommerceReadiness>
+  >(new Map())
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', niche: '', stage: 'validation', score: '', mrr: '' })
 
   const supabase = createSupabaseBrowser()
 
-  async function refreshLandingCoverage(ventureIds: string[]) {
+  async function refreshCommerceCoverage(ventures: DV[]) {
+    const ventureIds = ventures.map((v) => v.id)
     if (ventureIds.length === 0) {
-      setLandingVentureIds(new Set())
+      setCommerceReadinessByVenture(new Map())
       return
     }
 
-    const { data, error } = await supabase
-      .from('landing_pages')
-      .select('venture_id')
-      .in('venture_id', ventureIds)
-    if (error) {
-      setLandingVentureIds(new Set())
+    const [landingResult, pipelineResult, paymentResult] = await Promise.all([
+      supabase
+        .from('landing_pages')
+        .select('venture_id, statut, health_status')
+        .in('venture_id', ventureIds),
+      supabase
+        .from('venture_pipeline')
+        .select('venture_id, payment_output')
+        .eq('user_id', user!.id)
+        .in('venture_id', ventureIds),
+      supabase
+        .from('payments')
+        .select('venture_id, checkout_url, provider_status, status')
+        .in('venture_id', ventureIds),
+    ])
+
+    if (landingResult.error || pipelineResult.error || paymentResult.error) {
+      setCommerceReadinessByVenture(new Map())
       return
     }
 
-    setLandingVentureIds(
-      new Set(
-        ((data as Array<{ venture_id: string | null }> | null) ?? []).flatMap((row) =>
-          row.venture_id ? [row.venture_id] : []
-        )
+    const landingPages =
+      (landingResult.data as Array<{
+        venture_id: string | null
+        statut: string | null
+        health_status: string | null
+      }> | null) ?? []
+    const pipelines =
+      (pipelineResult.data as Array<{
+        venture_id: string | null
+        payment_output: string | null
+      }> | null) ?? []
+    const payments =
+      (paymentResult.data as Array<{
+        venture_id: string | null
+        checkout_url: string | null
+        provider_status: string | null
+        status: string | null
+      }> | null) ?? []
+
+    setCommerceReadinessByVenture(
+      new Map(
+        ventures.map((venture) => [
+          venture.id,
+          evaluateVentureCommerceReadiness({
+            venture,
+            landingPages,
+            pipelines,
+            payments,
+          }),
+        ])
       )
     )
   }
@@ -1100,7 +1198,7 @@ export default function VenturesPage() {
       }
       const dvs = ((data as Venture[]) || []).map(toDisplay)
       setItems(dvs)
-      await refreshLandingCoverage(dvs.map((v) => v.id))
+      await refreshCommerceCoverage(dvs)
       if (!selectedId && dvs.length > 0) setSelectedId(dvs[0].id)
     }
     load()
@@ -1118,23 +1216,30 @@ export default function VenturesPage() {
       .order('score', { ascending: false })
     const dvs = ((data as Venture[]) || []).map(toDisplay)
     setItems(dvs)
-    await refreshLandingCoverage(dvs.map((v) => v.id))
+    await refreshCommerceCoverage(dvs)
   }
 
   async function create(e: React.FormEvent) {
     e.preventDefault()
     if (!user || !form.name.trim()) return
+    const slug = await findAvailableSlug(async (candidate) => {
+      const { data } = await supabase.from('ventures').select('id').eq('slug', candidate).limit(1)
+      return Boolean(data?.length)
+    }, form.name.trim())
     const { error } = await supabase.from('ventures').insert({
       user_id: user.id,
       name: form.name.trim(),
+      nom: form.name.trim(),
+      slug,
       niche: form.niche.trim(),
       stage: form.stage,
       score: parseInt(form.score) || 50,
       mrr: form.mrr.trim() || '0',
       cac: '0',
       conversion: '0',
-      next_action: '',
-      insight: '',
+      next_action: 'Créer landing dédiée',
+      insight: 'Venture créée manuellement. Landing et paiement dédiés requis avant scaling.',
+      statut: 'actif',
     })
     if (error) return toast.error(error.message)
     setForm({ name: '', niche: '', stage: 'validation', score: '', mrr: '' })
@@ -1177,7 +1282,7 @@ export default function VenturesPage() {
     await reload()
   }
 
-  async function runRepairAgent(action: SupervisedLoopRepairAction) {
+  async function runRepairAgent(action: CommercialRepairAction) {
     if (!selected || !action.agentId) return
     const res = await fetch('/api/studio/agents/run', {
       method: 'POST',
@@ -1198,12 +1303,17 @@ export default function VenturesPage() {
   }
 
   const selected = items.find((v) => v.id === selectedId) ?? null
-  const selectedRepairAction = selected
-    ? getMissingLandingAction({
-        ventureName: selected.name,
-        hasLanding: landingVentureIds.has(selected.id),
-      })
-    : null
+  const selectedReadiness =
+    selected && commerceReadinessByVenture.get(selected.id)
+      ? commerceReadinessByVenture.get(selected.id)!
+      : null
+  const selectedRepairAction =
+    selected && selectedReadiness
+      ? getNextCommercialRepairAction({
+          ventureName: selected.name,
+          readiness: selectedReadiness,
+        })
+      : null
 
   const funnelCounts = STAGES.map((s) => ({
     stage: s,
@@ -1214,6 +1324,10 @@ export default function VenturesPage() {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       {[
         { label: `${items.length} ventures`, color: muted2 },
+        {
+          label: `${[...commerceReadinessByVenture.values()].filter((r) => r.status === 'ready').length} commerce ready`,
+          color: em,
+        },
         { label: `${items.filter((v) => v.stage === 'scale').length} scaling`, color: em },
         { label: `${items.filter((v) => v.stage === 'validation').length} valid.`, color: cy },
       ].map((pill) => (
@@ -1611,6 +1725,7 @@ export default function VenturesPage() {
           <VentureInspector
             v={selected}
             repairAction={selectedRepairAction}
+            commerceReadiness={selectedReadiness}
             onSave={update}
             onDelete={remove}
             onOpen={() => {

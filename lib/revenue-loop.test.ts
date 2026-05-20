@@ -48,6 +48,81 @@ describe('buildRevenueLoopSnapshot', () => {
     ])
   })
 
+  it('bloque une venture validée sans landing dédiée avant de créer le checkout', () => {
+    const snapshot = buildRevenueLoopSnapshot({
+      pipelines: [basePipeline],
+      ventures: [
+        {
+          id: 'venture-1',
+          name: 'InboxPulse',
+          slug: 'inboxpulse',
+          stage: 'launch',
+          statut: 'actif',
+          mrr: '0',
+        },
+      ],
+      landingPages: [],
+      payments: [],
+      campaignDrafts: [],
+      autonomyActions: [],
+      approvals: [],
+      decisions: [],
+    })
+
+    expect(snapshot.loops[0].stages).toContainEqual({
+      key: 'landing',
+      label: 'Landing',
+      status: 'blocked',
+    })
+    expect(snapshot.loops[0].nextAction).toMatchObject({
+      type: 'run_agent',
+      agentId: 'builder',
+      label: 'Créer landing dédiée',
+    })
+    expect(snapshot.summary.recommendedAction).toMatchObject({
+      reason: 'Landing dédiée manquante',
+    })
+  })
+
+  it('bloque une venture validée sans système de paiement dédié après la landing', () => {
+    const snapshot = buildRevenueLoopSnapshot({
+      pipelines: [{ ...basePipeline, payment_output: null }],
+      ventures: [
+        {
+          id: 'venture-1',
+          name: 'InboxPulse',
+          slug: 'inboxpulse',
+          stage: 'launch',
+          statut: 'actif',
+          mrr: '0',
+        },
+      ],
+      landingPages: [
+        {
+          venture_id: 'venture-1',
+          statut: 'deployed',
+          health_status: 'ready',
+        },
+      ],
+      payments: [],
+      campaignDrafts: [],
+      autonomyActions: [],
+      approvals: [],
+      decisions: [],
+    })
+
+    expect(snapshot.loops[0].stages).toContainEqual({
+      key: 'payment',
+      label: 'Payment',
+      status: 'blocked',
+    })
+    expect(snapshot.loops[0].nextAction).toMatchObject({
+      type: 'run_agent',
+      agentId: 'payment',
+      label: 'Créer paiement dédié',
+    })
+  })
+
   it('met en avant une approval bloquante avant toute autre action', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [basePipeline],
@@ -154,7 +229,7 @@ describe('buildRevenueLoopSnapshot', () => {
     })
   })
 
-  it("ne compte pas un checkout trial a 0 EUR comme revenu encaisse", () => {
+  it('ne compte pas un checkout trial a 0 EUR comme revenu encaisse', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [{ ...basePipeline, marketing_output: '{}' }],
       ventures: [{ id: 'venture-1', name: 'InboxPulse', stage: 'marketing', mrr: '29' }],

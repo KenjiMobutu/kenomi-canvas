@@ -8,6 +8,7 @@ import {
 } from '@/lib/autonomy/approval-executor'
 import {
   cancelAutonomyJob,
+  deleteApprovalGate,
   retryAutonomyJob,
   type OperatorSupabase,
 } from '@/lib/autonomy/operator-actions'
@@ -21,6 +22,10 @@ const approvalResolutionSchema = z.object({
 const operatorActionSchema = z.object({
   type: z.enum(['retry_job', 'cancel_job']),
   jobId: z.string().min(1),
+})
+
+const approvalDeleteSchema = z.object({
+  approvalId: z.string().min(1),
 })
 
 export async function GET() {
@@ -129,5 +134,25 @@ export async function POST(request: Request) {
         ? 409
         : 500
 
+  return NextResponse.json(result, { status })
+}
+
+export async function DELETE(request: Request) {
+  const cookieStore = await cookies()
+  const { user, supabase, response } = await requireAllowedUser(cookieStore)
+  if (response) return response
+
+  const parsed = approvalDeleteSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Payload suppression gate invalide' }, { status: 400 })
+  }
+
+  const result = await deleteApprovalGate({
+    supabase: supabase as unknown as OperatorSupabase,
+    userId: user!.id,
+    approvalId: parsed.data.approvalId,
+  })
+
+  const status = result.ok ? 200 : result.code === 'not_found' ? 404 : 500
   return NextResponse.json(result, { status })
 }

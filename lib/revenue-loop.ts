@@ -28,7 +28,10 @@ export interface RevenuePipelineRow {
 export interface RevenueVentureRow {
   id: string
   name?: string | null
+  slug?: string | null
   stage?: string | null
+  statut?: string | null
+  lifecycle_status?: string | null
   mrr?: string | number | null
   score?: number | null
   next_action?: string | null
@@ -91,6 +94,7 @@ export interface RevenueDecisionRow {
 export interface RevenueLoopInput {
   pipelines: RevenuePipelineRow[]
   ventures: RevenueVentureRow[]
+  landingPages?: CommerceLandingPageRow[]
   payments: RevenuePaymentRow[]
   campaignDrafts: RevenueCampaignDraftRow[]
   autonomyActions: RevenueAutonomyActionRow[]
@@ -281,8 +285,21 @@ function priorityFor(input: { nextAction: RevenueLoopNextAction; blockedRevenueE
   if (nextAction.type === 'configure_stripe') {
     return { priorityScore: 95, priorityReason: nextAction.reason }
   }
+  if (nextAction.type === 'run_agent' && nextAction.agentId === 'builder') {
+    return {
+      priorityScore: nextAction.label.includes('landing') ? 88 : 50,
+      priorityReason: nextAction.label.includes('landing')
+        ? 'Landing dédiée manquante'
+        : 'Agent requis pour avancer vers le revenu',
+    }
+  }
   if (nextAction.type === 'run_agent' && nextAction.agentId === 'payment') {
-    return { priorityScore: 80, priorityReason: 'Offre tarifée manquante' }
+    return {
+      priorityScore: 84,
+      priorityReason: nextAction.label.includes('dédié')
+        ? 'Paiement dédié manquant'
+        : 'Offre tarifée manquante',
+    }
   }
   if (nextAction.type === 'run_agent' && nextAction.agentId === 'marketing') {
     return {
@@ -310,7 +327,6 @@ function hasMissingStripeSecret(action: RevenueAutonomyActionRow): boolean {
 
 export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSnapshot {
   const venturesById = new Map(input.ventures.map((venture) => [venture.id, venture]))
-  const actionsById = new Map(input.autonomyActions.map((action) => [action.id, action]))
   const pendingApprovals = input.approvals.filter((approval) => approval.status === 'pending')
   const pendingApprovalByActionId = new Map(
     pendingApprovals.flatMap((approval) =>
@@ -358,10 +374,7 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       ? (paymentsByVenture.get(pipeline.venture_id) ?? [])
       : []
     const paidPayments = venturePayments.filter(isPaid)
-    const revenueEur = paidPayments.reduce(
-      (sum, payment) => sum + collectedAmountEur(payment),
-      0
-    )
+    const revenueEur = paidPayments.reduce((sum, payment) => sum + collectedAmountEur(payment), 0)
     const checkoutPayment = byDateDesc(venturePayments).find(hasCheckout)
     const ventureActions = pipeline.venture_id
       ? byDateDesc(actionsByVenture.get(pipeline.venture_id) ?? [])
@@ -380,16 +393,34 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       pipeline.decision_output ||
       (pipeline.venture_id && decisionsByVenture.get(pipeline.venture_id)?.length)
     )
+    const commercialReadiness =
+      venture && input.landingPages
+        ? evaluateVentureCommerceReadiness({
+            venture,
+            landingPages: input.landingPages,
+            pipelines: input.pipelines,
+            payments: input.payments,
+          })
+        : null
+    const enforceDedicatedCommerce = Boolean(
+      commercialReadiness && venture && isValidatedVenture(venture)
+    )
+    const hasDedicatedLanding = enforceDedicatedCommerce
+      ? commercialReadiness!.hasLanding
+      : Boolean(pipeline.builder_output)
+    const hasPaymentConfig = enforceDedicatedCommerce
+      ? commercialReadiness!.hasPaymentConfig
+      : Boolean(pipeline.payment_output)
 
     const checkoutStatus: RevenueLoopStageStatus = pendingApproval
       ? 'blocked'
       : missingStripeAction
         ? 'blocked'
-      : checkoutPayment
-        ? 'done'
-        : pipeline.payment_output
-          ? 'ready'
-          : 'idle'
+        : checkoutPayment
+          ? 'done'
+          : hasPaymentConfig
+            ? 'ready'
+            : 'idle'
 
     const marketingBlocked = ventureDrafts.some((draft) =>
       ['pending', 'pending_approval', 'blocked', 'ready'].includes(String(draft.status ?? ''))
@@ -403,11 +434,27 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       ),
       stage(
         'landing',
-        pipeline.builder_output ? 'done' : pipeline.validation_output ? 'ready' : 'idle'
+        hasDedicatedLanding
+          ? 'done'
+          : enforceDedicatedCommerce && pipeline.validation_output
+            ? 'blocked'
+            : pipeline.builder_output
+              ? 'done'
+              : pipeline.validation_output
+                ? 'ready'
+                : 'idle'
       ),
       stage(
         'payment',
-        pipeline.payment_output ? 'done' : pipeline.builder_output ? 'ready' : 'idle'
+        hasPaymentConfig
+          ? 'done'
+          : enforceDedicatedCommerce && hasDedicatedLanding
+            ? 'blocked'
+            : pipeline.payment_output
+              ? 'done'
+              : pipeline.builder_output
+                ? 'ready'
+                : 'idle'
       ),
       stage('checkout', checkoutStatus),
       stage(
@@ -450,6 +497,16 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
         pipelineId: pipeline.id,
         ventureId: pipeline.venture_id,
       }
+    } else if (
+      enforceDedicatedCommerce &&
+      (!commercialReadiness!.hasSlug || !hasDedicatedLanding)
+    ) {
+      nextAction = {
+        type: 'run_agent',
+        label: 'Créer landing dédiée',
+        agentId: 'builder',
+        ventureId: pipeline.venture_id,
+      }
     } else if (!pipeline.validation_output) {
       nextAction = {
         type: 'run_agent',
@@ -464,10 +521,10 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
         agentId: 'builder',
         ventureId: pipeline.venture_id,
       }
-    } else if (!pipeline.payment_output) {
+    } else if (!hasPaymentConfig) {
       nextAction = {
         type: 'run_agent',
-        label: 'Lancer Payment',
+        label: enforceDedicatedCommerce ? 'Créer paiement dédié' : 'Lancer Payment',
         agentId: 'payment',
         ventureId: pipeline.venture_id,
       }
@@ -534,10 +591,7 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
     .map((venture) => {
       const venturePayments = paymentsByVenture.get(venture.id) ?? []
       const paidPayments = venturePayments.filter(isPaid)
-      const revenueEur = paidPayments.reduce(
-        (sum, payment) => sum + collectedAmountEur(payment),
-        0
-      )
+      const revenueEur = paidPayments.reduce((sum, payment) => sum + collectedAmountEur(payment), 0)
       const nextAction: RevenueLoopNextAction = {
         type: 'run_agent',
         label: 'Lancer Scout',
@@ -628,3 +682,8 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
     agentRevenueAttribution,
   }
 }
+import {
+  evaluateVentureCommerceReadiness,
+  isValidatedVenture,
+  type CommerceLandingPageRow,
+} from './venture-commerce-readiness'

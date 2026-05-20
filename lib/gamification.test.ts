@@ -10,6 +10,7 @@ const EMPTY_INPUT: GamificationInput = {
   payments: [],
   metrics: [],
   decisions: [],
+  ventureEvents: [],
   claimed: [],
 }
 
@@ -159,6 +160,23 @@ describe('computeGamification', () => {
     const payment = r.agentLevels.find((a) => a.id === 'payment')!
     expect(isNaN(payment.level)).toBe(false)
     expect(payment.level).toBe(0)
+  })
+
+  it('utilise venture_events comme source revenu/ROI pour achievements et agents', () => {
+    const r = computeGamification({
+      ...EMPTY_INPUT,
+      ventureEvents: [
+        { venture_id: 'v1', event_type: 'campaign_published', value: null, occurred_at: new Date().toISOString() },
+        { venture_id: 'v1', event_type: 'campaign_spend', value: 2000, occurred_at: new Date().toISOString() },
+        { venture_id: 'v1', event_type: 'payment_succeeded', value: 120000, occurred_at: new Date().toISOString() },
+        { venture_id: 'v1', event_type: 'page_view', value: 100_000, occurred_at: new Date().toISOString() },
+      ],
+    })
+
+    expect(r.achievements.find((a) => a.id === 'first-mrr')?.unlocked).toBe(true)
+    expect(r.achievements.find((a) => a.id === '100k-imp')?.unlocked).toBe(true)
+    expect(r.agentLevels.find((a) => a.id === 'payment')?.level).toBeGreaterThan(0)
+    expect(r.agentLevels.find((a) => a.id === 'marketing')?.level).toBeGreaterThan(0)
   })
 
   it('season-podium : toujours locked, pct = 0', () => {

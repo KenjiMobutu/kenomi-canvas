@@ -1,6 +1,17 @@
 'use client'
 import React, { useMemo, useEffect, useState, useCallback } from 'react'
-import { Check, CheckCircle2, Clock3, RefreshCw, ShieldAlert, X, XCircle } from 'lucide-react'
+import {
+  Check,
+  CheckCircle2,
+  Clock3,
+  LayoutGrid,
+  List,
+  RefreshCw,
+  ShieldAlert,
+  Trash2,
+  X,
+  XCircle,
+} from 'lucide-react'
 import { CkShell } from '@/components/CkShell'
 import { useIsMobile } from '@/lib/studio-utils'
 import {
@@ -667,15 +678,20 @@ function ApprovalGatesPanel({
   queue,
   loading,
   resolvingKey,
+  deletingKey,
   onResolve,
+  onDelete,
   onRefresh,
 }: {
   queue: ApprovalQueueItem[]
   loading: boolean
   resolvingKey: string | null
+  deletingKey: string | null
   onResolve: (approvalId: string, decision: 'approved' | 'rejected') => void
+  onDelete: (approvalId: string) => void
   onRefresh: () => void
 }) {
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards')
   const pendingCount = queue.filter((item) => item.isPending).length
 
   return (
@@ -691,7 +707,13 @@ function ApprovalGatesPanel({
       }}
     >
       <div
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <div
@@ -735,24 +757,51 @@ function ApprovalGatesPanel({
             </div>
           </div>
         </div>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          title="Rafraîchir"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 8,
-            display: 'grid',
-            placeItems: 'center',
-            background: surface2,
-            color: loading ? muted2 : text,
-            border: `1px solid ${line2}`,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          <RefreshCw size={14} />
-        </button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {(['cards', 'list'] as const).map((mode) => {
+            const active = viewMode === mode
+            const Icon = mode === 'cards' ? LayoutGrid : List
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                title={mode === 'cards' ? 'Vue cards' : 'Vue liste'}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 8,
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: active ? `${amber}18` : surface2,
+                  color: active ? amber : muted,
+                  border: `1px solid ${active ? `${amber}45` : line2}`,
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon size={14} />
+              </button>
+            )
+          })}
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            title="Rafraîchir"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              display: 'grid',
+              placeItems: 'center',
+              background: surface2,
+              color: loading ? muted2 : text,
+              border: `1px solid ${line2}`,
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
       </div>
 
       {queue.length === 0 ? (
@@ -775,7 +824,8 @@ function ApprovalGatesPanel({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gridTemplateColumns:
+              viewMode === 'cards' ? 'repeat(auto-fit, minmax(260px, 1fr))' : '1fr',
             gap: 10,
           }}
         >
@@ -799,7 +849,9 @@ function ApprovalGatesPanel({
                   border: `1px solid ${item.isPending ? `${statusColor}55` : line}`,
                   borderRadius: 10,
                   padding: 12,
-                  display: 'flex',
+                  display: viewMode === 'cards' ? 'flex' : 'grid',
+                  gridTemplateColumns: viewMode === 'list' ? 'minmax(180px, 1.1fr) minmax(220px, 2fr) auto' : undefined,
+                  alignItems: viewMode === 'list' ? 'center' : undefined,
                   flexDirection: 'column',
                   gap: 10,
                   minWidth: 0,
@@ -937,7 +989,7 @@ function ApprovalGatesPanel({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: item.isPending ? '1fr 1fr' : '1fr',
+                    gridTemplateColumns: item.isPending ? '1fr 1fr 34px' : '1fr 34px',
                     gap: 8,
                   }}
                 >
@@ -989,25 +1041,63 @@ function ApprovalGatesPanel({
                         <X size={14} />
                         {resolvingKey === rejectKey ? '...' : 'Reject'}
                       </button>
+                      <button
+                        onClick={() => onDelete(item.approval.id)}
+                        disabled={deletingKey !== null || resolvingKey !== null}
+                        title="Supprimer ce gate"
+                        style={{
+                          minHeight: 34,
+                          borderRadius: 8,
+                          border: `1px solid ${rose}55`,
+                          background: `${rose}12`,
+                          color: rose,
+                          cursor: deletingKey || resolvingKey ? 'not-allowed' : 'pointer',
+                          display: 'grid',
+                          placeItems: 'center',
+                          opacity: deletingKey || resolvingKey ? 0.65 : 1,
+                        }}
+                      >
+                        {deletingKey === item.approval.id ? '…' : <Trash2 size={13} />}
+                      </button>
                     </>
                   ) : (
-                    <div
-                      style={{
-                        minHeight: 34,
-                        borderRadius: 8,
-                        border: `1px solid ${line}`,
-                        color: muted,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        letterSpacing: '.14em',
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      action {item.action?.status ?? 'unknown'}
-                    </div>
+                    <>
+                      <div
+                        style={{
+                          minHeight: 34,
+                          borderRadius: 8,
+                          border: `1px solid ${line}`,
+                          color: muted,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          letterSpacing: '.14em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        action {item.action?.status ?? 'unknown'}
+                      </div>
+                      <button
+                        onClick={() => onDelete(item.approval.id)}
+                        disabled={deletingKey !== null || resolvingKey !== null}
+                        title="Supprimer ce gate"
+                        style={{
+                          minHeight: 34,
+                          borderRadius: 8,
+                          border: `1px solid ${rose}55`,
+                          background: `${rose}12`,
+                          color: rose,
+                          cursor: deletingKey || resolvingKey ? 'not-allowed' : 'pointer',
+                          display: 'grid',
+                          placeItems: 'center',
+                          opacity: deletingKey || resolvingKey ? 0.65 : 1,
+                        }}
+                      >
+                        {deletingKey === item.approval.id ? '…' : <Trash2 size={13} />}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -1957,7 +2047,7 @@ function RosterTile({
       onClick={onClick}
       style={{
         position: 'relative',
-        background: surface,
+        background: active ? `${agent.color}10` : surface,
         border: active ? `1.5px solid ${agent.color}` : `1px solid ${line}`,
         borderRadius: 12,
         padding: 12,
@@ -2042,9 +2132,9 @@ function RosterTile({
               style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: 13,
-                fontWeight: 700,
+                fontWeight: 800,
                 letterSpacing: '-.01em',
-                color: text,
+                color: active ? agent.color : text,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -2056,22 +2146,22 @@ function RosterTile({
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 9,
-                padding: '1px 5px',
+                padding: '2px 6px',
                 borderRadius: 3,
-                background: `${agent.color}22`,
-                color: agent.color,
-                fontWeight: 700,
+                background: active ? agent.color : `${agent.color}22`,
+                color: active ? '#0b0d12' : agent.color,
+                fontWeight: 800,
                 flexShrink: 0,
               }}
             >
-              LV{agent.level}
+              LV {agent.level}
             </span>
           </div>
           <div
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 9,
-              color: muted,
+              color: active ? text : muted,
               letterSpacing: 1,
               marginTop: 2,
             }}
@@ -2106,9 +2196,10 @@ function RosterTile({
         />
         <span
           style={{
-            fontSize: 11,
-            color: text,
-            overflow: 'hidden',
+          fontSize: 11,
+          color: active ? text : muted,
+          fontWeight: active ? 700 : 400,
+          overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
@@ -2273,6 +2364,7 @@ export default function AgentsPage() {
   const [autonomyApprovals, setAutonomyApprovals] = useState<AutonomyApprovalView[]>([])
   const [autonomyLoading, setAutonomyLoading] = useState(false)
   const [resolvingApprovalKey, setResolvingApprovalKey] = useState<string | null>(null)
+  const [deletingApprovalKey, setDeletingApprovalKey] = useState<string | null>(null)
   const [operatingJobKey, setOperatingJobKey] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
 
@@ -2387,6 +2479,31 @@ export default function AgentsPage() {
       toast.error('Erreur réseau approval')
     } finally {
       setResolvingApprovalKey(null)
+    }
+  }
+
+  async function handleApprovalDelete(approvalId: string) {
+    setDeletingApprovalKey(approvalId)
+    try {
+      const res = await fetch('/api/studio/autonomy/jobs', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalId }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        message?: string
+        error?: string
+      }
+      if (!res.ok) {
+        toast.error(data.error || data.message || 'Suppression gate impossible')
+        return
+      }
+      toast.success(data.message || 'Gate supprimé')
+      await loadAutonomyState()
+    } catch {
+      toast.error('Erreur réseau suppression gate')
+    } finally {
+      setDeletingApprovalKey(null)
     }
   }
 
@@ -2559,7 +2676,9 @@ export default function AgentsPage() {
           queue={approvalQueue}
           loading={autonomyLoading}
           resolvingKey={resolvingApprovalKey}
+          deletingKey={deletingApprovalKey}
           onResolve={handleApprovalResolution}
+          onDelete={handleApprovalDelete}
           onRefresh={loadAutonomyState}
         />
 

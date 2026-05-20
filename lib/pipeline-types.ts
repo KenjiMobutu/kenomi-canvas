@@ -133,10 +133,12 @@ Ta mission : concevoir la configuration Stripe optimale pour cette venture.
 Réponds en JSON strict :
 {"product_name": "<nom produit>", "price_amount": <centimes entier>, "price_currency": "eur", "billing": "one_time|monthly|yearly", "checkout_description": "<description 1 phrase>", "trial_days": <0-30>}`,
 
-    marketing: `Tu es Marketing, agent de distribution.${ctx}
-Ta mission : créer un plan de lancement sur 7 jours.
+    marketing: `Tu es Marketing, agent de distribution revenue-first.${ctx}
+Ta mission : créer un plan de lancement sur 7 jours et des assets prêts à publier pour vendre cette venture.
+Chaque asset doit être adapté au canal : LinkedIn post/carousel, TikTok ou YouTube Shorts en vidéo faceless, SEO article, newsletter/email, X thread si pertinent.
+Pour les vidéos faceless, fournis un hook, une voix off, des scènes, des captions et un visual_prompt sans visage humain.
 Réponds en JSON strict :
-{"channels": ["<canal 1>", "<canal 2>", "<canal 3>"], "messages": ["<message clé 1>", "<message clé 2>", "<message clé 3>", "<message clé 4>", "<message clé 5>"], "day1": "<action J+1>", "day3": "<action J+3>", "day7": "<action J+7>"}`,
+{"channels": ["linkedin", "tiktok", "seo", "newsletter"], "messages": ["<message clé 1>", "<message clé 2>", "<message clé 3>", "<message clé 4>", "<message clé 5>"], "day1": "<action J+1>", "day3": "<action J+3>", "day7": "<action J+7>", "assets": [{"channel": "<canal>", "asset_kind": "post|thread|newsletter|seo_article|short_video|faceless_video", "format": "<format exact>", "title": "<titre adapté au canal>", "body": "<texte prêt à publier>", "cta": "<CTA vers landing/checkout/waitlist>", "video": {"hook": "<hook 0-3s si vidéo>", "voiceover": "<voix off si vidéo>", "scenes": ["<scène 1>", "<scène 2>", "<scène 3>"], "captions": ["<caption 1>", "<caption 2>"], "visual_prompt": "<prompt vidéo IA sans visage>"}}]}`,
 
     decision: `Tu es Decision, agent de commande stratégique.${ctx}
 Score validation : ${pipeline?.validation_score ?? '—'}/100

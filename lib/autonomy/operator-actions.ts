@@ -11,6 +11,14 @@ interface OperatorJobRow {
   updated_at?: string | null
 }
 
+interface OperatorApprovalRow {
+  id: string
+  user_id: string
+  action_id: string
+  status: string
+  updated_at?: string | null
+}
+
 interface QueryResponse<T = unknown> {
   data: T | null
   error: { message: string } | null
@@ -19,17 +27,19 @@ interface QueryResponse<T = unknown> {
 interface OperatorQueryBuilder {
   select(columns?: string): OperatorQueryBuilder
   update(row: Record<string, unknown>): OperatorQueryBuilder
+  delete(): OperatorQueryBuilder
   eq(field: string, value: unknown): OperatorQueryBuilder
   maybeSingle<T = unknown>(): Promise<QueryResponse<T>>
 }
 
 export interface OperatorSupabase {
-  from(table: 'autonomy_jobs'): OperatorQueryBuilder
+  from(table: 'autonomy_jobs' | 'human_approvals'): OperatorQueryBuilder
 }
 
 export type OperatorActionCode =
   | 'retried'
   | 'cancelled'
+  | 'approval_deleted'
   | 'not_found'
   | 'invalid_status'
   | 'failed'
@@ -161,5 +171,36 @@ export async function cancelAutonomyJob(input: {
     code: 'cancelled',
     message: 'Job annule.',
     job: updated.job,
+  }
+}
+
+export async function deleteApprovalGate(input: {
+  supabase: OperatorSupabase
+  userId: string
+  approvalId: string
+}): Promise<OperatorActionResult> {
+  const { data: approval, error: lookupError } = await input.supabase
+    .from('human_approvals')
+    .select('*')
+    .eq('id', input.approvalId)
+    .eq('user_id', input.userId)
+    .maybeSingle<OperatorApprovalRow>()
+
+  if (lookupError) return { ok: false, code: 'failed', message: lookupError.message }
+  if (!approval) return { ok: false, code: 'not_found', message: 'Gate introuvable.' }
+
+  const { error: deleteError } = await input.supabase
+    .from('human_approvals')
+    .delete()
+    .eq('id', input.approvalId)
+    .eq('user_id', input.userId)
+    .maybeSingle<OperatorApprovalRow>()
+
+  if (deleteError) return { ok: false, code: 'failed', message: deleteError.message }
+
+  return {
+    ok: true,
+    code: 'approval_deleted',
+    message: 'Gate supprime.',
   }
 }

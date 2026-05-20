@@ -19,7 +19,19 @@ import {
   rose,
   cyan,
 } from '@/lib/ck-vars'
-import { Bot, CreditCard, Database, Download, Save, Server, Trash2, User, Zap } from 'lucide-react'
+import {
+  Bot,
+  CreditCard,
+  Database,
+  Download,
+  Radio,
+  Save,
+  Search,
+  Server,
+  Trash2,
+  User,
+  Zap,
+} from 'lucide-react'
 import { useIsMobile } from '@/lib/studio-utils'
 import {
   DEFAULT_USER_SETTINGS,
@@ -31,7 +43,7 @@ import {
 
 const MODELS_OLLAMA = ['qwen3:8b', 'qwen3:14b', 'llama3.1:8b', 'mistral:7b', 'codestral:latest']
 
-type Section = 'modeles' | 'infrastructure' | 'payments' | 'compte'
+type Section = 'modeles' | 'scout' | 'infrastructure' | 'payments' | 'compte'
 type InfraSettingsDiagnostics = {
   checkedAt: string
   runtime: {
@@ -65,6 +77,32 @@ type InfraSettingsDiagnostics = {
     repairAction: string
     detail?: string
   }
+}
+
+type ScoutSourceStatusReport = {
+  checkedAt: string
+  query: string
+  summary: {
+    live: number
+    degraded: number
+    configRequired: number
+    planned: number
+  }
+  sources: {
+    id: string
+    label: string
+    priority: 0 | 1
+    status: 'live' | 'degraded' | 'planned' | 'config_required'
+    cost: 'free'
+    auth: 'none' | 'optional' | 'token_required'
+    signalType: 'pain' | 'trend' | 'competition' | 'buildability' | 'market'
+    endpoint: string
+    reason: string
+    signalCount: number
+    topSignal: string | null
+    topScore: number | null
+    lastError: string | null
+  }[]
 }
 
 function SectionCard({
@@ -386,6 +424,244 @@ function InfraSettingsCheck({
   )
 }
 
+function ScoutSourcesCheck({
+  report,
+  loading,
+  error,
+  query,
+  onQueryChange,
+  onCheck,
+}: {
+  report: ScoutSourceStatusReport | null
+  loading: boolean
+  error: string | null
+  query: string
+  onQueryChange: (value: string) => void
+  onCheck: () => void
+}) {
+  const rows = report?.sources ?? []
+  const liveCount = report?.summary.live ?? 0
+  const degradedCount = report?.summary.degraded ?? 0
+  const tokenCount = report?.summary.configRequired ?? 0
+  const plannedCount = report?.summary.planned ?? 0
+
+  return (
+    <SectionCard title="Scout sources gratuites" icon={<Search size={16} />}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 240, flex: 1 }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: muted2,
+              letterSpacing: '.12em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Discovery revenue-first
+          </div>
+          <div style={{ fontSize: 12, color: muted, marginTop: 4, lineHeight: 1.45 }}>
+            Le Scout croise douleurs, tendances, concurrence et buildabilité avant de proposer une
+            venture.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onCheck}
+          disabled={loading}
+          style={{
+            minHeight: 32,
+            padding: '6px 12px',
+            borderRadius: 7,
+            border: `1px solid ${cyan}35`,
+            background: loading ? surface2 : `${cyan}12`,
+            color: loading ? muted2 : cyan,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.1em',
+            textTransform: 'uppercase',
+            cursor: loading ? 'wait' : 'pointer',
+          }}
+        >
+          {loading ? 'Test...' : 'Tester sources'}
+        </button>
+      </div>
+
+      <Field label="Requête de test" hint="Utilisée pour vérifier les connecteurs live du Scout.">
+        <input
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="autopilot revenue micro-SaaS"
+          className="ck-input"
+          style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+        />
+      </Field>
+
+      {error && (
+        <div
+          style={{
+            padding: '9px 10px',
+            borderRadius: 7,
+            background: `${rose}12`,
+            border: `1px solid ${rose}30`,
+            color: rose,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10.5,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: 8,
+        }}
+      >
+        {[
+          { label: 'Live', value: liveCount, color: emerald },
+          { label: 'Dégradé', value: degradedCount, color: amber },
+          { label: 'Token', value: tokenCount, color: cyan },
+          { label: 'Planifié', value: plannedCount, color: muted },
+        ].map((item) => (
+          <div
+            key={item.label}
+            style={{
+              background: surface2,
+              border: `1px solid ${line}`,
+              borderRadius: 8,
+              padding: '8px 10px',
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 8.5,
+                color: muted2,
+                letterSpacing: '.14em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {item.label}
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 18,
+                color: item.color,
+                marginTop: 3,
+                fontWeight: 800,
+              }}
+            >
+              {item.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {report && (
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: muted2,
+            letterSpacing: '.04em',
+          }}
+        >
+          Dernier check : {new Date(report.checkedAt).toLocaleString('fr-FR')} · requête :{' '}
+          <span style={{ color: muted }}>{report.query}</span>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map((row) => {
+          const statusColor =
+            row.status === 'live'
+              ? emerald
+              : row.status === 'degraded'
+                ? amber
+                : row.status === 'config_required'
+                  ? cyan
+                  : muted
+          const statusLabel =
+            row.status === 'config_required' ? 'token' : row.status.replace('_', ' ')
+
+          return (
+            <div
+              key={row.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '112px 86px 1fr 72px',
+                gap: 10,
+                alignItems: 'center',
+                padding: '9px 10px',
+                borderRadius: 8,
+                background: surface2,
+                border: `1px solid ${line}`,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: text, fontSize: 11, fontWeight: 850 }}>{row.label}</div>
+                <div
+                  style={{
+                    color: muted2,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    marginTop: 2,
+                  }}
+                >
+                  P{row.priority} · {row.cost}
+                </div>
+              </div>
+              <div
+                style={{
+                  color: cyan,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  letterSpacing: '.08em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {row.signalType}
+              </div>
+              <div
+                style={{
+                  minWidth: 0,
+                  color: row.lastError ? amber : muted,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9.5,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={row.topSignal ?? row.lastError ?? row.reason}
+              >
+                {row.topSignal
+                  ? `${row.signalCount} signal(s) · score ${row.topScore}/100 · ${row.topSignal}`
+                  : row.lastError ?? row.reason}
+              </div>
+              <div
+                style={{
+                  color: statusColor,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  letterSpacing: '.1em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {statusLabel}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </SectionCard>
+  )
+}
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const [cfg, setCfg] = useState<UserSettings>(DEFAULT_USER_SETTINGS)
@@ -399,6 +675,10 @@ export default function SettingsPage() {
   const [infraDiagnostics, setInfraDiagnostics] = useState<InfraSettingsDiagnostics | null>(null)
   const [infraDiagnosticsLoading, setInfraDiagnosticsLoading] = useState(false)
   const [infraDiagnosticsError, setInfraDiagnosticsError] = useState<string | null>(null)
+  const [scoutQuery, setScoutQuery] = useState('autopilot revenue micro-SaaS')
+  const [scoutSources, setScoutSources] = useState<ScoutSourceStatusReport | null>(null)
+  const [scoutSourcesLoading, setScoutSourcesLoading] = useState(false)
+  const [scoutSourcesError, setScoutSourcesError] = useState<string | null>(null)
 
   function patch(partial: Partial<UserSettings>) {
     setCfg((prev) => ({ ...prev, ...partial }))
@@ -496,6 +776,37 @@ export default function SettingsPage() {
     }
   }
 
+  async function checkScoutSources() {
+    setScoutSourcesLoading(true)
+    setScoutSourcesError(null)
+    try {
+      const params = new URLSearchParams({ query: scoutQuery })
+      const res = await fetch(`/api/studio/settings/scout-sources?${params.toString()}`)
+      const data = (await res.json().catch(() => null)) as ScoutSourceStatusReport | {
+        error?: string
+      } | null
+      if (!res.ok) {
+        const message =
+          data && 'error' in data && data.error
+            ? data.error
+            : `Sources Scout indisponibles · HTTP ${res.status}`
+        setScoutSourcesError(message)
+        toast.error(message)
+        return
+      }
+      if (data && 'sources' in data) {
+        setScoutSources(data)
+        toast.success(`Scout sources · ${data.summary.live} live`)
+        return
+      }
+      setScoutSourcesError('Sources Scout indisponibles')
+    } catch {
+      setScoutSourcesError('Sources Scout indisponibles · requête réseau échouée')
+    } finally {
+      setScoutSourcesLoading(false)
+    }
+  }
+
   async function save() {
     if (!user || !dirty) return
     setSaving(true)
@@ -543,6 +854,7 @@ export default function SettingsPage() {
 
   const tabs: { id: Section; label: string; icon: React.ReactNode }[] = [
     { id: 'modeles', label: 'Modèles IA', icon: <Bot size={13} /> },
+    { id: 'scout', label: 'Scout', icon: <Search size={13} /> },
     { id: 'infrastructure', label: 'Infrastructure', icon: <Server size={13} /> },
     { id: 'payments', label: 'Paiements', icon: <CreditCard size={13} /> },
     { id: 'compte', label: 'Compte', icon: <User size={13} /> },
@@ -680,6 +992,78 @@ export default function SettingsPage() {
                   placeholder="sk-…"
                 />
               </Field>
+            </SectionCard>
+          </>
+        )}
+
+        {/* Scout */}
+        {section === 'scout' && (
+          <>
+            <ScoutSourcesCheck
+              report={scoutSources}
+              loading={scoutSourcesLoading}
+              error={scoutSourcesError}
+              query={scoutQuery}
+              onQueryChange={setScoutQuery}
+              onCheck={checkScoutSources}
+            />
+
+            <SectionCard title="Règles de sélection" icon={<Radio size={16} />}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                  gap: 10,
+                }}
+              >
+                {[
+                  {
+                    label: 'Pain',
+                    value: 'Douleur explicite et répétée',
+                    color: rose,
+                  },
+                  {
+                    label: 'Buyer',
+                    value: 'Acheteur B2B identifiable',
+                    color: emerald,
+                  },
+                  {
+                    label: 'Build',
+                    value: 'Landing + paiement + service rapide',
+                    color: cyan,
+                  },
+                  {
+                    label: 'ROI',
+                    value: 'Scale/cut mesurable sous 7 jours',
+                    color: amber,
+                  },
+                ].map((rule) => (
+                  <div
+                    key={rule.label}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      background: surface2,
+                      border: `1px solid ${line}`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        letterSpacing: '.14em',
+                        textTransform: 'uppercase',
+                        color: rule.color,
+                      }}
+                    >
+                      {rule.label}
+                    </div>
+                    <div style={{ color: muted, fontSize: 11, marginTop: 5, lineHeight: 1.35 }}>
+                      {rule.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </SectionCard>
           </>
         )}

@@ -19,6 +19,13 @@ export type GamifPayment = {
 }
 export type GamifMetric = { views: number }
 export type GamifDecision = { venture_id: string; decision: string; created_at: string }
+export type GamifVentureEvent = {
+  venture_id?: string | null
+  event_type: string
+  value?: number | null
+  occurred_at?: string | null
+  metadata?: Record<string, unknown> | null
+}
 
 export interface GamificationInput {
   ventures: GamifVenture[]
@@ -28,6 +35,7 @@ export interface GamificationInput {
   payments: GamifPayment[]
   metrics: GamifMetric[]
   decisions: GamifDecision[]
+  ventureEvents: GamifVentureEvent[]
   claimed: string[]
 }
 
@@ -198,6 +206,33 @@ function levelFromXp(xp: number, divisor: number): number {
   return Math.floor(Math.sqrt(Math.max(0, xp) / divisor))
 }
 
+function eventCents(event: GamifVentureEvent): number {
+  const n = Number(event.value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function revenueEurFromEvents(events: GamifVentureEvent[]): number {
+  return (
+    events
+      .filter((event) => event.event_type === 'payment_succeeded')
+      .reduce((sum, event) => sum + eventCents(event), 0) / 100
+  )
+}
+
+function spendEurFromEvents(events: GamifVentureEvent[]): number {
+  return (
+    events
+      .filter((event) => event.event_type === 'campaign_spend')
+      .reduce((sum, event) => sum + eventCents(event), 0) / 100
+  )
+}
+
+function viewsFromEvents(events: GamifVentureEvent[]): number {
+  return events
+    .filter((event) => event.event_type === 'page_view')
+    .reduce((sum, event) => sum + Math.max(1, Number(event.value) || 1), 0)
+}
+
 function xpBarFromXp(xp: number, divisor: number): number {
   const lv = levelFromXp(xp, divisor)
   const xpIn = xp - lv * lv * divisor
@@ -210,15 +245,19 @@ function xpBarFromXp(xp: number, divisor: number): number {
 function computeUnlocks(
   input: GamificationInput
 ): Record<string, { unlocked: boolean; pct: number }> {
-  const { ventures, snapshots, workflows, landings, payments, metrics, decisions } = input
+  const { ventures, snapshots, workflows, landings, payments, metrics, decisions, ventureEvents } =
+    input
 
   const latestSnap = [...snapshots].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )[0]
 
-  const mrr = parseNum(latestSnap?.mrr)
-  const cac = parseNum(latestSnap?.cac)
-  const totalViews = metrics.reduce((s, m) => s + (m.views || 0), 0)
+  const eventRevenueEur = revenueEurFromEvents(ventureEvents)
+  const eventSpendEur = spendEurFromEvents(ventureEvents)
+  const mrr = Math.max(parseNum(latestSnap?.mrr), eventRevenueEur)
+  const cac = parseNum(latestSnap?.cac) || (eventRevenueEur > 0 ? eventSpendEur : 0)
+  const totalViews =
+    metrics.reduce((s, m) => s + (m.views || 0), 0) + viewsFromEvents(ventureEvents)
 
   const ms30d = 30 * 24 * 60 * 60 * 1000
   const now = Date.now()
@@ -269,19 +308,27 @@ function computeUnlocks(
 // ── Agent XP ──────────────────────────────────────────────────────────────────
 
 function computeAgentLevels(input: GamificationInput): AgentLevel[] {
-  const { ventures, snapshots, workflows, landings, payments, claimed } = input
+  const { ventures, snapshots, workflows, landings, payments, claimed, ventureEvents } = input
   const enabledWf = workflows.filter((w) => w.enabled)
-  const totalRevenue = payments.reduce((s, p) => s + (Number(p.amount_eur) || 0), 0)
+  const totalRevenue = Math.max(
+    payments.reduce((s, p) => s + Math.max(0, Number(p.amount_eur) || 0), 0),
+    revenueEurFromEvents(ventureEvents)
+  )
   const totalScore = ventures.reduce((s, v) => s + (v.score || 0), 0)
+  const publishedCampaigns = ventureEvents.filter(
+    (event) => event.event_type === 'campaign_published'
+  ).length
+  const eventSpendEur = spendEurFromEvents(ventureEvents)
+  const roiXp = Math.max(0, revenueEurFromEvents(ventureEvents) - eventSpendEur)
 
   const raw: Record<string, number> = {
     scout: ventures.length * 40,
     validation: totalScore * 3,
     builder: landings.length * 60,
     payment: totalRevenue / 10,
-    marketing: enabledWf.length * 25,
+    marketing: enabledWf.length * 25 + publishedCampaigns * 60 + eventSpendEur * 0.5,
     analytics: snapshots.length * 15,
-    decision: claimed.length * 80 + ventures.filter((v) => v.score >= 75).length * 200,
+    decision: claimed.length * 80 + ventures.filter((v) => v.score >= 75).length * 200 + roiXp,
   }
 
   return Object.entries(raw).map(([id, xp]) => ({

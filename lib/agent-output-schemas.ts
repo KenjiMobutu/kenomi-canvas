@@ -34,12 +34,33 @@ const paymentSchema = z.object({
   trial_days: z.number().int().min(0).max(30),
 })
 
+const marketingVideoSchema = z.object({
+  hook: z.string().min(1).optional(),
+  voiceover: z.string().min(1).optional(),
+  scenes: z.array(z.string().min(1)).optional(),
+  captions: z.array(z.string().min(1)).optional(),
+  visual_prompt: z.string().min(1).optional(),
+})
+
+const marketingAssetSchema = z.object({
+  channel: z.string().min(1),
+  asset_kind: z
+    .enum(['post', 'thread', 'newsletter', 'seo_article', 'short_video', 'faceless_video'])
+    .optional(),
+  format: z.string().min(1),
+  title: z.string().min(1),
+  body: z.string().min(1),
+  cta: z.string().min(1),
+  video: marketingVideoSchema.optional(),
+})
+
 const marketingSchema = z.object({
   channels: z.array(z.string().min(1)).min(1),
   messages: z.array(z.string().min(1)).min(1),
   day1: z.string().min(1),
   day3: z.string().min(1),
   day7: z.string().min(1),
+  assets: z.array(marketingAssetSchema).optional(),
 })
 
 const decisionSchema = z.object({

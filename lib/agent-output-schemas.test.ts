@@ -45,6 +45,51 @@ describe('parseAgentOutput', () => {
     )
   })
 
+  it('valide une sortie Marketing avec assets par canal et vidéo faceless', () => {
+    const parsed = parseAgentOutput(
+      'marketing',
+      JSON.stringify({
+        channels: ['linkedin', 'tiktok'],
+        messages: ['Pain clair', 'CTA checkout'],
+        day1: 'Publier LinkedIn',
+        day3: 'Publier TikTok faceless',
+        day7: 'Retarget waitlist',
+        assets: [
+          {
+            channel: 'linkedin',
+            asset_kind: 'post',
+            format: 'carousel 5 slides',
+            title: 'Stop losing sales notes',
+            body: 'Transforme chaque meeting en action commerciale.',
+            cta: 'Rejoindre la waitlist',
+          },
+          {
+            channel: 'tiktok',
+            asset_kind: 'faceless_video',
+            format: '9:16 short',
+            title: 'Tes notes te coûtent du revenu',
+            body: 'Script vidéo court orienté douleur.',
+            cta: 'Essayer maintenant',
+            video: {
+              hook: 'Tu perds du revenu dans tes notes.',
+              voiceover: 'Chaque meeting crée une action qui disparaît.',
+              scenes: ['Notes dispersées', 'Dashboard propre'],
+              captions: ['Notes perdues', 'Actions claires'],
+              visual_prompt: 'SaaS dashboard, no human face',
+            },
+          },
+        ],
+      })
+    )
+
+    expect(parsed).toMatchObject({
+      assets: [
+        { channel: 'linkedin', title: 'Stop losing sales notes' },
+        { channel: 'tiktok', asset_kind: 'faceless_video' },
+      ],
+    })
+  })
+
   it('valide une sortie Decision actionnable', () => {
     const parsed = parseAgentOutput(
       'decision',

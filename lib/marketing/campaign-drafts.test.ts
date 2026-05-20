@@ -66,6 +66,69 @@ describe('buildCampaignDrafts', () => {
     expect(drafts[1].metadata).toMatchObject({ channel_index: 0, message_index: 1 })
   })
 
+  it('crée un draft structuré par asset marketing avec brief vidéo faceless', () => {
+    const drafts = buildCampaignDrafts({
+      userId: 'u1',
+      ventureId: 'v1',
+      output: {
+        channels: ['linkedin', 'tiktok'],
+        messages: ['fallback'],
+        assets: [
+          {
+            channel: 'linkedin',
+            asset_kind: 'post',
+            format: 'carousel 5 slides',
+            title: 'Stop losing founder notes',
+            body: 'Centralise les notes clients et transforme-les en actions.',
+            cta: 'Rejoindre la waitlist',
+          },
+          {
+            channel: 'tiktok',
+            asset_kind: 'faceless_video',
+            format: '9:16 short 35s',
+            title: 'Le chaos des notes founder',
+            body: 'Un angle vidéo pour vendre la douleur sans visage.',
+            cta: 'Essayer NoteFast',
+            video: {
+              hook: 'Tu perds déjà des revenus dans tes notes.',
+              voiceover: 'Chaque meeting crée des actions que personne ne suit.',
+              scenes: ['Inbox saturée', 'Synthèse IA', 'CTA checkout'],
+              captions: ['Trop de notes', 'Une action claire', 'Teste maintenant'],
+              visual_prompt: 'Clean SaaS dashboard, fast cuts, no human face',
+            },
+          },
+        ],
+      },
+    })
+
+    expect(drafts).toHaveLength(2)
+    expect(drafts[0]).toMatchObject({
+      channel: 'linkedin',
+      content: 'Centralise les notes clients et transforme-les en actions.',
+      metadata: {
+        asset_kind: 'post',
+        format: 'carousel 5 slides',
+        title: 'Stop losing founder notes',
+        cta: 'Rejoindre la waitlist',
+        asset_index: 0,
+      },
+    })
+    expect(drafts[1]).toMatchObject({
+      channel: 'tiktok',
+      content: 'Un angle vidéo pour vendre la douleur sans visage.',
+      metadata: {
+        asset_kind: 'faceless_video',
+        format: '9:16 short 35s',
+        title: 'Le chaos des notes founder',
+        cta: 'Essayer NoteFast',
+        video: {
+          hook: 'Tu perds déjà des revenus dans tes notes.',
+          scenes: ['Inbox saturée', 'Synthèse IA', 'CTA checkout'],
+        },
+      },
+    })
+  })
+
   it('accepte ventureId null', () => {
     const drafts = buildCampaignDrafts({
       userId: 'u1',

@@ -22,6 +22,7 @@ export async function GET() {
     const [
       pipelines,
       ventures,
+      landingPages,
       payments,
       campaignDrafts,
       autonomyActions,
@@ -46,10 +47,13 @@ export async function GET() {
       ),
       readTable(
         supabase
-          .from('payments')
-          .select('*')
+          .from('landing_pages')
+          .select('venture_id, statut, health_status')
           .order('created_at', { ascending: false })
           .limit(200)
+      ),
+      readTable(
+        supabase.from('payments').select('*').order('created_at', { ascending: false }).limit(200)
       ),
       readTable(
         supabase
@@ -76,11 +80,7 @@ export async function GET() {
           .limit(200)
       ),
       readTable(
-        supabase
-          .from('decisions')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(200)
+        supabase.from('decisions').select('*').order('created_at', { ascending: false }).limit(200)
       ),
     ])
 
@@ -89,6 +89,7 @@ export async function GET() {
       snapshot: buildRevenueLoopSnapshot({
         pipelines,
         ventures,
+        landingPages,
         payments,
         campaignDrafts,
         autonomyActions,

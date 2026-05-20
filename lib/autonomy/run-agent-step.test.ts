@@ -108,7 +108,11 @@ function createFakeSupabase(
 describe('runAgentStep', () => {
   it('exécute Scout côté serveur et crée un pipeline pending_validation', async () => {
     const supabase = createFakeSupabase()
-    const llm = async (): Promise<LLMResponse> => ({
+    let capturedSystem = ''
+    const llm = async (
+      _messages?: Parameters<NonNullable<Parameters<typeof runAgentStep>[0]['llm']>>[0],
+      _config?: Parameters<NonNullable<Parameters<typeof runAgentStep>[0]['llm']>>[1]
+    ): Promise<LLMResponse> => ({
       content: [
         'TITRE: InboxPulse',
         'NICHE: agences B2B',
@@ -120,18 +124,43 @@ describe('runAgentStep', () => {
       model: 'qwen3:8b',
       fallback_triggered: false,
     })
+    const observingLlm = async (
+      messages: Parameters<NonNullable<Parameters<typeof runAgentStep>[0]['llm']>>[0],
+      config: Parameters<NonNullable<Parameters<typeof runAgentStep>[0]['llm']>>[1]
+    ): Promise<LLMResponse> => {
+      capturedSystem = config.system
+      return llm(messages, config)
+    }
 
     const result = await runAgentStep({
       supabase,
       userId: 'user-1',
       agentId: 'scout',
-      llm,
+      llm: observingLlm,
+      scoutSourceCollector: async () => ({
+        generatedAt: '2026-05-20T08:00:00.000Z',
+        signals: [
+          {
+            sourceId: 'hacker-news',
+            sourceLabel: 'Hacker News',
+            signalType: 'pain',
+            title: 'Ask HN: Best tool to reconcile Stripe revenue?',
+            url: 'https://news.ycombinator.com/item?id=1',
+            score: 86,
+            evidence: '120 points, 44 commentaires',
+          },
+        ],
+        failures: [],
+      }),
       now: () => new Date('2026-05-18T10:00:00.000Z'),
     })
 
     expect(result.ok).toBe(true)
     expect(result.agentRunId).toBe('agent_runs-1')
     expect(result.parsedOutput).toMatchObject({ title: 'InboxPulse' })
+    expect(capturedSystem).toContain('Sources gratuites Scout')
+    expect(capturedSystem).toContain('Hacker News')
+    expect(capturedSystem).toContain('buyer_likelihood')
     expect(supabase.tables.venture_pipeline[0]).toMatchObject({
       user_id: 'user-1',
       idea_title: 'InboxPulse',
