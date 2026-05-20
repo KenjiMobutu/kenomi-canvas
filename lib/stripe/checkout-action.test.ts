@@ -5,6 +5,7 @@ import {
   buildCheckoutSessionParams,
   parsePaymentOutputPayload,
   parsePaymentOutput,
+  getCanonicalCheckoutSurface,
   type PaymentOutput,
 } from './checkout-action'
 
@@ -81,6 +82,10 @@ describe('buildCheckoutSessionParams', () => {
 })
 
 describe('buildCheckoutAutonomyAction', () => {
+  it('documents that client checkout is public-landing only', () => {
+    expect(getCanonicalCheckoutSurface()).toBe('public_landing')
+  })
+
   it('requires human approval for production checkout creation', () => {
     expect(
       requiresApproval(

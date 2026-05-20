@@ -32,7 +32,10 @@ function fakeSupabase(seed: Partial<Record<TableName, Row[]>> = {}) {
           return builder
         },
         maybeSingle: async () => ({ data: tables[tableName].find(matches) ?? null, error: null }),
-        single: async () => ({ data: inserted ?? tables[tableName].find(matches) ?? null, error: null }),
+        single: async () => ({
+          data: inserted ?? tables[tableName].find(matches) ?? null,
+          error: null,
+        }),
       }
       return builder
     },
@@ -55,7 +58,10 @@ describe('createMarketingBudgetApproval', () => {
       now: () => new Date('2026-05-20T09:00:00.000Z'),
     })
 
-    expect(result).toMatchObject({ budgetRequestId: 'budget_requests-1', actionId: 'autonomy_actions-1' })
+    expect(result).toMatchObject({
+      budgetRequestId: 'budget_requests-1',
+      actionId: 'autonomy_actions-1',
+    })
     expect(supabase.tables.budget_requests[0]).toMatchObject({
       venture_id: 'venture-1',
       campaign_name: 'Budget linkedin',

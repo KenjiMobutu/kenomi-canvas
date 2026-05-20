@@ -25,7 +25,9 @@ interface ApprovalRow {
   reason?: string | null
 }
 
-function fakeSupabase(seed: JobRow[] | { autonomy_jobs?: JobRow[]; human_approvals?: ApprovalRow[] }) {
+function fakeSupabase(
+  seed: JobRow[] | { autonomy_jobs?: JobRow[]; human_approvals?: ApprovalRow[] }
+) {
   const tables = Array.isArray(seed)
     ? { autonomy_jobs: seed.map((row) => ({ ...row })), human_approvals: [] as ApprovalRow[] }
     : {

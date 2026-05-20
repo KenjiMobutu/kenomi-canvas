@@ -74,8 +74,7 @@ async function recalculateVentureRevenue(input: {
       collected_amount_eur?: number | string | null
     }> | null) ?? []
   ).reduce(
-    (sum, payment) =>
-      sum + Number(payment.collected_amount_eur ?? payment.amount_eur ?? 0),
+    (sum, payment) => sum + Number(payment.collected_amount_eur ?? payment.amount_eur ?? 0),
     0
   )
 
@@ -100,7 +99,9 @@ export async function handleStripeWebhookEvent(input: {
   const payment = await maybeSingle<PaymentRow>(
     input.supabase
       .from('payments')
-      .select('venture_id, stripe_session_id, amount_eur, expected_amount_eur, collected_amount_eur, status')
+      .select(
+        'venture_id, stripe_session_id, amount_eur, expected_amount_eur, collected_amount_eur, status'
+      )
       .eq('stripe_session_id', session.id)
   )
 

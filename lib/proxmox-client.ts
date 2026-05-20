@@ -174,7 +174,8 @@ export function selectGuestRootFilesystem(
   const usable = filesystems.filter((fs) => {
     const total = fs['total-bytes']
     const used = fs['used-bytes']
-    if (typeof total !== 'number' || typeof used !== 'number' || total <= 0 || used < 0) return false
+    if (typeof total !== 'number' || typeof used !== 'number' || total <= 0 || used < 0)
+      return false
     return !['devtmpfs', 'tmpfs', 'squashfs', 'overlay'].includes(fs.type ?? '')
   })
   const root =
@@ -281,7 +282,9 @@ export async function getProxmoxMetrics(config = resolveProxmoxConfig()): Promis
           guest_disk_total: guestDisk?.total ?? null,
           guest_disk_pct: guestDisk?.pct ?? null,
           guest_disk_mountpoint: guestDisk?.mountpoint ?? null,
-          guest_disk_error: guestDisk ? null : 'QEMU guest agent ne retourne pas de filesystem utilisable',
+          guest_disk_error: guestDisk
+            ? null
+            : 'QEMU guest agent ne retourne pas de filesystem utilisable',
         }
       } catch (err) {
         return {

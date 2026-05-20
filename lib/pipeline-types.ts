@@ -34,6 +34,20 @@ export interface PipelineRow {
   updated_at: string
 }
 
+function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw?.trim().startsWith('{')) return {}
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function readString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 type AgentOutputs = Pick<
   PipelineRow,
   | 'status'
@@ -76,6 +90,17 @@ export function parsePipelineIdea(raw: string): {
   idea_solution: string
   idea_market: string
 } {
+  const parsed = parseJsonObject(raw)
+  if (Object.keys(parsed).length > 0) {
+    return {
+      idea_title: readString(parsed.title),
+      idea_niche: readString(parsed.niche),
+      idea_problem: readString(parsed.urgent_pain) || readString(parsed.problem),
+      idea_solution: readString(parsed.concrete_promise) || readString(parsed.solution),
+      idea_market: readString(parsed.buyer) || readString(parsed.market),
+    }
+  }
+
   const extract = (key: string) => {
     const m = raw.match(new RegExp(`^${key}:\\s*(.+)$`, 'im'))
     return m ? m[1].trim() : ''
@@ -87,6 +112,31 @@ export function parsePipelineIdea(raw: string): {
     idea_solution: extract('SOLUTION'),
     idea_market: extract('MARCH[EÉ]'),
   }
+}
+
+function buildSellableOfferContext(pipeline: PipelineRow | null): string {
+  const scout = parseJsonObject(pipeline?.scout_raw)
+  if (Object.keys(scout).length === 0) return ''
+
+  const buyer = readString(scout.buyer)
+  const urgentPain = readString(scout.urgent_pain)
+  const concretePromise = readString(scout.concrete_promise)
+  const price = readString(scout.price_hypothesis_eur)
+  const acquisitionChannel = readString(scout.acquisition_channel)
+  const landingAngle = readString(scout.landing_angle)
+
+  if (!buyer && !urgentPain && !concretePromise) return ''
+
+  return `
+Offre vendable issue du Scout :
+- Acheteur: ${buyer || pipeline?.idea_market || 'non précisé'}
+- Douleur urgente: ${urgentPain || pipeline?.idea_problem || 'non précisée'}
+- Promesse concrete: ${concretePromise || pipeline?.idea_solution || 'non précisée'}
+- Prix plausible: ${price || 'à valider'} EUR
+- Canal d'acquisition: ${acquisitionChannel || 'à valider'}
+- Angle landing: ${landingAngle || urgentPain || pipeline?.idea_problem || 'à valider'}
+La landing doit vendre cette offre, pas seulement expliquer le produit.
+`
 }
 
 export function buildSystemPrompt(
@@ -104,6 +154,7 @@ Contexte venture active :
 - Problème : ${pipeline.idea_problem}
 - Solution : ${pipeline.idea_solution}
 - Marché cible : ${pipeline.idea_market}
+${buildSellableOfferContext(pipeline)}
 `
     : ''
 
@@ -124,9 +175,9 @@ Réponds en JSON strict :
 {"score": <0-100>, "tam": "<estimation marché>", "cpc": "<coût clic estimé>", "seo_difficulty": "<faible|moyen|élevé>", "verdict": "go|no-go", "reason": "<justification 2 phrases>"}`,
 
     builder: `Tu es Builder, agent de création de landing page.${ctx}
-Ta mission : générer le contenu complet d'une landing page de pré-lancement.
+Ta mission : générer le contenu complet d'une landing page qui vend l'offre publique de cette venture.
 Réponds en JSON strict :
-{"headline": "<titre accrocheur>", "subline": "<sous-titre 1 phrase>", "cta": "<texte bouton>", "features": ["<feature 1>", "<feature 2>", "<feature 3>"], "pricing": "<offre simple ex: 29€/mois"}`,
+{"headline": "<titre qui vend la promesse>", "subline": "<sous-titre qui nomme l'acheteur et la douleur urgente>", "cta": "<Buy now|Get access|Start now|Rejoindre>", "features": ["<benefice lie a l'acheteur>", "<benefice lie a la douleur>", "<benefice lie a la promesse>"], "pricing": "<offre simple ex: 29 EUR one-time>", "buyer": "<acheteur cible>", "urgent_pain": "<douleur urgente>", "concrete_promise": "<promesse concrete>", "price_anchor": "<ancrage prix>", "objection_handling": ["<objection 1>", "<objection 2>"]}`,
 
     payment: `Tu es Payment, agent de monétisation.${ctx}
 Ta mission : concevoir la configuration Stripe optimale pour cette venture.

@@ -172,21 +172,21 @@ Le code backend pour Phase 2 (venture readiness) et Phase 5 (Coolify deploy stat
 
 ## 4. Definition of Done — checklist actuelle
 
-| Item                                    | État      |
-| --------------------------------------- | --------- |
-| `npm run format:check`                  | ✅        |
-| `npm run typecheck`                     | ✅        |
-| `npm test`                              | ✅        |
-| `npm run ops:coherence`                 | ✅        |
-| `npm run ops:readiness`                 | ✅        |
-| `npm run supabase:validate` contre prod | 🔴 404    |
-| `npm run build`                         | ✅        |
-| `npm run smoke` local                   | ✅        |
-| `SMOKE_BASE_URL=...kenomi.eu smoke`     | 🔴 supabase down |
-| `smoke-vision-loop.mjs`                 | ✅        |
-| Studio affiche sources / approvals / erreurs / réparations / dernier deploy | 🟡 partiel |
-| Aucune action externe sans approval     | ✅        |
-| Kill switch + dry-run bloquent          | ✅        |
+| Item                                                                        | État             |
+| --------------------------------------------------------------------------- | ---------------- |
+| `npm run format:check`                                                      | ✅               |
+| `npm run typecheck`                                                         | ✅               |
+| `npm test`                                                                  | ✅               |
+| `npm run ops:coherence`                                                     | ✅               |
+| `npm run ops:readiness`                                                     | ✅               |
+| `npm run supabase:validate` contre prod                                     | 🔴 404           |
+| `npm run build`                                                             | ✅               |
+| `npm run smoke` local                                                       | ✅               |
+| `SMOKE_BASE_URL=...kenomi.eu smoke`                                         | 🔴 supabase down |
+| `smoke-vision-loop.mjs`                                                     | ✅               |
+| Studio affiche sources / approvals / erreurs / réparations / dernier deploy | 🟡 partiel       |
+| Aucune action externe sans approval                                         | ✅               |
+| Kill switch + dry-run bloquent                                              | ✅               |
 
 **Score actuel : 9/13 DoD verts = 69%** (mais ~75% si on accorde la moitié aux 🟡).
 

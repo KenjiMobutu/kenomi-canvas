@@ -154,6 +154,15 @@ Le script vérifie:
   - un event `waitlist_signup`,
   - une décision `scale`, `cut` ou `hold`.
 
+Le smoke revenue-proof prouve la boucle applicative. Il ne prouve pas que
+Stripe est en mode live ni qu'une campagne est sortie sur un canal public. Pour
+declarer "revenu reel", verifier aussi:
+
+- au moins un paiement Stripe live demarre depuis une landing publique;
+- `MARKETING_ADAPTER=n8n`;
+- un `provider_run_id` externe non mock pour au moins une campagne;
+- une livraison post-paiement en statut `completed`.
+
 ### Résultat attendu avant preuve live
 
 Avant le paiement Stripe test et les events contrôlés, ce smoke doit échouer

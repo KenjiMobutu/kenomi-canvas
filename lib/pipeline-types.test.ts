@@ -1,6 +1,12 @@
 // lib/pipeline-types.test.ts
 import { describe, it, expect } from 'vitest'
-import { AGENT_CHAIN, nextAgentInChain, isAgentUnlocked, parsePipelineIdea } from './pipeline-types'
+import {
+  AGENT_CHAIN,
+  nextAgentInChain,
+  isAgentUnlocked,
+  parsePipelineIdea,
+  buildSystemPrompt,
+} from './pipeline-types'
 
 describe('AGENT_CHAIN', () => {
   it('contient 6 agents dans le bon ordre', () => {
@@ -104,5 +110,70 @@ MARCHÉ: PME 10-50 salariés`
   it('retourne des chaînes vides si format invalide', () => {
     const result = parsePipelineIdea('réponse libre sans format')
     expect(result.idea_title).toBe('')
+  })
+
+  it('parse un output Scout JSON vendable', () => {
+    const result = parsePipelineIdea(
+      JSON.stringify({
+        title: 'AI proposal cleanup',
+        niche: 'freelance consultants',
+        buyer: 'Solo consultants selling 1k-10k EUR services',
+        urgent_pain: 'They lose deals when proposals take too long.',
+        concrete_promise: 'Client-ready proposal in 10 minutes.',
+        offer: 'Proposal cleanup in 10 minutes',
+        price_hypothesis_eur: 29,
+        acquisition_channel: 'linkedin',
+        landing_angle: 'Win the deal while the call is still fresh.',
+      })
+    )
+
+    expect(result).toMatchObject({
+      idea_title: 'AI proposal cleanup',
+      idea_niche: 'freelance consultants',
+      idea_problem: 'They lose deals when proposals take too long.',
+      idea_solution: 'Client-ready proposal in 10 minutes.',
+      idea_market: 'Solo consultants selling 1k-10k EUR services',
+    })
+  })
+})
+
+describe('buildSystemPrompt', () => {
+  it('injects the Scout sellable offer into Builder prompts', () => {
+    const prompt = buildSystemPrompt(
+      'builder',
+      {
+        id: 'pipeline-1',
+        user_id: 'user-1',
+        idea_title: 'AI proposal cleanup',
+        idea_niche: 'freelance consultants',
+        idea_problem: 'They lose deals when proposals take too long.',
+        idea_solution: 'Client-ready proposal in 10 minutes.',
+        idea_market: 'Solo consultants',
+        scout_raw: JSON.stringify({
+          buyer: 'Solo consultants selling 1k-10k EUR services',
+          urgent_pain: 'They lose deals when proposals take too long.',
+          concrete_promise: 'Client-ready proposal in 10 minutes.',
+          price_hypothesis_eur: 29,
+          acquisition_channel: 'linkedin',
+          landing_angle: 'Win the deal while the call is still fresh.',
+        }),
+        status: 'approved',
+        validation_output: 'ok',
+        validation_score: 82,
+        builder_output: null,
+        payment_output: null,
+        marketing_output: null,
+        decision_output: null,
+        venture_id: 'venture-1',
+        current_agent: null,
+        created_at: '2026-05-20T10:00:00.000Z',
+        updated_at: '2026-05-20T10:00:00.000Z',
+      },
+      ''
+    )
+
+    expect(prompt).toContain('Acheteur: Solo consultants')
+    expect(prompt).toContain('Douleur urgente: They lose deals')
+    expect(prompt).toContain('La landing doit vendre cette offre')
   })
 })

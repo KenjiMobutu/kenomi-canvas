@@ -20,9 +20,7 @@ function missing(count: number) {
   return !Number.isFinite(count) || count <= 0
 }
 
-export function evaluateRevenueProofGate(
-  input: RevenueProofGateInput
-): RevenueProofGateResult {
+export function evaluateRevenueProofGate(input: RevenueProofGateInput): RevenueProofGateResult {
   const failures: string[] = []
 
   if (!input.healthOk) failures.push('health_not_ok')

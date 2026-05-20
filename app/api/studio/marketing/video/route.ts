@@ -13,7 +13,9 @@ function asString(value: unknown, fallback = '') {
 }
 
 function asStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
 }
 
 export async function POST(req: NextRequest) {

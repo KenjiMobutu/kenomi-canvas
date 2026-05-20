@@ -46,9 +46,9 @@ describe('infra diagnostic actions', () => {
       targetId: 'n8n',
     })
 
-    expect(() =>
-      parseDiagnosticActionRequest({ action: 'restart', targetId: 'n8n' })
-    ).toThrow('Payload action diagnostic invalide')
+    expect(() => parseDiagnosticActionRequest({ action: 'restart', targetId: 'n8n' })).toThrow(
+      'Payload action diagnostic invalide'
+    )
   })
 
   it('builds calm operator-facing results', () => {

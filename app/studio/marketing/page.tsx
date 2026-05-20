@@ -41,10 +41,7 @@ import {
 import { getStatusColor } from '@/components/studio/StatusBadge'
 import { EmptyState } from '@/components/studio/EmptyState'
 import { getMissingMarketingDraftsAction } from '@/lib/autonomy/supervised-loop-state'
-import {
-  adaptDraftToChannel,
-  type MarketingChannelId,
-} from '@/lib/marketing/channel-adapter'
+import { adaptDraftToChannel, type MarketingChannelId } from '@/lib/marketing/channel-adapter'
 
 interface CampaignDraft {
   id: string
@@ -1092,10 +1089,12 @@ function AssetPreview({
         ? draftTitle(selectedDraft)
         : channel.label
   const displayContent =
-    adaptedDraft?.content ?? 'Sélectionne un draft, puis choisis ce canal pour générer le bon format.'
+    adaptedDraft?.content ??
+    'Sélectionne un draft, puis choisis ce canal pour générer le bon format.'
   const displayFormat =
     typeof adaptedDraft?.metadata.format === 'string' ? adaptedDraft.metadata.format : 'preview'
-  const displayCta = typeof adaptedDraft?.metadata.cta === 'string' ? adaptedDraft.metadata.cta : 'CTA'
+  const displayCta =
+    typeof adaptedDraft?.metadata.cta === 'string' ? adaptedDraft.metadata.cta : 'CTA'
   const videoHook =
     typeof adaptedDraft?.metadata.video === 'object' &&
     adaptedDraft.metadata.video !== null &&
@@ -1187,58 +1186,58 @@ function AssetPreview({
             cta={displayCta}
             videoHook={videoHook}
           />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onConnect()
-            }}
-            style={{
-              minHeight: 32,
-              borderRadius: 7,
-              background: connected ? surface2 : `${channel.color}22`,
-              color: connected ? muted : channel.color,
-              border: `1px solid ${connected ? line2 : `${channel.color}55`}`,
-              fontFamily: 'var(--font-display)',
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-            }}
-          >
-            <Link2 size={12} /> {connected ? 'Connecté' : 'Connecter'}
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onSave()
-            }}
-            disabled={!adaptedDraft || saving}
-            style={{
-              minHeight: 32,
-              borderRadius: 7,
-              background: channel.color,
-              color: '#0b0d12',
-              border: 'none',
-              fontFamily: 'var(--font-display)',
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: !adaptedDraft || saving ? 'not-allowed' : 'pointer',
-              opacity: !adaptedDraft || saving ? 0.55 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-            }}
-          >
-            <Save size={12} /> {saving ? '...' : 'Adapter'}
-          </button>
-        </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onConnect()
+              }}
+              style={{
+                minHeight: 32,
+                borderRadius: 7,
+                background: connected ? surface2 : `${channel.color}22`,
+                color: connected ? muted : channel.color,
+                border: `1px solid ${connected ? line2 : `${channel.color}55`}`,
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+              }}
+            >
+              <Link2 size={12} /> {connected ? 'Connecté' : 'Connecter'}
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onSave()
+              }}
+              disabled={!adaptedDraft || saving}
+              style={{
+                minHeight: 32,
+                borderRadius: 7,
+                background: channel.color,
+                color: '#0b0d12',
+                border: 'none',
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: !adaptedDraft || saving ? 'not-allowed' : 'pointer',
+                opacity: !adaptedDraft || saving ? 0.55 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+              }}
+            >
+              <Save size={12} /> {saving ? '...' : 'Adapter'}
+            </button>
+          </div>
         </div>
       </div>
     </button>
@@ -1328,12 +1327,20 @@ function ChannelPreviewMock({
     return (
       <div style={{ width: '100%', maxWidth: 260 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color, letterSpacing: '.14em' }}>
-          kenomi.studio › {title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 26)}
+          kenomi.studio ›{' '}
+          {title
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .slice(0, 26)}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#60a5fa', marginTop: 4, lineHeight: 1.3 }}>
+        <div
+          style={{ fontSize: 13, fontWeight: 800, color: '#60a5fa', marginTop: 4, lineHeight: 1.3 }}
+        >
           {title}
         </div>
-        <div style={{ fontSize: 10, color: muted, marginTop: 4, lineHeight: 1.4 }}>{cleanContent}</div>
+        <div style={{ fontSize: 10, color: muted, marginTop: 4, lineHeight: 1.4 }}>
+          {cleanContent}
+        </div>
         <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color }}>SEO · intent</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2 }}>{cta}</span>
@@ -1369,7 +1376,9 @@ function ChannelPreviewMock({
         >
           {title}
         </div>
-        <div style={{ fontSize: 10.5, color: muted, marginTop: 6, lineHeight: 1.5 }}>{cleanContent}</div>
+        <div style={{ fontSize: 10.5, color: muted, marginTop: 6, lineHeight: 1.5 }}>
+          {cleanContent}
+        </div>
         <div
           style={{
             marginTop: 10,
@@ -1440,7 +1449,16 @@ function ChannelPreviewMock({
           />
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 12, marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 9, color: muted }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          marginTop: 8,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          color: muted,
+        }}
+      >
         <span>♥ 184</span>
         <span>💬 22</span>
         <span>↗ {cta.slice(0, 16)}</span>
@@ -1597,7 +1615,9 @@ export default function MarketingPage() {
         toast.error(data.error ?? 'Impossible d’adapter le draft')
         return
       }
-      toast.success(`Draft adapté pour ${CHANNELS.find((c) => c.id === adaptedDraft.channel)?.label}`)
+      toast.success(
+        `Draft adapté pour ${CHANNELS.find((c) => c.id === adaptedDraft.channel)?.label}`
+      )
       await refresh()
     } finally {
       setSavingAdaptation(false)
@@ -1655,7 +1675,8 @@ export default function MarketingPage() {
 
   const selectedVenture = ventures.find((venture) => venture.id === selectedVentureId) ?? null
   const selectedDrafts = useMemo(
-    () => (selectedVentureId ? drafts.filter((draft) => draft.venture_id === selectedVentureId) : []),
+    () =>
+      selectedVentureId ? drafts.filter((draft) => draft.venture_id === selectedVentureId) : [],
     [drafts, selectedVentureId]
   )
   const selectedDraft = selectedDrafts.find((draft) => draft.id === selectedDraftId) ?? null
@@ -1683,7 +1704,9 @@ export default function MarketingPage() {
   const channelCards = useMemo(
     () =>
       CHANNELS.map((channel) => {
-        const channelDrafts = selectedDrafts.filter((draft) => draftMatchesChannel(draft, channel.id))
+        const channelDrafts = selectedDrafts.filter((draft) =>
+          draftMatchesChannel(draft, channel.id)
+        )
         const connected = connectedChannelIds.includes(channel.id)
         return {
           ...channel,
@@ -1840,7 +1863,9 @@ export default function MarketingPage() {
             >
               {ventures.map((venture) => {
                 const ventureDrafts = drafts.filter((draft) => draft.venture_id === venture.id)
-                const venturePublished = ventureDrafts.filter((draft) => draft.status === 'published')
+                const venturePublished = ventureDrafts.filter(
+                  (draft) => draft.status === 'published'
+                )
                 const ventureVideos = ventureDrafts.filter(isVideoDraft)
                 const active = venture.id === selectedVentureId
                 return (

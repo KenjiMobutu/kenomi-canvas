@@ -6,6 +6,13 @@ describe('evaluatePublicLandingHealth', () => {
     expect(
       evaluatePublicLandingHealth({
         slug: 'inbox-pulse',
+        sellableOffer: {
+          buyer: 'Agences B2B avec leads email entrants',
+          urgentPain: 'Les leads chauds sont traités trop tard et se refroidissent.',
+          concretePromise: 'Prioriser les leads les plus proches de l achat chaque matin.',
+          priceHypothesisEur: 29,
+          acquisitionChannel: 'linkedin',
+        },
         landing: {
           headline: 'Priorisez vos leads',
           statut: 'deployed',
@@ -31,6 +38,7 @@ describe('evaluatePublicLandingHealth', () => {
     expect(
       evaluatePublicLandingHealth({
         slug: '',
+        sellableOffer: null,
         landing: {
           headline: '',
           statut: 'draft',
@@ -40,7 +48,14 @@ describe('evaluatePublicLandingHealth', () => {
       })
     ).toEqual({
       status: 'repair_required',
-      reasons: ['missing_slug', 'landing_not_deployed', 'missing_headline', 'missing_cta', 'tracking_missing'],
+      reasons: [
+        'missing_slug',
+        'missing_sellable_offer',
+        'landing_not_deployed',
+        'missing_headline',
+        'missing_cta',
+        'tracking_missing',
+      ],
       repairAction: {
         label: 'Lancer Builder',
         agentId: 'builder',
@@ -52,6 +67,13 @@ describe('evaluatePublicLandingHealth', () => {
     expect(
       evaluatePublicLandingHealth({
         slug: 'inbox-pulse',
+        sellableOffer: {
+          buyer: 'Agences B2B avec leads email entrants',
+          urgentPain: 'Les leads chauds sont traités trop tard et se refroidissent.',
+          concretePromise: 'Prioriser les leads les plus proches de l achat chaque matin.',
+          priceHypothesisEur: 29,
+          acquisitionChannel: 'linkedin',
+        },
         landing: null,
         hasTracking: false,
       })
@@ -62,6 +84,37 @@ describe('evaluatePublicLandingHealth', () => {
         label: 'Lancer Builder',
         agentId: 'builder',
       },
+    })
+  })
+
+  it('marks generic explanatory copy as repair required when it does not sell the Scout offer', () => {
+    expect(
+      evaluatePublicLandingHealth({
+        slug: 'ai-proposal-cleanup',
+        sellableOffer: {
+          buyer: 'Solo consultants selling 1k-10k EUR services',
+          urgentPain: 'They lose deals because proposals are slow and generic.',
+          concretePromise: 'Client-ready proposal in 10 minutes.',
+          priceHypothesisEur: 29,
+          acquisitionChannel: 'linkedin',
+        },
+        landing: {
+          headline: 'A simple AI app',
+          statut: 'deployed',
+          copywriting: {
+            hero: {
+              headline: 'A simple AI app',
+              subtitle: 'It helps with productivity.',
+              cta: 'Learn more',
+            },
+            features: [{ title: 'AI', description: 'Uses AI.' }],
+          },
+        },
+        hasTracking: true,
+      })
+    ).toMatchObject({
+      status: 'repair_required',
+      reasons: ['missing_sales_copy', 'missing_cta'],
     })
   })
 })

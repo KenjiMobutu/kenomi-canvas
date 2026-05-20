@@ -66,7 +66,10 @@ export interface RunAgentStepInput {
       max_tokens: number
     }
   ) => Promise<LLMResponse>
-  scoutSourceCollector?: (input: { query: string; now: () => Date }) => Promise<ScoutSourceCollection>
+  scoutSourceCollector?: (input: {
+    query: string
+    now: () => Date
+  }) => Promise<ScoutSourceCollection>
   now?: () => Date
 }
 

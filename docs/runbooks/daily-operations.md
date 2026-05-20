@@ -67,13 +67,18 @@ docker image prune -af
 ssh coolify "docker exec supabase-db-i12k0ju0ok5wk4gnts6uap03 psql -U supabase_admin -d postgres -c \"select 'payments' metric, count(*) value from public.payments union all select 'venture_events', count(*) from public.venture_events union all select 'published_campaigns', count(*) from public.campaign_drafts where published_at is not null;\""
 ```
 
-Baseline relevee le 2026-05-19 avant preuve live:
+Baseline relevee le 2026-05-20 apres preuve live:
 
-| Metric | Value |
-| --- | ---: |
-| payments | 0 |
-| venture_events | 0 |
-| published_campaigns | 0 |
+| Metric                    | Value |
+| ------------------------- | ----: |
+| payments_with_checkout    |     3 |
+| completed_payments        |     2 |
+| payment_succeeded_events  |     2 |
+| campaign_published_events |     2 |
+| campaign_spend_events     |     2 |
+| page_view_events          |     4 |
+| waitlist_signup_events    |     1 |
+| decisions                 |     3 |
 
 3. Verifier les secrets sans imprimer les valeurs:
 

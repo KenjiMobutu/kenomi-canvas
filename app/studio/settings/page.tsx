@@ -641,7 +641,7 @@ function ScoutSourcesCheck({
               >
                 {row.topSignal
                   ? `${row.signalCount} signal(s) · score ${row.topScore}/100 · ${row.topSignal}`
-                  : row.lastError ?? row.reason}
+                  : (row.lastError ?? row.reason)}
               </div>
               <div
                 style={{
@@ -782,9 +782,12 @@ export default function SettingsPage() {
     try {
       const params = new URLSearchParams({ query: scoutQuery })
       const res = await fetch(`/api/studio/settings/scout-sources?${params.toString()}`)
-      const data = (await res.json().catch(() => null)) as ScoutSourceStatusReport | {
-        error?: string
-      } | null
+      const data = (await res.json().catch(() => null)) as
+        | ScoutSourceStatusReport
+        | {
+            error?: string
+          }
+        | null
       if (!res.ok) {
         const message =
           data && 'error' in data && data.error

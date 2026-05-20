@@ -14,13 +14,60 @@ describe('parseAgentOutput', () => {
       ].join('\n')
     )
 
-    expect(parsed).toEqual({
+    expect(parsed).toMatchObject({
       title: 'InboxPulse',
       niche: 'agences B2B',
       problem: 'les leads email sont mal priorisés',
       solution: 'scoring automatique des conversations',
       market: 'agences de prospection outbound',
+      buyer: 'agences de prospection outbound',
+      urgent_pain: 'les leads email sont mal priorisés',
+      concrete_promise: 'scoring automatique des conversations',
+      price_hypothesis_eur: 29,
     })
+  })
+
+  it('requires Scout ideas to be sellable offers, not just interesting ideas', () => {
+    const parsed = parseAgentOutput(
+      'scout',
+      JSON.stringify({
+        title: 'AI proposal cleanup for freelancers',
+        niche: 'freelance consultants',
+        buyer: 'Solo consultants selling 1k-10k EUR services',
+        urgent_pain: 'Consultants lose deals because proposals are slow and generic.',
+        concrete_promise: 'Upload messy notes, get a client-ready proposal in 10 minutes.',
+        offer: 'Proposal cleanup and rewrite for one client opportunity.',
+        price_hypothesis_eur: 29,
+        acquisition_channel: 'linkedin',
+        landing_angle: 'Win the deal before the client forgets the call.',
+        evidence: ['Freelancers post proposal bottlenecks daily in public communities.'],
+        confidence: 72,
+      })
+    )
+
+    expect(parsed).toMatchObject({
+      buyer: expect.stringContaining('consultants'),
+      urgent_pain: expect.stringContaining('lose deals'),
+      concrete_promise: expect.stringContaining('10 minutes'),
+      price_hypothesis_eur: 29,
+      acquisition_channel: 'linkedin',
+      landing_angle: expect.stringContaining('Win the deal'),
+    })
+  })
+
+  it('rejects generic Scout ideas without a buyer, urgent pain, promise, price and channel', () => {
+    expect(() =>
+      parseAgentOutput(
+        'scout',
+        JSON.stringify({
+          title: 'Interesting AI thing',
+          niche: 'founders',
+          problem: 'Too much admin',
+          solution: 'Use AI',
+          market: 'startups',
+        })
+      )
+    ).toThrow('Invalid scout output')
   })
 
   it('valide une sortie Validation JSON stricte', () => {
@@ -87,6 +134,46 @@ describe('parseAgentOutput', () => {
         { channel: 'linkedin', title: 'Stop losing sales notes' },
         { channel: 'tiktok', asset_kind: 'faceless_video' },
       ],
+    })
+  })
+
+  it('requires Builder output to produce sales copy from the sellable offer', () => {
+    const parsed = parseAgentOutput(
+      'builder',
+      JSON.stringify({
+        headline: 'Win the deal before the client forgets the call',
+        subline:
+          'For solo consultants: turn messy call notes into a stronger proposal in 10 minutes.',
+        cta: 'Buy now',
+        features: [
+          'Built for solo consultants',
+          'Fixes proposal delay after sales calls',
+          'Client-ready proposal in 10 minutes',
+        ],
+        pricing: '29 EUR one-time',
+        buyer: 'Solo consultants selling 1k-10k EUR services',
+        urgent_pain: 'Proposal delay causes warm leads to go cold.',
+        concrete_promise: 'Client-ready proposal in 10 minutes.',
+        price_anchor: 'Costs less than 2% of a 1,500 EUR client project.',
+        objection_handling: [
+          'Works from rough notes.',
+          'No template setup required.',
+          'Designed for one urgent proposal at a time.',
+        ],
+        sections: [
+          {
+            title: 'Built for urgent follow-up',
+            body: 'Paste call notes and get a polished proposal while the opportunity is still warm.',
+          },
+        ],
+        faq: [{ q: 'Who is this for?', a: 'Solo consultants with active client opportunities.' }],
+      })
+    )
+
+    expect(parsed).toMatchObject({
+      cta: 'Buy now',
+      buyer: 'Solo consultants selling 1k-10k EUR services',
+      price_anchor: expect.stringContaining('1,500 EUR'),
     })
   })
 

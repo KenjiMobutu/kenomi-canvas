@@ -3,6 +3,7 @@ interface PipelineVentureInput {
   ideaTitle: string
   ideaNiche: string
   slug: string
+  scoutRaw?: string | null
 }
 
 interface BuilderOutput {
@@ -23,6 +24,59 @@ interface MaterializeBuilderOutputInput extends LandingPageInput {
   insertLandingPage: (payload: LandingPageInsert) => Promise<{ error: { message: string } | null }>
 }
 
+interface ValidatedIdeaPipelineInput {
+  id: string
+  idea_title: string
+  idea_niche: string
+  scout_raw?: string | null
+}
+
+interface MaterializeValidatedIdeaInput {
+  userId: string
+  pipeline: ValidatedIdeaPipelineInput
+  slug: string
+  nowIso: string
+}
+
+function parseScoutOffer(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw?.trim().startsWith('{')) return {}
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function readString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
+}
+
+function readPositiveNumber(value: unknown, fallback: number): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
+function buildSellableInsight(input: {
+  buyer: string
+  urgentPain: string
+  concretePromise: string
+  offer: string
+  priceHypothesisEur: number
+  acquisitionChannel: string
+  landingAngle: string
+}): string {
+  return [
+    `Acheteur: ${input.buyer}`,
+    `Douleur urgente: ${input.urgentPain}`,
+    `Promesse: ${input.concretePromise}`,
+    `Offre: ${input.offer}`,
+    `Prix plausible: ${input.priceHypothesisEur} EUR`,
+    `Canal: ${input.acquisitionChannel}`,
+    `Angle landing: ${input.landingAngle}`,
+  ].join('\n')
+}
+
 export function slugifyVentureName(name: string): string {
   const slug = name
     .normalize('NFD')
@@ -35,6 +89,15 @@ export function slugifyVentureName(name: string): string {
 }
 
 export function buildVentureInsertFromPipeline(input: PipelineVentureInput) {
+  const scout = parseScoutOffer(input.scoutRaw)
+  const buyer = readString(scout.buyer, input.ideaNiche)
+  const urgentPain = readString(scout.urgent_pain, 'Douleur à clarifier avant landing')
+  const concretePromise = readString(scout.concrete_promise, 'Promesse à clarifier avant landing')
+  const offer = readString(scout.offer, concretePromise)
+  const priceHypothesisEur = readPositiveNumber(scout.price_hypothesis_eur, 29)
+  const acquisitionChannel = readString(scout.acquisition_channel, 'manual_validation')
+  const landingAngle = readString(scout.landing_angle, urgentPain)
+
   return {
     user_id: input.userId,
     name: input.ideaTitle,
@@ -42,14 +105,42 @@ export function buildVentureInsertFromPipeline(input: PipelineVentureInput) {
     nom: input.ideaTitle,
     slug: input.slug,
     type_produit: 'micro-saas',
-    statut: 'actif',
+    statut: 'draft',
+    lifecycle_status: 'draft',
+    current_decision: 'continue',
     stage: 'Validation',
     score: 50,
     mrr: '0',
     cac: '0',
     conversion: '0',
-    next_action: 'Lancer agent Validation',
-    insight: 'Idée générée par Scout',
+    next_action: 'Créer landing et offre publique',
+    insight: buildSellableInsight({
+      buyer,
+      urgentPain,
+      concretePromise,
+      offer,
+      priceHypothesisEur,
+      acquisitionChannel,
+      landingAngle,
+    }),
+  }
+}
+
+export function materializeValidatedIdea(input: MaterializeValidatedIdeaInput) {
+  const venture = buildVentureInsertFromPipeline({
+    userId: input.userId,
+    ideaTitle: input.pipeline.idea_title,
+    ideaNiche: input.pipeline.idea_niche,
+    slug: input.slug,
+    scoutRaw: input.pipeline.scout_raw,
+  })
+
+  return {
+    venture,
+    pipelinePatch: {
+      status: 'approved' as const,
+      updated_at: input.nowIso,
+    },
   }
 }
 

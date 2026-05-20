@@ -103,8 +103,7 @@ export function buildDiagnosticActionAudit(input: {
   const result = buildDiagnosticActionResult(input)
   return {
     eventType: `infra.diagnostic.${input.action}`,
-    severity:
-      input.action === 'record_incident' ? severityForStatus(input.target.status) : 'info',
+    severity: input.action === 'record_incident' ? severityForStatus(input.target.status) : 'info',
     metadata: {
       action: input.action,
       action_label: ACTIONS[input.action].label,

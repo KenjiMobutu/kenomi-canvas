@@ -56,7 +56,7 @@ describe('buildRevenueAutopilotPlan', () => {
     ])
   })
 
-  it('met checkout production en approval humaine au lieu de l’exécuter directement', () => {
+  it('ne crée pas de checkout Studio quand une ancienne reco checkout remonte', () => {
     const plan = buildRevenueAutopilotPlan({
       snapshot: {
         ...baseSnapshot,
@@ -78,16 +78,17 @@ describe('buildRevenueAutopilotPlan', () => {
       environment: 'production',
     })
 
-    expect(plan.mode).toBe('approval_required')
+    expect(plan.mode).toBe('hold')
     expect(plan.steps[0]).toMatchObject({
-      kind: 'create_checkout',
-      execution: 'approval',
-      risk: 'medium',
+      kind: 'monitor',
+      execution: 'hold',
+      risk: 'low',
       blockedRevenueEur: 29,
+      reason: 'Paiement client uniquement sur landing publique',
     })
   })
 
-  it('transforme configurer Stripe en retry checkout soumis à approval', () => {
+  it('ne transforme pas configurer Stripe en retry checkout Studio', () => {
     const plan = buildRevenueAutopilotPlan({
       snapshot: {
         ...baseSnapshot,
@@ -109,13 +110,13 @@ describe('buildRevenueAutopilotPlan', () => {
       environment: 'production',
     })
 
-    expect(plan.mode).toBe('approval_required')
+    expect(plan.mode).toBe('hold')
     expect(plan.steps[0]).toMatchObject({
-      kind: 'create_checkout',
-      execution: 'approval',
+      kind: 'monitor',
+      execution: 'hold',
       ventureId: 'venture-1',
-      pipelineId: 'pipeline-1',
-      risk: 'medium',
+      risk: 'low',
+      reason: 'Clé Stripe manquante',
     })
   })
 
@@ -288,22 +289,22 @@ describe('stepFromRoiDecision', () => {
 })
 
 describe('filterDuplicateDailyAutopilotSteps', () => {
-  it('retire une approval revenue deja créée le même jour pour la même venture', () => {
+  it('retire une action revenue deja créée le même jour pour la même venture', () => {
     const plan = buildRevenueAutopilotPlan({
       snapshot: {
         ...baseSnapshot,
         summary: {
           ...baseSnapshot.summary,
           recommendedAction: {
-            type: 'create_checkout',
+            type: 'run_agent',
+            agentId: 'marketing',
             ventureId: 'venture-1',
-            pipelineId: 'pipeline-1',
-            label: 'Créer le checkout Stripe',
+            label: 'Lancer Marketing',
             loopId: 'loop-1',
             ventureName: 'NoteFast',
             priorityScore: 90,
             blockedRevenueEur: 29,
-            reason: 'Checkout Stripe manquant',
+            reason: 'Distribution manquante',
           },
         },
       },
@@ -316,7 +317,7 @@ describe('filterDuplicateDailyAutopilotSteps', () => {
       now: new Date('2026-05-19T12:00:00.000Z'),
       actions: [
         {
-          action_type: 'create_checkout',
+          action_type: 'run_agent',
           venture_id: 'venture-1',
           status: 'blocked',
           input: { source: 'revenue_autopilot' },

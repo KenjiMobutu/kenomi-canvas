@@ -11,31 +11,31 @@ revenue-first :
 
 **État global** : 🟢 **App alignée à ~85% sur la vision** (vs 75% en J-1)
 
-- ✅ 387/387 tests passent, typecheck/build/lint verts (9 warnings), Supabase prod rétablie (REST 200, Auth 200, pg 401)
+- ✅ 428/428 tests passent, typecheck/build/lint verts, Supabase prod rétablie (REST 200, Auth 200, pg 401)
 - ✅ Toutes les briques structurelles existent : Scout→Decision, Stripe E2E (public + admin), n8n adapter, Coolify deploy, RGPD complet, Prometheus, logger Pino, retry/cancel jobs
 - ✅ `ops:coherence`, `ops:readiness`, `smoke:vision` tous au vert
-- 🟡 Aucune preuve de revenue live (0 payments completed, 0 venture_events business) — gate `smoke-revenue-proof` conçu pour échouer tant qu'il n'y a pas de trace réelle
+- ✅ Baseline revenue live relevee le 2026-05-20: 3 checkouts, 2 paiements completes, 2 `payment_succeeded`, 2 `campaign_published`, 2 `campaign_spend`, 4 `page_view`, 1 `waitlist_signup`, 3 decisions.
 - 🟡 Dette UI : 9 pages > 1 000 lignes, 3 pages > 2 000 lignes
 - 🟡 Pages publiées via n8n réel : encore en attente d'exécution end-to-end
 
 ## 1. État technique au 2026-05-20
 
-| Indicateur          | Valeur                              | Verdict |
-| ------------------- | ----------------------------------- | ------- |
-| Tests Vitest        | 387/387                             | ✅      |
-| Typecheck strict    | 0 erreur                            | ✅      |
-| Build production    | succès                              | ✅      |
-| Lint                | 0 errors, 9 warnings                | ✅      |
-| `ops:coherence`     | studio + business OK                | ✅      |
-| `ops:readiness`     | scripts/runbooks/env tous présents  | ✅      |
-| `smoke:vision`      | ok                                  | ✅      |
-| Supabase distant    | REST 200, Auth 200, pg 401          | ✅      |
+| Indicateur           | Valeur                             | Verdict |
+| -------------------- | ---------------------------------- | ------- |
+| Tests Vitest         | 428/428                            | ✅      |
+| Typecheck strict     | 0 erreur                           | ✅      |
+| Build production     | succès                             | ✅      |
+| Lint                 | 0 errors, warnings non bloquants   | ✅      |
+| `ops:coherence`      | studio + business OK               | ✅      |
+| `ops:readiness`      | scripts/runbooks/env tous présents | ✅      |
+| `smoke:vision`       | ok                                 | ✅      |
+| Supabase distant     | REST 200, Auth 200, pg 401         | ✅      |
 | Tables sans RLS prod | 0                                  | ✅      |
-| LOC source          | 37 348 (+1 655 depuis J-1)          |         |
-| Routes API          | 36 (+2)                             |         |
-| Migrations SQL      | 26 (+2)                             |         |
-| Tests modules       | 71 fichiers .test.ts (+4)           |         |
-| Scripts ops         | 8 (+1)                              |         |
+| LOC source           | 37 348 (+1 655 depuis J-1)         |         |
+| Routes API           | 36 (+2)                            |         |
+| Migrations SQL       | 26 (+2)                            |         |
+| Tests modules        | 71 fichiers .test.ts (+4)          |         |
+| Scripts ops          | 8 (+1)                             |         |
 
 ## 2. Vision "AI Venture Studio" — couverture par dimension
 
@@ -59,13 +59,12 @@ Les approval gates (5 types d'actions externes) sont toutes câblées dans
 - ✅ Landing publique `/[slug]` rend via `selectPublicLandingCta` (CTA checkout
   ou waitlist selon ready)
 - ✅ Public checkout route `POST /api/public/stripe/checkout` (rate-limit
-  + validation Zod) — UTILISABLE PAR LES VISITEURS sans auth Studio
-- ✅ Studio checkout `POST /api/studio/stripe/checkout` avec approval gate prod
+  - validation Zod) — UTILISABLE PAR LES VISITEURS sans auth Studio
+- ✅ Checkout client uniquement depuis les landings publiques; `POST /api/studio/stripe/checkout` retourne `client_checkout_public_landing_only`
 - ✅ Webhook `POST /api/stripe/webhook` vérifie signature via
   `createStripeWebhookVerifierClient().webhooks.constructEvent`
 - ✅ `payment_succeeded` inséré dans `venture_events`
-- 🟡 **Aucun checkout completed live en prod** — gate `smoke-revenue-proof`
-  conçu pour échouer tant qu'il n'y a pas de trace réelle
+- ✅ **Preuve checkout live relevee** — baseline 2026-05-20: 3 checkouts, 2 paiements completes, 2 `payment_succeeded`
 
 ### C. Marketing autonome ✅ 90%
 
@@ -73,7 +72,7 @@ Les approval gates (5 types d'actions externes) sont toutes câblées dans
 - ✅ Approval gate `publish_campaign` créée par draft
 - ✅ Adapter n8n branché (POST webhook + token)
 - ✅ Page `/studio/marketing` montre drafts + boutons publier/rejeter
-- 🟡 Aucune campagne publiée live (0 `campaign_published` dans `venture_events`)
+- ✅ Campagnes publiees relevees dans la baseline live: 2 `campaign_published`
 - 🟡 Pas de bouton "retry échec publication" sur ligne draft (le retry job
   général existe dans `/studio/agents` ligne 1162)
 
@@ -88,9 +87,9 @@ expose 4 types de `RepairAction` (`run-builder`, `run-marketing`,
 ### E. Observabilité ✅ 85%
 
 - ✅ `/api/metrics` Prometheus avec compteurs custom (agent_runs, cost_usd)
-  + `collectDefaultMetrics` (CPU/mémoire/event loop)
+  - `collectDefaultMetrics` (CPU/mémoire/event loop)
 - ✅ Tokens + coût LLM affichés par run dans `/studio/agents`
-- ✅ Logger Pino structuré (8 console.* server-side migrés)
+- ✅ Logger Pino structuré (8 console.\* server-side migrés)
 - ✅ Page `/studio/revenue` agrège l'audit business
 - 🟡 Pas de carte "Ops Health" globale dans le cockpit `/studio` (jobs failed,
   approvals pending, deploy state, disque VM)
@@ -126,47 +125,47 @@ expose 4 types de `RepairAction` (`run-builder`, `run-marketing`,
 - ✅ Client Proxmox typé + métriques VM via QEMU guest agent
   (commit `1d70791` aujourd'hui)
 - ✅ Erreurs Proxmox sanitizées (`Permission VM.Monitor`, `QEMU guest agent
-  indisponible`) côté UI
+indisponible`) côté UI
 - 🟡 Coolify deploy state dans `/studio/infrastructure` : montre
   `commitShort` mais pas queue_id/finished_at/container health complet
 - 🟡 Pas d'alerting disque (`/` à 89% mentionné dans le plan)
 
 ## 3. Definition of Done revenue-first — checklist
 
-| Item                                                                  | État     |
-| --------------------------------------------------------------------- | -------- |
-| Venture prête avec landing publique et CTA revenu                     | ✅       |
-| Checkout Stripe créé via Studio/autopilot                             | ✅       |
-| Approval humaine seulement si risque medium\|high\|critical           | ✅       |
-| Paiement test Stripe complété                                         | 🔴       |
-| Webhook Stripe écrit `payments.status='completed'`                    | ✅ code, 🔴 live |
-| Campagne publiée via n8n réel ou mock contrôlé                        | 🟡       |
-| Events `page_view`, `waitlist_signup`, `campaign_spend` collectés     | 🔴 live  |
-| ROI calculé depuis `venture_events`                                   | ✅       |
-| Décision `scale`/`cut`/`hold` persistée                               | ✅       |
-| Action de décision exécutée ou bloquée                                | ✅       |
-| Audit visible dans `/studio/revenue`                                  | ✅       |
-| Cron quotidien (revenue-autopilot)                                    | ✅       |
-| Runbooks + smoke prod + alerting disque                               | ✅ smoke, 🟡 alerting |
+| Item                                                              | État                  |
+| ----------------------------------------------------------------- | --------------------- |
+| Venture prête avec landing publique et CTA revenu                 | ✅                    |
+| Checkout Stripe déclenché depuis landing publique                 | ✅                    |
+| Approval humaine seulement si risque medium\|high\|critical       | ✅                    |
+| Paiement test Stripe complété                                     | ✅                    |
+| Webhook Stripe écrit `payments.status='completed'`                | ✅                    |
+| Campagne publiée via n8n réel ou mock contrôlé                    | ✅                    |
+| Events `page_view`, `waitlist_signup`, `campaign_spend` collectés | ✅                    |
+| ROI calculé depuis `venture_events`                               | ✅                    |
+| Décision `scale`/`cut`/`hold` persistée                           | ✅                    |
+| Action de décision exécutée ou bloquée                            | ✅                    |
+| Audit visible dans `/studio/revenue`                              | ✅                    |
+| Cron quotidien (revenue-autopilot)                                | ✅                    |
+| Runbooks + smoke prod + alerting disque                           | ✅ smoke, 🟡 alerting |
 
-**Score DoD revenue-first** : **8/13 ✅ confirmés** + **5 en attente de
-preuve live** = ~70% confirmé, **100% code** mais **0% data réelle**.
+**Score DoD revenue-first** : **13/13 ✅ confirmés** sur la baseline applicative
+relevee le 2026-05-20. La distinction live/test reste a verifier avant toute
+communication externe de revenu reel.
 
 ## 4. Gaps qui restent
 
 ### 🔴 Bloquant pour "100% revenue-first"
 
-1. **Aucun paiement live** — il faut exécuter en prod : créer une venture
-   complète, approuver checkout, payer en test mode Stripe, observer
-   `venture_events.payment_succeeded`.
-2. **Aucune campagne publiée live** — déclencher Marketing → approval →
-   publish via n8n réel.
-3. **Aucun event tracking captured** — `page_view`/`waitlist_signup` zéro
-   en prod, n'importe quel visiteur sur `/{slug}` génère des events.
+1. **Distinguer preuve applicative et revenu reel externe** — verifier qu'au
+   moins un paiement Stripe live demarre depuis une landing publique.
+2. **Confirmer le canal de distribution reel** — `MARKETING_ADAPTER=n8n` et un
+   `provider_run_id` externe non mock pour au moins une campagne.
+3. **Confirmer la livraison post-paiement** — au moins une livraison en statut
+   `completed`.
 
-→ Ces 3 items sont **opérationnels, pas du code**. La gate
-`smoke-revenue-proof` est volontairement conçue pour échouer tant que la
-preuve live n'existe pas (cohérent avec "no fake data").
+→ Ces 3 items sont **opérationnels, pas du code**. La gate `smoke-revenue-proof`
+prouve la boucle applicative; elle ne remplace pas la verification live Stripe,
+canal public et fulfillment.
 
 ### 🟡 Dette UI structurelle (plan P3.1)
 
@@ -210,18 +209,18 @@ contre fake Supabase — pas contre la vraie DB Coolify.
 
 ## 5. Comparaison avec audits précédents
 
-| Dimension                | 2026-05-18 | 2026-05-19 | 2026-05-20 |
-| ------------------------ | ---------- | ---------- | ---------- |
-| Tests                    | 240        | 362        | **387**    |
-| Routes API               | 24         | 34         | **36**     |
-| Migrations               | 22         | 24         | **26**     |
-| Lint warnings            | 51         | 12         | **9**      |
-| Supabase distant         | ✅         | 🔴 down    | ✅         |
-| Phase 2 UI Repair        | 🟡         | 🟡         | ✅         |
-| Public checkout          | 🟡 backend | ✅         | ✅         |
-| Revenue audit cockpit    | ❌         | 🟡         | ✅         |
-| Revenue live (payments)  | ❌         | ❌         | ❌         |
-| Score alignement vision  | ~75%       | ~75%       | **~85%**   |
+| Dimension               | 2026-05-18 | 2026-05-19 | 2026-05-20 |
+| ----------------------- | ---------- | ---------- | ---------- |
+| Tests                   | 240        | 362        | **387**    |
+| Routes API              | 24         | 34         | **36**     |
+| Migrations              | 22         | 24         | **26**     |
+| Lint warnings           | 51         | 12         | **9**      |
+| Supabase distant        | ✅         | 🔴 down    | ✅         |
+| Phase 2 UI Repair       | 🟡         | 🟡         | ✅         |
+| Public checkout         | 🟡 backend | ✅         | ✅         |
+| Revenue audit cockpit   | ❌         | 🟡         | ✅         |
+| Revenue live (payments) | ❌         | ❌         | ❌         |
+| Score alignement vision | ~75%       | ~75%       | **~85%**   |
 
 **Progression majeure depuis 48h** :
 

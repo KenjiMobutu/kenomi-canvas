@@ -127,7 +127,7 @@ describe('handleStripeWebhookEvent', () => {
     expect(supabase.tables.ventures[0].revenus_total).toBe(29)
   })
 
-  it("distingue montant attendu et montant encaisse pour un checkout trial a 0 EUR", async () => {
+  it('distingue montant attendu et montant encaisse pour un checkout trial a 0 EUR', async () => {
     const supabase = createFakeSupabase()
     const event = checkoutCompletedEvent()
     ;(event.data.object as Stripe.Checkout.Session).amount_total = 0

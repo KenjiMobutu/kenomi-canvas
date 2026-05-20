@@ -30,6 +30,18 @@ export interface ScoutSourceSignal {
   url: string
   score: number
   evidence: string
+  sellableOffer: ScoutSellableOffer
+}
+
+export interface ScoutSellableOffer {
+  buyer: string
+  urgentPain: string
+  concretePromise: string
+  offer: string
+  priceHypothesisEur: number
+  acquisitionChannel: string
+  landingAngle: string
+  evidenceUrl: string
 }
 
 export interface ScoutSourceCollection {
@@ -190,6 +202,51 @@ function notEmpty<T>(value: T | null): value is T {
   return value !== null
 }
 
+function priceForSignal(signalType: ScoutSignalType): number {
+  if (signalType === 'market') return 499
+  if (signalType === 'buildability') return 99
+  if (signalType === 'competition') return 29
+  return 29
+}
+
+function acquisitionChannelForSource(sourceId: ScoutSourceId): string {
+  if (sourceId === 'reddit') return 'reddit'
+  if (sourceId === 'hacker-news') return 'hacker-news'
+  if (sourceId === 'stack-exchange') return 'seo'
+  if (sourceId === 'github' || sourceId === 'npm') return 'developer communities'
+  if (sourceId === 'product-hunt') return 'product-hunt'
+  return 'content'
+}
+
+function buildSellableOffer(input: {
+  sourceId: ScoutSourceId
+  signalType: ScoutSignalType
+  title: string
+  url: string
+  evidence: string
+}): ScoutSellableOffer {
+  const buyer =
+    input.signalType === 'buildability' || input.sourceId === 'npm' || input.sourceId === 'github'
+      ? 'Technical founders and operators with this recurring workflow'
+      : 'Operators actively discussing this painful workflow'
+  const urgentPain = input.title.endsWith('?')
+    ? input.title
+    : `Recurring pain signaled by: ${input.title}`
+  const concretePromise = `Turn this pain into a focused paid workflow with measurable relief.`
+  const priceHypothesisEur = priceForSignal(input.signalType)
+
+  return {
+    buyer,
+    urgentPain,
+    concretePromise,
+    offer: `Done-for-you or lightweight tool to solve: ${input.title}`,
+    priceHypothesisEur,
+    acquisitionChannel: acquisitionChannelForSource(input.sourceId),
+    landingAngle: `Stop losing time or revenue to: ${input.title}`,
+    evidenceUrl: input.url,
+  }
+}
+
 async function fetchJson(fetchImpl: FetchImpl, url: string): Promise<unknown> {
   let timeout: ReturnType<typeof setTimeout> | undefined
   try {
@@ -239,7 +296,7 @@ async function collectHackerNews(
       if (!title) return null
       const points = asNumber(row.points)
       const comments = asNumber(row.num_comments)
-      return {
+      const signal = {
         sourceId: 'hacker-news' as const,
         sourceLabel: 'Hacker News',
         signalType: 'pain' as const,
@@ -247,6 +304,10 @@ async function collectHackerNews(
         url: asText(row.url) || `https://news.ycombinator.com/item?id=${asText(row.objectID)}`,
         score: clampScore(42 + points * 0.22 + comments * 0.45),
         evidence: `${points} points, ${comments} commentaires`,
+      }
+      return {
+        ...signal,
+        sellableOffer: buildSellableOffer(signal),
       }
     })
     .filter(notEmpty)
@@ -267,7 +328,7 @@ async function collectNpm(query: string, fetchImpl: FetchImpl): Promise<ScoutSou
       const title = asText(packageData.name)
       if (!title) return null
       const finalScore = asNumber(score.final)
-      return {
+      const signal = {
         sourceId: 'npm' as const,
         sourceLabel: 'npm Registry',
         signalType: 'competition' as const,
@@ -277,6 +338,10 @@ async function collectNpm(query: string, fetchImpl: FetchImpl): Promise<ScoutSou
           : `https://www.npmjs.com/package/${encodeURIComponent(title)}`,
         score: clampScore(28 + finalScore * 42),
         evidence: asText(packageData.description) || `score npm ${finalScore.toFixed(2)}`,
+      }
+      return {
+        ...signal,
+        sellableOffer: buildSellableOffer(signal),
       }
     })
     .filter(notEmpty)
@@ -301,7 +366,7 @@ async function collectReddit(query: string, fetchImpl: FetchImpl): Promise<Scout
       if (!title) return null
       const score = asNumber(row.score)
       const comments = asNumber(row.num_comments)
-      return {
+      const signal = {
         sourceId: 'reddit' as const,
         sourceLabel: 'Reddit',
         signalType: 'pain' as const,
@@ -309,6 +374,10 @@ async function collectReddit(query: string, fetchImpl: FetchImpl): Promise<Scout
         url: `https://www.reddit.com${asText(row.permalink)}`,
         score: clampScore(40 + score * 0.16 + comments * 0.5),
         evidence: `${score} votes, ${comments} commentaires`,
+      }
+      return {
+        ...signal,
+        sellableOffer: buildSellableOffer(signal),
       }
     })
     .filter(notEmpty)
@@ -332,7 +401,7 @@ async function collectGithub(query: string, fetchImpl: FetchImpl): Promise<Scout
       const title = asText(row.title)
       if (!title) return null
       const comments = asNumber(row.comments)
-      return {
+      const signal = {
         sourceId: 'github' as const,
         sourceLabel: 'GitHub',
         signalType: 'buildability' as const,
@@ -340,6 +409,10 @@ async function collectGithub(query: string, fetchImpl: FetchImpl): Promise<Scout
         url: asText(row.html_url),
         score: clampScore(36 + comments * 2),
         evidence: `${comments} commentaires sur issue`,
+      }
+      return {
+        ...signal,
+        sellableOffer: buildSellableOffer(signal),
       }
     })
     .filter(notEmpty)
@@ -368,7 +441,7 @@ async function collectStackExchange(
       if (!title) return null
       const score = asNumber(row.score)
       const answers = asNumber(row.answer_count)
-      return {
+      const signal = {
         sourceId: 'stack-exchange' as const,
         sourceLabel: 'Stack Exchange',
         signalType: 'pain' as const,
@@ -376,6 +449,10 @@ async function collectStackExchange(
         url: asText(row.link),
         score: clampScore(38 + score * 1.5 + answers * 2),
         evidence: `${score} score, ${answers} réponses`,
+      }
+      return {
+        ...signal,
+        sellableOffer: buildSellableOffer(signal),
       }
     })
     .filter(notEmpty)
@@ -510,9 +587,7 @@ export function buildScoutSourceStatuses(
       signalCount: signals.length,
       topSignal: signals[0]?.title ?? null,
       topScore: signals[0]?.score ?? null,
-      lastError: needsToken
-        ? 'Token API requis avant activation live.'
-        : failure,
+      lastError: needsToken ? 'Token API requis avant activation live.' : failure,
     }
   })
 

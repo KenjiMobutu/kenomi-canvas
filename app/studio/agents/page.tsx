@@ -850,7 +850,10 @@ function ApprovalGatesPanel({
                   borderRadius: 10,
                   padding: 12,
                   display: viewMode === 'cards' ? 'flex' : 'grid',
-                  gridTemplateColumns: viewMode === 'list' ? 'minmax(180px, 1.1fr) minmax(220px, 2fr) auto' : undefined,
+                  gridTemplateColumns:
+                    viewMode === 'list'
+                      ? 'minmax(180px, 1.1fr) minmax(220px, 2fr) auto'
+                      : undefined,
                   alignItems: viewMode === 'list' ? 'center' : undefined,
                   flexDirection: 'column',
                   gap: 10,
@@ -2196,10 +2199,10 @@ function RosterTile({
         />
         <span
           style={{
-          fontSize: 11,
-          color: active ? text : muted,
-          fontWeight: active ? 700 : 400,
-          overflow: 'hidden',
+            fontSize: 11,
+            color: active ? text : muted,
+            fontWeight: active ? 700 : 400,
+            overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
@@ -2373,7 +2376,9 @@ export default function AgentsPage() {
     const supabase = createSupabaseBrowser()
     const { data, error } = await supabase
       .from('agent_runs')
-      .select('id, agent_id, duration_ms, created_at, fallback_triggered, total_tokens, cost_usd, provider, model')
+      .select(
+        'id, agent_id, duration_ms, created_at, fallback_triggered, total_tokens, cost_usd, provider, model'
+      )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(500)
@@ -2571,22 +2576,25 @@ export default function AgentsPage() {
 
   const selected = AGENTS_DATA.find((a) => a.id === selectedId) ?? AGENTS_DATA[0]
   const runMetrics = useMemo(
-    () => buildAgentRunMetrics(agentRuns, AGENTS_DATA.map((agent) => agent.id)),
+    () =>
+      buildAgentRunMetrics(
+        agentRuns,
+        AGENTS_DATA.map((agent) => agent.id)
+      ),
     [agentRuns]
   )
-  const selectedRunMetric =
-    runMetrics[selected.id] ?? {
-      agent_id: selected.id,
-      run_count: 0,
-      runs_24h: 0,
-      last_run_at: null,
-      avg_duration_ms: null,
-      fallback_count: 0,
-      total_tokens: 0,
-      cost_usd: 0,
-      providers: [],
-      last_model: null,
-    }
+  const selectedRunMetric = runMetrics[selected.id] ?? {
+    agent_id: selected.id,
+    run_count: 0,
+    runs_24h: 0,
+    last_run_at: null,
+    avg_duration_ms: null,
+    fallback_count: 0,
+    total_tokens: 0,
+    cost_usd: 0,
+    providers: [],
+    last_model: null,
+  }
   const activity = useMemo(
     () => buildAgentActivitySeries(agentRuns, selectedId),
     [agentRuns, selectedId]

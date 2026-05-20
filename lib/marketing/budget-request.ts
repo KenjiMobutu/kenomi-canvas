@@ -2,7 +2,10 @@ interface MarketingBudgetQueryBuilder {
   select(columns?: string): MarketingBudgetQueryBuilder
   eq(field: string, value: unknown): MarketingBudgetQueryBuilder
   insert(row: Record<string, unknown>): MarketingBudgetQueryBuilder
-  maybeSingle(): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
+  maybeSingle(): Promise<{
+    data: Record<string, unknown> | null
+    error: { message: string } | null
+  }>
   single(): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
 }
 

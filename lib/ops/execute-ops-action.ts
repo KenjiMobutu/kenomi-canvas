@@ -1,4 +1,8 @@
-import { runAgentStep, RunAgentStepError, type RunAgentStepSupabase } from '../autonomy/run-agent-step'
+import {
+  runAgentStep,
+  RunAgentStepError,
+  type RunAgentStepSupabase,
+} from '../autonomy/run-agent-step'
 import { buildRunResult } from '../automation-run-status'
 import { isAllowedWebhookUrl } from '../security'
 
@@ -75,7 +79,7 @@ export async function executeOpsAction(input: {
   return {
     ok: true,
     code: 'queued',
-    message: "Ouvrez Infrastructure pour rafraichir les checks de service.",
+    message: 'Ouvrez Infrastructure pour rafraichir les checks de service.',
     repairHref: '/studio/infrastructure',
   }
 }

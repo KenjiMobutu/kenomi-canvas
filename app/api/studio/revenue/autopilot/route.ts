@@ -67,7 +67,10 @@ async function readTable<T>(query: QueryResult<T>): Promise<T[]> {
   return data ?? []
 }
 
-async function loadRevenueContext(input: { supabase: RevenueRouteSupabase; userId: string }): Promise<{
+async function loadRevenueContext(input: {
+  supabase: RevenueRouteSupabase
+  userId: string
+}): Promise<{
   snapshot: RevenueLoopSnapshot
   autonomyActions: RevenueAutonomyActionRow[]
   approvals: RevenueApprovalRow[]

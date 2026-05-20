@@ -64,7 +64,9 @@ export async function GET() {
       .eq('user_id', user!.id),
     campaign_drafts: await supabase
       .from('campaign_drafts')
-      .select('id, venture_id, channel, content, status, metadata, published_at, provider_run_id, created_at')
+      .select(
+        'id, venture_id, channel, content, status, metadata, published_at, provider_run_id, created_at'
+      )
       .eq('user_id', user!.id),
     venture_events: await supabase
       .from('venture_events')

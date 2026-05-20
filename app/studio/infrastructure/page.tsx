@@ -429,7 +429,9 @@ function ArcGauge({
             marginTop: 2,
           }}
         >
-          {hasValue ? (detail ?? `${Math.round(pct * 100)}% of ${max}${unit ?? ''}`) : unavailableText}
+          {hasValue
+            ? (detail ?? `${Math.round(pct * 100)}% of ${max}${unit ?? ''}`)
+            : unavailableText}
         </div>
       </div>
     </div>
@@ -1606,7 +1608,9 @@ function InfraOpsJournalPanel({
               },
               {
                 label: 'Last action',
-                value: history.summary.lastActionAt ? minutesAgo(history.summary.lastActionAt) : '—',
+                value: history.summary.lastActionAt
+                  ? minutesAgo(history.summary.lastActionAt)
+                  : '—',
                 color: cyan,
               },
             ].map((item) => (
@@ -1766,11 +1770,7 @@ function InfraOpsJournalPanel({
               ) : (
                 events.slice(0, 5).map((event) => {
                   const color =
-                    event.severity === 'error'
-                      ? rose
-                      : event.severity === 'warn'
-                        ? amber
-                        : emerald
+                    event.severity === 'error' ? rose : event.severity === 'warn' ? amber : emerald
                   return (
                     <div
                       key={event.id}
@@ -2115,11 +2115,7 @@ export default function InfrastructurePage() {
           onAction={runDiagnosticAction}
         />
 
-        <InfraOpsJournalPanel
-          history={opsHistory}
-          error={opsHistoryError}
-          isMobile={isMobile}
-        />
+        <InfraOpsJournalPanel history={opsHistory} error={opsHistoryError} isMobile={isMobile} />
 
         {/* Topology + Service inspector */}
         <div

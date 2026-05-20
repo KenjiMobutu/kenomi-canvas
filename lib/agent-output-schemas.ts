@@ -3,9 +3,18 @@ import { z } from 'zod'
 const scoutSchema = z.object({
   title: z.string().min(1),
   niche: z.string().min(1),
-  problem: z.string().min(1),
-  solution: z.string().min(1),
-  market: z.string().min(1),
+  buyer: z.string().min(5),
+  urgent_pain: z.string().min(10),
+  concrete_promise: z.string().min(10),
+  offer: z.string().min(10),
+  price_hypothesis_eur: z.number().positive().max(5000),
+  acquisition_channel: z.string().min(2),
+  landing_angle: z.string().min(10),
+  evidence: z.array(z.string().min(5)).min(1),
+  confidence: z.number().min(0).max(100),
+  problem: z.string().min(1).optional(),
+  solution: z.string().min(1).optional(),
+  market: z.string().min(1).optional(),
 })
 
 const validationSchema = z.object({
@@ -23,6 +32,13 @@ const builderSchema = z.object({
   cta: z.string().min(1),
   features: z.array(z.string().min(1)).min(1),
   pricing: z.string().min(1),
+  buyer: z.string().min(5).optional(),
+  urgent_pain: z.string().min(10).optional(),
+  concrete_promise: z.string().min(10).optional(),
+  price_anchor: z.string().min(10).optional(),
+  objection_handling: z.array(z.string().min(5)).min(2).optional(),
+  sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).optional(),
+  faq: z.array(z.object({ q: z.string().min(1), a: z.string().min(1) })).optional(),
 })
 
 const paymentSchema = z.object({
@@ -95,12 +111,27 @@ function parseScoutLegacy(content: string): z.infer<typeof scoutSchema> {
     return match?.[1]?.trim() ?? ''
   }
 
+  const title = extract('TITRE')
+  const niche = extract('NICHE')
+  const problem = extract('PROBL[EÈ]ME')
+  const solution = extract('SOLUTION')
+  const market = extract('MARCH[EÉ]')
+
   return scoutSchema.parse({
-    title: extract('TITRE'),
-    niche: extract('NICHE'),
-    problem: extract('PROBL[EÈ]ME'),
-    solution: extract('SOLUTION'),
-    market: extract('MARCH[EÉ]'),
+    title,
+    niche,
+    buyer: market || niche,
+    urgent_pain: problem,
+    concrete_promise: solution,
+    offer: solution,
+    price_hypothesis_eur: 29,
+    acquisition_channel: 'manual_validation',
+    landing_angle: problem ? `Résoudre maintenant : ${problem}` : `Offre pour ${niche}`,
+    evidence: [`Signal Scout legacy pour ${market || niche}`],
+    confidence: 50,
+    problem,
+    solution,
+    market,
   })
 }
 

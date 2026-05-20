@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildLandingPageInsert,
   buildVentureInsertFromPipeline,
+  materializeValidatedIdea,
   materializeBuilderOutput,
   slugifyVentureName,
 } from './venture-materializer'
@@ -32,8 +33,51 @@ describe('buildVentureInsertFromPipeline', () => {
       nom: 'Inbox Pulse',
       slug: 'inbox-pulse',
       type_produit: 'micro-saas',
-      statut: 'actif',
+      statut: 'draft',
+      lifecycle_status: 'draft',
+      current_decision: 'continue',
       stage: 'Validation',
+      next_action: 'Créer landing et offre publique',
+    })
+  })
+})
+
+describe('materializeValidatedIdea', () => {
+  it('materializes a validated Scout offer into a revenue-ready venture draft', () => {
+    const result = materializeValidatedIdea({
+      userId: 'user-1',
+      pipeline: {
+        id: 'pipeline-1',
+        idea_title: 'AI proposal cleanup',
+        idea_niche: 'freelance consultants',
+        scout_raw: JSON.stringify({
+          buyer: 'Solo consultants selling 1k-10k EUR services',
+          urgent_pain: 'They lose deals when proposals take too long.',
+          concrete_promise: 'Client-ready proposal in 10 minutes.',
+          offer: 'Proposal cleanup in 10 minutes',
+          price_hypothesis_eur: 29,
+          acquisition_channel: 'linkedin',
+          landing_angle: 'Win the deal while the call is still fresh.',
+        }),
+      },
+      slug: 'ai-proposal-cleanup',
+      nowIso: '2026-05-20T10:00:00.000Z',
+    })
+
+    expect(result.venture).toMatchObject({
+      user_id: 'user-1',
+      name: 'AI proposal cleanup',
+      niche: 'freelance consultants',
+      slug: 'ai-proposal-cleanup',
+      lifecycle_status: 'draft',
+      current_decision: 'continue',
+      next_action: 'Créer landing et offre publique',
+    })
+    expect(result.venture.insight).toContain('Acheteur: Solo consultants')
+    expect(result.venture.insight).toContain('Prix plausible: 29 EUR')
+    expect(result.pipelinePatch).toMatchObject({
+      status: 'approved',
+      updated_at: '2026-05-20T10:00:00.000Z',
     })
   })
 })

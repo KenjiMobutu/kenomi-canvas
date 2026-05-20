@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { apiError, apiOk } from '@/lib/api-response'
 import { isRateLimited } from '@/lib/rate-limit'
-import { buildVentureInsertFromPipeline, findAvailableSlug } from '@/lib/venture-materializer'
+import { findAvailableSlug, materializeValidatedIdea } from '@/lib/venture-materializer'
 
 export async function GET() {
   const cookieStore = await cookies()
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   const { data: existing } = await supabase
     .from('venture_pipeline')
-    .select('id, status, idea_title, idea_niche, user_id')
+    .select('id, status, idea_title, idea_niche, user_id, scout_raw')
     .eq('id', pipelineId)
     .eq('user_id', user!.id)
     .maybeSingle()
@@ -71,16 +71,16 @@ export async function POST(req: NextRequest) {
     return !!data
   }, existing.idea_title)
 
+  const materialized = materializeValidatedIdea({
+    userId: user!.id,
+    pipeline: existing,
+    slug,
+    nowIso: new Date().toISOString(),
+  })
+
   const { data: venture, error: ventureErr } = await supabase
     .from('ventures')
-    .insert(
-      buildVentureInsertFromPipeline({
-        userId: user!.id,
-        ideaTitle: existing.idea_title,
-        ideaNiche: existing.idea_niche,
-        slug,
-      })
-    )
+    .insert(materialized.venture)
     .select('id')
     .single()
 
@@ -89,9 +89,8 @@ export async function POST(req: NextRequest) {
   await supabase
     .from('venture_pipeline')
     .update({
-      status: 'approved',
+      ...materialized.pipelinePatch,
       venture_id: venture.id,
-      updated_at: new Date().toISOString(),
     })
     .eq('id', pipelineId)
 

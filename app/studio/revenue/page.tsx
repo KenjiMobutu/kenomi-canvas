@@ -265,12 +265,14 @@ export default function RevenuePage() {
             prompt: `Continue la revenue loop pour ${loop.ventureName}. Priorité: ${action.label}.`,
           }),
         })
-      } else if (action.type === 'create_checkout' || action.type === 'configure_stripe') {
-        res = await fetch('/api/studio/stripe/checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ventureId: action.ventureId }),
-        })
+      } else if (action.type === 'create_checkout') {
+        if (!loop.publicLandingUrl) throw new Error('Landing publique manquante')
+        window.open(loop.publicLandingUrl, '_blank', 'noopener,noreferrer')
+        toast.success('Landing publique ouverte')
+        return
+      } else if (action.type === 'configure_stripe') {
+        window.location.href = '/studio/settings'
+        return
       } else if (action.type === 'resolve_approval') {
         res = await fetch('/api/studio/autonomy/jobs', {
           method: 'PATCH',
@@ -611,6 +613,15 @@ export default function RevenuePage() {
                   >
                     <div style={{ color: C.text, fontSize: 14 }}>{loop.nextAction.label}</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {loop.publicLandingUrl && (
+                        <Link
+                          href={loop.publicLandingUrl}
+                          target="_blank"
+                          style={linkButtonStyle()}
+                        >
+                          <ExternalLink size={15} /> Landing
+                        </Link>
+                      )}
                       {loop.checkoutUrl && (
                         <Link
                           href={loop.checkoutUrl}
@@ -659,6 +670,14 @@ export default function RevenuePage() {
                       ) : loop.nextAction.type === 'configure_stripe' ? (
                         <Link href="/studio/settings" style={linkButtonStyle()}>
                           <CreditCard size={15} /> Settings
+                        </Link>
+                      ) : loop.nextAction.type === 'create_checkout' && loop.publicLandingUrl ? (
+                        <Link
+                          href={loop.publicLandingUrl}
+                          target="_blank"
+                          style={{ ...buttonStyle('primary'), textDecoration: 'none' }}
+                        >
+                          <ExternalLink size={15} /> Ouvrir landing
                         </Link>
                       ) : loop.nextAction.type === 'monitor' ? (
                         <Link href="/studio/analytics" style={linkButtonStyle()}>

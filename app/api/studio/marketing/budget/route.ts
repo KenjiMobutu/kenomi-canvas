@@ -21,7 +21,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await createMarketingBudgetApproval({
-      supabase: supabase as unknown as Parameters<typeof createMarketingBudgetApproval>[0]['supabase'],
+      supabase: supabase as unknown as Parameters<
+        typeof createMarketingBudgetApproval
+      >[0]['supabase'],
       userId: user!.id,
       ventureId: body.ventureId,
       amountEur: Number(body.amountEur),

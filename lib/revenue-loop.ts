@@ -1,3 +1,9 @@
+import {
+  evaluateVentureCommerceReadiness,
+  isValidatedVenture,
+  type CommerceLandingPageRow,
+} from './venture-commerce-readiness'
+
 export type RevenueLoopStageKey =
   | 'idea'
   | 'validation'
@@ -139,6 +145,8 @@ export interface RevenueLoopItem {
   id: string
   pipelineId?: string | null
   ventureId?: string | null
+  ventureSlug?: string | null
+  publicLandingUrl?: string | null
   ventureName: string
   status: string
   revenueEur: number
@@ -226,6 +234,11 @@ function hasCheckout(payment: RevenuePaymentRow) {
   return Boolean(payment.checkout_url)
 }
 
+function publicLandingUrl(venture?: RevenueVentureRow): string | null {
+  const slug = String(venture?.slug ?? '').trim()
+  return slug ? `/${slug}` : null
+}
+
 function byDateDesc<T extends { created_at?: string | null; updated_at?: string | null }>(
   rows: T[]
 ): T[] {
@@ -278,9 +291,6 @@ function priorityFor(input: { nextAction: RevenueLoopNextAction; blockedRevenueE
           ? 'Approval checkout bloque le revenu'
           : 'Approval humaine bloque la boucle',
     }
-  }
-  if (nextAction.type === 'create_checkout') {
-    return { priorityScore: 90, priorityReason: 'Checkout Stripe manquant' }
   }
   if (nextAction.type === 'configure_stripe') {
     return { priorityScore: 95, priorityReason: nextAction.reason }
@@ -370,6 +380,7 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
   const pipelineLoops = byDateDesc(input.pipelines).map((pipeline) => {
     const venture = pipeline.venture_id ? venturesById.get(pipeline.venture_id) : undefined
     const ventureName = venture?.name ?? pipeline.idea_title ?? 'Venture sans nom'
+    const landingUrl = publicLandingUrl(venture)
     const venturePayments = pipeline.venture_id
       ? (paymentsByVenture.get(pipeline.venture_id) ?? [])
       : []
@@ -528,13 +539,6 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
         agentId: 'payment',
         ventureId: pipeline.venture_id,
       }
-    } else if (!checkoutPayment && pipeline.venture_id) {
-      nextAction = {
-        type: 'create_checkout',
-        label: 'Créer le checkout Stripe',
-        ventureId: pipeline.venture_id,
-        pipelineId: pipeline.id,
-      }
     } else if (!pipeline.marketing_output) {
       nextAction = {
         type: 'run_agent',
@@ -568,6 +572,8 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       id: pipeline.id,
       pipelineId: pipeline.id,
       ventureId: pipeline.venture_id,
+      ventureSlug: venture?.slug ?? null,
+      publicLandingUrl: landingUrl,
       ventureName,
       status: pipeline.status ?? 'unknown',
       revenueEur,
@@ -606,6 +612,8 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
       return {
         id: `venture-${venture.id}`,
         ventureId: venture.id,
+        ventureSlug: venture.slug ?? null,
+        publicLandingUrl: publicLandingUrl(venture),
         ventureName: venture.name ?? 'Venture sans nom',
         status: venture.stage ?? 'unknown',
         revenueEur,
@@ -668,7 +676,9 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
   return {
     summary: {
       activeLoops: loops.length,
-      readyCheckouts: loops.filter((loop) => loop.nextAction.type === 'create_checkout').length,
+      readyCheckouts: loops.filter((loop) =>
+        loop.stages.some((stage) => stage.key === 'checkout' && stage.status === 'ready')
+      ).length,
       pendingApprovals: pendingApprovals.length,
       blockedLoops: loops.filter((loop) =>
         ['resolve_approval', 'configure_stripe'].includes(loop.nextAction.type)
@@ -682,8 +692,3 @@ export function buildRevenueLoopSnapshot(input: RevenueLoopInput): RevenueLoopSn
     agentRevenueAttribution,
   }
 }
-import {
-  evaluateVentureCommerceReadiness,
-  isValidatedVenture,
-  type CommerceLandingPageRow,
-} from './venture-commerce-readiness'

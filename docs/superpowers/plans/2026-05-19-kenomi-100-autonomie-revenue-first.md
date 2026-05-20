@@ -64,25 +64,32 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** figer l’état réel avant exécution revenue live.
 
 **Files:**
+
 - Modify: `docs/runbooks/daily-operations.md`
 - Modify: `docs/runbooks/stripe-webhook.md`
 
 - [x] Vérifier prod Coolify :
+
   ```bash
   ssh coolify "docker ps --filter label=coolify.applicationId=3 --format '{{.Image}} {{.Names}} {{.Status}}'; df -h /"
   ```
+
   Expected: image `d0f4664...`, status healthy, disque < 90%.
 
 - [x] Vérifier Supabase prod :
+
   ```bash
   ssh coolify "docker exec supabase-db-i12k0ju0ok5wk4gnts6uap03 psql -U supabase_admin -d postgres -c \"select 'payments' metric, count(*) value from public.payments union all select 'venture_events', count(*) from public.venture_events union all select 'published_campaigns', count(*) from public.campaign_drafts where published_at is not null;\""
   ```
+
   Expected before proof: rows may be `0`; after phases, all must be `>0`.
 
 - [x] Vérifier secrets sans imprimer les valeurs :
+
   ```bash
   ssh coolify "docker inspect yup6hpmw0fcowrkkf2o3bzl1-195903076994 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(STRIPE_WEBHOOK_SECRET|AGENT_ORCHESTRATOR_SECRET|APP_ORIGIN|AUTONOMY_ENABLED|AUTONOMY_DRY_RUN)=' | sed 's/=.*/=yes/'"
   ```
+
   Expected: all present, `AUTONOMY_ENABLED=yes`, `AUTONOMY_DRY_RUN=yes/no` known.
 
 - [x] Documenter l’état initial et les commandes dans `docs/runbooks/daily-operations.md`.
@@ -102,12 +109,14 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** créer un checkout Stripe réel depuis `/studio/revenue`, avec approval si prod.
 
 **Files:**
+
 - Modify: `app/api/studio/stripe/checkout/route.ts`
 - Modify: `app/studio/revenue/page.tsx`
 - Test: `lib/stripe/checkout-action.test.ts`
 - Test: `lib/revenue-loop.test.ts`
 
 - [ ] Ajouter un test qui vérifie que `create_checkout` retourne soit `approvalRequired=true`, soit `checkoutUrl`.
+
   ```bash
   npm test -- lib/stripe/checkout-action.test.ts lib/revenue-loop.test.ts
   ```
@@ -133,6 +142,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** prouver que Stripe écrit un revenu réel dans Supabase.
 
 **Files:**
+
 - Modify: `lib/stripe/webhook-handler.ts`
 - Modify: `app/api/stripe/webhook/route.ts`
 - Test: `lib/stripe/webhook-handler.test.ts`
@@ -140,11 +150,13 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 - Docs: `docs/runbooks/stripe-webhook.md`
 
 - [ ] Étendre le test webhook pour vérifier idempotence replay :
+
   ```ts
   expect(result).toEqual({ ok: true, handled: false, reason: 'already_completed' })
   ```
 
 - [ ] Vérifier en prod que Stripe Dashboard envoie `checkout.session.completed` vers :
+
   ```text
   https://lab.kenomi.eu/api/stripe/webhook
   ```
@@ -165,6 +177,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** publier une campagne attribuable à une venture.
 
 **Files:**
+
 - Modify: `app/api/studio/revenue/proof/route.ts`
 - Modify: `lib/marketing/publish-action.ts`
 - Modify: `lib/marketing/adapters/n8n.ts`
@@ -174,6 +187,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 - [ ] Si n8n n’est pas prêt, utiliser explicitement `Campagne mock` dans `/studio/revenue`.
 
 - [ ] Si n8n est prêt, vérifier :
+
   ```bash
   ssh coolify "docker inspect yup6hpmw0fcowrkkf2o3bzl1-195903076994 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(MARKETING_ADAPTER|N8N_PUBLISH_WEBHOOK_URL|N8N_PUBLISH_TOKEN)=' | sed 's/=.*/=yes/'"
   ```
@@ -194,6 +208,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** collecter `page_view`, `waitlist_signup`, `campaign_spend`.
 
 **Files:**
+
 - Modify: `app/api/events/route.ts`
 - Modify: `app/api/waitlist/route.ts`
 - Modify: `app/[slug]/page.tsx`
@@ -203,6 +218,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 - Test: `lib/venture-events.test.ts`
 
 - [ ] Vérifier que `VENTURE_EVENT_TYPES` contient :
+
   ```ts
   'page_view',
   'waitlist_signup',
@@ -227,6 +243,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** transformer les signaux en décision `scale/cut/hold` persistée.
 
 **Files:**
+
 - Modify: `lib/metrics/acquisition-roi.ts`
 - Modify: `lib/revenue-proof.ts`
 - Modify: `app/api/studio/revenue/autopilot/route.ts`
@@ -235,6 +252,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 - Test: `lib/revenue-autopilot.test.ts`
 
 - [ ] Tester les règles :
+
   ```ts
   // scale
   revenueCents > 0 && roi >= 0.5
@@ -260,6 +278,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** exécuter la décision sans clic inutile, mais avec approval pour risque.
 
 **Files:**
+
 - Modify: `lib/autonomy/approval-executor.ts`
 - Modify: `app/api/studio/autonomy/jobs/route.ts`
 - Modify: `lib/revenue-autopilot.ts`
@@ -285,17 +304,20 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** le système exécute chaque jour, mesure, décide, et ne demande approval que si risque.
 
 **Files:**
+
 - Modify: `scripts/revenue-autopilot-cron.mjs`
 - Modify: `docs/runbooks/daily-operations.md`
 - Modify: `lib/revenue-cadence.ts`
 - Test: `lib/revenue-cadence.test.ts`
 
 - [ ] Vérifier cron prod :
+
   ```bash
   ssh coolify "crontab -l | grep revenue-autopilot"
   ```
 
 - [ ] Vérifier que le cron appelle :
+
   ```text
   POST /api/studio/revenue/autopilot
   Authorization: Bearer AGENT_ORCHESTRATOR_SECRET
@@ -317,6 +339,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** rendre l’exploitation quotidienne calme, vérifiable et facile à réparer.
 
 **Files:**
+
 - Modify: `app/studio/revenue/page.tsx`
 - Modify: `app/studio/page.tsx`
 - Modify: `app/studio/agents/page.tsx`
@@ -331,6 +354,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
   - décision.
 
 - [ ] Dans `/studio/revenue`, afficher les 8 étapes :
+
   ```text
   checkout_created
   approval_resolved
@@ -358,12 +382,14 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** éviter que Supabase/Coolify/disque cassent la boucle revenue.
 
 **Files:**
+
 - Modify: `app/api/metrics/route.ts`
 - Modify: `app/studio/infrastructure/page.tsx`
 - Modify: `lib/infra-diagnostics.ts`
 - Modify: `docs/runbooks/autonomy-incident.md`
 
 - [ ] Ajouter métriques :
+
   ```text
   kenomi_revenue_daily_cycle_age_hours
   kenomi_pending_approvals_total
@@ -390,6 +416,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
 **Goal:** empêcher de dire “100% autonomie” tant que la preuve live ne passe pas.
 
 **Files:**
+
 - Create: `scripts/smoke-revenue-proof.mjs`
 - Modify: `package.json`
 - Modify: `docs/runbooks/smoke-tests.md`
@@ -404,6 +431,7 @@ Kenomi est à 100% quand une journée autonome peut produire cette trace en prod
   - DB contient une décision récente.
 
 - [x] Ajouter script :
+
   ```json
   {
     "scripts": {
@@ -469,6 +497,7 @@ ssh coolify "docker exec supabase-db-i12k0ju0ok5wk4gnts6uap03 psql -U supabase_a
 ```
 
 Expected:
+
 - `payment_succeeded > 0`
 - `campaign_published > 0`
 - `campaign_spend > 0`

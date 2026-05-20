@@ -112,7 +112,7 @@ function stepFromNextAction(input: {
   loop?: RevenueLoopItem | null
   environment: AutonomyEnvironment
 }): RevenueAutopilotStep {
-  const { action, loop, environment } = input
+  const { action, loop } = input
   const reason =
     loop?.priorityReason ??
     ('reason' in action && typeof action.reason === 'string' ? action.reason : 'Priorité revenue')
@@ -135,31 +135,27 @@ function stepFromNextAction(input: {
   }
 
   if (action.type === 'create_checkout') {
-    const production = environment === 'production'
     return {
-      kind: 'create_checkout',
-      execution: production ? 'approval' : 'auto',
-      risk: 'medium',
+      kind: 'monitor',
+      execution: 'hold',
+      risk: 'low',
       ventureId: action.ventureId,
       pipelineId: action.pipelineId,
       label: action.label,
-      reason: production ? 'Checkout Stripe en production requiert approval' : reason,
+      reason: 'Paiement client uniquement sur landing publique',
       blockedRevenueEur,
     }
   }
 
   if (action.type === 'configure_stripe') {
-    const production = environment === 'production'
     return {
-      kind: 'create_checkout',
-      execution: production ? 'approval' : 'auto',
-      risk: 'medium',
+      kind: 'monitor',
+      execution: 'hold',
+      risk: 'low',
       ventureId: action.ventureId,
       pipelineId: action.pipelineId,
-      label: 'Retenter le checkout Stripe',
-      reason: production
-        ? 'Retry checkout Stripe après configuration requiert approval'
-        : action.reason,
+      label: action.label,
+      reason: action.reason,
       blockedRevenueEur,
     }
   }

@@ -37,13 +37,15 @@ describe('supervised loop repair actions', () => {
   })
 
   it('opens the public landing when analytics has no event yet but a slug exists', () => {
-    expect(getMissingAnalyticsEventsAction({ hasEvents: false, publicSlug: 'inboxpulse' })).toEqual({
-      id: 'open-public-landing',
-      label: 'Ouvrir landing publique',
-      detail: 'Aucun événement capturé. Ouvrez la landing pour générer un page_view.',
-      href: '/inboxpulse',
-      tone: 'warn',
-    })
+    expect(getMissingAnalyticsEventsAction({ hasEvents: false, publicSlug: 'inboxpulse' })).toEqual(
+      {
+        id: 'open-public-landing',
+        label: 'Ouvrir landing publique',
+        detail: 'Aucun événement capturé. Ouvrez la landing pour générer un page_view.',
+        href: '/inboxpulse',
+        tone: 'warn',
+      }
+    )
   })
 
   it('sends the operator back to Ventures when analytics has no events and no landing', () => {

@@ -24,10 +24,12 @@ const basePipeline = {
 }
 
 describe('buildRevenueLoopSnapshot', () => {
-  it('demande la création du checkout quand Payment a produit une offre mais aucun checkout existe', () => {
+  it('passe à la distribution quand Payment a produit une offre vendable pour la landing publique', () => {
     const snapshot = buildRevenueLoopSnapshot({
       pipelines: [basePipeline],
-      ventures: [{ id: 'venture-1', name: 'InboxPulse', stage: 'payment', mrr: '0' }],
+      ventures: [
+        { id: 'venture-1', name: 'InboxPulse', slug: 'inboxpulse', stage: 'payment', mrr: '0' },
+      ],
       payments: [],
       campaignDrafts: [],
       autonomyActions: [],
@@ -37,9 +39,11 @@ describe('buildRevenueLoopSnapshot', () => {
 
     expect(snapshot.summary.readyCheckouts).toBe(1)
     expect(snapshot.summary.revenueEur).toBe(0)
+    expect(snapshot.loops[0].publicLandingUrl).toBe('/inboxpulse')
     expect(snapshot.loops[0].nextAction).toMatchObject({
-      type: 'create_checkout',
-      label: 'Créer le checkout Stripe',
+      type: 'run_agent',
+      agentId: 'marketing',
+      label: 'Lancer Marketing',
       ventureId: 'venture-1',
     })
     expect(snapshot.loops[0].stages.map((stage) => [stage.key, stage.status])).toContainEqual([
@@ -290,11 +294,12 @@ describe('buildRevenueLoopSnapshot', () => {
 
     expect(snapshot.summary.blockedRevenueEur).toBe(29)
     expect(snapshot.summary.recommendedAction).toMatchObject({
-      type: 'create_checkout',
+      type: 'run_agent',
+      agentId: 'marketing',
       ventureId: 'venture-ready',
       ventureName: 'ReadyMoney',
       blockedRevenueEur: 29,
-      reason: 'Checkout Stripe manquant',
+      reason: 'Distribution manquante',
     })
     expect(snapshot.loops.map((loop) => loop.ventureName)).toEqual(['ReadyMoney', 'SlowMoney'])
   })

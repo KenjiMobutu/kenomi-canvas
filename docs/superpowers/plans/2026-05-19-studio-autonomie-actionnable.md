@@ -52,6 +52,7 @@
 ### Task 1: Modeliser Les Actions Cockpit Executables
 
 **Files:**
+
 - Create: `lib/ops/action-intents.ts`
 - Create: `lib/ops/action-intents.test.ts`
 - Modify: `lib/ops/studio-ops-summary.ts`
@@ -191,6 +192,7 @@ git commit -m "feat: add executable ops action intents"
 ### Task 2: Ajouter L'Endpoint D'Execution Ops
 
 **Files:**
+
 - Create: `app/api/studio/ops/actions/route.ts`
 - Create: `lib/ops/execute-ops-action.ts`
 - Create: `lib/ops/execute-ops-action.test.ts`
@@ -287,6 +289,7 @@ git commit -m "feat: execute safe cockpit ops actions"
 ### Task 3: Rendre Le Cockpit Actionnable
 
 **Files:**
+
 - Modify: `app/studio/page.tsx`
 
 - [ ] **Step 1: Add UI states**
@@ -294,7 +297,9 @@ git commit -m "feat: execute safe cockpit ops actions"
 Add local state near `opsSummary`:
 
 ```ts
-const [opsActionState, setOpsActionState] = useState<Record<string, 'idle' | 'running' | 'done' | 'error'>>({})
+const [opsActionState, setOpsActionState] = useState<
+  Record<string, 'idle' | 'running' | 'done' | 'error'>
+>({})
 const [opsActionMessage, setOpsActionMessage] = useState<Record<string, string>>({})
 ```
 
@@ -378,6 +383,7 @@ git commit -m "feat: make cockpit operations executable"
 ### Task 4: Queue Approvals/Actions Operable Dans Agents
 
 **Files:**
+
 - Modify: `app/studio/agents/page.tsx`
 - Modify: `app/api/studio/autonomy/jobs/route.ts`
 - Create: `lib/autonomy/operator-actions.ts`
@@ -396,8 +402,16 @@ Cover:
 Expose:
 
 ```ts
-export async function retryAutonomyJob(input: { supabase: OperatorSupabase; userId: string; jobId: string }): Promise<OperatorActionResult>
-export async function cancelAutonomyJob(input: { supabase: OperatorSupabase; userId: string; jobId: string }): Promise<OperatorActionResult>
+export async function retryAutonomyJob(input: {
+  supabase: OperatorSupabase
+  userId: string
+  jobId: string
+}): Promise<OperatorActionResult>
+export async function cancelAutonomyJob(input: {
+  supabase: OperatorSupabase
+  userId: string
+  jobId: string
+}): Promise<OperatorActionResult>
 ```
 
 - [ ] **Step 3: Extend API**
@@ -450,6 +464,7 @@ git commit -m "feat: add operator controls for autonomy queue"
 ### Task 5: Fermer Le Flux Venture Supervise
 
 **Files:**
+
 - Modify: `lib/autonomy/full-loop.test.ts`
 - Modify: `lib/autonomy/run-agent-step.ts`
 - Modify: `app/studio/ventures/page.tsx`
@@ -503,6 +518,7 @@ git commit -m "feat: close supervised venture loop"
 ### Task 6: Smoke Tests Production-Oriented
 
 **Files:**
+
 - Modify: `scripts/smoke-app.mjs`
 - Create: `scripts/smoke-studio-authenticated.mjs`
 - Modify: `package.json`
@@ -559,6 +575,7 @@ git commit -m "test: add production-oriented studio smoke checks"
 ### Task 7: Runbooks Et Verification Coolify/Supabase
 
 **Files:**
+
 - Modify: `docs/runbooks/daily-operations.md`
 - Modify: `docs/runbooks/autonomy-incident.md`
 - Modify: `docs/runbooks/database-migrations.md`
@@ -657,4 +674,3 @@ Expected:
 4. Task 5: venture loop closes visibly.
 5. Task 6: smoke tests protect the product.
 6. Task 7: Coolify/Supabase runbooks make production repair calm.
-

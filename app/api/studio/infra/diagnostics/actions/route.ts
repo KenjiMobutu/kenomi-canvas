@@ -28,7 +28,10 @@ export async function POST(request: Request) {
   try {
     payload = parseDiagnosticActionRequest(await request.json().catch(() => null))
   } catch (error) {
-    return apiError(error instanceof Error ? error.message : 'Payload action diagnostic invalide', 400)
+    return apiError(
+      error instanceof Error ? error.message : 'Payload action diagnostic invalide',
+      400
+    )
   }
 
   const diagnostics = await collectInfraDiagnostics({

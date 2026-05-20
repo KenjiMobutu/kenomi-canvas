@@ -13,6 +13,10 @@ const paymentOutputSchema = z.object({
 
 export type PaymentOutput = z.infer<typeof paymentOutputSchema>
 
+export function getCanonicalCheckoutSurface(): 'public_landing' {
+  return 'public_landing'
+}
+
 export function parsePaymentOutputPayload(raw: unknown): PaymentOutput {
   try {
     return paymentOutputSchema.parse(raw)

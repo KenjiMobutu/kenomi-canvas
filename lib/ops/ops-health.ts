@@ -83,8 +83,7 @@ export function buildOpsHealthSummary(input: OpsHealthInput): OpsHealthSummary {
     id: 'approvals_pending',
     label: 'Approvals pending',
     value: String(input.approvalsPending),
-    tone:
-      input.approvalsPending === 0 ? 'ok' : input.approvalsPending >= 5 ? 'crit' : 'warn',
+    tone: input.approvalsPending === 0 ? 'ok' : input.approvalsPending >= 5 ? 'crit' : 'warn',
     href: '/studio/agents',
     detail:
       input.approvalsPending === 0
@@ -165,19 +164,14 @@ export function buildOpsHealthSummary(input: OpsHealthInput): OpsHealthSummary {
     id: 'revenue_today',
     label: 'Revenue today',
     value: revenueValue,
-    tone:
-      input.paymentsCompletedToday > 0
-        ? 'ok'
-        : input.ventureEventsToday > 0
-          ? 'warn'
-          : 'muted',
+    tone: input.paymentsCompletedToday > 0 ? 'ok' : input.ventureEventsToday > 0 ? 'warn' : 'muted',
     href: '/studio/revenue',
     detail:
       input.paymentsCompletedToday > 0
         ? `${input.paymentsCompletedToday} paiement(s) complété(s) aujourd'hui`
         : input.ventureEventsToday > 0
           ? `${input.ventureEventsToday} venture_events captés, aucun paiement`
-          : 'Aucune trace business aujourd\'hui',
+          : "Aucune trace business aujourd'hui",
   }
 
   const signals: OpsHealthSignal[] = [

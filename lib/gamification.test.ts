@@ -166,10 +166,30 @@ describe('computeGamification', () => {
     const r = computeGamification({
       ...EMPTY_INPUT,
       ventureEvents: [
-        { venture_id: 'v1', event_type: 'campaign_published', value: null, occurred_at: new Date().toISOString() },
-        { venture_id: 'v1', event_type: 'campaign_spend', value: 2000, occurred_at: new Date().toISOString() },
-        { venture_id: 'v1', event_type: 'payment_succeeded', value: 120000, occurred_at: new Date().toISOString() },
-        { venture_id: 'v1', event_type: 'page_view', value: 100_000, occurred_at: new Date().toISOString() },
+        {
+          venture_id: 'v1',
+          event_type: 'campaign_published',
+          value: null,
+          occurred_at: new Date().toISOString(),
+        },
+        {
+          venture_id: 'v1',
+          event_type: 'campaign_spend',
+          value: 2000,
+          occurred_at: new Date().toISOString(),
+        },
+        {
+          venture_id: 'v1',
+          event_type: 'payment_succeeded',
+          value: 120000,
+          occurred_at: new Date().toISOString(),
+        },
+        {
+          venture_id: 'v1',
+          event_type: 'page_view',
+          value: 100_000,
+          occurred_at: new Date().toISOString(),
+        },
       ],
     })
 

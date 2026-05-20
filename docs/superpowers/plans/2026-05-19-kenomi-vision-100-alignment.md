@@ -55,6 +55,7 @@ Kenomi est 100% aligné quand, sans action manuelle hors approvals explicites, l
 **Objectif:** établir l'état réel des données et supprimer les incohérences visibles entre pages.
 
 **Files:**
+
 - Modify: `scripts/audit-studio-coherence.mjs`
 - Create: `scripts/audit-business-data.mjs`
 - Create: `lib/studio-data-consistency.ts`
@@ -76,6 +77,7 @@ npm test -- lib/studio-data-consistency.test.ts
 ```
 
 **Exit criteria:**
+
 - Le Studio n'a plus de compteurs contradictoires sans explication.
 - Chaque KPI principal affiche sa source ou un état `source_missing`.
 
@@ -86,6 +88,7 @@ npm test -- lib/studio-data-consistency.test.ts
 **Objectif:** faire de Supabase la source canonique claire pour ventures, landings, paiements, campagnes, décisions et événements.
 
 **Files:**
+
 - Create: `supabase/migrations/20260519_vision_alignment_core.sql`
 - Modify: `lib/autonomy/types.ts`
 - Modify: `lib/venture-events.ts`
@@ -109,6 +112,7 @@ npm test -- lib/metrics/venture-metrics.test.ts lib/venture-events.test.ts
 ```
 
 **Exit criteria:**
+
 - Aucune table Studio/business critique sans RLS.
 - Les métriques business peuvent être recalculées depuis `venture_events` + `payments` + `campaign_drafts`.
 
@@ -119,6 +123,7 @@ npm test -- lib/metrics/venture-metrics.test.ts lib/venture-events.test.ts
 **Objectif:** garantir qu'une idée approuvée produit une venture et une landing publique vérifiable.
 
 **Files:**
+
 - Modify: `lib/autonomy/run-agent-step.ts`
 - Modify: `lib/venture-materializer.ts`
 - Modify: `app/api/studio/agents/pipeline/route.ts`
@@ -143,6 +148,7 @@ npm run build
 ```
 
 **Exit criteria:**
+
 - Une venture approuvée n'est plus “orpheline”.
 - Toute venture non publiable explique pourquoi et propose une réparation.
 
@@ -153,6 +159,7 @@ npm run build
 **Objectif:** remplacer les derniers KPIs synthétiques par des sources réelles et auditables.
 
 **Files:**
+
 - Modify: `app/api/events/route.ts`
 - Modify: `app/api/waitlist/route.ts`
 - Modify: `app/api/studio/analytics/ventures/route.ts`
@@ -178,6 +185,7 @@ npm run build
 ```
 
 **Exit criteria:**
+
 - Analytics affiche uniquement des données réelles, vides ou partielles.
 - La page indique la source de chaque métrique critique.
 
@@ -188,6 +196,7 @@ npm run build
 **Objectif:** rendre Payment agent actionnable : offre, checkout, webhook, revenu et ROI.
 
 **Files:**
+
 - Modify: `lib/stripe/server.ts`
 - Modify: `lib/stripe/checkout-action.ts`
 - Modify: `lib/stripe/webhook-handler.ts`
@@ -213,6 +222,7 @@ npm run build
 ```
 
 **Exit criteria:**
+
 - Un paiement Stripe réussi remonte dans Analytics comme revenu réel.
 - Aucun checkout production ne peut être créé sans approval.
 
@@ -223,6 +233,7 @@ npm run build
 **Objectif:** faire du déploiement une action Studio traçable, réparable et vérifiable.
 
 **Files:**
+
 - Modify: `lib/coolify/client.ts`
 - Modify: `lib/deployments/deploy-action.ts`
 - Modify: `app/api/studio/deployments/route.ts`
@@ -246,6 +257,7 @@ SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke
 ```
 
 **Exit criteria:**
+
 - Le Studio sait dire quelle version est en production.
 - Le déploiement n'est plus une boîte noire externe à l'app.
 
@@ -256,6 +268,7 @@ SMOKE_BASE_URL=https://lab.kenomi.eu npm run smoke
 **Objectif:** transformer Marketing agent en campagnes publiables, supervisées et mesurées.
 
 **Files:**
+
 - Modify: `lib/marketing/campaign-drafts.ts`
 - Modify: `lib/marketing/publish-action.ts`
 - Modify: `lib/marketing/adapters/n8n.ts`
@@ -280,6 +293,7 @@ npm run build
 ```
 
 **Exit criteria:**
+
 - Une campagne ne part jamais sans approval.
 - Une publication réussie crée une trace business exploitable dans Analytics.
 
@@ -290,6 +304,7 @@ npm run build
 **Objectif:** rendre Decision agent opérationnel et réversible.
 
 **Files:**
+
 - Modify: `lib/autonomy/run-agent-step.ts`
 - Modify: `lib/autonomy/approval-executor.ts`
 - Modify: `lib/autonomy/policy.ts`
@@ -313,6 +328,7 @@ npm run build
 ```
 
 **Exit criteria:**
+
 - Le système peut recommander et exécuter `continue`, `pivot`, `scale`, `stop` sous supervision.
 - Toutes les décisions sont explicables et réversibles quand possible.
 
@@ -323,6 +339,7 @@ npm run build
 **Objectif:** rendre l'exploitation quotidienne calme, vérifiable et facile à réparer.
 
 **Files:**
+
 - Modify: `lib/agent-run-metrics.ts`
 - Modify: `lib/metrics/prometheus.ts`
 - Modify: `app/api/metrics/route.ts`
@@ -347,6 +364,7 @@ npm run build
 ```
 
 **Exit criteria:**
+
 - Le Studio explique ce qui ne va pas et propose la prochaine réparation.
 - Les checks quotidiens donnent une réponse actionnable, pas seulement “ça casse”.
 
@@ -357,6 +375,7 @@ npm run build
 **Objectif:** fermer les risques avant autonomie complète.
 
 **Files:**
+
 - Modify: `docs/security.md`
 - Modify: `app/api/studio/privacy/export/route.ts`
 - Modify: `app/api/studio/privacy/delete/route.ts`
@@ -379,6 +398,7 @@ npm run typecheck
 ```
 
 **Exit criteria:**
+
 - Toutes les données business utilisateur sont exportables/supprimables.
 - Aucun secret externe n'est lisible via Studio client ou export.
 
@@ -389,6 +409,7 @@ npm run typecheck
 **Objectif:** rendre l'app maintenable et lisible sans casser le design.
 
 **Files:**
+
 - Create/Modify: `components/studio/*`
 - Create/Modify: `components/charts/*`
 - Create/Modify: `lib/hooks/*`
@@ -413,6 +434,7 @@ npm run build
 ```
 
 Manual browser checks:
+
 - `/studio`
 - `/studio/agents`
 - `/studio/ventures`
@@ -422,6 +444,7 @@ Manual browser checks:
 - `/studio/settings`
 
 **Exit criteria:**
+
 - Les pages restent visuellement stables.
 - Les futures corrections se font dans des modules ciblés, pas dans des fichiers de 3 000 lignes.
 
@@ -432,6 +455,7 @@ Manual browser checks:
 **Objectif:** prouver la vision complète avec un scénario vérifiable.
 
 **Files:**
+
 - Modify: `lib/autonomy/full-loop.test.ts`
 - Create: `scripts/smoke-vision-loop.mjs`
 - Modify: `scripts/smoke-app.mjs`
@@ -455,6 +479,7 @@ node scripts/smoke-vision-loop.mjs
 ```
 
 **Exit criteria:**
+
 - On peut démontrer la boucle complète sans provider live grâce au dry-run.
 - On peut vérifier la prod sans modifier les données sensibles.
 

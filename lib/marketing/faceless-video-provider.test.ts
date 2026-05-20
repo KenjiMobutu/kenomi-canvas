@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createFacelessVideoProvider, getFacelessVideoProviderStatus } from './faceless-video-provider'
+import {
+  createFacelessVideoProvider,
+  getFacelessVideoProviderStatus,
+} from './faceless-video-provider'
 
 afterEach(() => vi.restoreAllMocks())
 

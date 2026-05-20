@@ -7,10 +7,7 @@ import {
   parsePaymentOutputPayload,
   type PaymentOutput,
 } from '@/lib/stripe/checkout-action'
-import {
-  createStripeClientFromSecretKey,
-  getOptionalStripeSecretKey,
-} from '@/lib/stripe/server'
+import { createStripeClientFromSecretKey, getOptionalStripeSecretKey } from '@/lib/stripe/server'
 import {
   executePublishCampaign,
   type ExecutePublishResult,

@@ -329,7 +329,8 @@ function WorkflowDAG({ workflow, runs }: { workflow: DbWorkflow | null; runs: Au
           textTransform: 'uppercase',
         }}
       >
-        source automation_runs · {workflow.run_count === 0 ? 'aucun run enregistré' : 'historique réel'}
+        source automation_runs ·{' '}
+        {workflow.run_count === 0 ? 'aucun run enregistré' : 'historique réel'}
       </div>
       {workflow.run_count === 0 && (
         <div
