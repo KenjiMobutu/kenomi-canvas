@@ -1,4 +1,8 @@
 import type Stripe from 'stripe'
+import { insertAuditEvent } from '@/lib/audit-log'
+import { createN8nFulfillmentProvider } from '@/lib/fulfillment/n8n'
+import { triggerFulfillmentForPayment } from '@/lib/fulfillment/trigger'
+import type { FulfillmentProvider } from '@/lib/fulfillment/types'
 import { buildVentureEventInsert } from '@/lib/venture-events'
 
 interface QueryBuilder {
@@ -6,6 +10,7 @@ interface QueryBuilder {
   eq(field: string, value: unknown): QueryBuilder
   insert(row: Record<string, unknown>): QueryBuilder
   update(row: Record<string, unknown>): QueryBuilder
+  single(): Promise<{ data: unknown; error: { message: string } | null }>
   maybeSingle(): Promise<{ data: unknown; error: { message: string } | null }>
   then<TResult1 = { data: unknown; error: { message: string } | null }, TResult2 = never>(
     onfulfilled?:
@@ -28,12 +33,14 @@ type WebhookResult =
   | { ok: false; error: string }
 
 interface PaymentRow {
+  id?: string
   venture_id: string | null
   stripe_session_id: string | null
   amount_eur: number | string
   expected_amount_eur?: number | string | null
   collected_amount_eur?: number | string | null
   status: string | null
+  customer_email?: string | null
 }
 
 interface VentureRow {
@@ -90,6 +97,8 @@ export async function handleStripeWebhookEvent(input: {
   supabase: StripeWebhookSupabase
   event: Stripe.Event
   now?: () => Date
+  fulfillmentProvider?: FulfillmentProvider
+  fulfillmentOfferName?: string
 }): Promise<WebhookResult> {
   if (input.event.type !== 'checkout.session.completed') {
     return { ok: true, handled: false, reason: 'ignored_event' }
@@ -100,7 +109,7 @@ export async function handleStripeWebhookEvent(input: {
     input.supabase
       .from('payments')
       .select(
-        'venture_id, stripe_session_id, amount_eur, expected_amount_eur, collected_amount_eur, status'
+        'id, venture_id, stripe_session_id, amount_eur, expected_amount_eur, collected_amount_eur, status, customer_email'
       )
       .eq('stripe_session_id', session.id)
   )
@@ -166,6 +175,34 @@ export async function handleStripeWebhookEvent(input: {
     supabase: input.supabase,
     ventureId: venture.id,
   })
+
+  try {
+    await triggerFulfillmentForPayment({
+      supabase: input.supabase,
+      provider: input.fulfillmentProvider ?? createN8nFulfillmentProvider(),
+      payment: {
+        id: payment.id ?? session.id,
+        user_id: venture.user_id,
+        venture_id: venture.id,
+        customer_email: getCustomerEmail(session) ?? payment.customer_email ?? null,
+        amount_eur: collectedAmountEur || Number(payment.collected_amount_eur ?? payment.amount_eur ?? 0),
+      },
+      offerName: input.fulfillmentOfferName ?? 'Kenomi delivery',
+      now: input.now,
+    })
+  } catch (error) {
+    await insertAuditEvent(input.supabase, {
+      user_id: venture.user_id,
+      event_type: 'fulfillment_delivery_failed',
+      severity: 'error',
+      metadata: {
+        venture_id: venture.id,
+        payment_id: payment.id ?? session.id,
+        stripe_session_id: session.id,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    })
+  }
 
   return { ok: true, handled: true }
 }

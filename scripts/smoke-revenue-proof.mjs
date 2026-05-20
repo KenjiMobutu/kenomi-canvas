@@ -35,6 +35,7 @@ function evalGate(input) {
   if (missing(input.campaignSpendEvents)) failures.push('campaign_spend_event_missing')
   if (missing(input.pageViewEvents)) failures.push('page_view_event_missing')
   if (missing(input.waitlistSignupEvents)) failures.push('waitlist_signup_event_missing')
+  if (missing(input.completedFulfillments)) failures.push('fulfillment_missing')
   if (missing(input.decisions)) failures.push('decision_missing')
 
   return { ok: failures.length === 0, failures }
@@ -58,6 +59,7 @@ function queryProofCounts() {
     "(select count(*) from public.venture_events where event_type='campaign_spend') as campaign_spend_events,",
     "(select count(*) from public.venture_events where event_type='page_view') as page_view_events,",
     "(select count(*) from public.venture_events where event_type='waitlist_signup') as waitlist_signup_events,",
+    "(select count(*) from public.fulfillment_deliveries where status='completed') as completed_fulfillments,",
     "(select count(*) from public.decisions where decision in ('scale','cut','hold')) as decisions,",
     "(select count(*) from public.campaign_drafts where status='published' and coalesce(metadata->>'adapter','')='n8n') as live_published_campaigns,",
     "(select count(*) from public.campaign_drafts where status='published' and coalesce(metadata->>'adapter','')='mock') as mock_published_campaigns",
@@ -91,9 +93,10 @@ function queryProofCounts() {
     campaignSpendEvents: values[4] ?? 0,
     pageViewEvents: values[5] ?? 0,
     waitlistSignupEvents: values[6] ?? 0,
-    decisions: values[7] ?? 0,
-    livePublishedCampaigns: values[8] ?? 0,
-    mockPublishedCampaigns: values[9] ?? 0,
+    completedFulfillments: values[7] ?? 0,
+    decisions: values[8] ?? 0,
+    livePublishedCampaigns: values[9] ?? 0,
+    mockPublishedCampaigns: values[10] ?? 0,
   }
 }
 

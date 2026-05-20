@@ -11,6 +11,10 @@ vi.mock('@/lib/supabase-admin', () => ({
   supabaseAdmin: {},
 }))
 
+vi.mock('@/lib/nurture/n8n', () => ({
+  notifyNurtureSignup: vi.fn().mockResolvedValue({ ok: true }),
+}))
+
 vi.mock('@/lib/venture-events', async () => {
   const actual =
     await vi.importActual<typeof import('@/lib/venture-events')>('@/lib/venture-events')
@@ -22,9 +26,11 @@ vi.mock('@/lib/venture-events', async () => {
 
 import { POST } from '@/app/api/waitlist/route'
 import { db } from '@/lib/db'
+import { notifyNurtureSignup } from '@/lib/nurture/n8n'
 
 const mockedFindFirst = vi.mocked(db.venture.findFirst)
 const mockedUpsert = vi.mocked(db.waitlist.upsert)
+const mockedNotifyNurtureSignup = vi.mocked(notifyNurtureSignup)
 
 function makeJsonRequest(body: unknown, headers: Record<string, string> = {}): Request {
   return new Request('http://localhost/api/waitlist', {
@@ -43,8 +49,10 @@ describe('POST /api/waitlist', () => {
   beforeEach(() => {
     mockedFindFirst.mockReset()
     mockedUpsert.mockReset()
+    mockedNotifyNurtureSignup.mockReset()
     mockedFindFirst.mockResolvedValue({ id: 'v-1' } as never)
     mockedUpsert.mockResolvedValue({} as never)
+    mockedNotifyNurtureSignup.mockResolvedValue({ ok: true })
   })
 
   it('400 si email manquant', async () => {
@@ -76,6 +84,14 @@ describe('POST /api/waitlist', () => {
     const location = res.headers.get('location') ?? ''
     expect(location).toContain('/my-venture')
     expect(location).toContain('waitlist=ok')
+    expect(mockedNotifyNurtureSignup).toHaveBeenCalledWith({
+      payload: {
+        slug: 'my-venture',
+        ventureId: 'v-1',
+        email: 'jean@kenomi.eu',
+        source: 'waitlist',
+      },
+    })
   })
 
   it('302 même si venture inconnu (waitlist accepté quand même)', async () => {

@@ -4,6 +4,7 @@ import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
 import { isValidEmail, isValidSlug } from '@/lib/validation'
 import { logError } from '@/lib/logger'
+import { notifyNurtureSignup } from '@/lib/nurture/n8n'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
 
@@ -60,6 +61,15 @@ export async function POST(req: NextRequest) {
         email_domain: email.split('@')[1] ?? '',
       },
     })
+
+    await notifyNurtureSignup({
+      payload: {
+        slug,
+        ventureId: venture?.id ?? null,
+        email,
+        source: 'waitlist',
+      },
+    }).catch(() => undefined)
 
     const rawOrigin = process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu'
     let BASE: string

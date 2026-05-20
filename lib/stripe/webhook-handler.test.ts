@@ -1,5 +1,5 @@
 import type Stripe from 'stripe'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { handleStripeWebhookEvent, type StripeWebhookSupabase } from './webhook-handler'
 
 function createFakeSupabase(seed?: { paymentStatus?: string; revenue?: number }) {
@@ -24,6 +24,8 @@ function createFakeSupabase(seed?: { paymentStatus?: string; revenue?: number })
       },
     ],
     venture_events: [] as Record<string, unknown>[],
+    fulfillment_deliveries: [] as Record<string, unknown>[],
+    agent_events: [] as Record<string, unknown>[],
   }
 
   const supabase = {
@@ -42,8 +44,9 @@ function createFakeSupabase(seed?: { paymentStatus?: string; revenue?: number })
 
       const execute = async () => {
         if (state.insertRow) {
-          ;(tables[table] as Record<string, unknown>[]).push(state.insertRow)
-          return { data: state.insertRow, error: null }
+          const inserted = { id: `row-${(tables[table] as Record<string, unknown>[]).length + 1}`, ...state.insertRow }
+          ;(tables[table] as Record<string, unknown>[]).push(inserted)
+          return { data: inserted, error: null }
         }
 
         if (state.updateRow) {
@@ -71,6 +74,10 @@ function createFakeSupabase(seed?: { paymentStatus?: string; revenue?: number })
         maybeSingle: async () => {
           const result = await execute()
           return { data: (result.data as unknown[])[0] ?? null, error: null }
+        },
+        single: async () => {
+          const result = await execute()
+          return { data: result.data as Record<string, unknown>, error: null }
         },
         then: (onFulfilled: (value: Awaited<ReturnType<typeof execute>>) => unknown) =>
           execute().then(onFulfilled),
@@ -103,11 +110,18 @@ function checkoutCompletedEvent(): Stripe.Event {
 describe('handleStripeWebhookEvent', () => {
   it('updates payment, records event, and recalculates venture revenue', async () => {
     const supabase = createFakeSupabase()
+    const fulfillmentProvider = {
+      deliver: vi.fn().mockResolvedValue({
+        externalId: 'fulfill-1',
+        accessUrl: 'https://x.test/access',
+      }),
+    }
 
     const result = await handleStripeWebhookEvent({
       supabase: supabase as unknown as StripeWebhookSupabase,
       event: checkoutCompletedEvent(),
       now: () => new Date('2026-05-18T12:00:00.000Z'),
+      fulfillmentProvider,
     })
 
     expect(result).toEqual({ ok: true, handled: true })
@@ -125,6 +139,14 @@ describe('handleStripeWebhookEvent', () => {
       value: 2900,
     })
     expect(supabase.tables.ventures[0].revenus_total).toBe(29)
+    expect(fulfillmentProvider.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentId: 'payment-1',
+        ventureId: 'venture-1',
+        customerEmail: 'founder@example.com',
+        amountEur: 29,
+      })
+    )
   })
 
   it('distingue montant attendu et montant encaisse pour un checkout trial a 0 EUR', async () => {
@@ -189,5 +211,27 @@ describe('handleStripeWebhookEvent', () => {
 
     expect(result).toEqual({ ok: true, handled: false, reason: 'payment_not_found' })
     expect(supabase.tables.venture_events).toEqual([])
+  })
+
+  it('logs fulfillment failures without failing the paid webhook', async () => {
+    const supabase = createFakeSupabase()
+    const fulfillmentProvider = {
+      deliver: vi.fn().mockRejectedValue(new Error('n8n offline')),
+    }
+
+    const result = await handleStripeWebhookEvent({
+      supabase: supabase as unknown as StripeWebhookSupabase,
+      event: checkoutCompletedEvent(),
+      now: () => new Date('2026-05-18T12:00:00.000Z'),
+      fulfillmentProvider,
+    })
+
+    expect(result).toEqual({ ok: true, handled: true })
+    expect(supabase.tables.payments[0]).toMatchObject({ status: 'completed' })
+    expect(supabase.tables.agent_events[0]).toMatchObject({
+      user_id: 'user-1',
+      event_type: 'fulfillment_delivery_failed',
+      severity: 'error',
+    })
   })
 })
