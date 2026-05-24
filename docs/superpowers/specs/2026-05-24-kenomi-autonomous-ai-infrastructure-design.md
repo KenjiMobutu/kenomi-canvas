@@ -2,7 +2,7 @@
 
 **Date** : 2026-05-24  
 **Statut** : draft approuvé pour review  
-**Portée** : architecture globale du système autonome Kenomi, intégrée à l'app existante, avec `Hermes` comme agent de raisonnement principal.
+**Portée** : architecture globale du système autonome Kenomi, intégrée à l'app existante, avec `Hermes` comme famille de modèles de raisonnement principale.
 
 ## Objectif
 
@@ -36,6 +36,73 @@ L'infrastructure physique et logique déjà documentée comprend:
 
 Cette spec doit rester cohérente avec ces éléments, et non les contredire.
 
+### Exposition web externe de `Hermes Agent`
+
+`Hermes Agent` doit être accessible depuis un navigateur externe via la VM Coolify, mais sans exposer directement le runtime d'inférence.
+
+Principe:
+
+- l'interface web et le reverse proxy vivent sur `VM-Coolify`;
+- les appels d'inférence partent vers le Mac Mini M4 sur réseau privé/Tailscale;
+- l'utilisateur final n'accède jamais directement à `Ollama`;
+- les actions sensibles restent soumises à auth, rate limiting et approval si nécessaire.
+
+Flux public:
+
+```mermaid
+graph LR
+  U["Navigateur externe"] --> RP["Reverse Proxy / VM-Coolify"]
+  RP --> UI["Hermes Agent UI"]
+  UI --> ORCH["n8n / orchestration légère"]
+  ORCH --> LLM["Mac Mini M4 / Ollama"]
+  ORCH --> DATA["Supabase / PostgreSQL / Qdrant"]
+  ORCH --> LOG["Loki / Prometheus / Grafana"]
+```
+
+Règles d'exposition:
+
+- un seul point d'entrée public par domaine ou sous-domaine;
+- auth obligatoire avant toute interaction avec Hermes;
+- limitation de débit et journalisation des requêtes;
+- aucun port Ollama exposé publiquement;
+- aucun accès administrateur au reverse proxy sans contrôle explicite;
+- les secrets sont injectés côté serveur, jamais dans le navigateur.
+
+### Topologie Proxmox / services cible
+
+Le système doit être installé sur Proxmox avec une séparation claire entre la couche d'exposition/orchestration et la couche d'inférence locale:
+
+```text
+Proxmox
+├── VM-Coolify
+│   ├── OpenWebUI
+│   ├── n8n
+│   ├── Hermes Agent
+│   └── Reverse Proxy
+├── VM-Workers
+│   ├── Playwright
+│   ├── scraping
+│   ├── automation
+│   └── execution sandbox
+├── VM-Monitoring
+│   ├── Grafana
+│   ├── Prometheus
+│   └── Loki
+└── Mac Mini M4
+    ├── Ollama
+    └── modèles IA
+```
+
+Règles de placement:
+
+- `VM-Coolify` porte la couche d'entrée, l'UI LLM, l'orchestration légère et le reverse proxy.
+- le Mac Mini M4 porte le runtime d'inférence local et les modèles Hermes/Qwen.
+- `VM-Workers` porte l'exécution jetable, sans secrets globaux ni accès Proxmox.
+- `VM-Monitoring` porte l'observabilité centralisée et les rétentions de logs.
+- l'état transactionnel, la queue et les données métier peuvent rester dans Supabase/PostgreSQL/Qdrant selon le plan de déploiement du control plane, mais l'inférence reste hors de la VM d'orchestration.
+- tout échange inter-VM passe par des ports explicitement ouverts et segmentés via Tailscale ou le réseau privé Proxmox.
+- aucun worker ne monte l'hôte Proxmox ni n'obtient un accès shell global à l'hyperviseur.
+
 ## Principes de conception
 
 1. Le système n'expose jamais Proxmox ou les secrets centraux aux workers.
@@ -54,7 +121,7 @@ La plateforme se compose de cinq plans distincts:
 1. **Control plane** — l'app Next.js existante, qui expose le cockpit opérateur, les tableaux de bord, les approvals et les vues d'audit.
 2. **Orchestration plane** — Supabase Queue, n8n et les jobs planifiés; ils décident quoi exécuter, quand, et dans quel ordre.
 3. **Execution plane** — workers jetables et spécialisés; ils exécutent scraping, extraction, génération, publication, monitoring et opérations contrôlées.
-4. **Reasoning plane** — `Hermes` comme agent maître de planification, triage, scoring et synthèse; `Qwen` pour le volume et les transformations moins critiques.
+4. **Reasoning plane** — `Hermes` comme famille de modèles maître de planification, triage, scoring et synthèse; `Qwen` pour le volume et les transformations moins critiques.
 5. **Memory and telemetry plane** — PostgreSQL, Qdrant, tables d'audit, métriques et historique d'exécution.
 
 Le flux standard est:
@@ -65,7 +132,7 @@ graph TB
   ORCH --> QUEUE["Supabase Queue"]
   ORCH --> N8N["n8n workflows"]
   QUEUE --> WORKERS["Sacrificial workers"]
-  WORKERS --> LLM["Hermes + Qwen via Ollama"]
+  WORKERS --> LLM["Hermes family + Qwen via Ollama"]
   LLM --> MEM["PostgreSQL + Qdrant"]
   WORKERS --> TOOLS["Playwright / scraping / browser tasks"]
   ORCH --> CHANNELS["Telegram / Discord / Gmail / CRM"]
@@ -123,7 +190,7 @@ Le back-office admin reste séparé. Il peut exposer des diagnostics, des config
 
 ## Rôle de `Hermes`
 
-`Hermes` est le modèle/agent de raisonnement principal. Il ne remplace pas les autres modèles; il les arbitre.
+`Hermes` est la famille de modèles de raisonnement principale. Elle ne remplace pas les autres modèles; elle les arbitre.
 
 ### Ce que fait `Hermes`
 
@@ -292,7 +359,7 @@ Responsabilités:
 - analyse de concurrence;
 - pré-score de marché.
 
-### Hermes Agent
+### Couche Hermes
 
 Mission: agent de raisonnement au-dessus de tous les autres.
 
@@ -312,7 +379,7 @@ Responsabilités:
 ```mermaid
 sequenceDiagram
   participant S as Scout/Prospect
-  participant H as Hermes
+  participant H as Hermes reasoning
   participant Q as Queue
   participant W as Worker
   participant C as CRM
@@ -346,7 +413,7 @@ sequenceDiagram
   participant M as Monitoring
   participant Q as Queue
   participant W as Worker
-  participant H as Hermes
+  participant H as Hermes reasoning
   participant T as Telegram
 
   M->>Q: job de collecte
@@ -361,7 +428,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant S as Scout
-  participant H as Hermes
+  participant H as Hermes reasoning
   participant W as Worker
   participant N as n8n
   participant P as Publication channel
@@ -524,14 +591,33 @@ La page `/studio/infrastructure` reste la source de vérité opérateur pour l'�
 
 ## Déploiement et scaling
 
-Le déploiement doit rester simple:
+Le déploiement doit rester simple et s'appuyer sur la topologie Proxmox:
 
-- Next.js sur Coolify;
-- Supabase self-hosted;
-- n8n sur sa propre surface;
-- workers comme services séparés;
-- inférence locale sur Ollama;
-- montée en charge horizontale par ajout de workers spécialisés.
+- `VM-Coolify` héberge OpenWebUI, n8n, Hermes Agent et le reverse proxy;
+- le Mac Mini M4 héberge Ollama et les modèles IA;
+- `VM-Workers` héberge les workers de scraping, Playwright et sandbox d'exécution;
+- `VM-Monitoring` héberge Grafana, Prometheus et Loki;
+- Next.js / Kenomi Canvas peut rester dans Coolify sur la même VM ou sur une VM proche du control plane selon le plan de déploiement;
+- le domaine public pointe vers `VM-Coolify`, qui sert de façade web;
+- `Hermes Agent` parle au Mac Mini M4 via le réseau privé, jamais via le navigateur;
+- montée en charge horizontale par ajout de workers spécialisés ou par séparation supplémentaire de VM si le volume l'exige.
+
+### Ports et flux
+
+- `443/tcp` public vers le reverse proxy sur `VM-Coolify`;
+- `80/tcp` uniquement pour redirection HTTPS si nécessaire;
+- `OpenWebUI` et `Hermes Agent` derrière le reverse proxy;
+- `Ollama` accessible uniquement depuis `VM-Coolify` et les services explicitement autorisés;
+- `n8n` accessible depuis `VM-Coolify` et les webhooks nécessaires;
+- `Grafana`, `Prometheus` et `Loki` isolés derrière auth, idéalement non exposés publiquement sauf besoin opérateur.
+
+### Variables d'environnement critiques
+
+- `OLLAMA_BASE_URL` pointe vers le Mac Mini M4;
+- `HERMES_MODEL` définit le modèle Hermes utilisé par défaut;
+- `N8N_WEBHOOK_URL` pointe vers la façade publique ou le tunnel privé selon le workflow;
+- `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` restent côté serveur uniquement;
+- les secrets de communication inter-services ne quittent jamais la couche serveur.
 
 La montée en charge ne doit pas introduire Kubernetes trop tôt. On scale d'abord par:
 
@@ -587,7 +673,7 @@ Le système doit donc mesurer non seulement l'activité, mais aussi le revenu ef
 - conserver l'app actuelle comme cockpit;
 - aligner les vues agents/automations/infrastructure/analytics;
 - normaliser les modèles de données d'agent;
-- intégrer `Hermes` comme modèle de raisonnement configurable;
+- intégrer la famille `Hermes` comme modèle de raisonnement configurable;
 - journaliser proprement les runs et décisions.
 
 ### Phase 2 — Acquisition client prioritaire
@@ -619,7 +705,7 @@ Le système doit donc mesurer non seulement l'activité, mais aussi le revenu ef
 La plateforme est considérée comme prête pour cette phase si:
 
 - l'app sert de control plane unique;
-- `Hermes` est intégré dans le routage LLM;
+- la famille `Hermes` est intégrée dans le routage LLM;
 - les jobs sont auditables de bout en bout;
 - les actions à risque passent par policy ou approval;
 - les workers restent isolés;
@@ -633,7 +719,7 @@ La plateforme est considérée comme prête pour cette phase si:
 - Supabase reste la source de vérité pour l'état opérationnel.
 - n8n reste la couche workflow.
 - Ollama reste le runtime local.
-- `Hermes` devient le modèle de raisonnement principal.
+- la famille `Hermes` devient la couche de raisonnement principale.
 - `Qwen` couvre les tâches de volume.
 - Les workers sont jetables et segmentés.
 - La priorité business absolue est l'acquisition client.
