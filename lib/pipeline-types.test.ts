@@ -40,6 +40,9 @@ describe('isAgentUnlocked', () => {
   it('scout est toujours débloqué', () => {
     expect(isAgentUnlocked('scout', null)).toBe(true)
   })
+  it('prospect est toujours débloqué', () => {
+    expect(isAgentUnlocked('prospect', null)).toBe(true)
+  })
   it('validation est bloqué si pas de pipeline approved', () => {
     expect(isAgentUnlocked('validation', null)).toBe(false)
   })
@@ -175,5 +178,14 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('Acheteur: Solo consultants')
     expect(prompt).toContain('Douleur urgente: They lose deals')
     expect(prompt).toContain('La landing doit vendre cette offre')
+  })
+
+  it('creates a strict Prospect system prompt', () => {
+    const prompt = buildSystemPrompt('prospect', null, '')
+
+    expect(prompt).toContain('Prospect')
+    expect(prompt).toContain('JSON strict')
+    expect(prompt).toContain('company_name')
+    expect(prompt).toContain('outreach_body')
   })
 })

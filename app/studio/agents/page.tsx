@@ -73,6 +73,12 @@ const DEFAULT_CONFIG: AgentConfig = {
   max_tokens: 2048,
 }
 const DEFAULT_CONFIG_BY_AGENT: Record<string, AgentConfig> = {
+  prospect: {
+    model: HERMES_MODELS[0],
+    system_prompt: '',
+    temperature: 0.6,
+    max_tokens: 1536,
+  },
 }
 const MODELS = [...HERMES_MODELS, 'qwen3:8b', 'qwen3:14b', 'claude-sonnet-4-6', 'gpt-4o-mini']
 

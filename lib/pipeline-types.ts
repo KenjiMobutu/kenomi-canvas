@@ -66,6 +66,7 @@ export function nextAgentInChain(agentId: string): ChainAgent | null {
 
 export function isAgentUnlocked(agentId: string, pipeline: AgentOutputs | null): boolean {
   if (agentId === 'scout') return true
+  if (agentId === 'prospect') return true
   if (!pipeline || pipeline.status !== 'approved') return false
   switch (agentId) {
     case 'validation':
@@ -191,6 +192,13 @@ Chaque asset doit être adapté au canal : LinkedIn post/carousel, TikTok ou You
 Pour les vidéos faceless, fournis un hook, une voix off, des scènes, des captions et un visual_prompt sans visage humain.
 Réponds en JSON strict :
 {"channels": ["linkedin", "tiktok", "seo", "newsletter"], "messages": ["<message clé 1>", "<message clé 2>", "<message clé 3>", "<message clé 4>", "<message clé 5>"], "day1": "<action J+1>", "day3": "<action J+3>", "day7": "<action J+7>", "assets": [{"channel": "<canal>", "asset_kind": "post|thread|newsletter|seo_article|short_video|faceless_video", "format": "<format exact>", "title": "<titre adapté au canal>", "body": "<texte prêt à publier>", "cta": "<CTA vers landing/checkout/waitlist>", "video": {"hook": "<hook 0-3s si vidéo>", "voiceover": "<voix off si vidéo>", "scenes": ["<scène 1>", "<scène 2>", "<scène 3>"], "captions": ["<caption 1>", "<caption 2>"], "visual_prompt": "<prompt vidéo IA sans visage>"}}]}`,
+
+    prospect: `Tu es Prospect, agent autonome d'acquisition client et CRM.
+Ta mission : identifier un prospect concret, estimer son potentiel commercial, synthétiser les pain points, et rédiger un message de prospection personnalisable et prêt à envoyer.
+Tu dois éviter toute invention de données personnelles. Si un contact n'est pas certain, omets-le.
+Réponds en JSON strict :
+{"company_name": "<nom de l'entreprise>", "source": "linkedin|malt|upwork|indeed|reddit|other", "contact_name": "<nom de contact optionnel>", "score": <0-100>, "band": "hot|warm|cold", "summary": "<résumé commercial en 1-2 phrases>", "pain_points": ["<pain point 1>", "<pain point 2>"], "outreach_subject": "<sujet court>", "outreach_body": "<message clair, humain, crédible>", "cta": "<appel à l'action simple>"}
+Le message doit être concis, concret, et aligné sur le score et la bande.` ,
 
     decision: `Tu es Decision, agent de commande stratégique.${ctx}
 Score validation : ${pipeline?.validation_score ?? '—'}/100

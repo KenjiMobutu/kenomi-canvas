@@ -14,6 +14,8 @@ type TableName =
   | 'autonomy_jobs'
   | 'decisions'
   | 'campaign_drafts'
+  | 'user_settings'
+  | 'prospects'
 
 interface TableRow {
   id?: string
@@ -38,6 +40,8 @@ function createFakeSupabase(
     autonomy_jobs: seed?.autonomy_jobs ?? [],
     decisions: seed?.decisions ?? [],
     campaign_drafts: seed?.campaign_drafts ?? [],
+    user_settings: seed?.user_settings ?? [],
+    prospects: seed?.prospects ?? [],
   }
 
   return {
@@ -787,6 +791,72 @@ describe('runAgentStep', () => {
         last_run_at: '2026-05-18T10:00:00.000Z',
       })
     )
+  })
+
+  it('runs Prospect as a first-class autonomous agent and stores CRM state', async () => {
+    const supabase = createFakeSupabase({
+      user_settings: [
+        {
+          user_id: 'user-1',
+          prospect_sources: ['linkedin', 'upwork'],
+          prospect_outreach_email: 'hello@kenomi.eu',
+          prospect_crm_provider: 'supabase',
+        },
+      ],
+    })
+    const llm = async (): Promise<LLMResponse> => ({
+      content: JSON.stringify({
+        company_name: 'Acme Studio',
+        source: 'upwork',
+        contact_name: 'Marie Dupont',
+        score: 88,
+        band: 'hot',
+        summary: 'L équipe a besoin d un accompagnement rapide pour prioriser les demandes entrantes.',
+        pain_points: ['les leads chauds ne sont pas rappelés à temps', 'la qualification est manuelle'],
+        outreach_subject: 'Acme Studio — une piste pour prioriser vos leads chauds',
+        outreach_body: 'Bonjour Marie, je vous propose une méthode simple pour traiter les leads chauds plus vite.',
+        cta: 'Répondez si vous voulez un résumé en 5 points.',
+      }),
+      provider: 'ollama',
+      model: 'hermes3:8b',
+      fallback_triggered: false,
+    })
+
+    const result = await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'prospect',
+      llm,
+      now: () => new Date('2026-05-18T10:00:00.000Z'),
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.parsedOutput).toMatchObject({
+      company_name: 'Acme Studio',
+      band: 'hot',
+    })
+    expect(supabase.tables.prospects).toHaveLength(1)
+    expect(supabase.tables.prospects[0]).toMatchObject({
+      user_id: 'user-1',
+      company_name: 'Acme Studio',
+      source: 'upwork',
+      score: 88,
+      band: 'hot',
+      status: 'ready_to_contact',
+      outreach_subject: 'Acme Studio — une piste pour prioriser vos leads chauds',
+    })
+    expect(supabase.tables.prospects[0].metadata).toMatchObject({
+      model: 'hermes3:8b',
+      model_family: 'hermes',
+      provider: 'ollama',
+      crm_provider: 'supabase',
+      sources: ['linkedin', 'upwork'],
+    })
+    expect(supabase.tables.prospects[0].next_followup_at).toBe('2026-05-19T10:00:00.000Z')
+    expect(supabase.tables.agent_runs[0]).toMatchObject({
+      agent_id: 'prospect',
+      model: 'hermes3:8b',
+    })
   })
 
   it('rejects Hermes as an executable agent id', async () => {

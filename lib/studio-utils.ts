@@ -12,6 +12,16 @@ export const AGENTS_DATA = [
     sigil: '◬',
   },
   {
+    id: 'prospect',
+    name: 'Prospect',
+    code: 'PRS',
+    role: 'Acquisition',
+    tagline: 'LinkedIn · Malt · Upwork · CRM',
+    model: 'Hermes',
+    color: '#f59e0b',
+    sigil: '◉',
+  },
+  {
     id: 'validation',
     name: 'Validation',
     code: 'VAL',

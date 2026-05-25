@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
 import {
@@ -28,10 +28,12 @@ const approvalDeleteSchema = z.object({
   approvalId: z.string().min(1),
 })
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
+
+  const agentIdFilter = request.nextUrl.searchParams.get('agent_id')
 
   const [jobs, actions, approvals] = await Promise.all([
     supabase
@@ -64,13 +66,25 @@ export async function GET() {
     approvals.error && { section: 'approvals', message: approvals.error.message },
   ].filter(Boolean)
 
+  const filteredJobs = agentIdFilter
+    ? (jobs.data ?? []).filter((job) => {
+        const payload = job && typeof job === 'object' ? (job as Record<string, unknown>).payload : null
+        const payloadAgentId =
+          payload && typeof payload === 'object'
+            ? (payload as Record<string, unknown>).agentId ?? (payload as Record<string, unknown>).agent_id
+            : null
+        return payloadAgentId === agentIdFilter
+      })
+    : jobs.data ?? []
+
   return NextResponse.json(
     {
       ok: errors.length === 0,
-      jobs: jobs.data ?? [],
+      jobs: filteredJobs,
       actions: actions.data ?? [],
       approvals: approvals.data ?? [],
       errors,
+      agentIdFilter,
     },
     { status: errors.length === 0 ? 200 : 207 }
   )

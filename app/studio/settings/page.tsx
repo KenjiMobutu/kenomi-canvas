@@ -24,10 +24,12 @@ import {
   CreditCard,
   Database,
   Download,
+  Mail,
   Radio,
   Save,
   Search,
   Server,
+  Target,
   Trash2,
   User,
   Zap,
@@ -43,7 +45,7 @@ import {
 
 const MODELS_OLLAMA = ['qwen3:8b', 'qwen3:14b', 'llama3.1:8b', 'mistral:7b', 'codestral:latest']
 
-type Section = 'modeles' | 'scout' | 'infrastructure' | 'payments' | 'compte'
+type Section = 'modeles' | 'scout' | 'prospect' | 'infrastructure' | 'payments' | 'compte'
 type InfraSettingsDiagnostics = {
   checkedAt: string
   runtime: {
@@ -858,6 +860,7 @@ export default function SettingsPage() {
   const tabs: { id: Section; label: string; icon: React.ReactNode }[] = [
     { id: 'modeles', label: 'Modèles IA', icon: <Bot size={13} /> },
     { id: 'scout', label: 'Scout', icon: <Search size={13} /> },
+    { id: 'prospect', label: 'Prospect', icon: <Target size={13} /> },
     { id: 'infrastructure', label: 'Infrastructure', icon: <Server size={13} /> },
     { id: 'payments', label: 'Paiements', icon: <CreditCard size={13} /> },
     { id: 'compte', label: 'Compte', icon: <User size={13} /> },
@@ -1063,6 +1066,102 @@ export default function SettingsPage() {
                     </div>
                     <div style={{ color: muted, fontSize: 11, marginTop: 5, lineHeight: 1.35 }}>
                       {rule.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          </>
+        )}
+
+        {/* Prospect */}
+        {section === 'prospect' && (
+          <>
+            <SectionCard title="Acquisition client" icon={<Target size={16} />}>
+              <Field
+                label="Sources prioritaires"
+                hint="Liste séparée par virgules. Prospect utilise ces sources comme garde-fou d'acquisition."
+              >
+                <input
+                  value={cfg.prospect_sources.join(', ')}
+                  onChange={(e) =>
+                    patch({
+                      prospect_sources: e.target.value
+                        .split(',')
+                        .map((item) => item.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                  placeholder="linkedin, malt, upwork"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+              <Field
+                label="Email de prospection"
+                hint="Adresse utilisée comme identité d'envoi et contexte pour les relances."
+              >
+                <input
+                  value={cfg.prospect_outreach_email}
+                  onChange={(e) => patch({ prospect_outreach_email: e.target.value })}
+                  placeholder="hello@kenomi.eu"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+              <Field
+                label="CRM provider"
+                hint="Backend de suivi CRM utilisé par Prospect."
+              >
+                <select
+                  value={cfg.prospect_crm_provider}
+                  onChange={(e) => patch({ prospect_crm_provider: e.target.value })}
+                  className="ck-select"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                >
+                  <option value="supabase">supabase</option>
+                  <option value="n8n">n8n</option>
+                  <option value="manual">manual</option>
+                </select>
+              </Field>
+            </SectionCard>
+
+            <SectionCard title="Runbook Prospect" icon={<Mail size={16} />}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                  gap: 10,
+                }}
+              >
+                {[
+                  { label: 'Input', value: 'Lead trouvé + score + pain points', color: cyan },
+                  { label: 'Output', value: 'Message personnalisé + CRM state', color: emerald },
+                  { label: 'Gate', value: 'Approval avant envoi critique', color: amber },
+                  { label: 'Memory', value: 'Qdrant + prospects table', color: rose },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      background: surface2,
+                      border: `1px solid ${line}`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        letterSpacing: '.14em',
+                        textTransform: 'uppercase',
+                        color: item.color,
+                      }}
+                    >
+                      {item.label}
+                    </div>
+                    <div style={{ color: muted, fontSize: 11, marginTop: 5, lineHeight: 1.35 }}>
+                      {item.value}
                     </div>
                   </div>
                 ))}

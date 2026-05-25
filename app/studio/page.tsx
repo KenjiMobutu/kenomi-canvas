@@ -112,6 +112,15 @@ const AGENTS_STATIC = [
     sigil: '◬',
   },
   {
+    id: 'prospect',
+    name: 'Prospect',
+    code: 'PRS',
+    role: 'Acquisition',
+    model: 'Hermes',
+    color: '#f59e0b',
+    sigil: '◉',
+  },
+  {
     id: 'validation',
     name: 'Validation',
     code: 'VAL',
@@ -2438,6 +2447,7 @@ function CmdkPalette({ onClose, ventures }: { onClose: () => void; ventures: Ven
     ...ventureItems,
     { kind: 'venture', label: 'Ventures', hint: 'kanban + funnel', href: '/studio/ventures' },
     { kind: 'agent', label: 'Agents', hint: 'run · pause · config', href: '/studio/agents' },
+    { kind: 'page', label: 'Prospects', hint: 'leads · CRM · outreach', href: '/studio/prospects' },
     {
       kind: 'page',
       label: 'Analytics',

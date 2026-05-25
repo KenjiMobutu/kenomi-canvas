@@ -18,6 +18,10 @@ import {
   parsePipelineIdea,
   type PipelineRow,
 } from '@/lib/pipeline-types'
+import { buildProspectMemoryRecord } from '@/lib/prospect/memory'
+import { buildProspectOutreach } from '@/lib/prospect/build-outreach'
+import type { ProspectOutput } from '@/lib/agent-output-schemas'
+import { getModelFamily } from '@/lib/model-families'
 import { materializeBuilderOutput } from '@/lib/venture-materializer'
 import { buildCampaignDrafts, type MarketingOutputShape } from '@/lib/marketing/campaign-drafts'
 import { agentRunsTotal, agentRunCostUsdTotal } from '@/lib/metrics/prometheus'
@@ -115,6 +119,11 @@ const outputCol: Record<string, string> = {
   payment: 'payment_output',
   marketing: 'marketing_output',
   decision: 'decision_output',
+}
+
+function prospectFollowUpAt(now: Date, band: ProspectOutput['band']): string {
+  const days = band === 'hot' ? 1 : band === 'warm' ? 3 : 7
+  return new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString()
 }
 
 async function maybeSingle<T>(query: QueryBuilder): Promise<T | null> {
@@ -368,10 +377,48 @@ async function getDecisionMetricsBundle(
   }
 }
 
+interface ProspectSettingsRow {
+  prospect_sources?: string[] | null
+  prospect_outreach_email?: string | null
+  prospect_crm_provider?: string | null
+}
+
+async function getProspectSettingsContext(
+  supabase: RunAgentStepSupabase,
+  userId: string
+): Promise<{ context: string; settings: ProspectSettingsRow | null }> {
+  try {
+    const settings = await maybeSingle<ProspectSettingsRow>(
+      supabase
+        .from('user_settings')
+        .select('prospect_sources, prospect_outreach_email, prospect_crm_provider')
+        .eq('user_id', userId)
+    )
+
+    if (!settings) return { context: '', settings: null }
+
+    const sources = (settings.prospect_sources ?? []).filter((source) => source.trim().length > 0)
+    const outreachEmail = settings.prospect_outreach_email?.trim() ?? ''
+    const crmProvider = settings.prospect_crm_provider?.trim() ?? 'supabase'
+
+    const lines = [
+      'Contexte Prospect:',
+      sources.length ? `- Sources autorisées: ${sources.join(', ')}` : '- Sources autorisées: non précisées',
+      outreachEmail ? `- Email de prospection: ${outreachEmail}` : '- Email de prospection: non défini',
+      `- CRM cible: ${crmProvider}`,
+      '- Réponds avec un prospect exploitable et un message prêt à envoyer.',
+    ]
+
+    return { context: `\n${lines.join('\n')}`, settings }
+  } catch {
+    return { context: '', settings: null }
+  }
+}
+
 export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentStepResult> {
   const { supabase, userId, agentId } = input
   if (!agentId) throw new RunAgentStepError('agentId requis', 400)
-  const supportedAgents = new Set(['scout', ...AGENT_CHAIN])
+  const supportedAgents = new Set(['scout', 'prospect', ...AGENT_CHAIN])
   if (!supportedAgents.has(agentId)) {
     throw new RunAgentStepError(`Agent inconnu: ${agentId}`, 400)
   }
@@ -387,29 +434,38 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
 
   if (cfg?.paused) throw new RunAgentStepError('Agent en pause', 409)
 
-  let pipelineQuery = supabase
-    .from('venture_pipeline')
-    .select('*')
-    .eq('user_id', userId)
-    .not('status', 'eq', 'rejected')
+  const pipeline =
+    agentId === 'prospect'
+      ? null
+      : await maybeSingle<PipelineRow>(
+          (() => {
+            let query = supabase
+              .from('venture_pipeline')
+              .select('*')
+              .eq('user_id', userId)
+              .not('status', 'eq', 'rejected')
 
-  if (input.ventureId) {
-    pipelineQuery = pipelineQuery.eq('venture_id', input.ventureId)
-  }
+            if (input.ventureId) {
+              query = query.eq('venture_id', input.ventureId)
+            }
 
-  const pipeline = await maybeSingle<PipelineRow>(
-    pipelineQuery.order('created_at', { ascending: false }).limit(1)
-  )
+            return query.order('created_at', { ascending: false }).limit(1)
+          })()
+        )
 
-  if (!isAgentUnlocked(agentId, pipeline)) {
+  if (agentId !== 'prospect' && !isAgentUnlocked(agentId, pipeline)) {
     if (!pipeline || pipeline.status === 'pending_validation') {
       throw new RunAgentStepError("Validez l'idée Scout avant de lancer cet agent", 409)
     }
     throw new RunAgentStepError("Cet agent attend la fin de l'étape précédente", 409)
   }
 
-  const model =
-    cfg?.model ?? 'qwen3:8b'
+  const prospectContext =
+    agentId === 'prospect'
+      ? await getProspectSettingsContext(supabase, userId)
+      : { context: '', settings: null }
+
+  const model = cfg?.model ?? (agentId === 'prospect' ? 'hermes3:8b' : 'qwen3:8b')
   const baseSystemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
   const decisionBundle =
     agentId === 'decision'
@@ -419,6 +475,8 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     input.prompt ||
     (agentId === 'scout'
       ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
+      : agentId === 'prospect'
+        ? 'Trouve un prospect qualifié, score-le, et rédige un message de prospection prêt à envoyer.'
       : 'Exécute ta mission.')
   const scoutSourceContext =
     agentId === 'scout'
@@ -429,7 +487,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           })
         )}`
       : ''
-  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}${scoutSourceContext}`
+  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}${scoutSourceContext}${prospectContext.context}`
 
   const startMs = now().getTime()
 
@@ -531,6 +589,104 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         agentRunId: agentRun?.id ?? null,
         parsedOutput,
         pipeline: { id: newPipeline?.id, ...parsed, status: 'pending_validation' },
+      }
+    }
+
+    if (agentId === 'prospect' && parsedOutput && 'company_name' in parsedOutput) {
+      const prospect = parsedOutput as ProspectOutput
+      const generatedDraft = buildProspectOutreach({
+        companyName: prospect.company_name,
+        contactName: prospect.contact_name ?? null,
+        source: prospect.source,
+        score: prospect.score,
+        band: prospect.band,
+        painPoints: prospect.pain_points,
+        focus: 'prospect',
+      })
+      const prospectInsert = await single<{ id?: string }>(
+        supabase
+          .from('prospects')
+          .insert({
+            user_id: userId,
+            source: prospect.source,
+            source_url: null,
+            company_name: prospect.company_name,
+            contact_name: prospect.contact_name ?? null,
+            contact_email: null,
+            contact_role: null,
+            score: prospect.score,
+            status:
+              prospect.band === 'hot'
+                ? 'ready_to_contact'
+                : prospect.band === 'warm'
+                  ? 'follow_up'
+                  : 'nurture',
+            band: prospect.band,
+            outreach_subject: prospect.outreach_subject,
+            outreach_body: prospect.outreach_body,
+            crm_record_id: null,
+            last_contacted_at: null,
+            next_followup_at: prospectFollowUpAt(now(), prospect.band),
+            metadata: {
+              summary: prospect.summary,
+              pain_points: prospect.pain_points,
+              cta: prospect.cta,
+              model: usedModel,
+              model_family: getModelFamily(usedModel),
+              provider: llmResult.provider,
+              sources: prospectContext.settings?.prospect_sources ?? [],
+              outreach_email: prospectContext.settings?.prospect_outreach_email ?? '',
+              crm_provider: prospectContext.settings?.prospect_crm_provider ?? 'supabase',
+              generated_draft: generatedDraft,
+              memory_record: buildProspectMemoryRecord({
+                id: 'pending',
+                companyName: prospect.company_name,
+                source: prospect.source,
+                score: prospect.score,
+                band: prospect.band,
+                summary: prospect.summary,
+                tags: prospect.pain_points,
+                contactName: prospect.contact_name ?? null,
+                contactRole: null,
+                contactEmail: null,
+              }),
+            },
+            created_at: now().toISOString(),
+            updated_at: now().toISOString(),
+          })
+          .select('id')
+      )
+
+      if (prospectInsert?.id) {
+        await supabase
+          .from('prospects')
+          .update({
+            metadata: {
+              summary: prospect.summary,
+              pain_points: prospect.pain_points,
+              cta: prospect.cta,
+              model: usedModel,
+              model_family: getModelFamily(usedModel),
+              provider: llmResult.provider,
+              sources: prospectContext.settings?.prospect_sources ?? [],
+              outreach_email: prospectContext.settings?.prospect_outreach_email ?? '',
+              crm_provider: prospectContext.settings?.prospect_crm_provider ?? 'supabase',
+              generated_draft: generatedDraft,
+              memory_record: buildProspectMemoryRecord({
+                id: prospectInsert.id,
+                companyName: prospect.company_name,
+                source: prospect.source,
+                score: prospect.score,
+                band: prospect.band,
+                summary: prospect.summary,
+                tags: prospect.pain_points,
+                contactName: prospect.contact_name ?? null,
+                contactRole: null,
+                contactEmail: null,
+              }),
+            },
+          })
+          .eq('id', prospectInsert.id)
       }
     }
 
