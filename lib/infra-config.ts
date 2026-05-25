@@ -146,7 +146,7 @@ export function resolveHealthServiceUrls(
   )
 
   return {
-    hermesAgent: `${hermesAgentBase}/healthz`,
+    hermesAgent: `${hermesAgentBase}/v1/health`,
     ollama: `${ollamaBase}/api/tags`,
     n8n: `${n8nBase}/healthz`,
     supabase: `${supabaseBase}/rest/v1/`,

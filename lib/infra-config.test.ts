@@ -132,7 +132,7 @@ describe('infra config', () => {
     )
 
     expect(urls).toEqual({
-      hermesAgent: 'https://hermes.local/healthz',
+      hermesAgent: 'https://hermes.local/v1/health',
       ollama: 'http://ollama.local:11434/api/tags',
       n8n: 'https://n8n.env/healthz',
       supabase: 'https://supabase.local/rest/v1/',
