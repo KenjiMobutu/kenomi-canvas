@@ -1,5 +1,7 @@
 // ── Types input ──────────────────────────────────────────────────────────────
 
+import { buildAgentRunMetrics, type AgentRunMetricInput } from './agent-run-metrics'
+
 export type GamifVenture = {
   id: string
   score: number
@@ -19,6 +21,17 @@ export type GamifPayment = {
 }
 export type GamifMetric = { views: number }
 export type GamifDecision = { venture_id: string; decision: string; created_at: string }
+export type GamifAgentRun = {
+  id?: string
+  agent_id: string
+  duration_ms: number | null
+  created_at: string
+  fallback_triggered?: boolean | null
+  total_tokens?: number | string | null
+  cost_usd?: number | string | null
+  provider?: string | null
+  model?: string | null
+}
 export type GamifVentureEvent = {
   venture_id?: string | null
   event_type: string
@@ -36,6 +49,7 @@ export interface GamificationInput {
   metrics: GamifMetric[]
   decisions: GamifDecision[]
   ventureEvents: GamifVentureEvent[]
+  agentRuns: GamifAgentRun[]
   claimed: string[]
 }
 
@@ -202,6 +216,16 @@ function clamp(v: number): number {
   return Math.round(Math.max(0, Math.min(100, v)))
 }
 
+const GAMIFICATION_AGENT_IDS = [
+  'scout',
+  'validation',
+  'builder',
+  'payment',
+  'marketing',
+  'analytics',
+  'decision',
+] as const
+
 function levelFromXp(xp: number, divisor: number): number {
   return Math.floor(Math.sqrt(Math.max(0, xp) / divisor))
 }
@@ -308,7 +332,11 @@ function computeUnlocks(
 // ── Agent XP ──────────────────────────────────────────────────────────────────
 
 function computeAgentLevels(input: GamificationInput): AgentLevel[] {
-  const { ventures, snapshots, workflows, landings, payments, claimed, ventureEvents } = input
+  const { ventures, snapshots, workflows, landings, payments, ventureEvents, metrics, claimed } = input
+  const runMetrics = buildAgentRunMetrics(
+    input.agentRuns as AgentRunMetricInput[],
+    [...GAMIFICATION_AGENT_IDS]
+  )
   const enabledWf = workflows.filter((w) => w.enabled)
   const totalRevenue = Math.max(
     payments.reduce((s, p) => s + Math.max(0, Number(p.amount_eur) || 0), 0),
@@ -321,14 +349,29 @@ function computeAgentLevels(input: GamificationInput): AgentLevel[] {
   const eventSpendEur = spendEurFromEvents(ventureEvents)
   const roiXp = Math.max(0, revenueEurFromEvents(ventureEvents) - eventSpendEur)
 
+  const runXp = (agentId: string) => {
+    const metric = runMetrics[agentId]
+    if (!metric) return 0
+    const fallbackPenalty = Math.min(metric.fallback_count * 6, 240)
+    return Math.max(0, metric.run_count * 90 + metric.runs_24h * 20 + 30 - fallbackPenalty)
+  }
+
   const raw: Record<string, number> = {
-    scout: ventures.length * 40,
-    validation: totalScore * 3,
-    builder: landings.length * 60,
-    payment: totalRevenue / 10,
-    marketing: enabledWf.length * 25 + publishedCampaigns * 60 + eventSpendEur * 0.5,
-    analytics: snapshots.length * 15,
-    decision: claimed.length * 80 + ventures.filter((v) => v.score >= 75).length * 200 + roiXp,
+    scout: runXp('scout'),
+    validation: runXp('validation'),
+    builder: runXp('builder'),
+    payment: runXp('payment') + (totalRevenue > 0 ? Math.min(900, totalRevenue * 0.2) : 0),
+    marketing:
+      runXp('marketing') +
+      publishedCampaigns * 45 +
+      enabledWf.length * 15 +
+      Math.max(0, metrics.length),
+    analytics: runXp('analytics') + snapshots.length * 6,
+    decision:
+      runXp('decision') +
+      ventures.filter((v) => v.score >= 75).length * 55 +
+      roiXp +
+      Math.max(0, landings.length - claimed.length) * 4,
   }
 
   return Object.entries(raw).map(([id, xp]) => ({

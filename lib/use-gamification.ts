@@ -54,7 +54,7 @@ export function useGamification(): GamificationResult & {
       const ventureIds = (ventures ?? []).map((v: { id: string }) => v.id)
 
       // Step 2: fetch all other data in parallel
-      const [
+    const [
         { data: snapshots },
         { data: workflows },
         { data: landings },
@@ -62,6 +62,7 @@ export function useGamification(): GamificationResult & {
         { data: metrics },
         { data: decisions },
         { data: ventureEvents },
+        { data: agentRuns },
         { data: claims },
       ] = await Promise.all([
         supabase.from('kpi_snapshots').select('mrr, cac, created_at').eq('user_id', userId),
@@ -96,6 +97,13 @@ export function useGamification(): GamificationResult & {
               .select('venture_id, event_type, value, metadata, occurred_at')
               .in('venture_id', ventureIds)
           : Promise.resolve({ data: [] }),
+        ventureIds.length
+          ? supabase
+              .from('agent_runs')
+              .select('agent_id, duration_ms, created_at, fallback_triggered, total_tokens, cost_usd, provider, model')
+              .eq('user_id', userId)
+              .order('created_at', { ascending: true })
+          : Promise.resolve({ data: [] }),
         supabase.from('achievement_claims').select('achievement_id').eq('user_id', userId),
       ])
 
@@ -110,6 +118,7 @@ export function useGamification(): GamificationResult & {
         metrics: (metrics ?? []) as GamificationInput['metrics'],
         decisions: (decisions ?? []) as GamificationInput['decisions'],
         ventureEvents: (ventureEvents ?? []) as GamificationInput['ventureEvents'],
+        agentRuns: (agentRuns ?? []) as GamificationInput['agentRuns'],
         claimed: claimedIds,
       }
 

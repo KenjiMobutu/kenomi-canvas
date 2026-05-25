@@ -19,7 +19,7 @@ import {
   violet,
   fuchsia,
 } from '@/lib/ck-vars'
-import { makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
+import { sparkPath, areaPath } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
@@ -78,8 +78,7 @@ function BigKPI({
   trend?: boolean
   sparkData?: number[]
 }) {
-  const fallbackSpark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
-  const spark = sparkData && sparkData.length >= 2 ? sparkData : fallbackSpark
+  const spark = useMemo(() => (sparkData && sparkData.length >= 2 ? sparkData : []), [sparkData])
   const uid = label.replace(/\W/g, '')
   return (
     <div
@@ -166,7 +165,25 @@ function StackedArea({ series }: { series: { v: VentureAN; values: number[] }[] 
   const W = 900,
     H = 280,
     pad = 10
-  const n = series[0].values.length
+  const n = series[0]?.values.length ?? 0
+  if (!n) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'grid',
+          placeItems: 'center',
+          color: muted2,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          letterSpacing: '.12em',
+        }}
+      >
+        <span>Aucune série MRR disponible pour la période.</span>
+      </div>
+    )
+  }
   const stacked = Array.from({ length: n }, () => 0)
   const layers = series.map((s) => {
     const layer = s.values.map((v, i) => {
@@ -814,17 +831,17 @@ export default function AnalyticsPage() {
 
   const mrrSeries = useMemo(
     () =>
-      ventures.map((v, i) => {
-        const base = v.mrr / 10
-        const vol = 6 + i * 1.5
-        return {
-          v,
-          values: makeSpark(60, base + 5, vol, (i + 1) * 13 + 5).map((x, j) =>
-            Math.max(0, x * (base / 30) + (j / 60) * (v.mrr / 30))
-          ),
-        }
-      }),
-    [ventures]
+      ventures.length === 0 || mrrSparkSeries.length < 2
+        ? []
+        : (() => {
+            const totalMrr = ventures.reduce((sum, venture) => sum + venture.mrr, 0)
+            return ventures.map((v) => ({
+              v,
+              values:
+                totalMrr > 0 ? mrrSparkSeries.map((value) => (v.mrr / totalMrr) * value) : [],
+            }))
+          })(),
+    [ventures, mrrSparkSeries]
   )
 
   const cohort = useMemo<(number | null)[][]>(() => [], [])

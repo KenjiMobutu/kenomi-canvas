@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { CkShell } from '@/components/CkShell'
 import {
   bg,
@@ -18,7 +18,7 @@ import {
   violet,
   fuchsia,
 } from '@/lib/ck-vars'
-import { makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
+import { sparkPath, useIsMobile } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
@@ -68,13 +68,15 @@ function AuKpi({
   value,
   delta,
   color,
+  trend = [],
 }: {
   label: string
   value: string
   delta: string
   color: string
+  trend?: number[]
 }) {
-  const spark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
+  const hasTrend = trend.length >= 2
   return (
     <div
       style={{
@@ -136,13 +138,32 @@ function AuKpi({
       >
         {value}
       </div>
-      <svg
-        viewBox="0 0 100 22"
-        preserveAspectRatio="none"
-        style={{ width: '100%', height: 20, marginTop: 4, display: 'block' }}
-      >
-        <path d={sparkPath(spark, 100, 22, 1)} fill="none" stroke={color} strokeWidth="1.4" />
-      </svg>
+      {hasTrend ? (
+        <svg
+          viewBox="0 0 100 22"
+          preserveAspectRatio="none"
+          style={{ width: '100%', height: 20, marginTop: 4, display: 'block' }}
+        >
+          <path
+            d={sparkPath(trend, 100, 22, 1)}
+            fill="none"
+            stroke={color}
+            strokeWidth="1.4"
+          />
+        </svg>
+      ) : (
+        <div
+          style={{
+            marginTop: 4,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.08em',
+          }}
+        >
+          Tendance indisponible.
+        </div>
+      )}
     </div>
   )
 }

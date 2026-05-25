@@ -11,6 +11,7 @@ const EMPTY_INPUT: GamificationInput = {
   metrics: [],
   decisions: [],
   ventureEvents: [],
+  agentRuns: [],
   claimed: [],
 }
 
@@ -160,6 +161,46 @@ describe('computeGamification', () => {
     const payment = r.agentLevels.find((a) => a.id === 'payment')!
     expect(isNaN(payment.level)).toBe(false)
     expect(payment.level).toBe(0)
+  })
+
+  it('agentLevels : dépend des agent_runs réels et reste monotone avec le nombre de runs', () => {
+    const input: GamificationInput = {
+      ...EMPTY_INPUT,
+      agentRuns: [
+        { agent_id: 'scout', duration_ms: 1000, created_at: new Date().toISOString() },
+        { agent_id: 'scout', duration_ms: 1000, created_at: new Date().toISOString() },
+        { agent_id: 'builder', duration_ms: 1000, created_at: new Date().toISOString() },
+      ],
+    }
+    const r = computeGamification(input)
+    const scout = r.agentLevels.find((a) => a.id === 'scout')!
+    const builder = r.agentLevels.find((a) => a.id === 'builder')!
+    const payment = r.agentLevels.find((a) => a.id === 'payment')!
+    expect(scout.level).toBeGreaterThan(builder.level)
+    expect(payment.level).toBe(0)
+  })
+
+  it('agentLevels : plus de runs ⇒ plus de niveau (sans dépendre du stage/scorage)', () => {
+    const base: GamificationInput = {
+      ...EMPTY_INPUT,
+      agentRuns: [
+        { agent_id: 'marketing', duration_ms: 1000, created_at: new Date().toISOString() },
+      ],
+    }
+    const upgraded: GamificationInput = {
+      ...base,
+      agentRuns: [
+        ...base.agentRuns,
+        ...base.agentRuns,
+        ...base.agentRuns,
+        ...base.agentRuns,
+      ],
+    }
+    const r1 = computeGamification(base)
+    const r2 = computeGamification(upgraded)
+    const l1 = r1.agentLevels.find((a) => a.id === 'marketing')?.level ?? 0
+    const l2 = r2.agentLevels.find((a) => a.id === 'marketing')?.level ?? 0
+    expect(l2).toBeGreaterThan(l1)
   })
 
   it('utilise venture_events comme source revenu/ROI pour achievements et agents', () => {

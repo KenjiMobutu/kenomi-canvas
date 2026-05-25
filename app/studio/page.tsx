@@ -187,19 +187,6 @@ function rhythmStatus(hour: string): 'done' | 'now' | 'soon' {
 }
 
 /* ─── Spark chart utilities ──────────────────────────────────── */
-function makeSpark(n = 24, base = 50, vol = 18, seed = 1) {
-  let s = seed
-  const out: number[] = []
-  for (let i = 0; i < n; i++) {
-    s = (s * 9301 + 49297) % 233280
-    const r = s / 233280
-    base += (r - 0.5) * vol
-    base = Math.max(8, Math.min(98, base))
-    out.push(base)
-  }
-  return out
-}
-
 function sparkPath(values: number[], w: number, h: number, pad = 2) {
   if (!values.length) return ''
   const min = Math.min(...values),
@@ -749,12 +736,14 @@ function ChartWithTooltip({
   const ref = useRef<HTMLDivElement>(null)
   const W = 100,
     H = 100
-  const min = Math.min(...series),
-    max = Math.max(...series)
+  const hasSeries = series.length > 1
+  const min = hasSeries ? Math.min(...series) : 0
+  const max = hasSeries ? Math.max(...series) : 0
   const span = max - min || 1
   const gradId = `df-grad-${title.replace(/\W/g, '')}`
 
   function onMove(clientX: number) {
+    if (!hasSeries) return
     if (!ref.current) return
     const rect = ref.current.getBoundingClientRect()
     const xN = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
@@ -826,28 +815,56 @@ function ChartWithTooltip({
           preserveAspectRatio="none"
           style={{ width: '100%', height: '100%' }}
         >
-          <defs>
-            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor={tone} stopOpacity=".4" />
-              <stop offset="100%" stopColor={tone} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {[0, 0.5, 1].map((y, i) => (
-            <line
-              key={i}
-              x1="0"
-              x2={W}
-              y1={y * H}
-              y2={y * H}
-              stroke={line}
-              strokeWidth="0.4"
-              strokeDasharray={i === 1 ? '1 2' : 'none'}
-            />
-          ))}
-          <path d={areaPath(series, W, H, 1)} fill={`url(#${gradId})`} />
-          <path d={sparkPath(series, W, H, 1)} fill="none" stroke={tone} strokeWidth="1.4" />
+          {!hasSeries && (
+            <g>
+              <line
+                x1="8"
+                x2="92"
+                y1={H / 2}
+                y2={H / 2}
+                stroke={line}
+                strokeDasharray="2 4"
+              />
+              <text
+                x={W / 2}
+                y={(H / 2) + 6}
+                textAnchor="middle"
+                fontSize="8"
+                fill={muted}
+                fontFamily="var(--font-mono)"
+                letterSpacing="0.08em"
+              >
+                Tendance indisponible
+              </text>
+            </g>
+          )}
+          {hasSeries && (
+            <>
+              <defs>
+                <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor={tone} stopOpacity=".4" />
+                  <stop offset="100%" stopColor={tone} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {[0, 0.5, 1].map((y, i) => (
+                <line
+                  key={i}
+                  x1="0"
+                  x2={W}
+                  y1={y * H}
+                  y2={y * H}
+                  stroke={line}
+                  strokeWidth="0.4"
+                  strokeDasharray={i === 1 ? '1 2' : 'none'}
+                />
+              ))}
+              <path d={areaPath(series, W, H, 1)} fill={`url(#${gradId})`} />
+              <path d={sparkPath(series, W, H, 1)} fill="none" stroke={tone} strokeWidth="1.4" />
+            </>
+          )}
           {hover &&
             (() => {
+              if (!series.length) return null
               const x = (hover.idx / (series.length - 1)) * W
               const v = series[hover.idx]
               const y = (1 - (v - min) / span) * H
@@ -867,7 +884,7 @@ function ChartWithTooltip({
               )
             })()}
         </svg>
-        {hover && (
+        {hover && hasSeries && (
           <div
             style={{
               position: 'absolute',
@@ -892,6 +909,25 @@ function ChartWithTooltip({
             <span style={{ color: tone, fontWeight: 700 }}>
               €{(series[hover.idx] * 60).toFixed(0)}
             </span>
+          </div>
+        )}
+        {hover && !hasSeries && (
+          <div
+            style={{
+              position: 'absolute',
+              left: 8,
+              top: 8,
+              padding: '3px 8px',
+              borderRadius: 4,
+              background: bg,
+              border: `1px solid ${line}`,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: muted,
+              letterSpacing: '.08em',
+            }}
+          >
+            Données insuffisantes
           </div>
         )}
       </div>
@@ -930,7 +966,7 @@ function DecisionHero({
   onConfirm: () => void
 }) {
   const t = actionTokens(d.action)
-  const series = useMemo(() => makeSpark(28, 40, 14, d.id.length * 11), [d.id])
+  const series: number[] = []
   const isMobile = useIsMobile()
 
   return (
@@ -1272,7 +1308,7 @@ function UpNext({
         {queue.slice(1, 4).map((d, i) => {
           const actualIdx = i + 1
           const t = actionTokens(d.action)
-          const spark = makeSpark(20, 40, 14, d.id.length * 7)
+          const spark: number[] = []
           const confirmed = confirmedIds.includes(d.id)
           const active = selectedIdx === actualIdx
           return (
@@ -1370,13 +1406,26 @@ function UpNext({
                 preserveAspectRatio="none"
                 style={{ width: '100%', height: 22, marginTop: 'auto' }}
               >
-                <path
-                  d={sparkPath(spark, 100, 24, 1)}
-                  fill="none"
-                  stroke={t.color}
-                  strokeWidth="1.2"
-                  opacity={confirmed ? 0.4 : 1}
-                />
+                {spark.length > 0 ? (
+                  <path
+                    d={sparkPath(spark, 100, 24, 1)}
+                    fill="none"
+                    stroke={t.color}
+                    strokeWidth="1.2"
+                    opacity={confirmed ? 0.4 : 1}
+                  />
+                ) : (
+                  <text
+                    x="4"
+                    y="16"
+                    fill={muted}
+                    fontSize="7"
+                    fontFamily="var(--font-mono)"
+                    letterSpacing="0.08em"
+                  >
+                    Tendance indisponible
+                  </text>
+                )}
               </svg>
               {confirmed && (
                 <span

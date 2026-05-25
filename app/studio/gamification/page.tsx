@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import {
   agentById,
   AGENTS_DATA,
-  makeSpark,
   sparkPath,
   areaPath,
   useIsMobile,
@@ -1855,8 +1854,8 @@ function ConstellationSVG({
         const active = activeBeams.some((b) => b.from === a.id || b.to === a.id)
         const isRight = a.x - CST_CX > 0
         const al = levelMap[a.id]
-        const xpVal = al ? al.xpBar : a.xp
-        const lvlVal = al ? al.level : a.level
+        const xpVal = al?.xpBar ?? 0
+        const lvlVal = al?.level ?? 0
         return (
           <g key={a.id} transform={`translate(${Math.round(a.x)}, ${Math.round(a.y)})`}>
             {active && (
@@ -1947,11 +1946,12 @@ function GaugeCard({
   value: string
   delta: string
   tone: string
-  spark: number[]
+  spark?: number[]
 }) {
   const safeId = label.replace(/\s+/g, '-').toLowerCase()
-  const pathLine = sparkPath(spark, 140, 44)
-  const pathArea = areaPath(spark, 140, 44)
+  const hasSpark = Boolean(spark && spark.length)
+  const pathLine = hasSpark && spark ? sparkPath(spark, 140, 44) : ''
+  const pathArea = hasSpark && spark ? areaPath(spark, 140, 44) : ''
   return (
     <div
       style={{
@@ -2008,14 +2008,42 @@ function GaugeCard({
         viewBox="0 0 140 44"
         preserveAspectRatio="none"
       >
-        <defs>
-          <linearGradient id={`cg-${safeId}`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={tone} stopOpacity=".35" />
-            <stop offset="100%" stopColor={tone} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={pathArea} fill={`url(#cg-${safeId})`} />
-        <path d={pathLine} fill="none" stroke={tone} strokeWidth="1.6" />
+        {hasSpark && (
+          <>
+            <defs>
+              <linearGradient id={`cg-${safeId}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={tone} stopOpacity=".35" />
+                <stop offset="100%" stopColor={tone} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={pathArea} fill={`url(#cg-${safeId})`} />
+            <path d={pathLine} fill="none" stroke={tone} strokeWidth="1.6" />
+          </>
+        )}
+        {!hasSpark && (
+          <g>
+            <line
+              x1="10"
+              y1={44 / 2}
+              x2="130"
+              y2={44 / 2}
+              stroke={line}
+              strokeDasharray="2 3"
+              opacity={0.55}
+            />
+            <text
+              x="70"
+              y="27"
+              textAnchor="middle"
+              fill={muted}
+              fontSize="7"
+              fontFamily="var(--font-mono)"
+              letterSpacing="0.08em"
+            >
+              Tendance indisponible
+            </text>
+          </g>
+        )}
       </svg>
     </div>
   )
@@ -2511,10 +2539,10 @@ function ConstellationTab({ agentLevels }: { agentLevels: AgentLevel[] }) {
     [agentLevels]
   )
 
-  const sparkMRR = useMemo(() => makeSpark(36, 30, 12, 7), [])
-  const sparkCAC = useMemo(() => makeSpark(36, 60, 14, 11), [])
-  const sparkConv = useMemo(() => makeSpark(36, 45, 16, 19), [])
-  const sparkExp = useMemo(() => makeSpark(36, 40, 22, 23), [])
+  const sparkMRR: number[] = []
+  const sparkCAC: number[] = []
+  const sparkConv: number[] = []
+  const sparkExp: number[] = []
 
   return (
     <div

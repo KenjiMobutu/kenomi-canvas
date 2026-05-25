@@ -6,7 +6,7 @@ import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import { surface, surface2, line, line2, text, muted, muted2, accent, bg } from '@/lib/ck-vars'
-import { agentById, makeSpark, sparkPath, areaPath } from '@/lib/studio-utils'
+import { agentById, sparkPath, areaPath } from '@/lib/studio-utils'
 import { Play } from 'lucide-react'
 import { findAvailableSlug } from '@/lib/venture-materializer'
 import {
@@ -15,6 +15,7 @@ import {
   type CommercialRepairAction,
   type VentureCommerceReadiness,
 } from '@/lib/venture-commerce-readiness'
+import { useGamification } from '@/lib/use-gamification'
 
 const em = '#34d399',
   am = '#fbbf24',
@@ -250,6 +251,25 @@ function VentureCard({
 }
 
 function MiniArea({ label, spark, color }: { label: string; spark: number[]; color: string }) {
+  if (!spark || spark.length < 2) {
+    return (
+      <div
+        style={{
+          padding: 8,
+          borderRadius: 8,
+          background: surface2,
+          border: `1px solid ${line}`,
+          color: muted2,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: '.1em',
+        }}
+      >
+        <div>{label}</div>
+        <div style={{ marginTop: 4, opacity: 0.8 }}>Historique indisponible.</div>
+      </div>
+    )
+  }
   const uid = label.replace(/\W/g, '')
   return (
     <div style={{ padding: 8, borderRadius: 8, background: surface2, border: `1px solid ${line}` }}>
@@ -314,6 +334,7 @@ function VentureInspector({
   onOpen,
   onBrief,
   onRepairAction,
+  agentLevels,
 }: {
   v: DV | null
   repairAction?: CommercialRepairAction | null
@@ -323,6 +344,7 @@ function VentureInspector({
   onOpen: () => void
   onBrief: () => void
   onRepairAction?: (action: CommercialRepairAction) => Promise<void>
+  agentLevels: Map<string, { level: number; xpBar: number }>
 }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -359,8 +381,8 @@ function VentureInspector({
   }, [v?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stage = v ? STAGES.find((s) => s.id === v.stage) || STAGES[2] : STAGES[2]
-  const sparkA = useMemo(() => (v ? makeSpark(28, 40, 14, (v.id?.length ?? 1) + 3) : []), [v])
-  const sparkB = useMemo(() => (v ? makeSpark(28, 50, 16, (v.id?.length ?? 1) + 11) : []), [v])
+  const sparkA: number[] = []
+  const sparkB: number[] = []
 
   if (!v)
     return (
@@ -831,6 +853,7 @@ function VentureInspector({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {v.agentIds.map((id) => {
                 const a = agentById(id)
+                const stats = agentLevels.get(id)
                 return (
                   <div
                     key={id}
@@ -872,7 +895,7 @@ function VentureInspector({
                         letterSpacing: 1,
                       }}
                     >
-                      LV {a.level}
+                      LV {stats?.level ?? 0}
                     </span>
                     <span
                       style={{
@@ -882,7 +905,7 @@ function VentureInspector({
                         letterSpacing: 1,
                       }}
                     >
-                      {60 + Math.round(a.xp * 30)}%
+                      {Math.round((stats?.xpBar ?? 0) * 100)}%
                     </span>
                   </div>
                 )
@@ -1110,6 +1133,7 @@ function VentureInspector({
 export default function VenturesPage() {
   const { user } = useAuth()
   const isMobile = useIsMobile()
+  const { agentLevels } = useGamification()
   const [items, setItems] = useState<DV[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [commerceReadinessByVenture, setCommerceReadinessByVenture] = useState<
@@ -1117,6 +1141,16 @@ export default function VenturesPage() {
   >(new Map())
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', niche: '', stage: 'validation', score: '', mrr: '' })
+  const agentLevelMap = useMemo(
+    () =>
+      new Map(
+        agentLevels.map((agentLevel) => [
+          agentLevel.id,
+          { level: agentLevel.level, xpBar: agentLevel.xpBar },
+        ])
+      ),
+    [agentLevels]
+  )
 
   const supabase = createSupabaseBrowser()
 
@@ -1739,6 +1773,7 @@ export default function VenturesPage() {
                 .catch(() => toast.error('Impossible de copier'))
             }}
             onRepairAction={runRepairAgent}
+            agentLevels={agentLevelMap}
           />
         )}
       </div>

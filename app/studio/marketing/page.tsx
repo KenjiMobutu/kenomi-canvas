@@ -21,7 +21,6 @@ import {
 } from '@/lib/ck-vars'
 import {
   AGENTS_DATA,
-  makeSpark,
   sparkPath,
   areaPath,
   useTick,
@@ -42,6 +41,7 @@ import { getStatusColor } from '@/components/studio/StatusBadge'
 import { EmptyState } from '@/components/studio/EmptyState'
 import { getMissingMarketingDraftsAction } from '@/lib/autonomy/supervised-loop-state'
 import { adaptDraftToChannel, type MarketingChannelId } from '@/lib/marketing/channel-adapter'
+import { useGamification } from '@/lib/use-gamification'
 
 interface CampaignDraft {
   id: string
@@ -110,6 +110,7 @@ interface Channel {
   ctr: string
   drafts: number
   status: string
+  trend?: number[]
   waveSeed: number
 }
 
@@ -243,13 +244,15 @@ function MkKpi({
   value,
   delta,
   color,
+  trend = [],
 }: {
   label: string
   value: string
   delta: string
   color: string
+  trend?: number[]
 }) {
-  const spark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
+  const hasTrend = trend.length >= 2
   return (
     <div
       style={{
@@ -311,13 +314,27 @@ function MkKpi({
       >
         {value}
       </div>
-      <svg
-        viewBox="0 0 100 22"
-        preserveAspectRatio="none"
-        style={{ width: '100%', height: 20, marginTop: 4, display: 'block' }}
-      >
-        <path d={sparkPath(spark, 100, 22, 1)} fill="none" stroke={color} strokeWidth="1.4" />
-      </svg>
+      {hasTrend ? (
+        <svg
+          viewBox="0 0 100 22"
+          preserveAspectRatio="none"
+          style={{ width: '100%', height: 20, marginTop: 4, display: 'block' }}
+        >
+          <path d={sparkPath(trend, 100, 22, 1)} fill="none" stroke={color} strokeWidth="1.4" />
+        </svg>
+      ) : (
+        <div
+          style={{
+            marginTop: 4,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.08em',
+          }}
+        >
+          Tendance indisponible.
+        </div>
+      )}
     </div>
   )
 }
@@ -331,7 +348,8 @@ function ChannelCard({
   active: boolean
   onClick: () => void
 }) {
-  const wave = useMemo(() => makeSpark(36, 50, 22, channel.waveSeed), [channel.waveSeed])
+  const trend = channel.trend ?? []
+  const hasTrend = trend.length >= 2
   return (
     <button
       onClick={onClick}
@@ -428,19 +446,45 @@ function ChannelCard({
         preserveAspectRatio="none"
         style={{ width: '100%', height: 40, display: 'block' }}
       >
-        <defs>
-          <linearGradient id={`ch-${channel.id}`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={channel.color} stopOpacity=".5" />
-            <stop offset="100%" stopColor={channel.color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={areaPath(wave, 200, 40, 2)} fill={`url(#ch-${channel.id})`} />
-        <path
-          d={sparkPath(wave, 200, 40, 2)}
-          fill="none"
-          stroke={channel.color}
-          strokeWidth="1.4"
-        />
+        {hasTrend ? (
+          <>
+            <defs>
+              <linearGradient id={`ch-${channel.id}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={channel.color} stopOpacity=".5" />
+                <stop offset="100%" stopColor={channel.color} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={areaPath(trend, 200, 40, 2)} fill={`url(#ch-${channel.id})`} />
+            <path
+              d={sparkPath(trend, 200, 40, 2)}
+              fill="none"
+              stroke={channel.color}
+              strokeWidth="1.4"
+            />
+          </>
+        ) : (
+          <g>
+            <line
+              x1="10"
+              x2="190"
+              y1="20"
+              y2="20"
+              stroke={line}
+              strokeWidth="1"
+              strokeDasharray="3 4"
+            />
+            <text
+              x="10"
+              y="34"
+              fontSize="8"
+              fill={muted2}
+              fontFamily="var(--font-mono)"
+              letterSpacing="0.08em"
+            >
+              Tendance indisponible
+            </text>
+          </g>
+        )}
       </svg>
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -505,12 +549,14 @@ function MarketingAgentInspector({
   drafts,
   onRun,
   running,
+  level,
 }: {
   channel: Channel
   venture: MarketingVenture | null
   drafts: CampaignDraft[]
   onRun: () => void
   running: boolean
+  level: number
 }) {
   const t = useTick(2500)
   const pulse = 0.3 + Math.abs(Math.sin(t * Math.PI * 2)) * 0.7
@@ -628,7 +674,7 @@ function MarketingAgentInspector({
             flexShrink: 0,
           }}
         >
-          LV {agent.level}
+          LV {level}
         </span>
       </div>
 
@@ -1479,6 +1525,8 @@ export default function MarketingPage() {
   const [selChannel, setSelChannel] = useState<(typeof CHANNELS)[number]['id']>('linkedin')
   const isMobile = useIsMobile()
   const agent = AGENTS_DATA.find((a) => a.id === 'marketing')!
+  const { agentLevels } = useGamification()
+  const marketingLevel = agentLevels.find((entry) => entry.id === 'marketing')?.level ?? 0
 
   const [drafts, setDrafts] = useState<CampaignDraft[]>([])
   const [ventures, setVentures] = useState<MarketingVenture[]>([])
@@ -1708,9 +1756,32 @@ export default function MarketingPage() {
           draftMatchesChannel(draft, channel.id)
         )
         const connected = connectedChannelIds.includes(channel.id)
+        if (!channelDrafts.length) {
+          return {
+            ...channel,
+            drafts: 0,
+            trend: [],
+            status: connected ? channel.status : 'À connecter',
+          }
+        }
+        const latestAt = Math.max(...channelDrafts.map((draft) => new Date(draft.created_at).getTime()))
+        const now = new Date(latestAt)
+        const trend = Array.from({ length: 7 }, (_, dayOffset) => {
+          const dayStart = new Date(now)
+          dayStart.setHours(0, 0, 0, 0)
+          dayStart.setDate(dayStart.getDate() - (6 - dayOffset))
+          const nextDay = new Date(dayStart)
+          nextDay.setDate(dayStart.getDate() + 1)
+          const dayCount = channelDrafts.filter((draft) => {
+            const createdAt = new Date(draft.created_at)
+            return createdAt >= dayStart && createdAt < nextDay
+          }).length
+          return dayCount
+        })
         return {
           ...channel,
           drafts: channelDrafts.length,
+          trend,
           status: !connected
             ? 'À connecter'
             : channelDrafts.some((draft) => draft.status === 'published')
@@ -2717,6 +2788,7 @@ export default function MarketingPage() {
             drafts={selectedDrafts}
             onRun={runMarketingRepair}
             running={repairRunning}
+            level={marketingLevel}
           />
         </div>
 
