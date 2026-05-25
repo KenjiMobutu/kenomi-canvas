@@ -75,6 +75,12 @@ Pour la migration settings infra, le fichier attendu est :
 supabase/migrations/20260519001800_user_settings_infra_endpoints.sql
 ```
 
+Pour la migration acquisition/prospect CRM, le fichier attendu est :
+
+```bash
+supabase/migrations/20260525_prospect_crm.sql
+```
+
 ### 4. Vérifier l'état après application
 
 ```bash

@@ -22,6 +22,9 @@ describe('normalizeUserSettings', () => {
       proxmox_node: null,
       coolify_url: null,
       hermes_agent_url: null,
+      prospect_sources: null,
+      prospect_outreach_email: null,
+      prospect_crm_provider: null,
       nginx_pm_url: null,
       uptime_kuma_url: null,
       vaultwarden_url: null,
@@ -44,6 +47,9 @@ describe('normalizeUserSettings', () => {
       proxmox_node: 'proxmox',
       coolify_url: 'http://192.168.0.19:8000',
       hermes_agent_url: 'https://hermes.kenomi.eu',
+      prospect_sources: [],
+      prospect_outreach_email: '',
+      prospect_crm_provider: 'supabase',
       nginx_pm_url: 'https://npm.tailnet.local',
       uptime_kuma_url: 'https://uptime.tailnet.local',
       vaultwarden_url: 'https://vault.tailnet.local',
@@ -51,6 +57,18 @@ describe('normalizeUserSettings', () => {
       studio_timezone: 'Europe/Paris',
       budget_cap_euros: 50,
     })
+  })
+
+  it('normalizes prospect crm and outreach settings', () => {
+    const settings = normalizeUserSettings({
+      prospect_sources: null,
+      prospect_outreach_email: null,
+      prospect_crm_provider: null,
+    })
+
+    expect(settings.prospect_sources).toEqual([])
+    expect(settings.prospect_outreach_email).toBe('')
+    expect(settings.prospect_crm_provider).toBe('supabase')
   })
 
   it('preserves valid persisted settings', () => {
@@ -62,6 +80,9 @@ describe('normalizeUserSettings', () => {
       proxmox_node: 'lab',
       coolify_url: 'https://coolify.tailnet.local',
       hermes_agent_url: 'https://hermes.tailnet.local',
+      prospect_sources: ['linkedin', 'malt'],
+      prospect_outreach_email: 'hello@kenomi.eu',
+      prospect_crm_provider: 'supabase',
       nginx_pm_url: 'https://npm.tailnet.local',
       uptime_kuma_url: 'https://uptime.tailnet.local',
       vaultwarden_url: 'https://vault.tailnet.local',
@@ -77,6 +98,9 @@ describe('normalizeUserSettings', () => {
     expect(settings.proxmox_node).toBe('lab')
     expect(settings.coolify_url).toBe('https://coolify.tailnet.local')
     expect(settings.hermes_agent_url).toBe('https://hermes.tailnet.local')
+    expect(settings.prospect_sources).toEqual(['linkedin', 'malt'])
+    expect(settings.prospect_outreach_email).toBe('hello@kenomi.eu')
+    expect(settings.prospect_crm_provider).toBe('supabase')
     expect(settings.nginx_pm_url).toBe('https://npm.tailnet.local')
     expect(settings.uptime_kuma_url).toBe('https://uptime.tailnet.local')
     expect(settings.vaultwarden_url).toBe('https://vault.tailnet.local')
@@ -90,11 +114,17 @@ describe('normalizeUserSettings', () => {
       coolify_url: 'https://coolify.tailnet.local',
       proxmox_base_url: 'https://proxmox.tailnet.local:8006',
       hermes_agent_url: 'https://hermes.tailnet.local',
+      prospect_sources: ['linkedin'],
+      prospect_outreach_email: 'hello@kenomi.eu',
+      prospect_crm_provider: 'supabase',
     })
 
     expect(omitInfraSettings(settings)).not.toHaveProperty('coolify_url')
     expect(omitInfraSettings(settings)).not.toHaveProperty('proxmox_base_url')
     expect(omitInfraSettings(settings)).not.toHaveProperty('hermes_agent_url')
+    expect(omitInfraSettings(settings)).not.toHaveProperty('prospect_sources')
+    expect(omitInfraSettings(settings)).not.toHaveProperty('prospect_outreach_email')
+    expect(omitInfraSettings(settings)).not.toHaveProperty('prospect_crm_provider')
     expect(omitInfraSettings(settings)).toHaveProperty('ollama_base_url')
   })
 
@@ -103,6 +133,13 @@ describe('normalizeUserSettings', () => {
       isMissingInfraSettingsColumnError({
         code: 'PGRST204',
         message: "Could not find the 'coolify_url' column of 'user_settings'",
+      })
+    ).toBe(true)
+
+    expect(
+      isMissingInfraSettingsColumnError({
+        code: 'PGRST204',
+        message: "Could not find the 'prospect_sources' column of 'user_settings'",
       })
     ).toBe(true)
 

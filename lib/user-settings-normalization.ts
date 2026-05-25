@@ -12,6 +12,9 @@ export interface UserSettings {
   proxmox_node: string
   coolify_url: string
   hermes_agent_url: string
+  prospect_sources: string[]
+  prospect_outreach_email: string
+  prospect_crm_provider: string
   nginx_pm_url: string
   uptime_kuma_url: string
   vaultwarden_url: string
@@ -34,6 +37,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   proxmox_node: 'proxmox',
   coolify_url: 'http://192.168.0.19:8000',
   hermes_agent_url: 'https://hermes.kenomi.eu',
+  prospect_sources: [],
+  prospect_outreach_email: '',
+  prospect_crm_provider: 'supabase',
   nginx_pm_url: 'https://npm.tailnet.local',
   uptime_kuma_url: 'https://uptime.tailnet.local',
   vaultwarden_url: 'https://vault.tailnet.local',
@@ -42,7 +48,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   budget_cap_euros: 50,
 }
 
-type RawUserSettings = Partial<Record<keyof UserSettings, string | number | null | undefined>>
+type RawUserSettings = Partial<
+  Record<keyof UserSettings, string | string[] | number | null | undefined>
+>
 type SettingsErrorLike = { code?: string; message?: string }
 
 const INFRA_SETTINGS_KEYS = [
@@ -50,6 +58,9 @@ const INFRA_SETTINGS_KEYS = [
   'proxmox_node',
   'coolify_url',
   'hermes_agent_url',
+  'prospect_sources',
+  'prospect_outreach_email',
+  'prospect_crm_provider',
   'nginx_pm_url',
   'uptime_kuma_url',
   'vaultwarden_url',
@@ -61,6 +72,11 @@ function stringOrDefault(value: unknown, fallback: string): string {
 
 function validNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function stringArrayOrDefault(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) return fallback
+  return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
 }
 
 export function normalizeUserSettings(raw: RawUserSettings | null | undefined): UserSettings {
@@ -89,6 +105,18 @@ export function normalizeUserSettings(raw: RawUserSettings | null | undefined): 
     hermes_agent_url: stringOrDefault(
       raw?.hermes_agent_url,
       DEFAULT_USER_SETTINGS.hermes_agent_url
+    ),
+    prospect_sources: stringArrayOrDefault(
+      raw?.prospect_sources,
+      DEFAULT_USER_SETTINGS.prospect_sources
+    ),
+    prospect_outreach_email: stringOrDefault(
+      raw?.prospect_outreach_email,
+      DEFAULT_USER_SETTINGS.prospect_outreach_email
+    ),
+    prospect_crm_provider: stringOrDefault(
+      raw?.prospect_crm_provider,
+      DEFAULT_USER_SETTINGS.prospect_crm_provider
     ),
     nginx_pm_url: stringOrDefault(raw?.nginx_pm_url, DEFAULT_USER_SETTINGS.nginx_pm_url),
     uptime_kuma_url: stringOrDefault(raw?.uptime_kuma_url, DEFAULT_USER_SETTINGS.uptime_kuma_url),
