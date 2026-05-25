@@ -1,13 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Activity, Database, Mail, RefreshCw, Send, Target, Clock3 } from 'lucide-react'
+import { Activity, Check, Clock3, Database, Mail, RefreshCw, Send, Target, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
-import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { useIsMobile } from '@/lib/studio-utils'
 import { surface, surface2, line, line2, text, muted, muted2, accent, emerald, amber, cyan, rose } from '@/lib/ck-vars'
+import type { ProspectApprovalStatus } from '@/lib/prospect/types'
 
 type ProspectRow = {
   id: string
@@ -29,6 +29,9 @@ type ProspectRow = {
   last_contacted_at: string | null
   next_followup_at: string | null
   metadata: Record<string, unknown> | null
+  approval_status: ProspectApprovalStatus
+  outreach_action_id: string | null
+  outreach_approval_id: string | null
   created_at: string
   updated_at: string
 }
@@ -46,6 +49,8 @@ type ProspectSummary = {
   cold: number
   readyToContact: number
   dueFollowups: number
+  awaitingApproval: number
+  approvedToSend: number
 }
 
 type ProspectApiPayload = {
@@ -172,6 +177,7 @@ export default function ProspectPage() {
   const [jobsPayload, setJobsPayload] = useState<JobsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
+  const [approvalPendingKey, setApprovalPendingKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [prompt, setPrompt] = useState(
     'Trouve un prospect qualifié sur les sources configurées et rédige un message de prospection prêt à envoyer.'
@@ -223,6 +229,8 @@ export default function ProspectPage() {
     cold: 0,
     readyToContact: 0,
     dueFollowups: 0,
+    awaitingApproval: 0,
+    approvedToSend: 0,
   }
 
   const topProspects = useMemo(() => prospects.slice(0, 8), [prospects])
@@ -251,11 +259,49 @@ export default function ProspectPage() {
     }
   }
 
+  async function resolveApproval(approvalId: string, decision: 'approved' | 'rejected') {
+    const key = `${approvalId}:${decision}`
+    setApprovalPendingKey(key)
+    setError(null)
+    try {
+      const res = await fetch('/api/studio/autonomy/jobs', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ approvalId, decision }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Approval resolution failed')
+      toast.success(decision === 'approved' ? 'Draft approved' : 'Draft rejected')
+      await load()
+    } catch (resolveError) {
+      const message = resolveError instanceof Error ? resolveError.message : String(resolveError)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setApprovalPendingKey(null)
+    }
+  }
+
+  function approvalTone(status: ProspectApprovalStatus): 'muted' | 'hot' | 'warm' | 'cold' {
+    if (status === 'awaiting_approval') return 'warm'
+    if (status === 'approved_to_send') return 'hot'
+    if (status === 'rejected') return 'hot'
+    return 'cold'
+  }
+
+  function approvalLabel(status: ProspectApprovalStatus): string {
+    if (status === 'awaiting_approval') return 'awaiting approval'
+    if (status === 'approved_to_send') return 'approved to send'
+    if (status === 'rejected') return 'rejected'
+    return 'no approval'
+  }
+
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       <Chip label={`${summary.total} leads`} tone="cold" />
       <Chip label={`${summary.hot} hot`} tone="hot" />
-      <Chip label={`${summary.readyToContact} ready`} tone="warm" />
+      <Chip label={`${summary.awaitingApproval} awaiting`} tone="warm" />
+      <Chip label={`${summary.approvedToSend} approved`} tone="hot" />
       <button
         type="button"
         onClick={() => void load()}
@@ -356,6 +402,7 @@ export default function ProspectPage() {
                   { label: 'Hot', value: summary.hot, color: rose },
                   { label: 'Due', value: summary.dueFollowups, color: amber },
                   { label: 'Ready', value: summary.readyToContact, color: emerald },
+                  { label: 'Awaiting', value: summary.awaitingApproval, color: amber },
                 ].map((card) => (
                   <div
                     key={card.label}
@@ -682,9 +729,63 @@ export default function ProspectPage() {
 
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <Chip label={`status ${prospect.status}`} tone={bandTone(prospect.band)} />
+                      <Chip label={approvalLabel(prospect.approval_status)} tone={approvalTone(prospect.approval_status)} />
                       <Chip label={`next ${fmtDate(prospect.next_followup_at)}`} tone="cold" />
                       <Chip label={prospect.crm_record_id ? 'synced' : 'local'} tone="cold" />
                     </div>
+
+                    {prospect.outreach_approval_id && prospect.approval_status === 'awaiting_approval' ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => void resolveApproval(prospect.outreach_approval_id!, 'approved')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${emerald}35`,
+                            background: `${emerald}14`,
+                            color: emerald,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <Check size={13} />
+                          {approvalPendingKey === `${prospect.outreach_approval_id}:approved` ? '...' : 'Approve'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void resolveApproval(prospect.outreach_approval_id!, 'rejected')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${rose}35`,
+                            background: `${rose}14`,
+                            color: rose,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <X size={13} />
+                          {approvalPendingKey === `${prospect.outreach_approval_id}:rejected` ? '...' : 'Reject'}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               ))

@@ -3,6 +3,11 @@ export type ProspectBand = 'hot' | 'warm' | 'cold'
 export type ProspectFit = 'low' | 'medium' | 'high'
 export type ProspectUrgency = 'low' | 'medium' | 'high'
 export type ProspectFocus = 'prospect' | 'crm' | 'reply'
+export type ProspectApprovalStatus =
+  | 'no_approval'
+  | 'awaiting_approval'
+  | 'approved_to_send'
+  | 'rejected'
 
 export interface ProspectScoreInput {
   companyName: string

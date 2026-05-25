@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAllowedUser } from '@/lib/auth-server'
-import type { ProspectBand } from '@/lib/prospect/types'
+import { buildProspectViews, summarizeProspects } from '@/lib/prospect/api-view'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -54,35 +54,12 @@ async function single<T>(query: SingleQueryBuilder): Promise<T | null> {
   return data as T | null
 }
 
-function summarizeProspects(rows: Array<Record<string, unknown>>) {
-  const now = Date.now()
-  const initial = {
-    hot: 0,
-    warm: 0,
-    cold: 0,
-    readyToContact: 0,
-    dueFollowups: 0,
-  }
-  return rows.reduce<typeof initial>((acc, row) => {
-    const band = row.band as ProspectBand | undefined
-    const status = typeof row.status === 'string' ? row.status : 'new'
-    const nextFollowupAt = typeof row.next_followup_at === 'string' ? row.next_followup_at : null
-
-    if (band === 'hot') acc.hot += 1
-    if (band === 'warm') acc.warm += 1
-    if (band === 'cold') acc.cold += 1
-    if (status === 'ready_to_contact') acc.readyToContact += 1
-    if (nextFollowupAt && new Date(nextFollowupAt).getTime() <= now) acc.dueFollowups += 1
-    return acc
-  }, initial)
-}
-
 export async function GET() {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
-  const [prospects, settings] = await Promise.all([
+  const [prospects, settings, actions, approvals] = await Promise.all([
     supabase
       .from('prospects')
       .select('*')
@@ -94,27 +71,47 @@ export async function GET() {
       .select('prospect_sources, prospect_outreach_email, prospect_crm_provider')
       .eq('user_id', user!.id)
       .maybeSingle(),
+    supabase
+      .from('autonomy_actions')
+      .select('id, action_type, status, input, created_at')
+      .eq('user_id', user!.id)
+      .eq('action_type', 'send_outreach')
+      .order('created_at', { ascending: false })
+      .limit(200),
+    supabase
+      .from('human_approvals')
+      .select('id, action_id, status, created_at, updated_at')
+      .eq('user_id', user!.id)
+      .order('created_at', { ascending: false })
+      .limit(200),
   ])
 
   const errors = [
     prospects.error && { section: 'prospects', message: prospects.error.message },
     settings.error && { section: 'settings', message: settings.error.message },
+    actions.error && { section: 'actions', message: actions.error.message },
+    approvals.error && { section: 'approvals', message: approvals.error.message },
   ].filter(Boolean)
 
   const prospectRows = (prospects.data ?? []) as Array<Record<string, unknown>>
-  const enrichedProspects = prospectRows.map((row) => {
-    const metadata =
-      row.metadata && typeof row.metadata === 'object'
-        ? (row.metadata as Record<string, unknown>)
-        : {}
-    return {
-      ...row,
-      summary: typeof metadata.summary === 'string' ? metadata.summary : null,
-      pain_points: Array.isArray(metadata.pain_points) ? metadata.pain_points : [],
-      cta: typeof metadata.cta === 'string' ? metadata.cta : null,
-    }
+  const enrichedProspects = buildProspectViews({
+    prospects: prospectRows as Array<{ id: string; [key: string]: unknown }>,
+    actions: (actions.data ?? []) as Array<{
+      id: string
+      action_type?: string | null
+      status?: string | null
+      input?: Record<string, unknown> | null
+      created_at?: string | null
+    }>,
+    approvals: (approvals.data ?? []) as Array<{
+      id: string
+      action_id: string
+      status?: string | null
+      created_at?: string | null
+      updated_at?: string | null
+    }>,
   })
-  const summary = summarizeProspects(prospectRows)
+  const summary = summarizeProspects(enrichedProspects)
 
   return NextResponse.json(
     {

@@ -66,6 +66,10 @@ function createFakeSupabase(
           state.filters.push({ field, value, op: 'eq' })
           return builder
         },
+        contains: (field: string, value: unknown) => {
+          state.filters.push({ field, value, op: 'eq' })
+          return builder
+        },
         not: (field: string, _operator: string, value: unknown) => {
           state.filters.push({ field, value, op: 'not' })
           return builder
@@ -857,6 +861,94 @@ describe('runAgentStep', () => {
       agent_id: 'prospect',
       model: 'qwen3:8b',
     })
+    expect(supabase.tables.autonomy_actions).toHaveLength(1)
+    expect(supabase.tables.autonomy_actions[0]).toMatchObject({
+      action_type: 'send_outreach',
+      status: 'blocked',
+      risk_level: 'medium',
+    })
+    expect(supabase.tables.autonomy_actions[0].input).toMatchObject({
+      prospect_id: 'prospects-1',
+      company_name: 'Acme Studio',
+      channel: 'email',
+      band: 'hot',
+    })
+    expect(supabase.tables.human_approvals).toHaveLength(1)
+    expect(supabase.tables.human_approvals[0]).toMatchObject({
+      action_id: 'autonomy_actions-1',
+      status: 'pending',
+    })
+  })
+
+  it('does not create send_outreach approval for cold prospects', async () => {
+    const supabase = createFakeSupabase()
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'prospect',
+      llm: async (): Promise<LLMResponse> => ({
+        content: JSON.stringify({
+          company_name: 'Dormant Co',
+          source: 'reddit',
+          score: 41,
+          band: 'cold',
+          summary: 'Weak buying signal.',
+          pain_points: ['low urgency'],
+          outreach_subject: 'Dormant Co — idea',
+          outreach_body: 'Short note.',
+          cta: 'Open to a quick exchange?',
+        }),
+        provider: 'ollama',
+        model: 'qwen3:8b',
+        fallback_triggered: false,
+      }),
+      now: () => new Date('2026-05-18T10:00:00.000Z'),
+    })
+
+    expect(supabase.tables.autonomy_actions).toHaveLength(0)
+    expect(supabase.tables.human_approvals).toHaveLength(0)
+  })
+
+  it('does not duplicate send_outreach approvals for the same prospect', async () => {
+    const supabase = createFakeSupabase({
+      autonomy_actions: [
+        {
+          id: 'action-existing',
+          user_id: 'user-1',
+          action_type: 'send_outreach',
+          status: 'blocked',
+          input: { prospect_id: 'prospects-1' },
+        },
+      ],
+    })
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'prospect',
+      llm: async (): Promise<LLMResponse> => ({
+        content: JSON.stringify({
+          company_name: 'Acme Studio',
+          source: 'linkedin',
+          score: 91,
+          band: 'hot',
+          summary: 'Urgent qualification issue.',
+          pain_points: ['manual follow-up'],
+          outreach_subject: 'Acme Studio — qualify faster',
+          outreach_body: 'Bonjour, voici une piste.',
+          cta: 'Can I share a short example?',
+        }),
+        provider: 'ollama',
+        model: 'qwen3:8b',
+        fallback_triggered: false,
+      }),
+      now: () => new Date('2026-05-18T10:00:00.000Z'),
+    })
+
+    expect(supabase.tables.prospects).toHaveLength(1)
+    expect(supabase.tables.autonomy_actions).toHaveLength(1)
+    expect(supabase.tables.human_approvals).toHaveLength(0)
   })
 
   it('rejects Hermes as an executable agent id', async () => {

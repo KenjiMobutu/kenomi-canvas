@@ -21,6 +21,7 @@ import {
 import { buildProspectMemoryRecord } from '@/lib/prospect/memory'
 import { buildProspectOutreach } from '@/lib/prospect/build-outreach'
 import type { ProspectOutput } from '@/lib/agent-output-schemas'
+import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
 import { getModelFamily } from '@/lib/model-families'
 import { materializeBuilderOutput } from '@/lib/venture-materializer'
 import { buildCampaignDrafts, type MarketingOutputShape } from '@/lib/marketing/campaign-drafts'
@@ -34,6 +35,7 @@ import {
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
   eq(field: string, value: unknown): QueryBuilder
+  contains?(field: string, value: unknown): QueryBuilder
   not(field: string, operator: string, value: unknown): QueryBuilder
   order(field: string, options?: { ascending?: boolean }): QueryBuilder
   limit(count: number): QueryBuilder
@@ -138,6 +140,12 @@ async function single<T>(query: QueryBuilder): Promise<T | null> {
   return data as T | null
 }
 
+async function selectRows<T>(query: QueryBuilder): Promise<T[]> {
+  const { data, error } = await query
+  if (error) throw new RunAgentStepError(error.message, 500)
+  return Array.isArray(data) ? (data as T[]) : []
+}
+
 async function syncAgentRunStats(input: {
   supabase: RunAgentStepSupabase
   userId: string
@@ -201,6 +209,78 @@ function parseOutputSafely(agentId: string, content: string): AgentOutput | null
   } catch {
     return null
   }
+}
+
+async function ensureProspectOutreachApproval(input: {
+  supabase: RunAgentStepSupabase
+  userId: string
+  prospectId: string
+  prospect: ProspectOutput
+  nowIso: string
+}) {
+  if (!(input.prospect.band === 'hot' || input.prospect.band === 'warm')) return
+  if (!input.prospect.outreach_subject || !input.prospect.outreach_body) return
+
+  const existingActions = await selectRows<{
+    id?: string
+    action_type?: string | null
+    status?: string | null
+    input?: Record<string, unknown> | null
+  }>(
+    input.supabase
+      .from('autonomy_actions')
+      .select('id, action_type, status, input')
+      .eq('user_id', input.userId)
+      .eq('action_type', 'send_outreach')
+  )
+
+  const openAction = existingActions.find((action) => {
+    const state = deriveProspectApprovalState({ action })
+    if (!(state.actionable || state.approvalStatus === 'approved_to_send')) return false
+    return action.input?.prospect_id === input.prospectId
+  })
+
+  if (openAction?.id) return
+
+  const action = await single<{ id?: string }>(
+    input.supabase
+      .from('autonomy_actions')
+      .insert({
+        user_id: input.userId,
+        venture_id: null,
+        action_type: 'send_outreach',
+        risk_level: 'medium',
+        status: 'blocked',
+        input: {
+          prospect_id: input.prospectId,
+          channel: 'email',
+          company_name: input.prospect.company_name,
+          contact_name: input.prospect.contact_name ?? null,
+          outreach_subject: input.prospect.outreach_subject,
+          outreach_body: input.prospect.outreach_body,
+          source: input.prospect.source,
+          score: input.prospect.score,
+          band: input.prospect.band,
+        },
+        output: {},
+        created_at: input.nowIso,
+        updated_at: input.nowIso,
+      })
+      .select('id')
+  )
+
+  if (!action?.id) return
+
+  await input.supabase.from('human_approvals').insert({
+    user_id: input.userId,
+    action_id: action.id,
+    status: 'pending',
+    approved_by: null,
+    approved_at: null,
+    reason: null,
+    created_at: input.nowIso,
+    updated_at: input.nowIso,
+  })
 }
 
 function isDecisionOutput(output: AgentOutput | null): output is DecisionOutput {
@@ -687,6 +767,14 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
             },
           })
           .eq('id', prospectInsert.id)
+
+        await ensureProspectOutreachApproval({
+          supabase,
+          userId,
+          prospectId: prospectInsert.id,
+          prospect,
+          nowIso: now().toISOString(),
+        })
       }
     }
 
