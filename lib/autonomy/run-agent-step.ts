@@ -13,6 +13,7 @@ import {
 } from '@/lib/metrics/acquisition-roi'
 import {
   buildSystemPrompt,
+  AGENT_CHAIN,
   isAgentUnlocked,
   parsePipelineIdea,
   type PipelineRow,
@@ -126,6 +127,63 @@ async function single<T>(query: QueryBuilder): Promise<T | null> {
   const { data, error } = await query.single()
   if (error) throw new RunAgentStepError(error.message, 500)
   return data as T | null
+}
+
+async function syncAgentRunStats(input: {
+  supabase: RunAgentStepSupabase
+  userId: string
+  agentId: string
+  nowIso: string
+  defaultModel?: string
+}) {
+  const { data, error } = await input.supabase
+    .from('agent_runs')
+    .select('created_at')
+    .eq('user_id', input.userId)
+    .eq('agent_id', input.agentId)
+
+  if (error) throw new RunAgentStepError(error.message, 500)
+
+  const runs = Array.isArray(data) ? (data as Array<{ created_at?: string | null }>) : []
+  const hasUndatedRun = runs.some((row) => !row?.created_at)
+  const lastRunAt = runs.reduce((latest, row) => {
+    if (!row?.created_at) return latest
+    if (!latest) return row.created_at
+    return new Date(row.created_at).getTime() > new Date(latest).getTime() ? row.created_at : latest
+  }, null as string | null)
+
+  const config = await maybeSingle<{ user_id?: string; agent_id?: string }>(
+    input.supabase
+      .from('agent_configs')
+      .select('user_id, agent_id')
+      .eq('user_id', input.userId)
+      .eq('agent_id', input.agentId)
+  )
+
+  const payload = {
+    run_count: runs.length,
+    last_run_at: hasUndatedRun ? input.nowIso : (lastRunAt ?? input.nowIso),
+  }
+
+  if (config) {
+    await input.supabase
+      .from('agent_configs')
+      .update(payload)
+      .eq('user_id', input.userId)
+      .eq('agent_id', input.agentId)
+    return
+  }
+
+  const insertRow: Record<string, unknown> = {
+    user_id: input.userId,
+    agent_id: input.agentId,
+    ...payload,
+  }
+  if (input.defaultModel) {
+    insertRow.model = input.defaultModel
+  }
+
+  await input.supabase.from('agent_configs').insert(insertRow)
 }
 
 function parseOutputSafely(agentId: string, content: string): AgentOutput | null {
@@ -313,6 +371,10 @@ async function getDecisionMetricsBundle(
 export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentStepResult> {
   const { supabase, userId, agentId } = input
   if (!agentId) throw new RunAgentStepError('agentId requis', 400)
+  const supportedAgents = new Set(['scout', ...AGENT_CHAIN])
+  if (!supportedAgents.has(agentId)) {
+    throw new RunAgentStepError(`Agent inconnu: ${agentId}`, 400)
+  }
 
   const now = input.now ?? (() => new Date())
   const cfg = await maybeSingle<AgentConfig>(
@@ -346,7 +408,8 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     throw new RunAgentStepError("Cet agent attend la fin de l'étape précédente", 409)
   }
 
-  const model = cfg?.model ?? 'qwen3:8b'
+  const model =
+    cfg?.model ?? 'qwen3:8b'
   const baseSystemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
   const decisionBundle =
     agentId === 'decision'
@@ -452,11 +515,13 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           .select('id')
       )
 
-      await supabase
-        .from('agent_configs')
-        .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: now().toISOString() })
-        .eq('user_id', userId)
-        .eq('agent_id', agentId)
+      await syncAgentRunStats({
+        supabase,
+        userId,
+        agentId,
+        nowIso: now().toISOString(),
+        defaultModel: undefined,
+      })
 
       return {
         ok: true,
@@ -566,11 +631,13 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       }
     }
 
-    await supabase
-      .from('agent_configs')
-      .update({ run_count: (cfg?.run_count ?? 0) + 1, last_run_at: now().toISOString() })
-      .eq('user_id', userId)
-      .eq('agent_id', agentId)
+    await syncAgentRunStats({
+      supabase,
+      userId,
+      agentId,
+      nowIso: now().toISOString(),
+      defaultModel: undefined,
+    })
 
     return {
       ok: true,

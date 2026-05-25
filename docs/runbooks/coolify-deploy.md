@@ -10,6 +10,8 @@ incorrect service.
 ```bash
 COOLIFY_URL=https://coolify.example.internal
 COOLIFY_TOKEN=...
+HERMES_AGENT_URL=https://hermes.kenomi.eu
+OLLAMA_BASE_URL=http://192.168.0.14:11434
 TRUSTED_PRIVATE_HOSTS=coolify.example.internal
 SOURCE_COMMIT=<git-sha-built>
 EXPECTED_SOURCE_COMMIT=<git-sha-expected>
@@ -23,6 +25,14 @@ known internal deploy target.
 Coolify builds a new image. The Infrastructure page compares it with
 `EXPECTED_SOURCE_COMMIT` when present so operators can see whether the running
 container matches the commit they expected to deploy.
+
+Deployment order for the live topology:
+
+1. Push the new app image to Coolify.
+2. Verify `Hermes Agent` responds through the reverse proxy.
+3. Verify `Ollama` remains reachable only from the private Mac Mini M4 path.
+4. Re-run the Studio health checks.
+5. Approve or unblock the autonomy action only after the public UI and private LLM both pass.
 
 ## Normal Flow
 

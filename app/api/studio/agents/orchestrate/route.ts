@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  const now = new Date()
   const { data, error } = await supabase
     .from('agent_schedules')
     .select('id, agent_id, enabled, next_run_at, interval_minutes, requires_human_approval')
@@ -58,8 +59,7 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const schedules = data ?? []
-  const now = new Date()
+  const schedules = (data ?? []).filter((schedule) => schedule.agent_id !== 'hermes')
   const due = selectDueAgentRuns(schedules, now)
   const partition = partitionDueRuns(due)
   const execution = await executeDueAgentRuns({

@@ -28,6 +28,7 @@ export interface UserInfraSettings {
   proxmox_base_url?: string | null
   proxmox_node?: string | null
   coolify_url?: string | null
+  hermes_agent_url?: string | null
   nginx_pm_url?: string | null
   uptime_kuma_url?: string | null
   vaultwarden_url?: string | null
@@ -37,6 +38,7 @@ export interface UserInfraSettings {
 }
 
 export interface HealthServiceUrls {
+  hermesAgent: string
   ollama: string
   n8n: string
   supabase: string
@@ -49,6 +51,7 @@ const PRIVATE_HOST =
 const SERVICE_ENDPOINT_KEYS: Record<string, keyof UserInfraSettings> = {
   proxmox: 'proxmox_base_url',
   coolify: 'coolify_url',
+  hermesAgent: 'hermes_agent_url',
   nginx: 'nginx_pm_url',
   uptime: 'uptime_kuma_url',
   vault: 'vaultwarden_url',
@@ -126,6 +129,9 @@ export function resolveHealthServiceUrls(
   const ollamaBase = trimTrailingSlash(
     configuredString(settings?.ollama_base_url, env.OLLAMA_BASE_URL ?? 'http://192.168.0.14:11434')
   )
+  const hermesAgentBase = trimTrailingSlash(
+    configuredString(settings?.hermes_agent_url, env.HERMES_AGENT_URL ?? 'https://hermes.kenomi.eu')
+  )
   const n8nBase = trimTrailingSlash(
     configuredString(settings?.n8n_base_url, env.N8N_BASE_URL ?? 'https://n8n.kenomi.eu')
   )
@@ -140,6 +146,7 @@ export function resolveHealthServiceUrls(
   )
 
   return {
+    hermesAgent: `${hermesAgentBase}/healthz`,
     ollama: `${ollamaBase}/api/tags`,
     n8n: `${n8nBase}/healthz`,
     supabase: `${supabaseBase}/rest/v1/`,
@@ -167,6 +174,17 @@ export const DEFAULT_INFRA_SERVICES: InfraServiceConfig[] = parseInfraServices([
     healthKey: 'coolify',
     short: 'COOL',
     color: '#34d399',
+    vmid: 102,
+    kind: 'service',
+  },
+  {
+    id: 'hermesAgent',
+    label: 'Hermes Agent',
+    endpoint: process.env.HERMES_AGENT_URL ?? 'https://hermes.kenomi.eu',
+    role: 'Public Hermes UI',
+    healthKey: 'hermesAgent',
+    short: 'HRM',
+    color: '#f97316',
     vmid: 102,
     kind: 'service',
   },

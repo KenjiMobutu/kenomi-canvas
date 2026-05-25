@@ -1,5 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { isAllowedWebhookUrl, isAllowedOllamaUrl, isValidEmail } from './security'
+import {
+  isAllowedWebhookUrl,
+  isAllowedOllamaUrl,
+  isAllowedHermesAgentUrl,
+  isValidEmail,
+} from './security'
 
 afterEach(() => {
   delete process.env.TRUSTED_PRIVATE_HOSTS
@@ -45,6 +50,17 @@ describe('isAllowedOllamaUrl', () => {
   it('accepte Ollama privé avec allowlist', () => {
     process.env.TRUSTED_PRIVATE_HOSTS = '192.168.0.14'
     expect(isAllowedOllamaUrl('http://192.168.0.14:11434')).toBe(true)
+  })
+})
+
+describe('isAllowedHermesAgentUrl', () => {
+  it('accepte Hermes Agent public sans allowlist privée', () => {
+    expect(isAllowedHermesAgentUrl('https://hermes.kenomi.eu/healthz')).toBe(true)
+  })
+
+  it('accepte un host privé explicitement autorisé pour Hermes Agent', () => {
+    process.env.TRUSTED_PRIVATE_HOSTS = 'hermes.tailnet.local'
+    expect(isAllowedHermesAgentUrl('https://hermes.tailnet.local/healthz')).toBe(true)
   })
 })
 

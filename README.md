@@ -24,13 +24,13 @@ Studio OS pour entrepreneurs solo — gérez vos ventures, automatisez vos workf
 | Auth            | Supabase Auth (@supabase/ssr, JWT cookies)        |
 | Base de données | Supabase PostgreSQL 15 + Row Level Security       |
 | ORM             | Prisma 6 (schéma ventures legacy)                 |
-| LLM             | Ollama (local, streaming SSE)                     |
+| LLM             | Hermes Agent UI + Ollama (local, streaming SSE)   |
 | Automations     | n8n (webhooks)                                    |
 | Déploiement     | Docker standalone, Coolify self-hosted            |
 
 ## Architecture Status
 
-Kenomi Canvas est le cockpit du Kenomi AI Venture Studio. Il fournit la gestion des ventures, l'exécution des agents, les triggers n8n, la capture waitlist, la santé de l'infrastructure et le routage LLM local-first.
+Kenomi Canvas est le cockpit du Kenomi AI Venture Studio. Il fournit la gestion des ventures, l'exécution des agents, les triggers n8n, la capture waitlist, la santé de l'infrastructure et le routage LLM local-first. L'interface Hermes est exposée via Coolify, tandis que l'inférence Ollama reste privée sur le Mac Mini M4.
 
 L'autonomie est intentionnellement supervisée : les actions risquées (paiement, déploiement, publication publique) requièrent une approbation humaine explicite.
 
@@ -42,6 +42,7 @@ Statut actuel :
 - **Monétisation** : création Stripe Checkout et webhook `checkout.session.completed` intégrés derrière approbation humaine.
 - **Déploiement** : action Coolify déclenchable derrière approbation humaine, avec mode dry-run.
 - **Infrastructure** : vue topology alimentée par `/api/studio/infra/services`, avec configuration extensible par variables d'environnement.
+- **Hermes** : UI publique derrière reverse proxy Coolify, backend Ollama privé sur le Mac Mini M4.
 - **Privacy** : export RGPD multi-tables et suppression confirmée avec token temporel.
 - **Sécurité** : RLS Supabase, allowlist email, proxy Next.js, protections SSRF et secrets côté serveur.
 
@@ -93,6 +94,8 @@ npm run dev
 | `STRIPE_WEBHOOK_SECRET`         | Secret de signature du webhook Stripe `/api/stripe/webhook`      |
 | `COOLIFY_URL`                   | URL API Coolify autorisée côté serveur                           |
 | `COOLIFY_TOKEN`                 | Token API Coolify côté serveur                                   |
+| `HERMES_AGENT_URL`              | URL publique de l'interface Hermes                               |
+| `OLLAMA_BASE_URL`               | URL privée du runtime Ollama sur le Mac Mini M4                  |
 | `TRUSTED_PRIVATE_HOSTS`         | Hosts privés autorisés pour appels serveur, séparés par virgules |
 | `SOURCE_COMMIT`                 | Commit embarqué dans le runtime, affiché par le diagnostic infra |
 | `EXPECTED_SOURCE_COMMIT`        | Commit attendu pour la parité prod, optionnel                    |

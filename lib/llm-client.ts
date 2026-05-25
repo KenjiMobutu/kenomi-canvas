@@ -10,6 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { logWarn } from './logger'
+import { HERMES_MODELS } from './model-families'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,10 @@ const PRICING_PER_1K_TOKENS_USD: Record<string, { input: number; output: number 
   'llama3.1:8b': { input: 0, output: 0 },
   'mistral:7b': { input: 0, output: 0 },
   'codestral:latest': { input: 0, output: 0 },
+}
+
+for (const model of HERMES_MODELS) {
+  PRICING_PER_1K_TOKENS_USD[model] = { input: 0, output: 0 }
 }
 
 export function computeCostUsd(model: string, usage: LLMUsage): number {

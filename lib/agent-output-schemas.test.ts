@@ -2,6 +2,30 @@ import { describe, expect, it } from 'vitest'
 import { parseAgentOutput } from './agent-output-schemas'
 
 describe('parseAgentOutput', () => {
+  it('refuse Hermes comme agent métier', () => {
+    expect(() =>
+      parseAgentOutput(
+        'hermes',
+        JSON.stringify({
+          objective: 'Prioriser les prochaines actions business',
+          summary: 'Le pipeline doit d’abord enrichir les leads puis préparer les séquences.',
+          focus: 'prospect',
+          confidence: 88,
+          next_actions: [
+            {
+              agent_id: 'scout',
+              label: 'Scanner les opportunités',
+              prompt: 'Scrape les signaux business autorisés et remonte les leads chauds.',
+              reason: 'Le pipeline d acquisition doit être alimenté avant la relance.',
+              priority: 90,
+            },
+          ],
+          risks: ['Source scraping à valider'],
+        })
+      )
+    ).toThrow('unknown agent')
+  })
+
   it('parse le format Scout legacy en objet structuré', () => {
     const parsed = parseAgentOutput(
       'scout',

@@ -65,7 +65,9 @@ export async function collectInfraDiagnostics(input: {
 }): Promise<InfraDiagnostics> {
   const { data, error } = await input.supabase
     .from('user_settings')
-    .select('ollama_base_url,n8n_base_url,supabase_url,coolify_url,proxmox_base_url,proxmox_node')
+    .select(
+      'hermes_agent_url,ollama_base_url,n8n_base_url,supabase_url,coolify_url,proxmox_base_url,proxmox_node'
+    )
     .eq('user_id', input.userId)
     .maybeSingle<UserInfraSettings>()
 
@@ -73,7 +75,8 @@ export async function collectInfraDiagnostics(input: {
   const urls = resolveHealthServiceUrls(settings)
   const checkedAt = new Date().toISOString()
 
-  const [ollama, n8n, supabaseStatus, coolify] = await Promise.all([
+  const [hermesAgent, ollama, n8n, supabaseStatus, coolify] = await Promise.all([
+    pingDiagnosticUrl(urls.hermesAgent),
     pingDiagnosticUrl(urls.ollama),
     pingDiagnosticUrl(urls.n8n),
     pingDiagnosticUrl(urls.supabase),
@@ -87,6 +90,15 @@ export async function collectInfraDiagnostics(input: {
   const proxmoxOk = proxmoxMetrics.nodes.length > 0 || proxmoxMetrics.vms.length > 0
 
   const services: ServiceDiagnosticInput[] = [
+    {
+      id: 'hermesAgent',
+      label: 'Hermes Agent',
+      url: urls.hermesAgent,
+      source: resolveSettingSource(settings?.hermes_agent_url),
+      ok: hermesAgent.ok,
+      latencyMs: hermesAgent.latencyMs,
+      error: hermesAgent.error,
+    },
     {
       id: 'ollama',
       label: 'Ollama',

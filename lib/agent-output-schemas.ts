@@ -143,6 +143,13 @@ export type AgentOutput =
   | z.infer<typeof marketingSchema>
   | z.infer<typeof decisionSchema>
 
+export type ScoutOutput = z.infer<typeof scoutSchema>
+export type ValidationOutput = z.infer<typeof validationSchema>
+export type BuilderOutput = z.infer<typeof builderSchema>
+export type PaymentOutput = z.infer<typeof paymentSchema>
+export type MarketingOutput = z.infer<typeof marketingSchema>
+export type DecisionOutput = z.infer<typeof decisionSchema>
+
 export function parseAgentOutput(agentId: string, content: string): AgentOutput {
   const schema = schemas[agentId as AgentId]
   if (!schema) throw new Error(`Invalid ${agentId} output: unknown agent`)

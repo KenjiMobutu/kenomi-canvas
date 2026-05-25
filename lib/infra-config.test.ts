@@ -55,6 +55,29 @@ describe('infra config', () => {
     expect(getSanitizedInfraServices(services)[0].endpointLabel).toBe('n8n.kenomi.eu')
   })
 
+  it('applies the Hermes Agent public endpoint before redaction', () => {
+    const services = parseInfraServices([
+      {
+        id: 'hermesAgent',
+        label: 'Hermes Agent',
+        endpoint: 'https://hermes.kenomi.eu',
+        role: 'Public Hermes UI',
+        healthKey: 'hermesAgent',
+        short: 'HRM',
+        color: '#f97316',
+        vmid: 102,
+        kind: 'service',
+      },
+    ])
+
+    const configured = applyUserInfraSettings(services, {
+      hermes_agent_url: 'https://hermes.tailnet.local',
+    })
+
+    expect(configured[0].endpoint).toBe('https://hermes.tailnet.local')
+    expect(getSanitizedInfraServices(configured)[0].endpointLabel).toBe('hermes.tailnet.local')
+  })
+
   it('applies saved service endpoints before redacting them for the UI', () => {
     const services = parseInfraServices([
       {
@@ -94,12 +117,14 @@ describe('infra config', () => {
   it('resolves health check URLs from saved settings with env fallbacks', () => {
     const urls = resolveHealthServiceUrls(
       {
+        hermes_agent_url: 'https://hermes.local',
         ollama_base_url: 'http://ollama.local:11434/',
         n8n_base_url: '',
         supabase_url: 'https://supabase.local/',
         coolify_url: 'https://coolify.local/',
       },
       {
+        HERMES_AGENT_URL: 'https://hermes.env',
         N8N_BASE_URL: 'https://n8n.env',
         NEXT_PUBLIC_SUPABASE_URL: 'https://supabase.env',
         COOLIFY_URL: 'https://coolify.env',
@@ -107,6 +132,7 @@ describe('infra config', () => {
     )
 
     expect(urls).toEqual({
+      hermesAgent: 'https://hermes.local/healthz',
       ollama: 'http://ollama.local:11434/api/tags',
       n8n: 'https://n8n.env/healthz',
       supabase: 'https://supabase.local/rest/v1/',

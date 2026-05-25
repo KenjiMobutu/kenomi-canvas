@@ -703,4 +703,105 @@ describe('runAgentStep', () => {
       headline: 'Priorisez vos leads email',
     })
   })
+
+  it('reconciles agent_configs.run_count from real agent_runs rows after a successful run', async () => {
+    const supabase = createFakeSupabase({
+      agent_configs: [
+        {
+          user_id: 'user-1',
+          agent_id: 'scout',
+          run_count: 9,
+          last_run_at: '2026-05-18T09:00:00.000Z',
+        },
+      ],
+      agent_runs: [
+        {
+          id: 'run-1',
+          user_id: 'user-1',
+          agent_id: 'scout',
+          created_at: '2026-05-18T08:00:00.000Z',
+        },
+        {
+          id: 'run-2',
+          user_id: 'user-1',
+          agent_id: 'scout',
+          created_at: '2026-05-18T08:30:00.000Z',
+        },
+      ],
+    })
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'scout',
+      llm: async (): Promise<LLMResponse> => ({
+        content: [
+          'TITRE: InboxPulse',
+          'NICHE: agences B2B',
+          'PROBLÈME: les leads email sont mal priorisés',
+          'SOLUTION: scoring automatique des conversations',
+          'MARCHÉ: agences de prospection outbound',
+        ].join('\n'),
+        provider: 'ollama',
+        model: 'qwen3:8b',
+        fallback_triggered: false,
+      }),
+      now: () => new Date('2026-05-18T10:00:00.000Z'),
+    })
+
+    expect(supabase.tables.agent_configs[0]).toMatchObject({
+      user_id: 'user-1',
+      agent_id: 'scout',
+      run_count: 3,
+      last_run_at: '2026-05-18T10:00:00.000Z',
+    })
+  })
+
+  it('creates agent_configs counters when the agent has runs but no config row yet', async () => {
+    const supabase = createFakeSupabase()
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'scout',
+      llm: async (): Promise<LLMResponse> => ({
+        content: [
+          'TITRE: InboxPulse',
+          'NICHE: agences B2B',
+          'PROBLÈME: les leads email sont mal priorisés',
+          'SOLUTION: scoring automatique des conversations',
+          'MARCHÉ: agences de prospection outbound',
+        ].join('\n'),
+        provider: 'ollama',
+        model: 'qwen3:8b',
+        fallback_triggered: false,
+      }),
+      now: () => new Date('2026-05-18T10:00:00.000Z'),
+    })
+
+    expect(supabase.tables.agent_configs).toContainEqual(
+      expect.objectContaining({
+        user_id: 'user-1',
+        agent_id: 'scout',
+        run_count: 1,
+        last_run_at: '2026-05-18T10:00:00.000Z',
+      })
+    )
+  })
+
+  it('rejects Hermes as an executable agent id', async () => {
+    const supabase = createFakeSupabase()
+
+    await expect(
+      runAgentStep({
+        supabase,
+        userId: 'user-1',
+        agentId: 'hermes',
+        now: () => new Date('2026-05-18T10:00:00.000Z'),
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('Agent inconnu'),
+    })
+  })
 })

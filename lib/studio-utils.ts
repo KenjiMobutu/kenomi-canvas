@@ -10,8 +10,6 @@ export const AGENTS_DATA = [
     model: 'Claude Code',
     color: '#22d3ee',
     sigil: '◬',
-    level: 14,
-    xp: 0.72,
   },
   {
     id: 'validation',
@@ -22,8 +20,6 @@ export const AGENTS_DATA = [
     model: 'Ollama',
     color: '#a78bfa',
     sigil: '◇',
-    level: 11,
-    xp: 0.41,
   },
   {
     id: 'builder',
@@ -34,8 +30,6 @@ export const AGENTS_DATA = [
     model: 'Claude Code',
     color: '#34d399',
     sigil: '◮',
-    level: 17,
-    xp: 0.88,
   },
   {
     id: 'payment',
@@ -46,8 +40,6 @@ export const AGENTS_DATA = [
     model: 'Stripe API',
     color: '#fbbf24',
     sigil: '◈',
-    level: 8,
-    xp: 0.55,
   },
   {
     id: 'marketing',
@@ -58,8 +50,6 @@ export const AGENTS_DATA = [
     model: 'Ollama',
     color: '#e879f9',
     sigil: '✺',
-    level: 13,
-    xp: 0.62,
   },
   {
     id: 'analytics',
@@ -70,8 +60,6 @@ export const AGENTS_DATA = [
     model: 'Supabase',
     color: '#60a5fa',
     sigil: '◐',
-    level: 12,
-    xp: 0.34,
   },
   {
     id: 'decision',
@@ -82,13 +70,11 @@ export const AGENTS_DATA = [
     model: 'Claude Code',
     color: '#ff6a3d',
     sigil: '✦',
-    level: 19,
-    xp: 0.93,
   },
 ]
 
 export function agentById(id: string) {
-  return AGENTS_DATA.find((a) => a.id === id) ?? AGENTS_DATA[0]
+  return AGENTS_DATA.find((a) => a.id === id) ?? AGENTS_DATA.find((a) => a.id === 'scout') ?? AGENTS_DATA[0]
 }
 
 export function makeSpark(n = 24, base = 50, vol = 18, seed = 1): number[] {

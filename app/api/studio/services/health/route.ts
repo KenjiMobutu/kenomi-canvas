@@ -9,6 +9,7 @@ import { cookies } from 'next/headers'
 import { checkOllamaHealth } from '@/lib/llm-client'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { resolveHealthServiceUrls, type UserInfraSettings } from '@/lib/infra-config'
+import { isAllowedHermesAgentUrl, isAllowedOllamaUrl } from '@/lib/security'
 import { unwrapOptionalInfraSettings } from '@/lib/user-settings-normalization'
 
 type ServiceStatus = {
@@ -47,22 +48,28 @@ export async function GET() {
 
   const { data, error } = await supabaseClient
     .from('user_settings')
-    .select('ollama_base_url,n8n_base_url,supabase_url,coolify_url')
+    .select('hermes_agent_url,ollama_base_url,n8n_base_url,supabase_url,coolify_url')
     .eq('user_id', user!.id)
     .maybeSingle()
   const urls = resolveHealthServiceUrls(
     unwrapOptionalInfraSettings(data as UserInfraSettings | null, error)
   )
 
-  const [ollama, n8n, supabaseHealth, coolify] = await Promise.all([
-    pingService(urls.ollama),
+  const hermesAllowed = isAllowedHermesAgentUrl(urls.hermesAgent)
+  const ollamaAllowed = isAllowedOllamaUrl(urls.ollama.replace(/\/api\/tags$/, ''))
+  const hermesDenied: ServiceStatus = { status: 'down', detail: 'URL Hermes invalide' }
+  const ollamaDenied: ServiceStatus = { status: 'down', detail: 'URL Ollama invalide' }
+
+  const [hermesAgent, ollama, n8n, supabaseHealth, coolify] = await Promise.all([
+    hermesAllowed ? pingService(urls.hermesAgent) : Promise.resolve(hermesDenied),
+    ollamaAllowed ? pingService(urls.ollama) : Promise.resolve(ollamaDenied),
     pingService(urls.n8n),
     pingService(urls.supabase),
     pingService(urls.coolify),
   ])
 
-  const ollamaHealthy = await checkOllamaHealth(urls.ollama)
-  const fallbackActive = !ollamaHealthy
+  const ollamaHealthy = ollamaAllowed && (await checkOllamaHealth(urls.ollama))
+  const fallbackActive = !ollamaHealthy || !ollamaAllowed
 
   const toHealthResult = (s: ServiceStatus) => ({
     ok: s.status === 'ok',
@@ -72,14 +79,19 @@ export async function GET() {
   // Ollama peut avoir une URL différente par utilisateur/env. Le statut final
   // doit suivre l'URL résolue ci-dessus, pas seulement OLLAMA_BASE_URL.
   const ollamaResult = { ok: ollamaHealthy, latencyMs: ollama.latency_ms ?? 0 }
+  const hermesAgentResult = { ok: hermesAgent.status === 'ok', latencyMs: hermesAgent.latency_ms ?? 0 }
 
-  const allOk = ollamaHealthy && [n8n, supabaseHealth, coolify].every((s) => s.status === 'ok')
+  const allOk =
+    hermesAgent.status === 'ok' &&
+    ollamaHealthy &&
+    [n8n, supabaseHealth, coolify].every((s) => s.status === 'ok')
 
   return NextResponse.json(
-    {
-      ollama: ollamaResult,
-      n8n: toHealthResult(n8n),
-      supabase: toHealthResult(supabaseHealth),
+      {
+        hermesAgent: hermesAgentResult,
+        ollama: ollamaResult,
+        n8n: toHealthResult(n8n),
+        supabase: toHealthResult(supabaseHealth),
       coolify: toHealthResult(coolify),
       _meta: {
         status: allOk ? 'ok' : 'degraded',

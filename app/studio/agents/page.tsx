@@ -29,7 +29,7 @@ import {
   cyan,
   violet,
 } from '@/lib/ck-vars'
-import { AGENTS_DATA, makeSpark, sparkPath, areaPath, useTick } from '@/lib/studio-utils'
+import { AGENTS_DATA, sparkPath, areaPath, useTick } from '@/lib/studio-utils'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
@@ -56,6 +56,8 @@ import {
   type AgentRunMetric,
   type AgentRunMetricInput,
 } from '@/lib/agent-run-metrics'
+import { useGamification } from '@/lib/use-gamification'
+import { HERMES_MODELS } from '@/lib/model-families'
 
 interface AgentConfig {
   model: string
@@ -70,7 +72,9 @@ const DEFAULT_CONFIG: AgentConfig = {
   temperature: 0.7,
   max_tokens: 2048,
 }
-const MODELS = ['qwen3:8b', 'qwen3:14b', 'claude-sonnet-4-6', 'gpt-4o-mini']
+const DEFAULT_CONFIG_BY_AGENT: Record<string, AgentConfig> = {
+}
+const MODELS = [...HERMES_MODELS, 'qwen3:8b', 'qwen3:14b', 'claude-sonnet-4-6', 'gpt-4o-mini']
 
 interface DbAgentState {
   paused: boolean
@@ -106,7 +110,9 @@ function TunePanel({
 
   useEffect(() => {
     if (!user) return
+    setCfg(DEFAULT_CONFIG_BY_AGENT[agentId] ?? DEFAULT_CONFIG)
     const supabase = createSupabaseBrowser()
+    let cancelled = false
     supabase
       .from('agent_configs')
       .select('*')
@@ -114,6 +120,7 @@ function TunePanel({
       .eq('agent_id', agentId)
       .maybeSingle()
       .then(({ data }) => {
+        if (cancelled) return
         if (data)
           setCfg({
             model: data.model,
@@ -122,6 +129,9 @@ function TunePanel({
             max_tokens: data.max_tokens,
           })
       })
+    return () => {
+      cancelled = true
+    }
   }, [agentId, user])
 
   async function save() {
@@ -330,6 +340,8 @@ function TunePanel({
 }
 
 type AgentData = (typeof AGENTS_DATA)[0]
+type AgentLevelView = { level: number; xpBar: number }
+type AgentCard = AgentData & AgentLevelView
 
 const QUEUE: Record<string, string[]> = {}
 
@@ -1436,7 +1448,7 @@ function AgentInspector({
   runMetric,
   onRunComplete,
 }: {
-  agent: AgentData
+  agent: AgentCard
   activity: number[]
   queue: string[]
   pipeline: PipelineRow | null
@@ -1665,7 +1677,7 @@ function AgentInspector({
               letterSpacing: '.1em',
             }}
           >
-            {Math.round(agent.xp * 1000)} / 1000 · next: LV {agent.level + 1}
+            {Math.round(agent.xpBar * 1000)} / 1000 · next: LV {agent.level + 1}
           </span>
         </div>
         <div
@@ -1680,7 +1692,7 @@ function AgentInspector({
         >
           <div
             style={{
-              width: `${agent.xp * 100}%`,
+              width: `${agent.xpBar * 100}%`,
               height: '100%',
               background: `linear-gradient(90deg, ${agent.color}, var(--ck-accent-2))`,
               boxShadow: `0 0 10px ${agent.color}`,
@@ -2038,7 +2050,7 @@ function RosterTile({
   active,
   onClick,
 }: {
-  agent: AgentData
+  agent: AgentCard
   idx: number
   active: boolean
   onClick: () => void
@@ -2175,7 +2187,7 @@ function RosterTile({
       </div>
 
       <div style={{ height: 4, borderRadius: 2, background: surface2, overflow: 'hidden' }}>
-        <div style={{ width: `${agent.xp * 100}%`, height: '100%', background: agent.color }} />
+        <div style={{ width: `${agent.xpBar * 100}%`, height: '100%', background: agent.color }} />
       </div>
 
       <div
@@ -2284,7 +2296,7 @@ function RunsTimeline({ runs }: { runs: AgentRunMetricInput[] }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {rows.slice(0, 6).map((row) => (
+      {rows.slice(0, AGENTS_DATA.length).map((row) => (
         <div
           key={row.agent.id}
           style={{
@@ -2575,16 +2587,40 @@ export default function AgentsPage() {
   }
 
   const selected = AGENTS_DATA.find((a) => a.id === selectedId) ?? AGENTS_DATA[0]
+  const { agentLevels } = useGamification()
+  const levelMap = useMemo(
+    () =>
+      new Map(
+        agentLevels.map((agentLevel) => [
+          agentLevel.id,
+          { level: agentLevel.level, xpBar: agentLevel.xpBar },
+        ])
+      ),
+    [agentLevels]
+  )
+  const agents = useMemo<AgentCard[]>(
+    () =>
+      AGENTS_DATA.map((agent) => {
+        const derived = levelMap.get(agent.id)
+        return {
+          ...agent,
+          level: derived?.level ?? 0,
+          xpBar: derived?.xpBar ?? 0,
+        }
+      }),
+    [levelMap]
+  )
+  const selectedAgent = agents.find((agent) => agent.id === selected.id) ?? agents[0]
   const runMetrics = useMemo(
     () =>
       buildAgentRunMetrics(
         agentRuns,
-        AGENTS_DATA.map((agent) => agent.id)
+        agents.map((agent) => agent.id)
       ),
-    [agentRuns]
+    [agentRuns, agents]
   )
-  const selectedRunMetric = runMetrics[selected.id] ?? {
-    agent_id: selected.id,
+  const selectedRunMetric = runMetrics[selectedAgent.id] ?? {
+    agent_id: selectedAgent.id,
     run_count: 0,
     runs_24h: 0,
     last_run_at: null,
@@ -2610,7 +2646,7 @@ export default function AgentsPage() {
   )
   const pendingApprovalCount = approvalQueue.filter((item) => item.isPending).length
 
-  const throughput = AGENTS_DATA.map((a) => {
+  const throughput = agents.map((a) => {
     const metric = runMetrics[a.id]
     return {
       ...a,
@@ -2665,7 +2701,7 @@ export default function AgentsPage() {
     <CkShell
       breadcrumb="Studio / Agents"
       title="Fleet Command"
-      subtitle="7 agents · missions autonomes"
+      subtitle={`${AGENTS_DATA.length} agents · missions autonomes`}
       actions={headerActions}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -2731,8 +2767,8 @@ export default function AgentsPage() {
           }}
         >
           {/* Left: AgentInspector */}
-          <AgentInspector
-            agent={selected}
+            <AgentInspector
+            agent={selectedAgent}
             activity={activity}
             queue={queue}
             pipeline={pipeline}
@@ -2786,7 +2822,7 @@ export default function AgentsPage() {
                   gap: 10,
                 }}
               >
-                {AGENTS_DATA.map((a, i) => (
+                {agents.map((a, i) => (
                   <RosterTile
                     key={a.id}
                     agent={a}

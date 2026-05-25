@@ -11,6 +11,7 @@ export interface UserSettings {
   proxmox_base_url: string
   proxmox_node: string
   coolify_url: string
+  hermes_agent_url: string
   nginx_pm_url: string
   uptime_kuma_url: string
   vaultwarden_url: string
@@ -32,6 +33,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   proxmox_base_url: 'https://192.168.0.10:8006',
   proxmox_node: 'proxmox',
   coolify_url: 'http://192.168.0.19:8000',
+  hermes_agent_url: 'https://hermes.kenomi.eu',
   nginx_pm_url: 'https://npm.tailnet.local',
   uptime_kuma_url: 'https://uptime.tailnet.local',
   vaultwarden_url: 'https://vault.tailnet.local',
@@ -47,6 +49,7 @@ const INFRA_SETTINGS_KEYS = [
   'proxmox_base_url',
   'proxmox_node',
   'coolify_url',
+  'hermes_agent_url',
   'nginx_pm_url',
   'uptime_kuma_url',
   'vaultwarden_url',
@@ -83,6 +86,10 @@ export function normalizeUserSettings(raw: RawUserSettings | null | undefined): 
     ),
     proxmox_node: stringOrDefault(raw?.proxmox_node, DEFAULT_USER_SETTINGS.proxmox_node),
     coolify_url: stringOrDefault(raw?.coolify_url, DEFAULT_USER_SETTINGS.coolify_url),
+    hermes_agent_url: stringOrDefault(
+      raw?.hermes_agent_url,
+      DEFAULT_USER_SETTINGS.hermes_agent_url
+    ),
     nginx_pm_url: stringOrDefault(raw?.nginx_pm_url, DEFAULT_USER_SETTINGS.nginx_pm_url),
     uptime_kuma_url: stringOrDefault(raw?.uptime_kuma_url, DEFAULT_USER_SETTINGS.uptime_kuma_url),
     vaultwarden_url: stringOrDefault(raw?.vaultwarden_url, DEFAULT_USER_SETTINGS.vaultwarden_url),

@@ -21,6 +21,7 @@ describe('normalizeUserSettings', () => {
       proxmox_base_url: null,
       proxmox_node: null,
       coolify_url: null,
+      hermes_agent_url: null,
       nginx_pm_url: null,
       uptime_kuma_url: null,
       vaultwarden_url: null,
@@ -42,6 +43,7 @@ describe('normalizeUserSettings', () => {
       proxmox_base_url: 'https://192.168.0.10:8006',
       proxmox_node: 'proxmox',
       coolify_url: 'http://192.168.0.19:8000',
+      hermes_agent_url: 'https://hermes.kenomi.eu',
       nginx_pm_url: 'https://npm.tailnet.local',
       uptime_kuma_url: 'https://uptime.tailnet.local',
       vaultwarden_url: 'https://vault.tailnet.local',
@@ -59,6 +61,7 @@ describe('normalizeUserSettings', () => {
       proxmox_base_url: 'https://proxmox.tailnet.local:8006',
       proxmox_node: 'lab',
       coolify_url: 'https://coolify.tailnet.local',
+      hermes_agent_url: 'https://hermes.tailnet.local',
       nginx_pm_url: 'https://npm.tailnet.local',
       uptime_kuma_url: 'https://uptime.tailnet.local',
       vaultwarden_url: 'https://vault.tailnet.local',
@@ -73,6 +76,7 @@ describe('normalizeUserSettings', () => {
     expect(settings.proxmox_base_url).toBe('https://proxmox.tailnet.local:8006')
     expect(settings.proxmox_node).toBe('lab')
     expect(settings.coolify_url).toBe('https://coolify.tailnet.local')
+    expect(settings.hermes_agent_url).toBe('https://hermes.tailnet.local')
     expect(settings.nginx_pm_url).toBe('https://npm.tailnet.local')
     expect(settings.uptime_kuma_url).toBe('https://uptime.tailnet.local')
     expect(settings.vaultwarden_url).toBe('https://vault.tailnet.local')
@@ -85,10 +89,12 @@ describe('normalizeUserSettings', () => {
     const settings = normalizeUserSettings({
       coolify_url: 'https://coolify.tailnet.local',
       proxmox_base_url: 'https://proxmox.tailnet.local:8006',
+      hermes_agent_url: 'https://hermes.tailnet.local',
     })
 
     expect(omitInfraSettings(settings)).not.toHaveProperty('coolify_url')
     expect(omitInfraSettings(settings)).not.toHaveProperty('proxmox_base_url')
+    expect(omitInfraSettings(settings)).not.toHaveProperty('hermes_agent_url')
     expect(omitInfraSettings(settings)).toHaveProperty('ollama_base_url')
   })
 

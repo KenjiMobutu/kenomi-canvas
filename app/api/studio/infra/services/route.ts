@@ -20,6 +20,7 @@ export async function GET() {
       [
         'proxmox_base_url',
         'coolify_url',
+        'hermes_agent_url',
         'nginx_pm_url',
         'uptime_kuma_url',
         'vaultwarden_url',
@@ -39,7 +40,8 @@ export async function GET() {
     services: getSanitizedInfraServices(services).map((service) => ({
       ...service,
       checkedAt,
-      repairHref: service.id === 'proxmox' ? '/studio/infrastructure' : '/studio/settings',
+      repairHref:
+        service.id === 'proxmox' ? '/studio/infrastructure' : '/studio/settings',
     })),
   })
 }

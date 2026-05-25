@@ -45,6 +45,14 @@ describe('infra diagnostics', () => {
       },
       services: [
         {
+          id: 'hermesAgent',
+          label: 'Hermes Agent',
+          url: 'https://hermes.kenomi.eu/healthz',
+          source: 'settings',
+          ok: true,
+          latencyMs: 19,
+        },
+        {
           id: 'ollama',
           label: 'Ollama',
           url: 'http://192.168.0.14:11434/api/tags',
@@ -72,14 +80,20 @@ describe('infra diagnostics', () => {
       },
     })
 
-    expect(diagnostics.summary).toEqual({ ok: false, checksOk: 2, checksTotal: 3 })
+    expect(diagnostics.summary).toEqual({ ok: false, checksOk: 3, checksTotal: 4 })
     expect(diagnostics.services[0]).toMatchObject({
+      id: 'hermesAgent',
+      status: 'ok',
+      repairAction: 'Aucune action',
+      urlLabel: 'hermes.kenomi.eu/healthz',
+    })
+    expect(diagnostics.services[1]).toMatchObject({
       id: 'ollama',
       status: 'ok',
       repairAction: 'Aucune action',
       urlLabel: '192.168.0.14:11434/api/tags',
     })
-    expect(diagnostics.services[1]).toMatchObject({
+    expect(diagnostics.services[2]).toMatchObject({
       id: 'n8n',
       status: 'down',
       repairAction: 'Verifier URL n8n / DNS / container Coolify',

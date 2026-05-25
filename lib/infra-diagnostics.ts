@@ -80,6 +80,7 @@ export function summarizeRuntime(env: Partial<NodeJS.ProcessEnv> = process.env):
 
 function serviceRepairAction(id: string, ok: boolean): string {
   if (ok) return 'Aucune action'
+  if (id === 'hermesAgent') return 'Verifier le reverse proxy Coolify, l auth et le backend Ollama'
   if (id === 'ollama') return 'Verifier URL Ollama settings/env et port 11434'
   if (id === 'n8n') return 'Verifier URL n8n / DNS / container Coolify'
   if (id === 'supabase') return 'Verifier Supabase via VM Coolify et REST API'

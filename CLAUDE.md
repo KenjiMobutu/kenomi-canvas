@@ -17,6 +17,13 @@ npx prisma generate  # Regénérer le client Prisma (après modification du sch�
 
 Les migrations Supabase se gèrent depuis la VM Coolify, pas depuis la machine de dev. Le `DATABASE_URL` peut pointer vers un hostname interne Docker (`supabase-db-...`) qui ne se résout que sur cette VM ou sur le même réseau Docker.
 
+La topologie live actuelle est la suivante :
+
+- VM Coolify : `OpenWebUI`, `n8n`, `Hermes Agent`, reverse proxy
+- Mac Mini M4 : `Ollama` + modèles IA
+- `HERMES_AGENT_URL` pointe vers la façade publique Hermes
+- `OLLAMA_BASE_URL` pointe vers le Mac Mini M4 et reste privé
+
 ## Architecture générale
 
 **Kenomi Canvas** est un « Studio OS » pour entrepreneur solo — interface unique qui agrège ventures, chat IA, automations n8n et gamification. L'app est mono-utilisateur : une seule adresse email (`ALLOWED_EMAIL`) peut accéder au studio.
@@ -121,6 +128,8 @@ ALLOWED_EMAIL                 # Seul email autorisé
 DASHBOARD_TOKEN_SECRET        # Secret HMAC pour le dashboard admin
 APP_ORIGIN                    # URL publique
 TRUSTED_PRIVATE_HOSTS         # CSV d'hôtes privés autorisés (ex: 192.168.0.14,n8n.local)
+HERMES_AGENT_URL              # URL publique de la façade Hermes
+OLLAMA_BASE_URL               # URL privée de l'inférence Ollama sur le Mac Mini M4
 ```
 
 ## Tests

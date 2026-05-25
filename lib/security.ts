@@ -42,4 +42,8 @@ export function isAllowedOllamaUrl(url: string, env: NodeJS.ProcessEnv = process
   }
 }
 
+export function isAllowedHermesAgentUrl(url: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return isAllowedWebhookUrl(url, env)
+}
+
 export { isValidEmail } from './validation'

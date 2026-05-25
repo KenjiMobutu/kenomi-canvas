@@ -1195,6 +1195,21 @@ export default function SettingsPage() {
               </div>
             </SectionCard>
 
+            <SectionCard title="Hermes Agent — Public UI" icon={<Radio size={16} />}>
+              <Field
+                label="URL Hermes"
+                hint="URL navigateur publique exposée via le reverse proxy Coolify. Le backend Ollama reste privé sur le Mac Mini M4."
+              >
+                <input
+                  value={cfg.hermes_agent_url}
+                  onChange={(e) => patch({ hermes_agent_url: e.target.value })}
+                  placeholder="https://hermes.kenomi.eu"
+                  className="ck-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                />
+              </Field>
+            </SectionCard>
+
             <SectionCard title="Edge & observabilité" icon={<Server size={16} />}>
               <Field label="Nginx Proxy Manager" hint="Reverse proxy et certificats SSL.">
                 <input

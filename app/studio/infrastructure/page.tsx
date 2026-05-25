@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useMemo, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CkShell } from '@/components/CkShell'
 import {
   bg,
@@ -17,7 +17,7 @@ import {
   violet,
   fuchsia,
 } from '@/lib/ck-vars'
-import { makeSpark, sparkPath, useIsMobile } from '@/lib/studio-utils'
+import { sparkPath, useIsMobile } from '@/lib/studio-utils'
 
 // Services de l'infra — statuts alimentés par /api/studio/services/health
 type InfraService = {
@@ -58,6 +58,17 @@ const FALLBACK_SERVICES: InfraService[] = [
     kind: 'service',
   },
   {
+    id: 'hermesAgent',
+    vmid: 102,
+    label: 'Hermes Agent',
+    short: 'HRM',
+    color: '#f97316',
+    role: 'Public Hermes UI',
+    endpointLabel: 'hermes.kenomi.eu',
+    healthKey: 'hermesAgent',
+    kind: 'service',
+  },
+  {
     id: 'n8n',
     vmid: null,
     label: 'n8n',
@@ -95,6 +106,7 @@ const FALLBACK_SERVICES: InfraService[] = [
 const POSITIONS: Record<string, { x: number; y: number; kind: string }> = {
   proxmox: { x: 200, y: 240, kind: 'host' },
   coolify: { x: 380, y: 100, kind: 'service' },
+  hermesAgent: { x: 560, y: 100, kind: 'service' },
   nginx: { x: 580, y: 80, kind: 'edge' },
   uptime: { x: 580, y: 200, kind: 'service' },
   vault: { x: 380, y: 240, kind: 'service' },
@@ -113,12 +125,15 @@ const TOPO_EDGES: [string, string][] = [
   ['n8n', 'supabase'],
   ['coolify', 'supabase'],
   ['nginx', 'supabase'],
+  ['coolify', 'hermesAgent'],
+  ['hermesAgent', 'ollama'],
   ['coolify', 'ollama'],
   ['n8n', 'ollama'],
 ]
 
 type HealthResult = { ok: boolean; latencyMs: number }
 type HealthServices = {
+  hermesAgent: HealthResult
   ollama: HealthResult
   n8n: HealthResult
   supabase: HealthResult
@@ -263,13 +278,15 @@ function InfraKpi({
   value,
   delta,
   color,
+  trend = [],
 }: {
   label: string
   value: string
   delta: string
   color: string
+  trend?: number[]
 }) {
-  const spark = useMemo(() => makeSpark(28, 40, 14, label.length * 7), [label])
+  const hasTrend = trend.length >= 2
   return (
     <div
       style={{
@@ -331,13 +348,32 @@ function InfraKpi({
       >
         {value}
       </div>
-      <svg
-        viewBox="0 0 100 22"
-        preserveAspectRatio="none"
-        style={{ width: '100%', height: 20, marginTop: 4, display: 'block' }}
-      >
-        <path d={sparkPath(spark, 100, 22, 1)} fill="none" stroke={color} strokeWidth="1.4" />
-      </svg>
+      {hasTrend ? (
+        <svg
+          viewBox="0 0 100 22"
+          preserveAspectRatio="none"
+          style={{ width: '100%', height: 20, marginTop: 4, display: 'block' }}
+        >
+          <path
+            d={sparkPath(trend, 100, 22, 1)}
+            fill="none"
+            stroke={color}
+            strokeWidth="1.4"
+          />
+        </svg>
+      ) : (
+        <div
+          style={{
+            marginTop: 4,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.08em',
+          }}
+        >
+          Tendance indisponible.
+        </div>
+      )}
     </div>
   )
 }
@@ -753,10 +789,16 @@ function TopologyGraph({
             SERVICES UP{' '}
             <b style={{ color: emerald }}>
               {
-                [health.ollama, health.n8n, health.supabase, health.coolify].filter((h) => h?.ok)
+                [
+                  health.hermesAgent,
+                  health.ollama,
+                  health.n8n,
+                  health.supabase,
+                  health.coolify,
+                ].filter((h) => h?.ok)
                   .length
               }
-              /4
+              /5
             </b>
           </span>
         )}
@@ -1971,17 +2013,35 @@ export default function InfrastructurePage() {
   const selected = services.find((s) => s.id === selectedId) ?? services[0] ?? FALLBACK_SERVICES[0]
 
   const liveCount = health
-    ? [health.ollama, health.n8n, health.supabase, health.coolify].filter((h) => h?.ok).length
+    ? [
+        health.hermesAgent,
+        health.ollama,
+        health.n8n,
+        health.supabase,
+        health.coolify,
+      ].filter((h) => h?.ok).length
     : null
 
   const avgLatency = health
     ? Math.round(
-        [health.ollama, health.n8n, health.supabase, health.coolify]
+        [
+          health.hermesAgent,
+          health.ollama,
+          health.n8n,
+          health.supabase,
+          health.coolify,
+        ]
           .filter((h) => h?.ok)
           .reduce((sum, h) => sum + h!.latencyMs, 0) /
           Math.max(
             1,
-            [health.ollama, health.n8n, health.supabase, health.coolify].filter((h) => h?.ok).length
+            [
+              health.hermesAgent,
+              health.ollama,
+              health.n8n,
+              health.supabase,
+              health.coolify,
+            ].filter((h) => h?.ok).length
           )
       )
     : null
@@ -1992,9 +2052,9 @@ export default function InfrastructurePage() {
   const kpiList = [
     {
       label: 'Services live',
-      value: liveCount !== null ? `${liveCount}/4` : '—',
+      value: liveCount !== null ? `${liveCount}/5` : '—',
       delta: healthLoading ? '…' : 'ping',
-      color: liveCount === 4 ? emerald : liveCount === null ? muted : rose,
+      color: liveCount === 5 ? emerald : liveCount === null ? muted : rose,
     },
     {
       label: 'Latency avg',
@@ -2031,16 +2091,16 @@ export default function InfrastructurePage() {
           style={{
             padding: '4px 10px',
             borderRadius: 5,
-            background: liveCount === 4 ? `${emerald}18` : `${rose}18`,
-            color: liveCount === 4 ? emerald : rose,
+            background: liveCount === 5 ? `${emerald}18` : `${rose}18`,
+            color: liveCount === 5 ? emerald : rose,
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             letterSpacing: '.1em',
             fontWeight: 700,
-            border: `1px solid ${liveCount === 4 ? emerald : rose}30`,
+            border: `1px solid ${liveCount === 5 ? emerald : rose}30`,
           }}
         >
-          {liveCount}/4 services live
+          {liveCount}/5 services live
         </span>
       )}
       {[
