@@ -94,7 +94,8 @@ npm run dev
 | `STRIPE_WEBHOOK_SECRET`         | Secret de signature du webhook Stripe `/api/stripe/webhook`      |
 | `COOLIFY_URL`                   | URL API Coolify autorisée côté serveur                           |
 | `COOLIFY_TOKEN`                 | Token API Coolify côté serveur                                   |
-| `HERMES_AGENT_URL`              | URL publique de l'interface Hermes                               |
+| `HERMES_AGENT_URL`              | URL publique de l'API Hermes Agent                               |
+| `HERMES_AGENT_API_KEY`          | Clé Bearer de l'API Hermes Agent                                 |
 | `OLLAMA_BASE_URL`               | URL privée du runtime Ollama sur le Mac Mini M4                  |
 | `TRUSTED_PRIVATE_HOSTS`         | Hosts privés autorisés pour appels serveur, séparés par virgules |
 | `SOURCE_COMMIT`                 | Commit embarqué dans le runtime, affiché par le diagnostic infra |

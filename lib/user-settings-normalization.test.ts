@@ -46,7 +46,7 @@ describe('normalizeUserSettings', () => {
       proxmox_base_url: 'https://192.168.0.10:8006',
       proxmox_node: 'proxmox',
       coolify_url: 'http://192.168.0.19:8000',
-      hermes_agent_url: 'https://hermes.kenomi.eu',
+      hermes_agent_url: 'https://hermes-api.kenomi.eu',
       prospect_sources: [],
       prospect_outreach_email: '',
       prospect_crm_provider: 'supabase',

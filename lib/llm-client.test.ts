@@ -1,12 +1,28 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { checkOllamaHealth, computeCostUsd } from './llm-client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const anthropicCreateMock = vi.fn()
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class Anthropic {
+    messages = {
+      create: anthropicCreateMock,
+    }
+  },
+}))
+
+async function loadLlmClient() {
+  vi.resetModules()
+  return import('./llm-client')
+}
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('computeCostUsd', () => {
-  it('calcule le coût Claude Sonnet (1000 input + 500 output)', () => {
+  it('calcule le coût Claude Sonnet (1000 input + 500 output)', async () => {
+    const { computeCostUsd } = await loadLlmClient()
     expect(
       computeCostUsd('claude-sonnet-4-6', {
         prompt_tokens: 1000,
@@ -16,7 +32,8 @@ describe('computeCostUsd', () => {
     ).toBeCloseTo(0.0105, 6)
   })
 
-  it('calcule le coût Haiku', () => {
+  it('calcule le coût Haiku', async () => {
+    const { computeCostUsd } = await loadLlmClient()
     expect(
       computeCostUsd('claude-haiku-4-5-20251001', {
         prompt_tokens: 2000,
@@ -26,7 +43,8 @@ describe('computeCostUsd', () => {
     ).toBeCloseTo(0.0056, 6)
   })
 
-  it('retourne 0 pour Ollama local', () => {
+  it('retourne 0 pour Ollama local', async () => {
+    const { computeCostUsd } = await loadLlmClient()
     expect(
       computeCostUsd('qwen3:8b', {
         prompt_tokens: 1000,
@@ -36,7 +54,8 @@ describe('computeCostUsd', () => {
     ).toBe(0)
   })
 
-  it('retourne 0 pour un modèle inconnu (fail-safe)', () => {
+  it('retourne 0 pour un modèle inconnu (fail-safe)', async () => {
+    const { computeCostUsd } = await loadLlmClient()
     expect(
       computeCostUsd('gpt-99', {
         prompt_tokens: 100,
@@ -46,7 +65,8 @@ describe('computeCostUsd', () => {
     ).toBe(0)
   })
 
-  it('accepte zéro tokens sans diviser par zéro', () => {
+  it('accepte zéro tokens sans diviser par zéro', async () => {
+    const { computeCostUsd } = await loadLlmClient()
     expect(
       computeCostUsd('claude-sonnet-4-6', {
         prompt_tokens: 0,
@@ -59,6 +79,7 @@ describe('computeCostUsd', () => {
 
 describe('checkOllamaHealth', () => {
   it('uses the configured Ollama base URL for health checks', async () => {
+    const { checkOllamaHealth } = await loadLlmClient()
     const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -68,5 +89,93 @@ describe('checkOllamaHealth', () => {
       'http://settings-ollama.local:11434/api/tags',
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
+  })
+})
+
+describe('llmChat', () => {
+  beforeEach(() => {
+    anthropicCreateMock.mockReset()
+  })
+
+  it('routes Hermes-family models through Hermes Agent when configured', async () => {
+    vi.stubEnv('HERMES_AGENT_URL', 'https://hermes-api.kenomi.eu')
+    vi.stubEnv('HERMES_AGENT_API_KEY', 'secret-hermes')
+    const { llmChat } = await loadLlmClient()
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'Prospect qualifié.' } }],
+        usage: { prompt_tokens: 120, completion_tokens: 80, total_tokens: 200 },
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await llmChat([{ role: 'user', content: 'Analyse ce prospect.' }], {
+      model: 'hermes3:8b',
+      system: 'Tu es Hermes.',
+      temperature: 0.2,
+      max_tokens: 400,
+    })
+
+    expect(result).toMatchObject({
+      content: 'Prospect qualifié.',
+      provider: 'hermes',
+      model: 'hermes3:8b',
+      fallback_triggered: false,
+      usage: { prompt_tokens: 120, completion_tokens: 80, total_tokens: 200 },
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://hermes-api.kenomi.eu/v1/chat/completions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer secret-hermes',
+        }),
+        body: JSON.stringify({
+          model: 'hermes-agent',
+          messages: [
+            { role: 'system', content: 'Tu es Hermes.' },
+            { role: 'user', content: 'Analyse ce prospect.' },
+          ],
+          stream: false,
+          temperature: 0.2,
+          max_tokens: 400,
+        }),
+      })
+    )
+  })
+
+  it('falls back to Claude if Hermes Agent is unavailable', async () => {
+    vi.stubEnv('HERMES_AGENT_URL', 'https://hermes-api.kenomi.eu')
+    const { llmChat } = await loadLlmClient()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        text: async () => 'bad gateway',
+      })
+    )
+    anthropicCreateMock.mockResolvedValue({
+      content: [{ type: 'text', text: 'Fallback Claude.' }],
+      usage: { input_tokens: 11, output_tokens: 7 },
+    })
+
+    const result = await llmChat([{ role: 'user', content: 'Continue.' }], {
+      model: 'hermes3:8b',
+      system: 'Tu es Hermes.',
+    })
+
+    expect(result).toMatchObject({
+      content: 'Fallback Claude.',
+      provider: 'claude',
+      model: 'claude-sonnet-4-5',
+      fallback_triggered: true,
+      usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 },
+    })
   })
 })

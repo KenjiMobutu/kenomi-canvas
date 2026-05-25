@@ -1302,7 +1302,7 @@ export default function SettingsPage() {
                 <input
                   value={cfg.hermes_agent_url}
                   onChange={(e) => patch({ hermes_agent_url: e.target.value })}
-                  placeholder="https://hermes.kenomi.eu"
+                  placeholder="https://hermes-api.kenomi.eu"
                   className="ck-input"
                   style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
                 />

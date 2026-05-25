@@ -818,7 +818,7 @@ describe('runAgentStep', () => {
         cta: 'Répondez si vous voulez un résumé en 5 points.',
       }),
       provider: 'ollama',
-      model: 'hermes3:8b',
+      model: 'qwen3:8b',
       fallback_triggered: false,
     })
 
@@ -846,8 +846,8 @@ describe('runAgentStep', () => {
       outreach_subject: 'Acme Studio — une piste pour prioriser vos leads chauds',
     })
     expect(supabase.tables.prospects[0].metadata).toMatchObject({
-      model: 'hermes3:8b',
-      model_family: 'hermes',
+      model: 'qwen3:8b',
+      model_family: 'qwen',
       provider: 'ollama',
       crm_provider: 'supabase',
       sources: ['linkedin', 'upwork'],
@@ -855,7 +855,7 @@ describe('runAgentStep', () => {
     expect(supabase.tables.prospects[0].next_followup_at).toBe('2026-05-19T10:00:00.000Z')
     expect(supabase.tables.agent_runs[0]).toMatchObject({
       agent_id: 'prospect',
-      model: 'hermes3:8b',
+      model: 'qwen3:8b',
     })
   })
 
@@ -872,6 +872,27 @@ describe('runAgentStep', () => {
     ).rejects.toMatchObject({
       status: 400,
       message: expect.stringContaining('Agent inconnu'),
+    })
+  })
+
+  it('preserves upstream LLM failure details instead of forcing an Ollama label', async () => {
+    const supabase = createFakeSupabase()
+
+    await expect(
+      runAgentStep({
+        supabase,
+        userId: 'user-1',
+        agentId: 'prospect',
+        llm: async () => {
+          throw new Error(
+            'LLM indisponible — Hermes Agent HTTP 401: unauthorized | Claude: missing API key'
+          )
+        },
+        now: () => new Date('2026-05-18T10:00:00.000Z'),
+      })
+    ).rejects.toMatchObject({
+      status: 502,
+      message: expect.stringContaining('Hermes Agent HTTP 401'),
     })
   })
 })

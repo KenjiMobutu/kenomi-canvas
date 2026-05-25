@@ -48,7 +48,7 @@ Stack hybride **Prisma + Supabase JS**. Voir `CLAUDE.md` → "Stratégie long te
 ### Helpers transverses
 
 - `agent-output-schemas.ts` — schémas Zod par agent (Scout, Validation, Builder, Payment, Marketing, Decision)
-- `llm-client.ts` — `llmChat()` Ollama primary + Claude fallback, `computeCostUsd()` pricing par modèle
+- `llm-client.ts` — `llmChat()` Hermes Agent/Ollama primary + Claude fallback, `computeCostUsd()` pricing par modèle
 - `audit-log.ts` — `insertAuditEvent()` vers `agent_events` (sanitize secrets)
 - `privacy-export.ts` — `redactPrivacyExport()` pour export RGPD
 - `security.ts` — `isAllowedWebhookUrl()`, `isAllowedOllamaUrl()` (SSRF guard via `TRUSTED_PRIVATE_HOSTS`)

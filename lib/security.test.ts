@@ -55,12 +55,12 @@ describe('isAllowedOllamaUrl', () => {
 
 describe('isAllowedHermesAgentUrl', () => {
   it('accepte Hermes Agent public sans allowlist privée', () => {
-    expect(isAllowedHermesAgentUrl('https://hermes.kenomi.eu/healthz')).toBe(true)
+    expect(isAllowedHermesAgentUrl('https://hermes-api.kenomi.eu/v1/health')).toBe(true)
   })
 
   it('accepte un host privé explicitement autorisé pour Hermes Agent', () => {
     process.env.TRUSTED_PRIVATE_HOSTS = 'hermes.tailnet.local'
-    expect(isAllowedHermesAgentUrl('https://hermes.tailnet.local/healthz')).toBe(true)
+    expect(isAllowedHermesAgentUrl('https://hermes.tailnet.local/v1/health')).toBe(true)
   })
 })
 

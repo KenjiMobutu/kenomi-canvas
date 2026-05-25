@@ -47,7 +47,7 @@ describe('infra diagnostics', () => {
         {
           id: 'hermesAgent',
           label: 'Hermes Agent',
-          url: 'https://hermes.kenomi.eu/healthz',
+          url: 'https://hermes-api.kenomi.eu/v1/health',
           source: 'settings',
           ok: true,
           latencyMs: 19,
@@ -85,7 +85,7 @@ describe('infra diagnostics', () => {
       id: 'hermesAgent',
       status: 'ok',
       repairAction: 'Aucune action',
-      urlLabel: 'hermes.kenomi.eu/healthz',
+      urlLabel: 'hermes-api.kenomi.eu/v1/health',
     })
     expect(diagnostics.services[1]).toMatchObject({
       id: 'ollama',

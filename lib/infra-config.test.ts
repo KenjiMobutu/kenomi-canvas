@@ -60,8 +60,8 @@ describe('infra config', () => {
       {
         id: 'hermesAgent',
         label: 'Hermes Agent',
-        endpoint: 'https://hermes.kenomi.eu',
-        role: 'Public Hermes UI',
+        endpoint: 'https://hermes-api.kenomi.eu',
+        role: 'Hermes API',
         healthKey: 'hermesAgent',
         short: 'HRM',
         color: '#f97316',

@@ -465,7 +465,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       ? await getProspectSettingsContext(supabase, userId)
       : { context: '', settings: null }
 
-  const model = cfg?.model ?? (agentId === 'prospect' ? 'hermes3:8b' : 'qwen3:8b')
+  const model = cfg?.model ?? 'qwen3:8b'
   const baseSystemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
   const decisionBundle =
     agentId === 'decision'
@@ -811,7 +811,9 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         .eq('id', pipeline.id)
     }
     if (error instanceof RunAgentStepError) throw error
-    const isTimeout = error instanceof Error && error.name === 'TimeoutError'
-    throw new RunAgentStepError(isTimeout ? 'Ollama timeout (30s)' : 'Ollama injoignable', 502)
+    const message = error instanceof Error ? error.message : 'LLM indisponible'
+    const isTimeout =
+      error instanceof Error && (error.name === 'TimeoutError' || /timeout/i.test(error.message))
+    throw new RunAgentStepError(isTimeout ? 'LLM timeout (30s)' : message, 502)
   }
 }

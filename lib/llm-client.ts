@@ -15,7 +15,7 @@ import { getModelFamily, HERMES_MODELS } from './model-families'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type LLMMessage = {
-  role: 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant'
   content: string
 }
 
@@ -35,7 +35,7 @@ export type LLMUsage = {
 
 export type LLMResponse = {
   content: string
-  provider: 'ollama' | 'claude'
+  provider: 'hermes' | 'ollama' | 'claude'
   model: string
   fallback_triggered: boolean
   usage?: LLMUsage
@@ -66,6 +66,8 @@ export function computeCostUsd(model: string, usage: LLMUsage): number {
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://192.168.0.14:11434'
 const OLLAMA_DEFAULT_MODEL = process.env.OLLAMA_DEFAULT_MODEL ?? 'qwen3:8b'
+const HERMES_AGENT_BASE_URL = (process.env.HERMES_AGENT_URL ?? '').replace(/\/+$/, '')
+const HERMES_AGENT_API_KEY = process.env.HERMES_AGENT_API_KEY ?? ''
 const CLAUDE_FALLBACK_MODEL = process.env.CLAUDE_FALLBACK_MODEL ?? 'claude-sonnet-4-5'
 const OLLAMA_TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '30000', 10)
 
@@ -74,6 +76,11 @@ const OLLAMA_TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '30000', 10)
 function buildOllamaMessages(messages: LLMMessage[], system?: string): LLMMessage[] {
   if (!system) return messages
   return [{ role: 'user', content: `[System: ${system}]` }, ...messages]
+}
+
+function buildHermesMessages(messages: LLMMessage[], system?: string): LLMMessage[] {
+  if (!system) return messages
+  return [{ role: 'system', content: system }, ...messages]
 }
 
 function ollamaTagsUrl(baseUrl: string): string {
@@ -135,20 +142,87 @@ async function callOllama(
   }
 }
 
+async function callHermesAgent(
+  messages: LLMMessage[],
+  config: LLMConfig
+): Promise<{ content: string; usage?: LLMUsage }> {
+  if (!HERMES_AGENT_BASE_URL) {
+    throw new Error('Hermes Agent URL missing')
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), config.timeout_ms ?? OLLAMA_TIMEOUT_MS)
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (HERMES_AGENT_API_KEY) {
+      headers.Authorization = `Bearer ${HERMES_AGENT_API_KEY}`
+    }
+
+    const res = await fetch(`${HERMES_AGENT_BASE_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: 'hermes-agent',
+        messages: buildHermesMessages(messages, config.system),
+        stream: false,
+        temperature: config.temperature ?? 0.7,
+        max_tokens: config.max_tokens ?? 2048,
+      }),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Hermes Agent HTTP ${res.status}: ${await res.text()}`)
+    }
+
+    const data = await res.json()
+    const content = data?.choices?.[0]?.message?.content
+
+    if (!content || typeof content !== 'string') {
+      throw new Error('Hermes Agent: réponse vide ou malformée')
+    }
+
+    const promptTokens = typeof data?.usage?.prompt_tokens === 'number' ? data.usage.prompt_tokens : undefined
+    const completionTokens =
+      typeof data?.usage?.completion_tokens === 'number' ? data.usage.completion_tokens : undefined
+    const usage =
+      promptTokens !== undefined && completionTokens !== undefined
+        ? {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens:
+              typeof data?.usage?.total_tokens === 'number'
+                ? data.usage.total_tokens
+                : promptTokens + completionTokens,
+          }
+        : undefined
+
+    return { content, usage }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function callClaude(
   messages: LLMMessage[],
   config: LLMConfig
 ): Promise<{ content: string; usage?: LLMUsage }> {
   const client = new Anthropic()
+  const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: string }> = messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map((message) => ({
+      role: message.role === 'assistant' ? 'assistant' : 'user',
+      content: message.content,
+    }))
 
   const response = await client.messages.create({
     model: CLAUDE_FALLBACK_MODEL,
     max_tokens: config.max_tokens ?? 2048,
     system: config.system,
-    messages: messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    })),
+    messages: anthropicMessages,
   })
 
   const block = response.content[0]
@@ -190,29 +264,32 @@ export async function llmChat(
   config: LLMConfig = {}
 ): Promise<LLMResponse> {
   const model = config.model ?? OLLAMA_DEFAULT_MODEL
+  const modelFamily = getModelFamily(model)
+  const useHermesAgent = modelFamily === 'hermes' && Boolean(HERMES_AGENT_BASE_URL)
 
-  // Tentative Ollama
   try {
-    const result = await callOllama(messages, config)
+    const result = useHermesAgent
+      ? await callHermesAgent(messages, config)
+      : await callOllama(messages, config)
     return {
       content: result.content,
-      provider: 'ollama',
+      provider: useHermesAgent ? 'hermes' : 'ollama',
       model,
       fallback_triggered: false,
       usage: result.usage,
     }
-  } catch (ollamaError) {
-    const reason = ollamaError instanceof Error ? ollamaError.message : String(ollamaError)
+  } catch (primaryError) {
+    const reason = primaryError instanceof Error ? primaryError.message : String(primaryError)
 
     logWarn('llm.fallback', 'Ollama unavailable, falling back to Claude', {
       event: 'llm_fallback_triggered',
       reason,
-      ollama_url: OLLAMA_BASE_URL,
+      primary_provider: useHermesAgent ? 'hermes' : 'ollama',
+      primary_url: useHermesAgent ? HERMES_AGENT_BASE_URL : OLLAMA_BASE_URL,
       fallback_model: CLAUDE_FALLBACK_MODEL,
-      model_family: getModelFamily(model),
+      model_family: modelFamily,
     })
 
-    // Fallback Claude API
     try {
       const result = await callClaude(messages, config)
       return {

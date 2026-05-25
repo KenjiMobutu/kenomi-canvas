@@ -130,7 +130,10 @@ export function resolveHealthServiceUrls(
     configuredString(settings?.ollama_base_url, env.OLLAMA_BASE_URL ?? 'http://192.168.0.14:11434')
   )
   const hermesAgentBase = trimTrailingSlash(
-    configuredString(settings?.hermes_agent_url, env.HERMES_AGENT_URL ?? 'https://hermes.kenomi.eu')
+    configuredString(
+      settings?.hermes_agent_url,
+      env.HERMES_AGENT_URL ?? 'https://hermes-api.kenomi.eu'
+    )
   )
   const n8nBase = trimTrailingSlash(
     configuredString(settings?.n8n_base_url, env.N8N_BASE_URL ?? 'https://n8n.kenomi.eu')
@@ -180,8 +183,8 @@ export const DEFAULT_INFRA_SERVICES: InfraServiceConfig[] = parseInfraServices([
   {
     id: 'hermesAgent',
     label: 'Hermes Agent',
-    endpoint: process.env.HERMES_AGENT_URL ?? 'https://hermes.kenomi.eu',
-    role: 'Public Hermes UI',
+    endpoint: process.env.HERMES_AGENT_URL ?? 'https://hermes-api.kenomi.eu',
+    role: 'Hermes API',
     healthKey: 'hermesAgent',
     short: 'HRM',
     color: '#f97316',
