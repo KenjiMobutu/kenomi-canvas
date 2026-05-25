@@ -26,6 +26,19 @@ const validationSchema = z.object({
   reason: z.string().min(1),
 })
 
+const prospectSchema = z.object({
+  company_name: z.string().min(1),
+  source: z.enum(['linkedin', 'malt', 'upwork', 'indeed', 'reddit', 'other']),
+  contact_name: z.string().min(1).optional(),
+  score: z.number().int().min(0).max(100),
+  band: z.enum(['hot', 'warm', 'cold']),
+  summary: z.string().min(1),
+  pain_points: z.array(z.string().min(2)).min(1),
+  outreach_subject: z.string().min(1),
+  outreach_body: z.string().min(1),
+  cta: z.string().min(1),
+})
+
 const builderSchema = z.object({
   headline: z.string().min(1),
   subline: z.string().min(1),
@@ -89,6 +102,7 @@ const decisionSchema = z.object({
 const schemas = {
   scout: scoutSchema,
   validation: validationSchema,
+  prospect: prospectSchema,
   builder: builderSchema,
   payment: paymentSchema,
   marketing: marketingSchema,
@@ -138,6 +152,7 @@ function parseScoutLegacy(content: string): z.infer<typeof scoutSchema> {
 export type AgentOutput =
   | z.infer<typeof scoutSchema>
   | z.infer<typeof validationSchema>
+  | z.infer<typeof prospectSchema>
   | z.infer<typeof builderSchema>
   | z.infer<typeof paymentSchema>
   | z.infer<typeof marketingSchema>
@@ -145,6 +160,7 @@ export type AgentOutput =
 
 export type ScoutOutput = z.infer<typeof scoutSchema>
 export type ValidationOutput = z.infer<typeof validationSchema>
+export type ProspectOutput = z.infer<typeof prospectSchema>
 export type BuilderOutput = z.infer<typeof builderSchema>
 export type PaymentOutput = z.infer<typeof paymentSchema>
 export type MarketingOutput = z.infer<typeof marketingSchema>

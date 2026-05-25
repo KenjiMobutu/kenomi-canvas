@@ -26,6 +26,32 @@ describe('parseAgentOutput', () => {
     ).toThrow('unknown agent')
   })
 
+  it('parse une sortie Prospect JSON structurée', () => {
+    const parsed = parseAgentOutput(
+      'prospect',
+      JSON.stringify({
+        company_name: 'Acme Studio',
+        source: 'upwork',
+        contact_name: 'Lina',
+        score: 88,
+        band: 'hot',
+        summary: 'Need faster follow-up and better lead prioritization.',
+        pain_points: ['slow follow-up', 'leads going cold'],
+        outreach_subject: 'Acme Studio: quick follow-up system',
+        outreach_body: 'Hi Lina, I saw Acme Studio on Upwork and thought...',
+        cta: 'Reply if this is relevant',
+      })
+    )
+
+    expect(parsed).toMatchObject({
+      company_name: 'Acme Studio',
+      source: 'upwork',
+      contact_name: 'Lina',
+      score: 88,
+      band: 'hot',
+    })
+  })
+
   it('parse le format Scout legacy en objet structuré', () => {
     const parsed = parseAgentOutput(
       'scout',

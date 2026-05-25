@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { logWarn } from './logger'
-import { HERMES_MODELS } from './model-families'
+import { getModelFamily, HERMES_MODELS } from './model-families'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -209,6 +209,7 @@ export async function llmChat(
       reason,
       ollama_url: OLLAMA_BASE_URL,
       fallback_model: CLAUDE_FALLBACK_MODEL,
+      model_family: getModelFamily(model),
     })
 
     // Fallback Claude API
