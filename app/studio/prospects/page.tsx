@@ -240,7 +240,7 @@ export default function ProspectPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Prospect run failed')
-      toast.success('Prospect lancé')
+      toast.success('Prospect mis en file')
       await load()
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : String(runError)

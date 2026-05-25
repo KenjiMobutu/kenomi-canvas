@@ -74,6 +74,20 @@ where id = '<job_id>' and status = 'failed';
 Keep `AUTONOMY_DRY_RUN=true` for the first replay if the job can create external
 side effects.
 
+## Worker Queue Drain
+
+If jobs stay queued, trigger the internal worker endpoint from the Coolify VM:
+
+```bash
+curl -X POST "$APP_BASE_URL/api/studio/autonomy/jobs" \
+  -H "x-autonomy-worker-token: $AUTONOMY_WORKER_SECRET" \
+  -H "content-type: application/json" \
+  -d '{"limit":5}'
+```
+
+Expected behavior: queued jobs move to `running`, then `completed` or `failed`,
+and `autonomy_jobs.last_error` captures any failure reason.
+
 ## Recovery Gate
 
 Before re-enabling autonomy:

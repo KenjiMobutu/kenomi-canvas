@@ -25,7 +25,7 @@ Stack hybride **Prisma + Supabase JS**. Voir `CLAUDE.md` → "Stratégie long te
 - `policy.ts` — `requiresApproval()` + `checkBudgetPolicy()`
 - `approval-executor.ts` — `resolveHumanApproval()` exécute les actions approuvées (deploy, publish_campaign, stop_venture)
 - `run-agent-step.ts` — orchestre un step agent (LLM call → output schema → persist agent_runs avec tokens/coût)
-- `job-runner.ts` — runner périodique des `autonomy_jobs`
+- `job-runner.ts` — runner périodique des `autonomy_jobs` et consommation queue/worker
 - `approval-view-model.ts` — formatage pour UI Approval Gates (incluant `extractBudgetBreach`)
 - `action-view-model.ts` — formatage pour tabs Jobs / Actions dans /studio/agents
 - `agent-orchestration.ts` (parent) — `selectDueAgentRuns()` depuis `agent_schedules`

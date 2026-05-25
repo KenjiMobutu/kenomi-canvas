@@ -4,7 +4,6 @@ import { z } from 'zod'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
-import { runAgentStep, RunAgentStepError, type RunAgentStepSupabase } from '@/lib/autonomy/run-agent-step'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -80,9 +79,8 @@ export async function POST(request: Request) {
         user_id: user!.id,
         venture_id: null,
         kind: 'run_agent',
-        status: 'running',
-        attempt_count: 1,
-        locked_at: nowIso,
+        status: 'queued',
+        attempt_count: 0,
         next_run_at: nowIso,
         payload: {
           agentId: 'prospect',
@@ -101,73 +99,13 @@ export async function POST(request: Request) {
     return apiError("Impossible de créer le job Prospect", 500)
   }
 
-  try {
-    const result = await runAgentStep({
-      supabase: supabase as unknown as RunAgentStepSupabase,
-      userId: user!.id,
-      agentId: 'prospect',
-      prompt,
-    })
-
-    await supabase
-      .from('autonomy_jobs')
-      .update({
-        status: 'completed',
-        locked_at: null,
-        last_error: null,
-        payload: {
-          agentId: 'prospect',
-          source: parsed.data.source ?? null,
-          focus: parsed.data.focus ?? 'prospect',
-          prompt,
-          input: parsed.data,
-          output: {
-            agentRunId: result.agentRunId,
-            model: result.model,
-            durationMs: result.durationMs,
-            parsedOutput: result.parsedOutput,
-          },
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', job.id)
-      .eq('user_id', user!.id)
-
-    return NextResponse.json({
+  return NextResponse.json(
+    {
       ok: true,
       jobId: job.id,
-      agentRunId: result.agentRunId,
-      model: result.model,
-      durationMs: result.durationMs,
-      parsedOutput: result.parsedOutput,
-      content: result.content,
-      jobStatus: 'completed',
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    await supabase
-      .from('autonomy_jobs')
-      .update({
-        status: 'failed',
-        locked_at: null,
-        last_error: message,
-        payload: {
-          agentId: 'prospect',
-          source: parsed.data.source ?? null,
-          focus: parsed.data.focus ?? 'prospect',
-          prompt,
-          input: parsed.data,
-          error: message,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', job.id)
-      .eq('user_id', user!.id)
-
-    if (error instanceof RunAgentStepError) {
-      return apiError(error.message, error.status)
-    }
-
-    return apiError('Erreur Prospect', 500)
-  }
+      jobStatus: 'queued',
+      message: 'Prospect mis en file pour exécution par le worker',
+    },
+    { status: 202 }
+  )
 }
