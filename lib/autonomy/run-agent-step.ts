@@ -19,6 +19,11 @@ import {
   type PipelineRow,
 } from '@/lib/pipeline-types'
 import { buildProspectMemoryRecord } from '@/lib/prospect/memory'
+import {
+  formatRetrievedProspectMemories,
+  retrieveProspectMemories,
+  writeProspectMemory,
+} from '@/lib/memory/prospect-memory'
 import { buildProspectOutreach } from '@/lib/prospect/build-outreach'
 import type { ProspectOutput } from '@/lib/agent-output-schemas'
 import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
@@ -77,6 +82,8 @@ export interface RunAgentStepInput {
     query: string
     now: () => Date
   }) => Promise<ScoutSourceCollection>
+  writeProspectMemory?: typeof writeProspectMemory
+  retrieveProspectMemories?: typeof retrieveProspectMemories
   now?: () => Date
 }
 
@@ -544,6 +551,18 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     agentId === 'prospect'
       ? await getProspectSettingsContext(supabase, userId)
       : { context: '', settings: null }
+  const prospectMemoryRows =
+    agentId === 'prospect'
+      ? await (input.retrieveProspectMemories ?? retrieveProspectMemories)({
+          userId,
+          query: input.prompt || 'Trouve un prospect qualifié, score-le, et rédige un message de prospection prêt à envoyer.',
+          limit: 4,
+        })
+      : []
+  const prospectMemoryContext =
+    agentId === 'prospect'
+      ? formatRetrievedProspectMemories(prospectMemoryRows)
+      : ''
 
   const model = cfg?.model ?? 'qwen3:8b'
   const baseSystemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
@@ -567,7 +586,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           })
         )}`
       : ''
-  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}${scoutSourceContext}${prospectContext.context}`
+  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}${scoutSourceContext}${prospectContext.context}${prospectMemoryContext ? `\n${prospectMemoryContext}` : ''}`
 
   const startMs = now().getTime()
 
@@ -775,6 +794,29 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           prospect,
           nowIso: now().toISOString(),
         })
+
+        try {
+          await (input.writeProspectMemory ?? writeProspectMemory)({
+            userId,
+            prospectId: prospectInsert.id,
+            companyName: prospect.company_name,
+            memoryKind: 'prospect_created',
+            pipelineStatus:
+              prospect.band === 'hot'
+                ? 'ready_to_contact'
+                : prospect.band === 'warm'
+                  ? 'follow_up'
+                  : 'nurture',
+            band: prospect.band,
+            source: prospect.source,
+            createdAt: now().toISOString(),
+            summary: prospect.summary,
+            painPoints: prospect.pain_points,
+            tags: prospect.pain_points,
+          })
+        } catch (error) {
+          console.error('prospect memory write failed', error)
+        }
       }
     }
 

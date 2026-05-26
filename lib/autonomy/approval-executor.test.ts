@@ -108,6 +108,9 @@ describe('resolveHumanApproval', () => {
         {
           id: 'prospect-1',
           user_id: 'u1',
+          company_name: 'Acme Studio',
+          source: 'linkedin',
+          band: 'warm',
           contact_email: 'marie@acme.test',
           status: 'awaiting_approval',
           metadata: {
@@ -123,12 +126,17 @@ describe('resolveHumanApproval', () => {
         },
       ],
     })
+    const memoryWrites: Array<Record<string, unknown>> = []
 
     const result = await resolveHumanApproval({
       supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
       userId: 'u1',
       approvalId: 'app-o1',
       decision: 'approved',
+      writeProspectMemory: async (row) => {
+        memoryWrites.push(row as unknown as Record<string, unknown>)
+        return { ok: true, id: 'memory-1' }
+      },
       now: () => new Date('2026-05-26T10:00:00.000Z'),
     })
 
@@ -174,6 +182,12 @@ describe('resolveHumanApproval', () => {
         provider: 'gmail',
       }),
     })
+    expect(memoryWrites).toEqual([
+      expect.objectContaining({
+        memoryKind: 'outreach_draft_created',
+        companyName: 'Acme Studio',
+      }),
+    ])
   })
 
   it('approuve send_follow_up et crée un draft Gmail local pour la première relance', async () => {

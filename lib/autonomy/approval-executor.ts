@@ -19,6 +19,7 @@ import { appendProspectActivity } from '@/lib/prospect/activity'
 import { buildProspectActivityInsert } from '@/lib/prospect/activity-log'
 import { getFollowUpRank, scheduleNextFollowUpAt } from '@/lib/prospect/follow-up'
 import type { ProspectOutreachKind } from '@/lib/prospect/types'
+import { writeProspectMemory } from '@/lib/memory/prospect-memory'
 
 type QueryResponse = { data: unknown; error: { message: string } | null }
 
@@ -64,6 +65,9 @@ interface AutonomyActionRow {
 interface ProspectRow {
   id: string
   user_id: string
+  company_name?: string | null
+  source?: string | null
+  band?: string | null
   contact_email?: string | null
   status?: string | null
   pipeline_status?: string | null
@@ -134,6 +138,7 @@ export interface ResolveHumanApprovalInput {
   stripeClient?: CheckoutStripeClient
   stripeClientFactory?: StripeClientFactory
   marketingPublisher?: MarketingPublisher
+  writeProspectMemory?: typeof writeProspectMemory
   now?: () => Date
   config?: AutonomyConfig
 }
@@ -813,7 +818,7 @@ export async function resolveHumanApproval(
       input.supabase
         .from('prospects')
         .select(
-          'id, user_id, contact_email, metadata, follow_up_count, follow_up_version, pipeline_status'
+          'id, user_id, company_name, source, band, contact_email, metadata, follow_up_count, follow_up_version, pipeline_status'
         )
         .eq('id', prospectId)
         .eq('user_id', input.userId)
@@ -902,6 +907,32 @@ export async function resolveHumanApproval(
         }),
       ])
     )
+
+    if (action.action_type === 'send_outreach') {
+      try {
+        const metadata =
+          prospect.metadata && typeof prospect.metadata === 'object'
+            ? (prospect.metadata as Record<string, unknown>)
+            : {}
+        await (input.writeProspectMemory ?? writeProspectMemory)({
+          userId: input.userId,
+          prospectId,
+          companyName: prospect.company_name ?? companyName,
+          memoryKind: 'outreach_draft_created',
+          pipelineStatus: 'draft_created',
+          band: typeof prospect.band === 'string' ? prospect.band : 'warm',
+          source: typeof prospect.source === 'string' ? prospect.source : 'other',
+          createdAt: nowIso,
+          summary: typeof metadata.summary === 'string' ? metadata.summary : null,
+          painPoints: Array.isArray(metadata.pain_points)
+            ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
+            : [],
+          outreachKind,
+        })
+      } catch (error) {
+        console.error('prospect memory write failed', error)
+      }
+    }
 
     executed = false
     actionStatus = 'completed'

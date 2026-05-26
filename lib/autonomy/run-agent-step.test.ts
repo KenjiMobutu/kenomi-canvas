@@ -236,6 +236,67 @@ describe('runAgentStep', () => {
     })
   })
 
+  it('injects retrieved memory into Prospect prompts and writes prospect memory on creation', async () => {
+    const supabase = createFakeSupabase({
+      user_settings: [
+        {
+          user_id: 'user-1',
+          prospect_sources: ['linkedin'],
+          prospect_outreach_email: 'ops@kenomi.eu',
+          prospect_crm_provider: 'supabase',
+        },
+      ],
+    })
+    let capturedSystem = ''
+    const memoryWrites: Array<Record<string, unknown>> = []
+
+    const llm = async (
+      _messages: Parameters<NonNullable<Parameters<typeof runAgentStep>[0]['llm']>>[0],
+      config: Parameters<NonNullable<Parameters<typeof runAgentStep>[0]['llm']>>[1]
+    ): Promise<LLMResponse> => {
+      capturedSystem = config.system
+      return {
+        content: JSON.stringify({
+          company_name: 'Acme Studio',
+          source: 'linkedin',
+          contact_name: 'Marie',
+          score: 82,
+          band: 'warm',
+          summary: 'Needs better follow-up visibility',
+          pain_points: ['manual triage'],
+          outreach_subject: 'Acme Studio — qualifier plus vite',
+          outreach_body: 'Bonjour Marie, proposition concise.',
+          cta: 'Reply to continue',
+        }),
+        provider: 'ollama',
+        model: 'qwen3:8b',
+        fallback_triggered: false,
+      }
+    }
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'prospect',
+      llm,
+      retrieveProspectMemories: async () => [{ id: 'm1', text: 'Memory 1', payload: {} }],
+      writeProspectMemory: async (row) => {
+        memoryWrites.push(row as unknown as Record<string, unknown>)
+        return { ok: true, id: 'memory-1' }
+      },
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+    })
+
+    expect(capturedSystem).toContain('Relevant memory:')
+    expect(capturedSystem).toContain('Memory 1')
+    expect(memoryWrites).toEqual([
+      expect.objectContaining({
+        memoryKind: 'prospect_created',
+        companyName: 'Acme Studio',
+      }),
+    ])
+  })
+
   it('injecte les métriques business réelles dans le prompt Decision', async () => {
     let systemPrompt = ''
     const supabase = createFakeSupabase({

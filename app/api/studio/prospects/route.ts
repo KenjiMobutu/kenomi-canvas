@@ -3,6 +3,11 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import { requireAllowedUser } from '@/lib/auth-server'
+import {
+  formatRetrievedProspectMemories,
+  retrieveProspectMemories,
+  writeProspectMemory,
+} from '@/lib/memory/prospect-memory'
 import { buildProspectActivityInsert } from '@/lib/prospect/activity-log'
 import { buildProspectViews, summarizeProspects } from '@/lib/prospect/api-view'
 import { normalizeProspectTags } from '@/lib/prospect/crm-fields'
@@ -114,6 +119,9 @@ function asText(value: unknown) {
 interface ProspectFollowUpRow {
   id: string
   company_name: string
+  source?: string | null
+  band?: string | null
+  tags?: string[] | null
   contact_name?: string | null
   contact_email?: string | null
   outreach_subject?: string | null
@@ -127,6 +135,25 @@ interface ProspectFollowUpRow {
   follow_up_count?: number | null
   follow_up_version?: number | null
   last_outreach_kind?: string | null
+}
+
+function buildFollowUpMemoryQuery(row: ProspectFollowUpRow) {
+  const metadata =
+    row.metadata && typeof row.metadata === 'object'
+      ? (row.metadata as Record<string, unknown>)
+      : {}
+  const summary = typeof metadata.summary === 'string' ? metadata.summary : ''
+  return [row.company_name, summary, row.operator_notes ?? ''].filter(Boolean).join(' ').trim()
+}
+
+async function writeProspectMemoryBestEffort(
+  input: Parameters<typeof writeProspectMemory>[0]
+) {
+  try {
+    await writeProspectMemory(input)
+  } catch (error) {
+    console.error('prospect memory write failed', error)
+  }
 }
 
 function asOutreachKind(value: unknown): ProspectOutreachKind {
@@ -256,7 +283,7 @@ async function processDueProspectFollowUps(input: {
   const { data, error } = await input.supabase
     .from('prospects')
     .select(
-      'id, company_name, contact_name, contact_email, outreach_subject, outreach_body, pipeline_status, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, operator_notes, metadata'
+      'id, company_name, source, band, contact_name, contact_email, outreach_subject, outreach_body, pipeline_status, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, operator_notes, metadata, tags'
     )
     .eq('user_id', input.userId)
     .order('next_followup_at', { ascending: true })
@@ -281,6 +308,13 @@ async function processDueProspectFollowUps(input: {
       currentVersion: row.follow_up_version,
       targetKind: kind,
     })
+    const memoryContext = formatRetrievedProspectMemories(
+      await retrieveProspectMemories({
+        userId: input.userId,
+        query: buildFollowUpMemoryQuery(row),
+        limit: 3,
+      })
+    )
     const draft = buildProspectFollowUpDraft({
       companyName: row.company_name,
       contactName: row.contact_name ?? null,
@@ -289,7 +323,7 @@ async function processDueProspectFollowUps(input: {
         ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
         : [],
       previousSubject: row.outreach_subject ?? null,
-      operatorNotes: row.operator_notes ?? null,
+      operatorNotes: [row.operator_notes ?? '', memoryContext].filter(Boolean).join('\n\n') || null,
       kind,
     })
 
@@ -379,6 +413,23 @@ async function processDueProspectFollowUps(input: {
         followUpVersion,
       })
     }
+
+    await writeProspectMemoryBestEffort({
+      userId: input.userId,
+      prospectId: row.id,
+      companyName: row.company_name,
+      memoryKind: 'follow_up_generated',
+      pipelineStatus: approvalRequired ? 'awaiting_approval' : 'follow_up_due',
+      band: row.band ?? 'warm',
+      source: row.source ?? 'other',
+      createdAt: input.nowIso,
+      summary: typeof metadata.summary === 'string' ? metadata.summary : null,
+      painPoints: Array.isArray(metadata.pain_points)
+        ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
+        : [],
+      tags: Array.isArray(row.tags) ? row.tags.filter((value): value is string => typeof value === 'string') : [],
+      outreachKind: kind,
+    })
   }
 }
 
@@ -566,6 +617,8 @@ export async function PATCH(request: Request) {
     follow_up_version?: number | null
     last_outreach_kind?: string | null
     company_name?: string | null
+    source?: string | null
+    band?: string | null
     contact_name?: string | null
     contact_email?: string | null
     outreach_subject?: string | null
@@ -576,6 +629,7 @@ export async function PATCH(request: Request) {
         .from('prospects')
         .select(
           'metadata, pipeline_status, status, operator_notes, next_action, tags, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, company_name, contact_name, contact_email, outreach_subject, outreach_body'
+          + ', source, band'
         )
         .eq('id', parsed.data.id)
         .eq('user_id', user!.id)
@@ -791,6 +845,54 @@ export async function PATCH(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+  }
+
+  const metadata =
+    current.metadata && typeof current.metadata === 'object'
+      ? (current.metadata as Record<string, unknown>)
+      : {}
+  if (parsed.data.operator_notes !== undefined && parsed.data.operator_notes.trim().length > 0) {
+    await writeProspectMemoryBestEffort({
+      userId: user!.id,
+      prospectId: parsed.data.id,
+      companyName: current.company_name ?? 'Unknown company',
+      memoryKind: 'operator_note',
+      pipelineStatus: typeof patch.pipeline_status === 'string' ? patch.pipeline_status : (current.pipeline_status ?? 'new'),
+      band: current.band ?? 'warm',
+      source: current.source ?? 'other',
+      createdAt: nowIso,
+      summary: typeof metadata.summary === 'string' ? metadata.summary : null,
+      painPoints: Array.isArray(metadata.pain_points)
+        ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
+        : [],
+      tags: Array.isArray(current.tags) ? current.tags.filter((value): value is string => typeof value === 'string') : [],
+      operatorNote: parsed.data.operator_notes,
+    })
+  }
+
+  if (parsed.data.status === 'replied' || parsed.data.status === 'won' || parsed.data.status === 'lost') {
+    await writeProspectMemoryBestEffort({
+      userId: user!.id,
+      prospectId: parsed.data.id,
+      companyName: current.company_name ?? 'Unknown company',
+      memoryKind:
+        parsed.data.status === 'replied'
+          ? 'reply_recorded'
+          : parsed.data.status === 'won'
+            ? 'prospect_won'
+            : 'prospect_lost',
+      pipelineStatus: parsed.data.status,
+      band: current.band ?? 'warm',
+      source: current.source ?? 'other',
+      createdAt: nowIso,
+      summary: typeof metadata.summary === 'string' ? metadata.summary : null,
+      painPoints: Array.isArray(metadata.pain_points)
+        ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
+        : [],
+      tags: Array.isArray(current.tags) ? current.tags.filter((value): value is string => typeof value === 'string') : [],
+      result: parsed.data.status,
+      outreachKind: current.last_outreach_kind ?? null,
+    })
   }
 
   return NextResponse.json({ ok: true, prospect }, { status: 200 })

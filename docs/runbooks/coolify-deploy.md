@@ -12,6 +12,9 @@ COOLIFY_URL=https://coolify.example.internal
 COOLIFY_TOKEN=...
 HERMES_AGENT_URL=https://hermes.kenomi.eu
 OLLAMA_BASE_URL=http://192.168.0.14:11434
+QDRANT_URL=http://qdrant.internal:6333
+QDRANT_COLLECTION_PROSPECTS=prospects
+EMBEDDING_MODEL=nomic-embed-text:latest
 TRUSTED_PRIVATE_HOSTS=coolify.example.internal
 SOURCE_COMMIT=<git-sha-built>
 EXPECTED_SOURCE_COMMIT=<git-sha-expected>
@@ -59,6 +62,8 @@ For Phase 3, the same smoke must also validate the first follow-up loop:
 - Gmail draft materialized after approval
 - operator transition back to `sent`
 - `follow_up_count=1` with the next due date scheduled
+
+Phase 4 adds Qdrant-backed Prospect memory, but the outbound smoke must remain runnable even when `QDRANT_URL` or `EMBEDDING_MODEL` are absent. Memory writes and retrieval are best effort only; a disabled or failing Qdrant must not block the Prospect loop.
 
 ## Normal Flow
 

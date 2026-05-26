@@ -100,6 +100,10 @@ npm run dev
 | `HERMES_AGENT_URL`              | URL publique de l'API Hermes Agent                               |
 | `HERMES_AGENT_API_KEY`          | Clé Bearer de l'API Hermes Agent                                 |
 | `OLLAMA_BASE_URL`               | URL privée du runtime Ollama sur le Mac Mini M4                  |
+| `QDRANT_URL`                    | URL du service Qdrant self-hosted                                |
+| `QDRANT_API_KEY`                | Clé API Qdrant, optionnelle selon le déploiement                 |
+| `QDRANT_COLLECTION_PROSPECTS`   | Nom de la collection Qdrant dédiée à la mémoire Prospect         |
+| `EMBEDDING_MODEL`               | Modèle d'embedding utilisé pour la mémoire serveur               |
 | `TRUSTED_PRIVATE_HOSTS`         | Hosts privés autorisés pour appels serveur, séparés par virgules |
 | `SOURCE_COMMIT`                 | Commit embarqué dans le runtime, affiché par le diagnostic infra |
 | `EXPECTED_SOURCE_COMMIT`        | Commit attendu pour la parité prod, optionnel                    |
