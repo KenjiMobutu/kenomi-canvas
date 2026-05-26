@@ -139,15 +139,29 @@ export function buildProspectViews(input: {
       nextFollowupAt: typeof row.next_followup_at === 'string' ? row.next_followup_at : null,
       nowIso: input.nowIso,
     })
-    if (state.approvalStatus === 'awaiting_approval') pipelineStatus = 'awaiting_approval'
-    else if (
+    if (
+      state.approvalStatus === 'awaiting_approval' &&
+      (storedPipeline === 'new' ||
+        storedPipeline === 'ready_to_contact' ||
+        storedPipeline === 'awaiting_approval' ||
+        storedPipeline === 'approved_to_send')
+    ) {
+      pipelineStatus = 'awaiting_approval'
+    } else if (
       draftProvider &&
       draftExternalId &&
       (storedPipeline === 'approved_to_send' || storedPipeline === 'draft_created')
     ) {
       pipelineStatus = 'draft_created'
+    } else if (
+      state.approvalStatus === 'approved_to_send' &&
+      (storedPipeline === 'new' ||
+        storedPipeline === 'ready_to_contact' ||
+        storedPipeline === 'awaiting_approval' ||
+        storedPipeline === 'approved_to_send')
+    ) {
+      pipelineStatus = 'approved_to_send'
     }
-    else if (state.approvalStatus === 'approved_to_send') pipelineStatus = 'approved_to_send'
 
     return {
       ...row,
