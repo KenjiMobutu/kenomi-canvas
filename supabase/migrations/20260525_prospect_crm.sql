@@ -61,6 +61,21 @@ CREATE TABLE IF NOT EXISTS public.prospects (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.prospects
+  ADD COLUMN IF NOT EXISTS draft_provider text,
+  ADD COLUMN IF NOT EXISTS draft_external_id text,
+  ADD COLUMN IF NOT EXISTS draft_created_at timestamptz,
+  ADD COLUMN IF NOT EXISTS last_contacted_at timestamptz,
+  ADD COLUMN IF NOT EXISTS next_followup_at timestamptz,
+  ADD COLUMN IF NOT EXISTS replied_at timestamptz,
+  ADD COLUMN IF NOT EXISTS closed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS owner_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS pipeline_status text NOT NULL DEFAULT 'new',
+  ADD COLUMN IF NOT EXISTS operator_notes text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS next_action text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS last_activity_at timestamptz,
+  ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}'::text[];
+
 ALTER TABLE public.prospects ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "prospects_own" ON public.prospects;
