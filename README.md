@@ -187,6 +187,7 @@ Le smoke outbound suppose une session Studio déjà authentifiée. Exporter le c
 ```bash
 export SMOKE_BASE_URL=https://lab.kenomi.eu
 export SMOKE_STUDIO_COOKIE='sb-supabase-auth-token=base64-...'
+export AUTONOMY_WORKER_SECRET='...'
 npm run smoke:prospect
 ```
 
@@ -197,6 +198,8 @@ Le script vérifie:
 - l'approbation `send_outreach`
 - la création d'un draft local Gmail (`pipeline_status=draft_created`)
 - la transition opérateur `sent`
+
+Si le worker Prospect n'est pas déclenché en continu sur l'environnement ciblé, définir `AUTONOMY_WORKER_SECRET` permet au smoke de déclencher explicitement `POST /api/studio/autonomy/jobs` pendant le test.
 
 ## Structure du projet
 

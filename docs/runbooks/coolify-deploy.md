@@ -38,10 +38,13 @@ Deployment order for the live topology:
 ```bash
 export SMOKE_BASE_URL=https://lab.kenomi.eu
 export SMOKE_STUDIO_COOKIE='sb-supabase-auth-token=base64-...'
+export AUTONOMY_WORKER_SECRET='...'
 npm run smoke:prospect
 ```
 
 6. Approve or unblock the autonomy action only after the public UI, private LLM, and Prospect outbound loop all pass.
+
+If the autonomy worker is not drained continuously in production, `AUTONOMY_WORKER_SECRET` lets the smoke trigger the queue worker explicitly through `/api/studio/autonomy/jobs`.
 
 ## Normal Flow
 

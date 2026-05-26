@@ -1,5 +1,6 @@
 const baseUrl = process.env.SMOKE_BASE_URL ?? 'http://localhost:3000'
 const studioCookie = process.env.SMOKE_STUDIO_COOKIE
+const workerSecret = process.env.AUTONOMY_WORKER_SECRET
 
 if (!studioCookie) {
   console.error('SMOKE_STUDIO_COOKIE is required')
@@ -32,17 +33,76 @@ async function request(path, init = {}) {
   return { response, json, text }
 }
 
+async function triggerWorker(limit = 1) {
+  if (!workerSecret) return null
+
+  const response = await fetch(new URL('/api/studio/autonomy/jobs', baseUrl), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-autonomy-worker-token': workerSecret,
+    },
+    body: JSON.stringify({ limit }),
+  })
+
+  const text = await response.text()
+  let json = null
+  try {
+    json = text ? JSON.parse(text) : null
+  } catch {
+    json = null
+  }
+
+  if (!response.ok) {
+    throw new Error(`worker trigger failed: ${response.status} ${text}`)
+  }
+
+  return json
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-function latestProspect(prospects) {
-  return Array.isArray(prospects) && prospects.length > 0 ? prospects[0] : null
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function findProspectByCompany(prospects, companyName) {
+  if (!Array.isArray(prospects)) return null
+  return prospects.find((prospect) => prospect?.company_name === companyName) ?? null
+}
+
+async function waitForProspect(companyName, predicate, label, timeoutMs = 45000) {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (workerSecret) {
+      await triggerWorker(1)
+    }
+
+    const result = await request('/api/studio/prospects')
+    assert(
+      result.response.status === 200 || result.response.status === 207,
+      `${label}: prospects fetch failed ${result.response.status} ${result.text}`
+    )
+
+    const prospect = findProspectByCompany(result.json?.prospects, companyName)
+    if (prospect && predicate(prospect)) {
+      return prospect
+    }
+
+    await sleep(1500)
+  }
+
+  throw new Error(`${label}: timed out waiting for prospect ${companyName}`)
+}
+
+const runTag = Date.now().toString(36)
+const companyName = `Smoke Prospect Co ${runTag}`
 const prompt = [
   'Lance un run Prospect concret et retourne un prospect exploitable.',
-  'Entreprise prioritaire: Smoke Prospect Co',
+  `Entreprise prioritaire: ${companyName}`,
   'Source prioritaire: linkedin',
   'Contact connu: Léa Martin',
   'Rôle: CEO',
@@ -51,7 +111,14 @@ const prompt = [
 
 const run = await request('/api/studio/prospects/run', {
   method: 'POST',
-  body: JSON.stringify({ prompt, companyName: 'Smoke Prospect Co', source: 'linkedin', contactName: 'Léa Martin', contactRole: 'CEO', focus: 'prospect' }),
+  body: JSON.stringify({
+    prompt,
+    companyName,
+    source: 'linkedin',
+    contactName: 'Léa Martin',
+    contactRole: 'CEO',
+    focus: 'prospect',
+  }),
 })
 
 assert(run.response.status === 202, `prospect run failed: ${run.response.status} ${run.text}`)
@@ -61,13 +128,18 @@ const jobs = await request('/api/studio/autonomy/jobs?agent_id=prospect')
 assert(jobs.response.status === 200, `jobs fetch failed: ${jobs.response.status} ${jobs.text}`)
 process.stdout.write(`ok jobs endpoint (${Array.isArray(jobs.json?.jobs) ? jobs.json.jobs.length : 0} jobs)\n`)
 
-const prospectsBefore = await request('/api/studio/prospects')
-assert(
-  prospectsBefore.response.status === 200 || prospectsBefore.response.status === 207,
-  `prospects fetch failed: ${prospectsBefore.response.status} ${prospectsBefore.text}`
-)
+if (workerSecret) {
+  const worker = await triggerWorker(1)
+  process.stdout.write(
+    `ok worker trigger (${Array.isArray(worker?.processed) ? worker.processed.length : 0} jobs processed)\n`
+  )
+}
 
-const prospect = latestProspect(prospectsBefore.json?.prospects)
+const prospect = await waitForProspect(
+  companyName,
+  (candidate) => Boolean(candidate.id),
+  'initial prospect'
+)
 assert(prospect, 'no prospect visible in /api/studio/prospects')
 process.stdout.write(`ok found prospect ${prospect.id}\n`)
 
@@ -80,12 +152,14 @@ if (prospect.approval_status === 'awaiting_approval' && prospect.outreach_approv
   process.stdout.write(`ok approved outreach ${prospect.outreach_approval_id}\n`)
 }
 
-const prospectsAfterApproval = await request('/api/studio/prospects')
-assert(
-  prospectsAfterApproval.response.status === 200 || prospectsAfterApproval.response.status === 207,
-  `prospects after approval failed: ${prospectsAfterApproval.response.status} ${prospectsAfterApproval.text}`
+const approvedProspect = await waitForProspect(
+  companyName,
+  (candidate) =>
+    candidate.pipeline_status === 'draft_created' ||
+    candidate.pipeline_status === 'approved_to_send' ||
+    candidate.approval_status === 'awaiting_approval',
+  'prospect after approval'
 )
-const approvedProspect = latestProspect(prospectsAfterApproval.json?.prospects)
 assert(approvedProspect, 'prospect missing after approval refresh')
 assert(
   approvedProspect.pipeline_status === 'draft_created' || approvedProspect.pipeline_status === 'approved_to_send',
@@ -102,12 +176,11 @@ if (approvedProspect.pipeline_status === 'draft_created') {
   process.stdout.write(`ok marked sent ${approvedProspect.id}\n`)
 }
 
-const prospectsFinal = await request('/api/studio/prospects')
-assert(
-  prospectsFinal.response.status === 200 || prospectsFinal.response.status === 207,
-  `final prospects fetch failed: ${prospectsFinal.response.status} ${prospectsFinal.text}`
+const finalProspect = await waitForProspect(
+  companyName,
+  (candidate) => ['draft_created', 'sent', 'replied', 'won', 'lost'].includes(candidate.pipeline_status),
+  'final prospect'
 )
-const finalProspect = latestProspect(prospectsFinal.json?.prospects)
 assert(finalProspect, 'prospect missing in final fetch')
 assert(
   ['draft_created', 'sent', 'replied', 'won', 'lost'].includes(finalProspect.pipeline_status),
