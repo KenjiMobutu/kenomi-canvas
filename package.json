@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "smoke": "node scripts/smoke-app.mjs",
+    "smoke:prospect": "node scripts/smoke-prospect-outbound.mjs",
     "smoke:vision": "node scripts/smoke-vision-loop.mjs",
     "smoke:revenue-proof": "node scripts/smoke-revenue-proof.mjs",
     "smoke:revenue-cadence": "node scripts/smoke-revenue-cadence.mjs",

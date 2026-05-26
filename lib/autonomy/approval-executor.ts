@@ -14,6 +14,8 @@ import {
   type PublishActionSupabase,
 } from '@/lib/marketing/publish-action'
 import { getMarketingPublisher, type MarketingPublisher } from '@/lib/marketing/adapters'
+import { buildGmailDraftPayload } from '@/lib/prospect/gmail-draft'
+import { appendProspectActivity } from '@/lib/prospect/activity'
 
 type QueryResponse = { data: unknown; error: { message: string } | null }
 
@@ -54,6 +56,13 @@ interface AutonomyActionRow {
   input?: Record<string, unknown> | null
   estimated_cost_eur?: number | null
   budget_cap_eur?: number | null
+}
+
+interface ProspectRow {
+  id: string
+  user_id: string
+  contact_email?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 interface VentureSpendRow {
@@ -148,6 +157,12 @@ async function single<T>(query: QueryFilterBuilder, notFoundMessage: string): Pr
 async function update(query: QueryResult): Promise<void> {
   const { error } = await query
   if (error) throw new ApprovalExecutionError(error.message, 500)
+}
+
+async function maybeSingleRow<T>(query: QueryFilterBuilder): Promise<T | null> {
+  const { data, error } = await query.maybeSingle()
+  if (error) throw new ApprovalExecutionError(error.message, 500)
+  return data as T | null
 }
 
 async function executeStopVenture(input: {
@@ -474,6 +489,37 @@ export async function resolveHumanApproval(
   )
 
   if (input.decision === 'rejected') {
+    if (action.action_type === 'send_outreach') {
+      const prospectId =
+        typeof action.input?.prospect_id === 'string' ? action.input.prospect_id : null
+      if (prospectId) {
+        const prospect = await maybeSingleRow<ProspectRow>(
+          input.supabase
+            .from('prospects')
+            .select('id, user_id, contact_email, metadata')
+            .eq('id', prospectId)
+            .eq('user_id', input.userId)
+        )
+        if (prospect?.id) {
+          await update(
+            input.supabase
+              .from('prospects')
+              .update({
+                metadata: appendProspectActivity(prospect.metadata, {
+                  type: 'approval_rejected',
+                  actor: 'operator',
+                  at: nowIso,
+                  detail: 'Outreach rejected',
+                }),
+                updated_at: nowIso,
+              })
+              .eq('id', prospectId)
+              .eq('user_id', input.userId)
+          )
+        }
+      }
+    }
+
     await update(
       input.supabase
         .from('human_approvals')
@@ -691,6 +737,99 @@ export async function resolveHumanApproval(
         draft_id: draftId,
         error: publishResult.error,
       }
+    }
+  }
+
+  if (action.action_type === 'send_outreach') {
+    const prospectId = typeof action.input?.prospect_id === 'string' ? action.input.prospect_id : null
+    const companyName =
+      typeof action.input?.company_name === 'string' ? action.input.company_name : 'Unknown company'
+    const contactName = typeof action.input?.contact_name === 'string' ? action.input.contact_name : null
+    const subject =
+      typeof action.input?.outreach_subject === 'string'
+        ? action.input.outreach_subject
+        : 'Outbound draft'
+    const body = typeof action.input?.outreach_body === 'string' ? action.input.outreach_body : ''
+
+    if (!prospectId) {
+      throw new ApprovalExecutionError('prospect_id manquant pour send_outreach', 422)
+    }
+
+    const prospect = await maybeSingleRow<ProspectRow>(
+      input.supabase
+        .from('prospects')
+        .select('id, user_id, contact_email, metadata')
+        .eq('id', prospectId)
+        .eq('user_id', input.userId)
+    )
+
+    if (!prospect?.id) {
+      throw new ApprovalExecutionError('prospect introuvable pour send_outreach', 404)
+    }
+
+    const draftId = randomUUID()
+    const draft = buildGmailDraftPayload({
+      prospectId,
+      companyName,
+      contactName,
+      to: prospect.contact_email ?? null,
+      subject,
+      body,
+    })
+
+    await update(
+      input.supabase.from('campaign_drafts').insert({
+        id: draftId,
+        user_id: input.userId,
+        venture_id: null,
+        channel: draft.channel,
+        content: draft.content,
+        status: draft.status,
+        metadata: {
+          ...draft.metadata,
+          provider: draft.provider,
+          autonomy_action_id: action.id,
+        },
+        created_at: nowIso,
+        updated_at: nowIso,
+      })
+    )
+
+    await update(
+      input.supabase
+        .from('prospects')
+        .update({
+          status: 'approved_to_send',
+          draft_provider: 'gmail',
+          draft_external_id: draftId,
+          draft_created_at: nowIso,
+          metadata: appendProspectActivity(
+            appendProspectActivity(prospect.metadata, {
+              type: 'approval_approved',
+              actor: 'operator',
+              at: nowIso,
+              detail: 'Outreach approved',
+            }),
+            {
+              type: 'gmail_draft_created',
+              actor: 'system',
+              at: nowIso,
+              detail: `Gmail draft ${draftId} created`,
+            }
+          ),
+          updated_at: nowIso,
+        })
+        .eq('id', prospectId)
+        .eq('user_id', input.userId)
+    )
+
+    executed = false
+    actionStatus = 'completed'
+    output = {
+      executed: false,
+      handler: 'send_outreach',
+      draft_id: draftId,
+      provider: 'gmail',
     }
   }
 

@@ -12,6 +12,7 @@ Studio OS pour entrepreneurs solo — gérez vos ventures, automatisez vos workf
 - **Gamification** — achievements et progression pour maintenir la motivation
 - **Marketing** — landing pages et waitlist publique par venture
 - **Infrastructure** — vue de l'état de vos services
+- **Prospects** — acquisition, scoring, drafts outreach, approval humaine et pipeline outbound
 - **API Keys** — gestion des clés d'accès
 - **Dashboard admin** — back-office séparé avec authentification dédiée
 
@@ -43,6 +44,7 @@ Statut actuel :
 - **Déploiement** : action Coolify déclenchable derrière approbation humaine, avec mode dry-run.
 - **Infrastructure** : vue topology alimentée par `/api/studio/infra/services`, avec configuration extensible par variables d'environnement.
 - **Hermes** : UI publique derrière reverse proxy Coolify, backend Ollama privé sur le Mac Mini M4.
+- **Prospect outbound** : `Prospect` qualifie un lead, crée une approval `send_outreach`, matérialise un draft Gmail après approbation, puis suit le pipeline `draft_created -> sent -> replied -> won/lost`.
 - **Privacy** : export RGPD multi-tables et suppression confirmée avec token temporel.
 - **Sécurité** : RLS Supabase, allowlist email, proxy Next.js, protections SSRF et secrets côté serveur.
 
@@ -100,6 +102,7 @@ npm run dev
 | `TRUSTED_PRIVATE_HOSTS`         | Hosts privés autorisés pour appels serveur, séparés par virgules |
 | `SOURCE_COMMIT`                 | Commit embarqué dans le runtime, affiché par le diagnostic infra |
 | `EXPECTED_SOURCE_COMMIT`        | Commit attendu pour la parité prod, optionnel                    |
+| `SMOKE_STUDIO_COOKIE`           | Cookie Studio de test pour `npm run smoke:prospect`              |
 
 ### Health check
 
@@ -174,7 +177,26 @@ ls supabase/migrations/
 
 ```bash
 npm test
+npm run smoke:prospect
 ```
+
+### Prospect outbound smoke
+
+Le smoke outbound suppose une session Studio déjà authentifiée. Exporter le cookie navigateur complet avant de lancer le script:
+
+```bash
+export SMOKE_BASE_URL=https://lab.kenomi.eu
+export SMOKE_STUDIO_COOKIE='sb-supabase-auth-token=base64-...'
+npm run smoke:prospect
+```
+
+Le script vérifie:
+
+- le queueing du run `Prospect`
+- la présence d'un prospect dans `/api/studio/prospects`
+- l'approbation `send_outreach`
+- la création d'un draft local Gmail (`pipeline_status=draft_created`)
+- la transition opérateur `sent`
 
 ## Structure du projet
 

@@ -4,6 +4,7 @@ import { resolveHumanApproval, type ApprovalExecutorSupabase } from './approval-
 type TableName =
   | 'human_approvals'
   | 'autonomy_actions'
+  | 'prospects'
   | 'ventures'
   | 'landing_pages'
   | 'budget_requests'
@@ -29,6 +30,7 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
   const tables: Record<TableName, TableRow[]> = {
     human_approvals: seed.human_approvals ?? [],
     autonomy_actions: seed.autonomy_actions ?? [],
+    prospects: seed.prospects ?? [],
     ventures: seed.ventures ?? [],
     landing_pages: seed.landing_pages ?? [],
     budget_requests: seed.budget_requests ?? [],
@@ -81,6 +83,90 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
 }
 
 describe('resolveHumanApproval', () => {
+  it('approuve send_outreach et crée un draft Gmail local lié au prospect', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-o1', user_id: 'u1', action_id: 'act-o1', status: 'pending' }],
+      autonomy_actions: [
+        {
+          id: 'act-o1',
+          user_id: 'u1',
+          action_type: 'send_outreach',
+          status: 'blocked',
+          input: {
+            prospect_id: 'prospect-1',
+            company_name: 'Acme Studio',
+            contact_name: 'Marie Dupont',
+            outreach_subject: 'Acme Studio — qualifier plus vite',
+            outreach_body: 'Bonjour Marie, je vous propose une méthode plus rapide.',
+          },
+        },
+      ],
+      prospects: [
+        {
+          id: 'prospect-1',
+          user_id: 'u1',
+          contact_email: 'marie@acme.test',
+          status: 'awaiting_approval',
+          metadata: {
+            activity: [
+              {
+                type: 'approval_created',
+                actor: 'system',
+                at: '2026-05-26T09:00:00.000Z',
+                detail: 'send_outreach approval created',
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-o1',
+      decision: 'approved',
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+    })
+
+    expect(result).toMatchObject({
+      actionType: 'send_outreach',
+      status: 'approved',
+      executed: false,
+    })
+    expect(fakeSupabase.tables.campaign_drafts[0]).toMatchObject({
+      user_id: 'u1',
+      venture_id: null,
+      channel: 'email',
+      status: 'draft',
+      metadata: expect.objectContaining({
+        provider: 'gmail',
+        prospect_id: 'prospect-1',
+        company_name: 'Acme Studio',
+        to: 'marie@acme.test',
+      }),
+    })
+    expect(fakeSupabase.tables.prospects[0]).toMatchObject({
+      status: 'approved_to_send',
+      draft_provider: 'gmail',
+      draft_created_at: '2026-05-26T10:00:00.000Z',
+    })
+    expect(fakeSupabase.tables.prospects[0].metadata).toMatchObject({
+      activity: [
+        expect.objectContaining({ type: 'approval_created' }),
+        expect.objectContaining({ type: 'approval_approved' }),
+        expect.objectContaining({ type: 'gmail_draft_created' }),
+      ],
+    })
+    expect(fakeSupabase.tables.autonomy_actions[0]).toMatchObject({
+      status: 'completed',
+      output: expect.objectContaining({
+        handler: 'send_outreach',
+        provider: 'gmail',
+      }),
+    })
+  })
+
   it('rejette une approval pending et annule action associée', async () => {
     const supabase = createFakeSupabase({
       human_approvals: [
@@ -113,6 +199,43 @@ describe('resolveHumanApproval', () => {
     expect(supabase.tables.autonomy_actions[0]).toMatchObject({
       status: 'cancelled',
     })
+  })
+
+  it('records rejection activity when send_outreach is rejected', async () => {
+    const supabase = createFakeSupabase({
+      human_approvals: [
+        { id: 'approval-2', user_id: 'user-1', action_id: 'action-2', status: 'pending' },
+      ],
+      autonomy_actions: [
+        {
+          id: 'action-2',
+          user_id: 'user-1',
+          action_type: 'send_outreach',
+          status: 'blocked',
+          input: { prospect_id: 'prospect-2' },
+        },
+      ],
+      prospects: [
+        {
+          id: 'prospect-2',
+          user_id: 'user-1',
+          metadata: { activity: [] },
+        },
+      ],
+    })
+
+    await resolveHumanApproval({
+      supabase,
+      userId: 'user-1',
+      approvalId: 'approval-2',
+      decision: 'rejected',
+      now: () => new Date('2026-05-26T12:00:00.000Z'),
+    })
+
+    expect(supabase.tables.prospects[0].metadata).toMatchObject({
+      activity: [expect.objectContaining({ type: 'approval_rejected' })],
+    })
+    expect(supabase.tables.autonomy_actions[0]).toMatchObject({ status: 'cancelled' })
   })
 
   it('approuve et exécute stop_venture sur la venture, les landing pages, budgets et campagnes', async () => {

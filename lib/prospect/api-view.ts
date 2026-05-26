@@ -1,5 +1,10 @@
 import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
-import type { ProspectApprovalStatus, ProspectBand } from '@/lib/prospect/types'
+import type {
+  ProspectActivityEvent,
+  ProspectApprovalStatus,
+  ProspectBand,
+  ProspectPipelineStatus,
+} from '@/lib/prospect/types'
 
 export interface ProspectActionRow {
   id: string
@@ -34,12 +39,19 @@ export interface ProspectSummaryView {
   dueFollowups: number
   awaitingApproval: number
   approvedToSend: number
+  draftCreated: number
+  sent: number
+  replied: number
 }
 
 export interface ProspectRecordView extends ProspectRecordRow {
+  pipeline_status: ProspectPipelineStatus
   approval_status: ProspectApprovalStatus
   outreach_action_id: string | null
   outreach_approval_id: string | null
+  draft_provider: string | null
+  draft_external_id: string | null
+  activity: ProspectActivityEvent[]
   summary: string | null
   pain_points: unknown[]
   cta: string | null
@@ -72,12 +84,25 @@ export function buildProspectViews(input: {
     const action = pickActionForProspect(row.id, input.actions)
     const approval = action ? approvalsByActionId.get(action.id) ?? null : null
     const state = deriveProspectApprovalState({ action, approval })
+    const activity = Array.isArray(metadata.activity) ? (metadata.activity as ProspectActivityEvent[]) : []
+    const draftProvider = typeof row.draft_provider === 'string' ? row.draft_provider : null
+    const draftExternalId = typeof row.draft_external_id === 'string' ? row.draft_external_id : null
+    const status = typeof row.status === 'string' ? row.status : 'new'
+
+    let pipelineStatus: ProspectPipelineStatus = status as ProspectPipelineStatus
+    if (state.approvalStatus === 'awaiting_approval') pipelineStatus = 'awaiting_approval'
+    else if (draftProvider && draftExternalId) pipelineStatus = 'draft_created'
+    else if (state.approvalStatus === 'approved_to_send') pipelineStatus = 'approved_to_send'
 
     return {
       ...row,
+      pipeline_status: pipelineStatus,
       approval_status: state.approvalStatus,
       outreach_action_id: action?.id ?? null,
       outreach_approval_id: approval?.id ?? null,
+      draft_provider: draftProvider,
+      draft_external_id: draftExternalId,
+      activity,
       summary: typeof metadata.summary === 'string' ? metadata.summary : null,
       pain_points: Array.isArray(metadata.pain_points) ? metadata.pain_points : [],
       cta: typeof metadata.cta === 'string' ? metadata.cta : null,
@@ -98,6 +123,9 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       if (nextFollowupAt && new Date(nextFollowupAt).getTime() <= nowMs) acc.dueFollowups += 1
       if (row.approval_status === 'awaiting_approval') acc.awaitingApproval += 1
       if (row.approval_status === 'approved_to_send') acc.approvedToSend += 1
+      if (row.pipeline_status === 'draft_created') acc.draftCreated += 1
+      if (row.pipeline_status === 'sent') acc.sent += 1
+      if (row.pipeline_status === 'replied') acc.replied += 1
       return acc
     },
     {
@@ -108,6 +136,9 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       dueFollowups: 0,
       awaitingApproval: 0,
       approvedToSend: 0,
+      draftCreated: 0,
+      sent: 0,
+      replied: 0,
     }
   )
 }

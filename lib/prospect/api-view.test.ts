@@ -33,6 +33,7 @@ describe('buildProspectViews', () => {
     })
 
     expect(prospects[0]).toMatchObject({
+      pipeline_status: 'awaiting_approval',
       approval_status: 'awaiting_approval',
       outreach_action_id: 'action-1',
       outreach_approval_id: 'approval-1',
@@ -52,9 +53,13 @@ describe('summarizeProspects', () => {
           band: 'hot',
           status: 'ready_to_contact',
           next_followup_at: '2026-05-24T08:00:00.000Z',
+          pipeline_status: 'awaiting_approval',
           approval_status: 'awaiting_approval',
           outreach_action_id: 'action-1',
           outreach_approval_id: 'approval-1',
+          draft_provider: null,
+          draft_external_id: null,
+          activity: [],
           summary: null,
           pain_points: [],
           cta: null,
@@ -64,9 +69,13 @@ describe('summarizeProspects', () => {
           band: 'warm',
           status: 'follow_up',
           next_followup_at: '2026-05-26T08:00:00.000Z',
+          pipeline_status: 'draft_created',
           approval_status: 'approved_to_send',
           outreach_action_id: 'action-2',
           outreach_approval_id: 'approval-2',
+          draft_provider: 'gmail',
+          draft_external_id: 'draft-1',
+          activity: [],
           summary: null,
           pain_points: [],
           cta: null,
@@ -83,6 +92,31 @@ describe('summarizeProspects', () => {
       dueFollowups: 1,
       awaitingApproval: 1,
       approvedToSend: 1,
+      draftCreated: 1,
+      sent: 0,
+      replied: 0,
+    })
+  })
+
+  it('maps a gmail-backed approved prospect to draft_created', () => {
+    const prospects = buildProspectViews({
+      prospects: [
+        {
+          id: 'prospect-1',
+          status: 'approved_to_send',
+          draft_provider: 'gmail',
+          draft_external_id: 'draft-1',
+          metadata: { activity: [] },
+        },
+      ],
+      actions: [],
+      approvals: [],
+    })
+
+    expect(prospects[0]).toMatchObject({
+      pipeline_status: 'draft_created',
+      draft_provider: 'gmail',
+      draft_external_id: 'draft-1',
     })
   })
 })

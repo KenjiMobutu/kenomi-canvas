@@ -30,8 +30,17 @@ type ProspectRow = {
   next_followup_at: string | null
   metadata: Record<string, unknown> | null
   approval_status: ProspectApprovalStatus
+  pipeline_status: string
   outreach_action_id: string | null
   outreach_approval_id: string | null
+  draft_provider: string | null
+  draft_external_id: string | null
+  activity?: Array<{
+    type: string
+    actor: string
+    at: string
+    detail: string
+  }>
   created_at: string
   updated_at: string
 }
@@ -51,6 +60,9 @@ type ProspectSummary = {
   dueFollowups: number
   awaitingApproval: number
   approvedToSend: number
+  draftCreated: number
+  sent: number
+  replied: number
 }
 
 type ProspectApiPayload = {
@@ -231,6 +243,9 @@ export default function ProspectPage() {
     dueFollowups: 0,
     awaitingApproval: 0,
     approvedToSend: 0,
+    draftCreated: 0,
+    sent: 0,
+    replied: 0,
   }
 
   const topProspects = useMemo(() => prospects.slice(0, 8), [prospects])
@@ -282,6 +297,32 @@ export default function ProspectPage() {
     }
   }
 
+  async function updateProspectStage(
+    prospectId: string,
+    status: 'sent' | 'replied' | 'won' | 'lost'
+  ) {
+    const key = `${prospectId}:${status}`
+    setApprovalPendingKey(key)
+    setError(null)
+    try {
+      const res = await fetch('/api/studio/prospects', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: prospectId, status }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Prospect transition failed')
+      toast.success(`Prospect marked ${status}`)
+      await load()
+    } catch (updateError) {
+      const message = updateError instanceof Error ? updateError.message : String(updateError)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setApprovalPendingKey(null)
+    }
+  }
+
   function approvalTone(status: ProspectApprovalStatus): 'muted' | 'hot' | 'warm' | 'cold' {
     if (status === 'awaiting_approval') return 'warm'
     if (status === 'approved_to_send') return 'hot'
@@ -302,6 +343,7 @@ export default function ProspectPage() {
       <Chip label={`${summary.hot} hot`} tone="hot" />
       <Chip label={`${summary.awaitingApproval} awaiting`} tone="warm" />
       <Chip label={`${summary.approvedToSend} approved`} tone="hot" />
+      <Chip label={`${summary.draftCreated} drafted`} tone="cold" />
       <button
         type="button"
         onClick={() => void load()}
@@ -403,6 +445,7 @@ export default function ProspectPage() {
                   { label: 'Due', value: summary.dueFollowups, color: amber },
                   { label: 'Ready', value: summary.readyToContact, color: emerald },
                   { label: 'Awaiting', value: summary.awaitingApproval, color: amber },
+                  { label: 'Drafted', value: summary.draftCreated, color: cyan },
                 ].map((card) => (
                   <div
                     key={card.label}
@@ -729,9 +772,18 @@ export default function ProspectPage() {
 
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <Chip label={`status ${prospect.status}`} tone={bandTone(prospect.band)} />
+                      <Chip label={`pipeline ${prospect.pipeline_status}`} tone="cold" />
                       <Chip label={approvalLabel(prospect.approval_status)} tone={approvalTone(prospect.approval_status)} />
                       <Chip label={`next ${fmtDate(prospect.next_followup_at)}`} tone="cold" />
                       <Chip label={prospect.crm_record_id ? 'synced' : 'local'} tone="cold" />
+                      <Chip
+                        label={
+                          prospect.draft_provider && prospect.draft_external_id
+                            ? `draft ${prospect.draft_provider}`
+                            : 'no draft'
+                        }
+                        tone="cold"
+                      />
                     </div>
 
                     {prospect.outreach_approval_id && prospect.approval_status === 'awaiting_approval' ? (
@@ -784,6 +836,156 @@ export default function ProspectPage() {
                           <X size={13} />
                           {approvalPendingKey === `${prospect.outreach_approval_id}:rejected` ? '...' : 'Reject'}
                         </button>
+                      </div>
+                    ) : null}
+
+                    {prospect.pipeline_status === 'draft_created' ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => void updateProspectStage(prospect.id, 'sent')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${emerald}35`,
+                            background: `${emerald}14`,
+                            color: emerald,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <Send size={13} />
+                          {approvalPendingKey === `${prospect.id}:sent` ? '...' : 'Mark sent'}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {prospect.pipeline_status === 'sent' ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => void updateProspectStage(prospect.id, 'replied')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${accent}35`,
+                            background: `${accent}14`,
+                            color: accent,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <Mail size={13} />
+                          {approvalPendingKey === `${prospect.id}:replied` ? '...' : 'Mark replied'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void updateProspectStage(prospect.id, 'lost')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${rose}35`,
+                            background: `${rose}14`,
+                            color: rose,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <X size={13} />
+                          {approvalPendingKey === `${prospect.id}:lost` ? '...' : 'Mark lost'}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {prospect.pipeline_status === 'replied' ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => void updateProspectStage(prospect.id, 'won')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${emerald}35`,
+                            background: `${emerald}14`,
+                            color: emerald,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <Check size={13} />
+                          {approvalPendingKey === `${prospect.id}:won` ? '...' : 'Mark won'}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {Array.isArray(prospect.activity) && prospect.activity.length > 0 ? (
+                      <div
+                        style={{
+                          padding: 10,
+                          borderRadius: 8,
+                          border: `1px solid ${line}`,
+                          background: surface,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 9,
+                            color: muted2,
+                            letterSpacing: '.14em',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          Activity
+                        </div>
+                        {prospect.activity.slice(-4).map((event) => (
+                          <div
+                            key={`${event.type}:${event.at}`}
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10.5,
+                              color: muted,
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            {fmtDate(event.at)} · {event.detail}
+                          </div>
+                        ))}
                       </div>
                     ) : null}
                   </div>

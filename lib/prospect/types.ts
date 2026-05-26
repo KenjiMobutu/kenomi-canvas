@@ -8,6 +8,32 @@ export type ProspectApprovalStatus =
   | 'awaiting_approval'
   | 'approved_to_send'
   | 'rejected'
+export type ProspectPipelineStatus =
+  | 'new'
+  | 'ready_to_contact'
+  | 'awaiting_approval'
+  | 'approved_to_send'
+  | 'draft_created'
+  | 'sent'
+  | 'replied'
+  | 'won'
+  | 'lost'
+
+export type ProspectActivityEvent = {
+  type:
+    | 'prospect_created'
+    | 'approval_created'
+    | 'approval_approved'
+    | 'approval_rejected'
+    | 'gmail_draft_created'
+    | 'marked_sent'
+    | 'marked_replied'
+    | 'marked_won'
+    | 'marked_lost'
+  actor: 'system' | 'operator'
+  at: string
+  detail: string
+}
 
 export interface ProspectScoreInput {
   companyName: string

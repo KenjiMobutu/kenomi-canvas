@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { buildProspectViews, summarizeProspects } from '@/lib/prospect/api-view'
+import { buildProspectStagePatch } from '@/lib/prospect/stage-transition'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -22,7 +23,14 @@ interface QueryBuilder {
 }
 
 interface SingleQueryBuilder {
+  select(columns?: string): SingleQueryBuilder
+  eq(field: string, value: unknown): SingleQueryBuilder
+  maybeSingle(): PromiseLike<{ data: unknown; error: { message: string } | null }>
   single(): PromiseLike<{ data: unknown; error: { message: string } | null }>
+}
+
+function asSingleQueryBuilder(query: unknown): SingleQueryBuilder {
+  return query as SingleQueryBuilder
 }
 
 const sourceValues = ['linkedin', 'malt', 'upwork', 'indeed', 'reddit', 'other'] as const
@@ -48,8 +56,21 @@ const prospectSchema = z.object({
   updated_at: z.string().optional(),
 })
 
+const prospectStageSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(['sent', 'replied', 'won', 'lost']),
+})
+
 async function single<T>(query: SingleQueryBuilder): Promise<T | null> {
   const { data, error } = await query.single()
+  if (error) throw new Error(error.message)
+  return data as T | null
+}
+
+async function maybeSingle<T>(
+  query: Pick<SingleQueryBuilder, 'maybeSingle'>
+): Promise<T | null> {
+  const { data, error } = await query.maybeSingle()
   if (error) throw new Error(error.message)
   return data as T | null
 }
@@ -162,14 +183,63 @@ export async function POST(request: Request) {
 
   const prospect = parsed.data.id
     ? await single<{ id?: string }>(
-        supabase
-          .from('prospects')
-          .update(row)
-          .eq('id', parsed.data.id)
-          .eq('user_id', user!.id)
-          .select('id')
+        asSingleQueryBuilder(
+          supabase
+            .from('prospects')
+            .update(row)
+            .eq('id', parsed.data.id)
+            .eq('user_id', user!.id)
+            .select('id')
+        )
       )
-    : await single<{ id?: string }>(supabase.from('prospects').insert(row).select('id'))
+    : await single<{ id?: string }>(
+        asSingleQueryBuilder(supabase.from('prospects').insert(row).select('id'))
+      )
+
+  return NextResponse.json({ ok: true, prospect }, { status: 200 })
+}
+
+export async function PATCH(request: Request) {
+  const cookieStore = await cookies()
+  const { user, supabase, response } = await requireAllowedUser(cookieStore)
+  if (response) return response
+
+  const parsed = prospectStageSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Payload transition prospect invalide' }, { status: 400 })
+  }
+
+  const current = await maybeSingle<{ metadata?: Record<string, unknown> | null }>(
+    asSingleQueryBuilder(
+      supabase
+        .from('prospects')
+        .select('metadata')
+        .eq('id', parsed.data.id)
+        .eq('user_id', user!.id)
+    )
+  )
+
+  if (!current) {
+    return NextResponse.json({ error: 'Prospect introuvable' }, { status: 404 })
+  }
+
+  const nowIso = new Date().toISOString()
+  const patch = buildProspectStagePatch({
+    currentMetadata: current.metadata ?? {},
+    nextStatus: parsed.data.status,
+    nowIso,
+  })
+
+  const prospect = await single<{ id?: string }>(
+    asSingleQueryBuilder(
+      supabase
+        .from('prospects')
+        .update(patch)
+        .eq('id', parsed.data.id)
+        .eq('user_id', user!.id)
+        .select('id')
+    )
+  )
 
   return NextResponse.json({ ok: true, prospect }, { status: 200 })
 }

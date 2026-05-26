@@ -15,6 +15,7 @@ OLLAMA_BASE_URL=http://192.168.0.14:11434
 TRUSTED_PRIVATE_HOSTS=coolify.example.internal
 SOURCE_COMMIT=<git-sha-built>
 EXPECTED_SOURCE_COMMIT=<git-sha-expected>
+HERMES_AGENT_API_KEY=...
 ```
 
 If `COOLIFY_URL` uses a private tailnet or LAN host, the hostname must be listed
@@ -32,7 +33,15 @@ Deployment order for the live topology:
 2. Verify `Hermes Agent` responds through the reverse proxy.
 3. Verify `Ollama` remains reachable only from the private Mac Mini M4 path.
 4. Re-run the Studio health checks.
-5. Approve or unblock the autonomy action only after the public UI and private LLM both pass.
+5. Re-run the Prospect outbound smoke loop with a valid Studio cookie:
+
+```bash
+export SMOKE_BASE_URL=https://lab.kenomi.eu
+export SMOKE_STUDIO_COOKIE='sb-supabase-auth-token=base64-...'
+npm run smoke:prospect
+```
+
+6. Approve or unblock the autonomy action only after the public UI, private LLM, and Prospect outbound loop all pass.
 
 ## Normal Flow
 
