@@ -9,6 +9,7 @@ import {
   Bot,
   Workflow,
   FileText,
+  Target,
   KeyRound,
   Settings,
   LogOut,
@@ -20,6 +21,7 @@ const nav = [
     items: [
       { to: '/studio', label: 'Cockpit', icon: LayoutDashboard },
       { to: '/studio/agents', label: 'Agents', icon: Bot },
+      { to: '/studio/prospects', label: 'Prospects', icon: Target },
       { to: '/studio/automations', label: 'Automations', icon: Workflow },
       { to: '/studio/chat', label: 'Command Chat', icon: MessageSquare },
     ],
