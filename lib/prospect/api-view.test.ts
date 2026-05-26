@@ -108,6 +108,10 @@ describe('summarizeProspects', () => {
           summary: null,
           pain_points: [],
           cta: null,
+          follow_up_count: 0,
+          last_outreach_kind: 'initial',
+          last_follow_up_generated_at: null,
+          follow_up_version: 0,
         },
         {
           id: 'prospect-2',
@@ -128,6 +132,10 @@ describe('summarizeProspects', () => {
           summary: null,
           pain_points: [],
           cta: null,
+          follow_up_count: 0,
+          last_outreach_kind: 'initial',
+          last_follow_up_generated_at: null,
+          follow_up_version: 0,
         },
       ],
       new Date('2026-05-25T10:00:00.000Z').getTime()
@@ -172,6 +180,31 @@ describe('summarizeProspects', () => {
     })
   })
 
+  it('keeps follow_up_due when a later follow-up already has a local draft', () => {
+    const prospects = buildProspectViews({
+      prospects: [
+        {
+          id: 'prospect-1',
+          status: 'follow_up',
+          pipeline_status: 'follow_up_due',
+          draft_provider: 'gmail',
+          draft_external_id: 'draft-2',
+          last_outreach_kind: 'follow_up_2',
+          metadata: { activity: [] },
+        },
+      ],
+      actions: [],
+      approvals: [],
+    })
+
+    expect(prospects[0]).toMatchObject({
+      pipeline_status: 'follow_up_due',
+      draft_provider: 'gmail',
+      draft_external_id: 'draft-2',
+      last_outreach_kind: 'follow_up_2',
+    })
+  })
+
   it('counts derived follow-up due and terminal crm states', () => {
     const summary = summarizeProspects(
       [
@@ -193,6 +226,10 @@ describe('summarizeProspects', () => {
           summary: null,
           pain_points: [],
           cta: null,
+          follow_up_count: 1,
+          last_outreach_kind: 'follow_up_1',
+          last_follow_up_generated_at: null,
+          follow_up_version: 1,
         },
         {
           id: 'prospect-2',
@@ -212,6 +249,10 @@ describe('summarizeProspects', () => {
           summary: null,
           pain_points: [],
           cta: null,
+          follow_up_count: 0,
+          last_outreach_kind: 'initial',
+          last_follow_up_generated_at: null,
+          follow_up_version: 0,
         },
       ],
       new Date('2026-05-26T10:00:00.000Z').getTime()

@@ -1,4 +1,5 @@
 import { appendProspectActivity } from './activity'
+import { asOutreachKind, scheduleNextFollowUpAt } from './follow-up'
 import type { ProspectActivityType, ProspectPipelineStatus } from './types'
 
 export type ProspectStageTransition = 'sent' | 'replied' | 'won' | 'lost'
@@ -30,15 +31,20 @@ export function buildProspectStagePatch(input: {
   currentMetadata: Record<string, unknown> | null | undefined
   nextStatus: ProspectStageTransition
   nowIso: string
+  currentOutreachKind?: string | null
 }) {
   const { eventType, detail, pipelineStatus } = buildProspectStageActivity({
     nextStatus: input.nextStatus,
   })
+  const currentKind = asOutreachKind(input.currentOutreachKind)
+  const nextFollowUpAt =
+    input.nextStatus === 'sent' ? scheduleNextFollowUpAt(new Date(input.nowIso), currentKind) : undefined
 
   return {
     status: input.nextStatus,
     pipeline_status: pipelineStatus,
     last_contacted_at: input.nextStatus === 'sent' ? input.nowIso : undefined,
+    next_followup_at: nextFollowUpAt,
     replied_at: input.nextStatus === 'replied' ? input.nowIso : undefined,
     closed_at: input.nextStatus === 'won' || input.nextStatus === 'lost' ? input.nowIso : undefined,
     metadata: appendProspectActivity(input.currentMetadata, {

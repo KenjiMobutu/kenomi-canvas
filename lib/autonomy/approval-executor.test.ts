@@ -13,6 +13,7 @@ type TableName =
   | 'venture_events'
   | 'campaign_drafts'
   | 'user_settings'
+  | 'prospect_activities'
 
 interface TableRow {
   id?: string
@@ -39,6 +40,7 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
     venture_events: seed.venture_events ?? [],
     campaign_drafts: seed.campaign_drafts ?? [],
     user_settings: seed.user_settings ?? [],
+    prospect_activities: seed.prospect_activities ?? [],
   }
 
   return {
@@ -61,8 +63,9 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
           state.patch = patch
           return builder
         },
-        insert: (row: TableRow) => {
-          tables[tableName].push({ ...row })
+        insert: (row: TableRow | TableRow[]) => {
+          const rows = Array.isArray(row) ? row : [row]
+          rows.forEach((item) => tables[tableName].push({ ...item }))
           return builder
         },
         single: async () => ({ data: tables[tableName].find(matches) ?? null, error: null }),
@@ -158,6 +161,12 @@ describe('resolveHumanApproval', () => {
         expect.objectContaining({ type: 'gmail_draft_created' }),
       ],
     })
+    expect(fakeSupabase.tables.prospect_activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'approval_approved' }),
+        expect.objectContaining({ type: 'gmail_draft_created' }),
+      ])
+    )
     expect(fakeSupabase.tables.autonomy_actions[0]).toMatchObject({
       status: 'completed',
       output: expect.objectContaining({
@@ -165,6 +174,79 @@ describe('resolveHumanApproval', () => {
         provider: 'gmail',
       }),
     })
+  })
+
+  it('approuve send_follow_up et crée un draft Gmail local pour la première relance', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-f1', user_id: 'u1', action_id: 'act-f1', status: 'pending' }],
+      autonomy_actions: [
+        {
+          id: 'act-f1',
+          user_id: 'u1',
+          action_type: 'send_follow_up',
+          status: 'blocked',
+          input: {
+            prospect_id: 'prospect-f1',
+            company_name: 'Beta Studio',
+            contact_name: 'Léa Martin',
+            outreach_subject: 'Re: Beta Studio',
+            outreach_body: 'Quick follow-up.',
+            outreach_kind: 'follow_up_1',
+            follow_up_count: 1,
+            follow_up_version: 1,
+          },
+        },
+      ],
+      prospects: [
+        {
+          id: 'prospect-f1',
+          user_id: 'u1',
+          contact_email: 'lea@beta.test',
+          status: 'follow_up',
+          pipeline_status: 'awaiting_approval',
+          follow_up_count: 0,
+          last_outreach_kind: 'follow_up_1',
+          metadata: { activity: [] },
+        },
+      ],
+    })
+
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-f1',
+      decision: 'approved',
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+    })
+
+    expect(result).toMatchObject({
+      actionType: 'send_follow_up',
+      status: 'approved',
+      executed: false,
+    })
+    expect(fakeSupabase.tables.campaign_drafts[0]).toMatchObject({
+      metadata: expect.objectContaining({
+        outreach_kind: 'follow_up_1',
+        follow_up_count: 1,
+        follow_up_version: 1,
+      }),
+    })
+    expect(fakeSupabase.tables.prospects[0]).toMatchObject({
+      pipeline_status: 'draft_created',
+      draft_provider: 'gmail',
+    })
+    expect(fakeSupabase.tables.prospects[0].metadata).toMatchObject({
+      activity: [
+        expect.objectContaining({ type: 'follow_up_approved' }),
+        expect.objectContaining({ type: 'gmail_draft_created' }),
+      ],
+    })
+    expect(fakeSupabase.tables.prospect_activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'follow_up_approved' }),
+        expect.objectContaining({ type: 'gmail_draft_created' }),
+      ])
+    )
   })
 
   it('rejette une approval pending et annule action associée', async () => {
@@ -235,6 +317,9 @@ describe('resolveHumanApproval', () => {
     expect(supabase.tables.prospects[0].metadata).toMatchObject({
       activity: [expect.objectContaining({ type: 'approval_rejected' })],
     })
+    expect(supabase.tables.prospect_activities).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'approval_rejected' })])
+    )
     expect(supabase.tables.autonomy_actions[0]).toMatchObject({ status: 'cancelled' })
   })
 

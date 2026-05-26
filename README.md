@@ -45,6 +45,7 @@ Statut actuel :
 - **Infrastructure** : vue topology alimentée par `/api/studio/infra/services`, avec configuration extensible par variables d'environnement.
 - **Hermes** : UI publique derrière reverse proxy Coolify, backend Ollama privé sur le Mac Mini M4.
 - **Prospect outbound** : `Prospect` qualifie un lead, crée une approval `send_outreach`, matérialise un draft Gmail après approbation, puis suit le pipeline `draft_created -> sent -> replied -> won/lost`.
+- **Follow-up orchestration** : après `sent`, la première relance est générée avec approval `send_follow_up`, puis les relances suivantes entrent dans `follow_up_due` avec draft local et pilotage opérateur (`mark sent / skip / regenerate`).
 - **Privacy** : export RGPD multi-tables et suppression confirmée avec token temporel.
 - **Sécurité** : RLS Supabase, allowlist email, proxy Next.js, protections SSRF et secrets côté serveur.
 
@@ -200,6 +201,9 @@ Le script vérifie:
 - la création d'un draft local Gmail (`pipeline_status=draft_created`)
 - la transition opérateur `sent`
 - la persistance CRM locale de `operator_notes`, `next_action` et `tags`
+- la génération de `follow_up_1` avec approval humaine
+- l'approbation de `follow_up_1`, puis sa transition `sent`
+- la mise à jour de la séquence (`follow_up_count=1` et prochaine échéance)
 
 Si le worker Prospect n'est pas déclenché en continu sur l'environnement ciblé, définir `AUTONOMY_WORKER_SECRET` permet au smoke de déclencher explicitement `POST /api/studio/autonomy/jobs` pendant le test.
 

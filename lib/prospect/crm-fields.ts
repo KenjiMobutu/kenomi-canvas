@@ -30,6 +30,10 @@ export function derivePipelineStatus(input: {
   nextFollowupAt?: string | null
   nowIso?: string
 }) {
+  if (input.pipelineStatus === 'awaiting_approval') return input.pipelineStatus
+  if (input.pipelineStatus === 'approved_to_send') return input.pipelineStatus
+  if (input.pipelineStatus === 'draft_created') return input.pipelineStatus
+  if (input.pipelineStatus === 'follow_up_due') return input.pipelineStatus
   if (TERMINAL_STATUSES.has(input.pipelineStatus)) return input.pipelineStatus
   if (!input.nextFollowupAt) return input.pipelineStatus
 

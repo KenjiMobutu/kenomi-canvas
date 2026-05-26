@@ -5,6 +5,7 @@ import type {
   ProspectActivityRow,
   ProspectApprovalStatus,
   ProspectBand,
+  ProspectOutreachKind,
   ProspectPipelineStatus,
 } from '@/lib/prospect/types'
 
@@ -34,6 +35,10 @@ export interface ProspectRecordRow {
   last_activity_at?: string | null
   tags?: string[] | null
   next_followup_at?: string | null
+  follow_up_count?: number | null
+  last_outreach_kind?: string | null
+  last_follow_up_generated_at?: string | null
+  follow_up_version?: number | null
   metadata?: Record<string, unknown> | null
   [key: string]: unknown
 }
@@ -69,6 +74,10 @@ export interface ProspectRecordView extends ProspectRecordRow {
   summary: string | null
   pain_points: unknown[]
   cta: string | null
+  follow_up_count: number
+  last_outreach_kind: ProspectOutreachKind
+  last_follow_up_generated_at: string | null
+  follow_up_version: number
 }
 
 function pickActionForProspect(
@@ -76,11 +85,25 @@ function pickActionForProspect(
   actions: ProspectActionRow[]
 ): ProspectActionRow | null {
   for (const action of actions) {
-    if (action.input?.prospect_id === prospectId) {
+    if (
+      action.input?.prospect_id === prospectId &&
+      (action.action_type === 'send_outreach' || action.action_type === 'send_follow_up')
+    ) {
       return action
     }
   }
   return null
+}
+
+function asOutreachKind(value: unknown): ProspectOutreachKind {
+  switch (value) {
+    case 'follow_up_1':
+    case 'follow_up_2':
+    case 'follow_up_3':
+      return value
+    default:
+      return 'initial'
+  }
 }
 
 export function buildProspectViews(input: {
@@ -107,6 +130,9 @@ export function buildProspectViews(input: {
     const draftExternalId = typeof row.draft_external_id === 'string' ? row.draft_external_id : null
     const status = typeof row.status === 'string' ? row.status : 'new'
     const storedPipeline = asProspectPipelineStatus(row.pipeline_status ?? status)
+    const lastOutreachKind = asOutreachKind(row.last_outreach_kind)
+    const followUpCount = Number.isFinite(row.follow_up_count) ? Number(row.follow_up_count) : 0
+    const followUpVersion = Number.isFinite(row.follow_up_version) ? Number(row.follow_up_version) : 0
 
     let pipelineStatus = derivePipelineStatus({
       pipelineStatus: storedPipeline,
@@ -114,7 +140,13 @@ export function buildProspectViews(input: {
       nowIso: input.nowIso,
     })
     if (state.approvalStatus === 'awaiting_approval') pipelineStatus = 'awaiting_approval'
-    else if (draftProvider && draftExternalId) pipelineStatus = 'draft_created'
+    else if (
+      draftProvider &&
+      draftExternalId &&
+      (storedPipeline === 'approved_to_send' || storedPipeline === 'draft_created')
+    ) {
+      pipelineStatus = 'draft_created'
+    }
     else if (state.approvalStatus === 'approved_to_send') pipelineStatus = 'approved_to_send'
 
     return {
@@ -133,6 +165,11 @@ export function buildProspectViews(input: {
       summary: typeof metadata.summary === 'string' ? metadata.summary : null,
       pain_points: Array.isArray(metadata.pain_points) ? metadata.pain_points : [],
       cta: typeof metadata.cta === 'string' ? metadata.cta : null,
+      follow_up_count: followUpCount,
+      last_outreach_kind: lastOutreachKind,
+      last_follow_up_generated_at:
+        typeof row.last_follow_up_generated_at === 'string' ? row.last_follow_up_generated_at : null,
+      follow_up_version: followUpVersion,
     }
   })
 }

@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS public.prospects (
   next_action text NOT NULL DEFAULT '',
   last_activity_at timestamptz,
   tags text[] NOT NULL DEFAULT '{}'::text[],
+  follow_up_count integer NOT NULL DEFAULT 0,
+  last_outreach_kind text NOT NULL DEFAULT 'initial',
+  last_follow_up_generated_at timestamptz,
+  follow_up_version integer NOT NULL DEFAULT 0,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -74,7 +78,11 @@ ALTER TABLE public.prospects
   ADD COLUMN IF NOT EXISTS operator_notes text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS next_action text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS last_activity_at timestamptz,
-  ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}'::text[];
+  ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}'::text[],
+  ADD COLUMN IF NOT EXISTS follow_up_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_outreach_kind text NOT NULL DEFAULT 'initial',
+  ADD COLUMN IF NOT EXISTS last_follow_up_generated_at timestamptz,
+  ADD COLUMN IF NOT EXISTS follow_up_version integer NOT NULL DEFAULT 0;
 
 ALTER TABLE public.prospects ENABLE ROW LEVEL SECURITY;
 

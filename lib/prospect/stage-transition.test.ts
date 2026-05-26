@@ -7,11 +7,13 @@ describe('buildProspectStagePatch', () => {
       currentMetadata: {},
       nextStatus: 'sent',
       nowIso: '2026-05-26T11:00:00.000Z',
+      currentOutreachKind: 'initial',
     })
 
     expect(patch).toMatchObject({
       status: 'sent',
       last_contacted_at: '2026-05-26T11:00:00.000Z',
+      next_followup_at: '2026-05-28T11:00:00.000Z',
       updated_at: '2026-05-26T11:00:00.000Z',
     })
     expect(patch.metadata).toMatchObject({
@@ -24,6 +26,7 @@ describe('buildProspectStagePatch', () => {
       currentMetadata: {},
       nextStatus: 'won',
       nowIso: '2026-05-26T11:00:00.000Z',
+      currentOutreachKind: 'initial',
     })
 
     expect(patch).toMatchObject({

@@ -1,12 +1,27 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { buildProspectActivityInsert } from '@/lib/prospect/activity-log'
 import { buildProspectViews, summarizeProspects } from '@/lib/prospect/api-view'
 import { normalizeProspectTags } from '@/lib/prospect/crm-fields'
+import {
+  buildProspectFollowUpDraft,
+  getNextFollowUpKind,
+  getNextFollowUpVersion,
+  getFollowUpRank,
+  requiresFollowUpApproval,
+  scheduleNextFollowUpAt,
+  shouldGenerateFollowUp,
+} from '@/lib/prospect/follow-up'
+import { buildGmailDraftPayload } from '@/lib/prospect/gmail-draft'
 import { buildProspectStageActivity, buildProspectStagePatch } from '@/lib/prospect/stage-transition'
-import type { ProspectActivityRow, ProspectActivityType } from '@/lib/prospect/types'
+import type {
+  ProspectActivityRow,
+  ProspectActivityType,
+  ProspectOutreachKind,
+} from '@/lib/prospect/types'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -62,9 +77,11 @@ const prospectSchema = z.object({
 const prospectStageSchema = z.object({
   id: z.string().min(1),
   status: z.enum(['sent', 'replied', 'won', 'lost']).optional(),
+  action: z.enum(['mark_follow_up_sent', 'skip_follow_up', 'regenerate_follow_up']).optional(),
   operator_notes: z.string().max(4000).optional(),
   next_action: z.string().max(1000).optional(),
   tags: z.array(z.string().min(1)).max(20).optional(),
+  next_followup_at: z.string().nullable().optional(),
 })
 
 async function single<T>(query: SingleQueryBuilder): Promise<T | null> {
@@ -94,10 +111,283 @@ function asText(value: unknown) {
   return typeof value === 'string' ? value : null
 }
 
+interface ProspectFollowUpRow {
+  id: string
+  company_name: string
+  contact_name?: string | null
+  contact_email?: string | null
+  outreach_subject?: string | null
+  outreach_body?: string | null
+  summary?: string | null
+  operator_notes?: string | null
+  pain_points?: string[]
+  metadata?: Record<string, unknown> | null
+  pipeline_status?: string | null
+  next_followup_at?: string | null
+  follow_up_count?: number | null
+  follow_up_version?: number | null
+  last_outreach_kind?: string | null
+}
+
+function asOutreachKind(value: unknown): ProspectOutreachKind {
+  switch (value) {
+    case 'follow_up_1':
+    case 'follow_up_2':
+    case 'follow_up_3':
+      return value
+    default:
+      return 'initial'
+  }
+}
+
+async function createFollowUpApproval(input: {
+  supabase: Awaited<ReturnType<typeof requireAllowedUser>>['supabase']
+  userId: string
+  prospect: ProspectFollowUpRow
+  kind: ProspectOutreachKind
+  subject: string
+  body: string
+  nowIso: string
+  followUpVersion: number
+}) {
+  const { data: existingActions, error: existingActionError } = await input.supabase
+    .from('autonomy_actions')
+    .select('id, input, status, action_type')
+    .eq('user_id', input.userId)
+    .eq('action_type', 'send_follow_up')
+    .eq('status', 'blocked')
+
+  if (existingActionError) throw new Error(existingActionError.message)
+  const openAction = ((existingActions ?? []) as Array<{ id?: string; input?: Record<string, unknown> | null }>)
+    .find((action) => action.input?.prospect_id === input.prospect.id)
+  if (openAction?.id) return
+
+  const { data: actionData, error: actionError } = await input.supabase
+    .from('autonomy_actions')
+    .insert({
+      user_id: input.userId,
+      venture_id: null,
+      action_type: 'send_follow_up',
+      risk_level: 'medium',
+      status: 'blocked',
+      input: {
+        prospect_id: input.prospect.id,
+        channel: 'email',
+        company_name: input.prospect.company_name,
+        contact_name: input.prospect.contact_name ?? null,
+        outreach_subject: input.subject,
+        outreach_body: input.body,
+        outreach_kind: input.kind,
+        follow_up_count: getFollowUpRank(input.kind),
+        follow_up_version: input.followUpVersion,
+      },
+      output: {},
+      created_at: input.nowIso,
+      updated_at: input.nowIso,
+    })
+    .select('id')
+    .single()
+
+  if (actionError || !actionData?.id) {
+    throw new Error(actionError?.message ?? 'Impossible de créer l’action send_follow_up')
+  }
+
+  const { error: approvalError } = await input.supabase.from('human_approvals').insert({
+    user_id: input.userId,
+    action_id: actionData.id,
+    status: 'pending',
+    approved_by: null,
+    approved_at: null,
+    reason: null,
+    created_at: input.nowIso,
+    updated_at: input.nowIso,
+  })
+
+  if (approvalError) throw new Error(approvalError.message)
+}
+
+async function materializeFollowUpDraft(input: {
+  supabase: Awaited<ReturnType<typeof requireAllowedUser>>['supabase']
+  userId: string
+  prospect: ProspectFollowUpRow
+  kind: ProspectOutreachKind
+  subject: string
+  body: string
+  nowIso: string
+  followUpVersion: number
+}) {
+  const draftId = randomUUID()
+  const draft = buildGmailDraftPayload({
+    prospectId: input.prospect.id,
+    companyName: input.prospect.company_name,
+    contactName: input.prospect.contact_name ?? null,
+    to: input.prospect.contact_email ?? null,
+    subject: input.subject,
+    body: input.body,
+    outreachKind: input.kind,
+    followUpCount: getFollowUpRank(input.kind),
+    followUpVersion: input.followUpVersion,
+  })
+
+  const { error } = await input.supabase.from('campaign_drafts').insert({
+    id: draftId,
+    user_id: input.userId,
+    venture_id: null,
+    channel: draft.channel,
+    content: draft.content,
+    status: draft.status,
+    metadata: {
+      ...draft.metadata,
+      provider: draft.provider,
+    },
+    created_at: input.nowIso,
+    updated_at: input.nowIso,
+  })
+
+  if (error) throw new Error(error.message)
+  return draftId
+}
+
+async function processDueProspectFollowUps(input: {
+  supabase: Awaited<ReturnType<typeof requireAllowedUser>>['supabase']
+  userId: string
+  nowIso: string
+}) {
+  const { data, error } = await input.supabase
+    .from('prospects')
+    .select(
+      'id, company_name, contact_name, contact_email, outreach_subject, outreach_body, pipeline_status, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, operator_notes, metadata'
+    )
+    .eq('user_id', input.userId)
+    .order('next_followup_at', { ascending: true })
+    .limit(100)
+
+  if (error) throw new Error(error.message)
+
+  const rows = (data ?? []) as ProspectFollowUpRow[]
+
+  for (const row of rows) {
+    if (!shouldGenerateFollowUp({ ...row, nowIso: input.nowIso })) continue
+
+    const metadata =
+      row.metadata && typeof row.metadata === 'object'
+        ? (row.metadata as Record<string, unknown>)
+        : {}
+    const kind = getNextFollowUpKind(row.follow_up_count ?? 0)
+    if (!kind) continue
+
+    const followUpVersion = getNextFollowUpVersion({
+      currentKind: row.last_outreach_kind,
+      currentVersion: row.follow_up_version,
+      targetKind: kind,
+    })
+    const draft = buildProspectFollowUpDraft({
+      companyName: row.company_name,
+      contactName: row.contact_name ?? null,
+      summary: typeof metadata.summary === 'string' ? metadata.summary : null,
+      painPoints: Array.isArray(metadata.pain_points)
+        ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
+        : [],
+      previousSubject: row.outreach_subject ?? null,
+      operatorNotes: row.operator_notes ?? null,
+      kind,
+    })
+
+    let draftId: string | null = null
+    const approvalRequired = requiresFollowUpApproval(kind)
+    if (!approvalRequired) {
+      draftId = await materializeFollowUpDraft({
+        supabase: input.supabase,
+        userId: input.userId,
+        prospect: row,
+        kind,
+        subject: draft.subject,
+        body: draft.body,
+        nowIso: input.nowIso,
+        followUpVersion,
+      })
+    }
+
+    const patch: Record<string, unknown> = {
+      outreach_subject: draft.subject,
+      outreach_body: draft.body,
+      pipeline_status: approvalRequired ? 'awaiting_approval' : 'follow_up_due',
+      last_outreach_kind: kind,
+      last_follow_up_generated_at: input.nowIso,
+      follow_up_version: followUpVersion,
+      last_activity_at: input.nowIso,
+      updated_at: input.nowIso,
+    }
+    if (draftId) {
+      patch.draft_provider = 'gmail'
+      patch.draft_external_id = draftId
+      patch.draft_created_at = input.nowIso
+    }
+
+    const { error: updateError } = await input.supabase
+      .from('prospects')
+      .update(patch)
+      .eq('id', row.id)
+      .eq('user_id', input.userId)
+    if (updateError) throw new Error(updateError.message)
+
+    const activityRows = [
+      buildProspectActivityInsert({
+        prospectId: row.id,
+        userId: input.userId,
+        type: 'follow_up_generated',
+        detail: `${kind} draft generated`,
+        metadata: { outreach_kind: kind, follow_up_version: followUpVersion, approval_required: approvalRequired },
+        nowIso: input.nowIso,
+      }),
+    ]
+    if (approvalRequired) {
+      activityRows.push(
+        buildProspectActivityInsert({
+          prospectId: row.id,
+          userId: input.userId,
+          type: 'approval_created',
+          detail: 'send_follow_up approval created',
+          metadata: { outreach_kind: kind, follow_up_version: followUpVersion },
+          nowIso: input.nowIso,
+        })
+      )
+    } else {
+      activityRows.push(
+        buildProspectActivityInsert({
+          prospectId: row.id,
+          userId: input.userId,
+          type: 'gmail_draft_created',
+          detail: `Gmail draft ${draftId} created`,
+          metadata: { outreach_kind: kind, follow_up_version: followUpVersion },
+          nowIso: input.nowIso,
+        })
+      )
+    }
+    const { error: activityError } = await input.supabase.from('prospect_activities').insert(activityRows)
+    if (activityError) throw new Error(activityError.message)
+
+    if (approvalRequired) {
+      await createFollowUpApproval({
+        supabase: input.supabase,
+        userId: input.userId,
+        prospect: row,
+        kind,
+        subject: draft.subject,
+        body: draft.body,
+        nowIso: input.nowIso,
+        followUpVersion,
+      })
+    }
+  }
+}
+
 export async function GET(request: Request) {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
+  const nowIso = new Date().toISOString()
+  await processDueProspectFollowUps({ supabase, userId: user!.id, nowIso })
 
   const url = new URL(request.url)
   const statusFilter = url.searchParams.get('status')
@@ -122,9 +412,8 @@ export async function GET(request: Request) {
       .from('autonomy_actions')
       .select('id, action_type, status, input, created_at')
       .eq('user_id', user!.id)
-      .eq('action_type', 'send_outreach')
       .order('created_at', { ascending: false })
-      .limit(200),
+      .limit(300),
     supabase
       .from('human_approvals')
       .select('id, action_id, status, created_at, updated_at')
@@ -166,6 +455,7 @@ export async function GET(request: Request) {
       updated_at?: string | null
     }>,
     activitiesByProspectId: groupActivitiesByProspectId(activityRows),
+    nowIso,
   })
   const filteredProspects = enrichedProspects.filter((prospect) => {
     if (statusFilter && prospect.pipeline_status !== statusFilter) return false
@@ -267,14 +557,26 @@ export async function PATCH(request: Request) {
   const current = await maybeSingle<{
     metadata?: Record<string, unknown> | null
     pipeline_status?: string | null
+    status?: string | null
     operator_notes?: string | null
     next_action?: string | null
     tags?: string[] | null
+    next_followup_at?: string | null
+    follow_up_count?: number | null
+    follow_up_version?: number | null
+    last_outreach_kind?: string | null
+    company_name?: string | null
+    contact_name?: string | null
+    contact_email?: string | null
+    outreach_subject?: string | null
+    outreach_body?: string | null
   }>(
     asSingleQueryBuilder(
       supabase
         .from('prospects')
-        .select('metadata, pipeline_status, operator_notes, next_action, tags')
+        .select(
+          'metadata, pipeline_status, status, operator_notes, next_action, tags, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, company_name, contact_name, contact_email, outreach_subject, outreach_body'
+        )
         .eq('id', parsed.data.id)
         .eq('user_id', user!.id)
     )
@@ -295,20 +597,37 @@ export async function PATCH(request: Request) {
   }> = []
 
   if (parsed.data.status) {
+    const currentKind = asOutreachKind(current.last_outreach_kind)
+    const followUpSent = parsed.data.status === 'sent' && currentKind !== 'initial'
     Object.assign(
       patch,
       buildProspectStagePatch({
         currentMetadata: current.metadata ?? {},
         nextStatus: parsed.data.status,
         nowIso,
+        currentOutreachKind: current.last_outreach_kind,
       })
     )
-    const stageActivity = buildProspectStageActivity({ nextStatus: parsed.data.status })
+    const stageActivity = followUpSent
+      ? {
+          eventType: 'follow_up_marked_sent' as ProspectActivityType,
+          detail: `${currentKind} marked sent`,
+          pipelineStatus: 'sent',
+        }
+      : buildProspectStageActivity({ nextStatus: parsed.data.status })
+    if (followUpSent) {
+      patch.status = 'follow_up'
+      patch.follow_up_count = getFollowUpRank(currentKind)
+    }
     activitiesToInsert.push({
       type: stageActivity.eventType,
       detail: stageActivity.detail,
       metadata: { pipeline_status: stageActivity.pipelineStatus },
     })
+  }
+
+  if (parsed.data.next_followup_at !== undefined) {
+    patch.next_followup_at = parsed.data.next_followup_at
   }
 
   if (parsed.data.operator_notes !== undefined) {
@@ -340,6 +659,109 @@ export async function PATCH(request: Request) {
       detail: 'Updated tags',
       metadata: { tags },
     })
+  }
+
+  if (parsed.data.action) {
+    const currentKind = asOutreachKind(current.last_outreach_kind)
+    const currentRank = getFollowUpRank(currentKind)
+    if (currentKind === 'initial' || currentRank === 0) {
+      return NextResponse.json({ error: 'Aucune relance en cours pour ce prospect' }, { status: 409 })
+    }
+
+    if (parsed.data.action === 'mark_follow_up_sent') {
+      patch.status = 'follow_up'
+      patch.pipeline_status = 'sent'
+      patch.last_contacted_at = nowIso
+      patch.follow_up_count = currentRank
+      patch.next_followup_at = scheduleNextFollowUpAt(new Date(nowIso), currentKind)
+      patch.last_activity_at = nowIso
+      activitiesToInsert.push({
+        type: 'follow_up_marked_sent',
+        detail: `${currentKind} marked sent`,
+        metadata: {
+          outreach_kind: currentKind,
+          follow_up_count: currentRank,
+          next_followup_at: patch.next_followup_at ?? null,
+        },
+      })
+    }
+
+    if (parsed.data.action === 'skip_follow_up') {
+      patch.status = 'follow_up'
+      patch.pipeline_status = 'sent'
+      patch.next_followup_at = scheduleNextFollowUpAt(new Date(nowIso), currentKind)
+      patch.follow_up_count = currentRank
+      patch.last_activity_at = nowIso
+      activitiesToInsert.push({
+        type: 'follow_up_skipped',
+        detail: `${currentKind} skipped`,
+        metadata: {
+          outreach_kind: currentKind,
+          follow_up_count: currentRank,
+          next_followup_at: patch.next_followup_at ?? null,
+        },
+      })
+    }
+
+    if (parsed.data.action === 'regenerate_follow_up') {
+      if (currentKind === 'follow_up_1') {
+        return NextResponse.json({ error: 'Regenerate is reserved for queued follow-ups without approval' }, { status: 409 })
+      }
+      const metadata =
+        current.metadata && typeof current.metadata === 'object'
+          ? (current.metadata as Record<string, unknown>)
+          : {}
+      const nextVersion = getNextFollowUpVersion({
+        currentKind,
+        currentVersion: current.follow_up_version,
+        targetKind: currentKind,
+      })
+      const regenerated = buildProspectFollowUpDraft({
+        companyName: current.company_name ?? 'Unknown company',
+        contactName: current.contact_name ?? null,
+        summary: typeof metadata.summary === 'string' ? metadata.summary : null,
+        painPoints: Array.isArray(metadata.pain_points)
+          ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
+          : [],
+        previousSubject: current.outreach_subject ?? null,
+        operatorNotes: current.operator_notes ?? null,
+        kind: currentKind,
+      })
+      const draftId = await materializeFollowUpDraft({
+        supabase,
+        userId: user!.id,
+        prospect: {
+          id: parsed.data.id,
+          company_name: current.company_name ?? 'Unknown company',
+          contact_name: current.contact_name ?? null,
+          contact_email: current.contact_email ?? null,
+        },
+        kind: currentKind,
+        subject: regenerated.subject,
+        body: regenerated.body,
+        nowIso,
+        followUpVersion: nextVersion,
+      })
+      patch.outreach_subject = regenerated.subject
+      patch.outreach_body = regenerated.body
+      patch.pipeline_status = 'follow_up_due'
+      patch.last_follow_up_generated_at = nowIso
+      patch.follow_up_version = nextVersion
+      patch.draft_provider = 'gmail'
+      patch.draft_external_id = draftId
+      patch.draft_created_at = nowIso
+      patch.last_activity_at = nowIso
+      activitiesToInsert.push({
+        type: 'follow_up_regenerated',
+        detail: `${currentKind} regenerated`,
+        metadata: { outreach_kind: currentKind, follow_up_version: nextVersion, draft_id: draftId },
+      })
+      activitiesToInsert.push({
+        type: 'gmail_draft_created',
+        detail: `Gmail draft ${draftId} created`,
+        metadata: { outreach_kind: currentKind, follow_up_version: nextVersion },
+      })
+    }
   }
 
   const prospect = await single<{ id?: string }>(

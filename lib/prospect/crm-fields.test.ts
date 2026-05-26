@@ -17,4 +17,14 @@ describe('derivePipelineStatus', () => {
       })
     ).toBe('follow_up_due')
   })
+
+  it('preserves explicit pipeline stages that should not be overwritten by due logic', () => {
+    expect(
+      derivePipelineStatus({
+        pipelineStatus: 'draft_created',
+        nextFollowupAt: '2026-05-25T10:00:00.000Z',
+        nowIso: '2026-05-26T10:00:00.000Z',
+      })
+    ).toBe('draft_created')
+  })
 })

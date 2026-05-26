@@ -251,4 +251,62 @@ const crmUpdatedProspect = await waitForProspect(
 )
 assert(crmUpdatedProspect, 'prospect missing after crm patch')
 
-process.stdout.write(`smoke prospect outbound ok ${baseUrl} · final=${crmUpdatedProspect.pipeline_status}\n`)
+const forceFollowUpDue = await request('/api/studio/prospects', {
+  method: 'PATCH',
+  body: JSON.stringify({
+    id: crmUpdatedProspect.id,
+    next_followup_at: '2026-05-01T00:00:00.000Z',
+  }),
+})
+assert(
+  forceFollowUpDue.response.status === 200,
+  `force follow-up due failed: ${forceFollowUpDue.response.status} ${forceFollowUpDue.text}`
+)
+process.stdout.write(`ok forced follow-up due ${crmUpdatedProspect.id}\n`)
+
+const firstFollowUp = await waitForProspect(
+  companyName,
+  (candidate) =>
+    candidate.approval_status === 'awaiting_approval' && candidate.last_outreach_kind === 'follow_up_1',
+  'first follow-up'
+)
+assert(firstFollowUp?.outreach_approval_id, 'missing first follow-up approval id')
+process.stdout.write(`ok generated first follow-up ${firstFollowUp.outreach_approval_id}\n`)
+
+const followUpApproval = await request('/api/studio/autonomy/jobs', {
+  method: 'PATCH',
+  body: JSON.stringify({ approvalId: firstFollowUp.outreach_approval_id, decision: 'approved' }),
+})
+assert(
+  followUpApproval.response.status === 200,
+  `follow-up approval failed: ${followUpApproval.response.status} ${followUpApproval.text}`
+)
+process.stdout.write(`ok approved first follow-up ${firstFollowUp.outreach_approval_id}\n`)
+
+const followUpDraft = await waitForProspect(
+  companyName,
+  (candidate) => candidate.pipeline_status === 'draft_created' && candidate.last_outreach_kind === 'follow_up_1',
+  'follow-up draft'
+)
+assert(followUpDraft, 'follow-up draft missing after approval')
+
+const markFollowUpSent = await request('/api/studio/prospects', {
+  method: 'PATCH',
+  body: JSON.stringify({ id: followUpDraft.id, status: 'sent' }),
+})
+assert(
+  markFollowUpSent.response.status === 200,
+  `mark first follow-up sent failed: ${markFollowUpSent.response.status} ${markFollowUpSent.text}`
+)
+process.stdout.write(`ok marked first follow-up sent ${followUpDraft.id}\n`)
+
+const sequencedProspect = await waitForProspect(
+  companyName,
+  (candidate) => candidate.follow_up_count === 1 && candidate.pipeline_status === 'sent',
+  'sequenced prospect'
+)
+assert(sequencedProspect.next_followup_at, 'missing next follow-up date after first follow-up send')
+
+process.stdout.write(
+  `smoke prospect outbound ok ${baseUrl} · final=${sequencedProspect.pipeline_status} · fu=${sequencedProspect.follow_up_count}\n`
+)

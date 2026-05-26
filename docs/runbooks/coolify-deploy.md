@@ -52,6 +52,14 @@ The Prospect smoke is only considered green if it also confirms the Phase 2 CRM-
 - `next_action`
 - `tags`
 
+For Phase 3, the same smoke must also validate the first follow-up loop:
+
+- first due follow-up generated as `follow_up_1`
+- approval `send_follow_up`
+- Gmail draft materialized after approval
+- operator transition back to `sent`
+- `follow_up_count=1` with the next due date scheduled
+
 ## Normal Flow
 
 1. `POST /api/studio/deployments` creates an `autonomy_actions` row with

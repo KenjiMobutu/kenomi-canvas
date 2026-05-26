@@ -16,6 +16,9 @@ import {
 import { getMarketingPublisher, type MarketingPublisher } from '@/lib/marketing/adapters'
 import { buildGmailDraftPayload } from '@/lib/prospect/gmail-draft'
 import { appendProspectActivity } from '@/lib/prospect/activity'
+import { buildProspectActivityInsert } from '@/lib/prospect/activity-log'
+import { getFollowUpRank, scheduleNextFollowUpAt } from '@/lib/prospect/follow-up'
+import type { ProspectOutreachKind } from '@/lib/prospect/types'
 
 type QueryResponse = { data: unknown; error: { message: string } | null }
 
@@ -30,7 +33,7 @@ interface QueryFilterBuilder extends QueryResult {
 interface TableQueryBuilder {
   select(columns?: string): QueryFilterBuilder
   update(row: Record<string, unknown>): QueryFilterBuilder
-  insert(row: Record<string, unknown>): QueryFilterBuilder
+  insert(row: Record<string, unknown> | Record<string, unknown>[]): QueryFilterBuilder
 }
 
 export interface ApprovalExecutorSupabase {
@@ -62,6 +65,11 @@ interface ProspectRow {
   id: string
   user_id: string
   contact_email?: string | null
+  status?: string | null
+  pipeline_status?: string | null
+  follow_up_count?: number | null
+  last_outreach_kind?: string | null
+  follow_up_version?: number | null
   metadata?: Record<string, unknown> | null
 }
 
@@ -224,6 +232,21 @@ function isExternalAction(actionType: string): boolean {
     actionType === 'publish_campaign' ||
     actionType === 'scale_budget'
   )
+}
+
+function isProspectApprovalAction(actionType: string) {
+  return actionType === 'send_outreach' || actionType === 'send_follow_up'
+}
+
+function asOutreachKind(value: unknown): ProspectOutreachKind {
+  switch (value) {
+    case 'follow_up_1':
+    case 'follow_up_2':
+    case 'follow_up_3':
+      return value
+    default:
+      return 'initial'
+  }
 }
 
 function readDeployInput(action: AutonomyActionRow): {
@@ -489,32 +512,59 @@ export async function resolveHumanApproval(
   )
 
   if (input.decision === 'rejected') {
-    if (action.action_type === 'send_outreach') {
+    if (isProspectApprovalAction(action.action_type)) {
       const prospectId =
         typeof action.input?.prospect_id === 'string' ? action.input.prospect_id : null
       if (prospectId) {
         const prospect = await maybeSingleRow<ProspectRow>(
           input.supabase
             .from('prospects')
-            .select('id, user_id, contact_email, metadata')
+            .select(
+              'id, user_id, contact_email, metadata, pipeline_status, follow_up_count, last_outreach_kind'
+            )
             .eq('id', prospectId)
             .eq('user_id', input.userId)
         )
         if (prospect?.id) {
+          const lastOutreachKind = asOutreachKind(
+            action.input?.outreach_kind ?? prospect.last_outreach_kind
+          )
+          const followUpRejected = action.action_type === 'send_follow_up'
+          const nextFollowUpAt = followUpRejected
+            ? scheduleNextFollowUpAt(new Date(nowIso), lastOutreachKind)
+            : undefined
+          const followUpRank = getFollowUpRank(lastOutreachKind)
           await update(
             input.supabase
               .from('prospects')
               .update({
                 metadata: appendProspectActivity(prospect.metadata, {
-                  type: 'approval_rejected',
+                  type: followUpRejected ? 'follow_up_rejected' : 'approval_rejected',
                   actor: 'operator',
                   at: nowIso,
-                  detail: 'Outreach rejected',
+                  detail: followUpRejected ? 'First follow-up rejected' : 'Outreach rejected',
                 }),
+                status: followUpRejected ? 'follow_up' : prospect.status,
+                pipeline_status: followUpRejected ? 'sent' : prospect.pipeline_status,
+                next_followup_at: nextFollowUpAt,
+                follow_up_count: followUpRejected ? followUpRank : prospect.follow_up_count,
+                last_activity_at: nowIso,
                 updated_at: nowIso,
               })
               .eq('id', prospectId)
               .eq('user_id', input.userId)
+          )
+          await update(
+            input.supabase.from('prospect_activities').insert(
+              buildProspectActivityInsert({
+                prospectId,
+                userId: input.userId,
+                type: followUpRejected ? 'follow_up_rejected' : 'approval_rejected',
+                detail: followUpRejected ? 'First follow-up rejected' : 'Outreach rejected',
+                metadata: { outreach_kind: lastOutreachKind },
+                nowIso,
+              })
+            )
           )
         }
       }
@@ -740,7 +790,7 @@ export async function resolveHumanApproval(
     }
   }
 
-  if (action.action_type === 'send_outreach') {
+  if (action.action_type === 'send_outreach' || action.action_type === 'send_follow_up') {
     const prospectId = typeof action.input?.prospect_id === 'string' ? action.input.prospect_id : null
     const companyName =
       typeof action.input?.company_name === 'string' ? action.input.company_name : 'Unknown company'
@@ -750,21 +800,27 @@ export async function resolveHumanApproval(
         ? action.input.outreach_subject
         : 'Outbound draft'
     const body = typeof action.input?.outreach_body === 'string' ? action.input.outreach_body : ''
+    const outreachKind = asOutreachKind(action.input?.outreach_kind)
+    const followUpCount = typeof action.input?.follow_up_count === 'number' ? action.input.follow_up_count : 0
+    const followUpVersion =
+      typeof action.input?.follow_up_version === 'number' ? action.input.follow_up_version : 0
 
     if (!prospectId) {
-      throw new ApprovalExecutionError('prospect_id manquant pour send_outreach', 422)
+      throw new ApprovalExecutionError(`prospect_id manquant pour ${action.action_type}`, 422)
     }
 
     const prospect = await maybeSingleRow<ProspectRow>(
       input.supabase
         .from('prospects')
-        .select('id, user_id, contact_email, metadata')
+        .select(
+          'id, user_id, contact_email, metadata, follow_up_count, follow_up_version, pipeline_status'
+        )
         .eq('id', prospectId)
         .eq('user_id', input.userId)
     )
 
     if (!prospect?.id) {
-      throw new ApprovalExecutionError('prospect introuvable pour send_outreach', 404)
+      throw new ApprovalExecutionError(`prospect introuvable pour ${action.action_type}`, 404)
     }
 
     const draftId = randomUUID()
@@ -775,6 +831,9 @@ export async function resolveHumanApproval(
       to: prospect.contact_email ?? null,
       subject,
       body,
+      outreachKind,
+      followUpCount,
+      followUpVersion,
     })
 
     await update(
@@ -799,16 +858,17 @@ export async function resolveHumanApproval(
       input.supabase
         .from('prospects')
         .update({
-          status: 'approved_to_send',
+          status: action.action_type === 'send_follow_up' ? 'follow_up' : 'approved_to_send',
+          pipeline_status: 'draft_created',
           draft_provider: 'gmail',
           draft_external_id: draftId,
           draft_created_at: nowIso,
           metadata: appendProspectActivity(
             appendProspectActivity(prospect.metadata, {
-              type: 'approval_approved',
+              type: action.action_type === 'send_follow_up' ? 'follow_up_approved' : 'approval_approved',
               actor: 'operator',
               at: nowIso,
-              detail: 'Outreach approved',
+              detail: action.action_type === 'send_follow_up' ? 'First follow-up approved' : 'Outreach approved',
             }),
             {
               type: 'gmail_draft_created',
@@ -822,12 +882,32 @@ export async function resolveHumanApproval(
         .eq('id', prospectId)
         .eq('user_id', input.userId)
     )
+    await update(
+      input.supabase.from('prospect_activities').insert([
+        buildProspectActivityInsert({
+          prospectId,
+          userId: input.userId,
+          type: action.action_type === 'send_follow_up' ? 'follow_up_approved' : 'approval_approved',
+          detail: action.action_type === 'send_follow_up' ? 'First follow-up approved' : 'Outreach approved',
+          metadata: { outreach_kind: outreachKind, follow_up_version: followUpVersion },
+          nowIso,
+        }),
+        buildProspectActivityInsert({
+          prospectId,
+          userId: input.userId,
+          type: 'gmail_draft_created',
+          detail: `Gmail draft ${draftId} created`,
+          metadata: { outreach_kind: outreachKind, follow_up_version: followUpVersion },
+          nowIso,
+        }),
+      ])
+    )
 
     executed = false
     actionStatus = 'completed'
     output = {
       executed: false,
-      handler: 'send_outreach',
+      handler: action.action_type,
       draft_id: draftId,
       provider: 'gmail',
     }

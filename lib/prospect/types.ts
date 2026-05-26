@@ -8,6 +8,7 @@ export type ProspectApprovalStatus =
   | 'awaiting_approval'
   | 'approved_to_send'
   | 'rejected'
+export type ProspectOutreachKind = 'initial' | 'follow_up_1' | 'follow_up_2' | 'follow_up_3'
 export type ProspectPipelineStatus =
   | 'new'
   | 'ready_to_contact'
@@ -34,6 +35,13 @@ export type ProspectActivityEvent = {
     | 'marked_replied'
     | 'marked_won'
     | 'marked_lost'
+    | 'follow_up_scheduled'
+    | 'follow_up_generated'
+    | 'follow_up_approved'
+    | 'follow_up_rejected'
+    | 'follow_up_marked_sent'
+    | 'follow_up_skipped'
+    | 'follow_up_regenerated'
   actor: 'system' | 'operator'
   at: string
   detail: string

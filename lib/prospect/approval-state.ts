@@ -19,7 +19,10 @@ export function deriveProspectApprovalState(input: {
   approvalStatus: ProspectApprovalStatus
   actionable: boolean
 } {
-  if (!input.action || input.action.action_type !== 'send_outreach') {
+  if (
+    !input.action ||
+    (input.action.action_type !== 'send_outreach' && input.action.action_type !== 'send_follow_up')
+  ) {
     return { approvalStatus: 'no_approval', actionable: false }
   }
 

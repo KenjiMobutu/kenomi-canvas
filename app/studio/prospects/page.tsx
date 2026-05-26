@@ -7,7 +7,7 @@ import { CkShell } from '@/components/CkShell'
 import { useAuth } from '@/lib/auth-context'
 import { useIsMobile } from '@/lib/studio-utils'
 import { surface, surface2, line, line2, text, muted, muted2, accent, emerald, amber, cyan, rose } from '@/lib/ck-vars'
-import type { ProspectApprovalStatus } from '@/lib/prospect/types'
+import type { ProspectApprovalStatus, ProspectOutreachKind } from '@/lib/prospect/types'
 
 type ProspectRow = {
   id: string
@@ -35,6 +35,10 @@ type ProspectRow = {
   outreach_approval_id: string | null
   draft_provider: string | null
   draft_external_id: string | null
+  follow_up_count: number
+  last_outreach_kind: ProspectOutreachKind
+  last_follow_up_generated_at: string | null
+  follow_up_version: number
   operator_notes?: string | null
   next_action?: string | null
   last_activity_at?: string | null
@@ -176,6 +180,10 @@ function Chip({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 'hot'
 
 function bandTone(band: ProspectRow['band']): 'hot' | 'warm' | 'cold' {
   return band === 'hot' ? 'hot' : band === 'warm' ? 'warm' : 'cold'
+}
+
+function followUpLabel(kind: ProspectOutreachKind) {
+  return kind === 'follow_up_1' ? 'F/U 1' : kind === 'follow_up_2' ? 'F/U 2' : kind === 'follow_up_3' ? 'F/U 3' : 'Initial'
 }
 
 function fmtDate(value: string | null) {
@@ -352,6 +360,38 @@ export default function ProspectPage() {
       await load()
     } catch (updateError) {
       const message = updateError instanceof Error ? updateError.message : String(updateError)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setApprovalPendingKey(null)
+    }
+  }
+
+  async function runProspectAction(
+    prospectId: string,
+    action: 'mark_follow_up_sent' | 'skip_follow_up' | 'regenerate_follow_up'
+  ) {
+    const key = `${prospectId}:${action}`
+    setApprovalPendingKey(key)
+    setError(null)
+    try {
+      const res = await fetch('/api/studio/prospects', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: prospectId, action }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Prospect follow-up action failed')
+      toast.success(
+        action === 'mark_follow_up_sent'
+          ? 'Follow-up marked sent'
+          : action === 'skip_follow_up'
+            ? 'Follow-up skipped'
+            : 'Follow-up regenerated'
+      )
+      await load()
+    } catch (actionError) {
+      const message = actionError instanceof Error ? actionError.message : String(actionError)
       setError(message)
       toast.error(message)
     } finally {
@@ -905,6 +945,7 @@ export default function ProspectPage() {
                       <Chip label={`status ${prospect.status}`} tone={bandTone(prospect.band)} />
                       <Chip label={`pipeline ${prospect.pipeline_status}`} tone="cold" />
                       <Chip label={approvalLabel(prospect.approval_status)} tone={approvalTone(prospect.approval_status)} />
+                      <Chip label={followUpLabel(prospect.last_outreach_kind)} tone="cold" />
                       <Chip label={`next ${fmtDate(prospect.next_followup_at)}`} tone="cold" />
                       <Chip label={prospect.crm_record_id ? 'synced' : 'local'} tone="cold" />
                       {prospect.tags?.map((tag) => (
@@ -1148,6 +1189,83 @@ export default function ProspectPage() {
                         >
                           <X size={13} />
                           {approvalPendingKey === `${prospect.id}:lost` ? '...' : 'Mark lost'}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {prospect.pipeline_status === 'follow_up_due' ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => void runProspectAction(prospect.id, 'mark_follow_up_sent')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${emerald}35`,
+                            background: `${emerald}14`,
+                            color: emerald,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <Send size={13} />
+                          {approvalPendingKey === `${prospect.id}:mark_follow_up_sent` ? '...' : 'Mark follow-up sent'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void runProspectAction(prospect.id, 'regenerate_follow_up')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${cyan}35`,
+                            background: `${cyan}14`,
+                            color: cyan,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <RefreshCw size={13} />
+                          {approvalPendingKey === `${prospect.id}:regenerate_follow_up` ? '...' : 'Regenerate'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void runProspectAction(prospect.id, 'skip_follow_up')}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${amber}35`,
+                            background: `${amber}14`,
+                            color: amber,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <Clock3 size={13} />
+                          {approvalPendingKey === `${prospect.id}:skip_follow_up` ? '...' : 'Skip'}
                         </button>
                       </div>
                     ) : null}
