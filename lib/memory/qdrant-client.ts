@@ -16,7 +16,7 @@ export function createQdrantClient(input: {
   const fetchImpl = input.fetchImpl ?? fetch
   const baseHeaders = {
     'content-type': 'application/json',
-    ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+    ...(input.apiKey ? { 'api-key': input.apiKey } : {}),
   }
 
   return {

@@ -39,7 +39,7 @@ describe('createQdrantClient', () => {
       'http://qdrant/collections/prospects/points/search',
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ apiKey: 'secret' }),
+        headers: expect.objectContaining({ 'api-key': 'secret' }),
       })
     )
   })
