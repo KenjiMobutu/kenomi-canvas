@@ -401,6 +401,7 @@ function CkHeader({
     { label: 'Cockpit', href: '/studio' },
     { label: 'Ventures', href: '/studio/ventures' },
     { label: 'Agents', href: '/studio/agents' },
+    { label: 'Prospects', href: '/studio/prospects' },
     { label: 'Marketing', href: '/studio/marketing' },
     { label: 'Analytics', href: '/studio/analytics' },
   ]
