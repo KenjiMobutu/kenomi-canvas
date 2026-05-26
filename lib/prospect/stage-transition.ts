@@ -1,13 +1,10 @@
 import { appendProspectActivity } from './activity'
+import type { ProspectActivityType, ProspectPipelineStatus } from './types'
 
 export type ProspectStageTransition = 'sent' | 'replied' | 'won' | 'lost'
 
-export function buildProspectStagePatch(input: {
-  currentMetadata: Record<string, unknown> | null | undefined
-  nextStatus: ProspectStageTransition
-  nowIso: string
-}) {
-  const eventType =
+export function buildProspectStageActivity(input: { nextStatus: ProspectStageTransition }) {
+  const eventType: ProspectActivityType =
     input.nextStatus === 'sent'
       ? 'marked_sent'
       : input.nextStatus === 'replied'
@@ -25,8 +22,22 @@ export function buildProspectStagePatch(input: {
           ? 'Prospect marked won'
           : 'Prospect marked lost'
 
+  const pipelineStatus: ProspectPipelineStatus = input.nextStatus
+  return { eventType, detail, pipelineStatus }
+}
+
+export function buildProspectStagePatch(input: {
+  currentMetadata: Record<string, unknown> | null | undefined
+  nextStatus: ProspectStageTransition
+  nowIso: string
+}) {
+  const { eventType, detail, pipelineStatus } = buildProspectStageActivity({
+    nextStatus: input.nextStatus,
+  })
+
   return {
     status: input.nextStatus,
+    pipeline_status: pipelineStatus,
     last_contacted_at: input.nextStatus === 'sent' ? input.nowIso : undefined,
     replied_at: input.nextStatus === 'replied' ? input.nowIso : undefined,
     closed_at: input.nextStatus === 'won' || input.nextStatus === 'lost' ? input.nowIso : undefined,
@@ -36,6 +47,7 @@ export function buildProspectStagePatch(input: {
       at: input.nowIso,
       detail,
     }),
+    last_activity_at: input.nowIso,
     updated_at: input.nowIso,
   }
 }

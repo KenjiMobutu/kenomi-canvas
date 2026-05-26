@@ -1,6 +1,8 @@
 import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
+import { asProspectPipelineStatus, derivePipelineStatus, normalizeProspectTags } from '@/lib/prospect/crm-fields'
 import type {
   ProspectActivityEvent,
+  ProspectActivityRow,
   ProspectApprovalStatus,
   ProspectBand,
   ProspectPipelineStatus,
@@ -26,6 +28,11 @@ export interface ProspectRecordRow {
   id: string
   band?: ProspectBand
   status?: string | null
+  pipeline_status?: string | null
+  operator_notes?: string | null
+  next_action?: string | null
+  last_activity_at?: string | null
+  tags?: string[] | null
   next_followup_at?: string | null
   metadata?: Record<string, unknown> | null
   [key: string]: unknown
@@ -42,6 +49,9 @@ export interface ProspectSummaryView {
   draftCreated: number
   sent: number
   replied: number
+  won: number
+  lost: number
+  followUpDue: number
 }
 
 export interface ProspectRecordView extends ProspectRecordRow {
@@ -51,7 +61,11 @@ export interface ProspectRecordView extends ProspectRecordRow {
   outreach_approval_id: string | null
   draft_provider: string | null
   draft_external_id: string | null
-  activity: ProspectActivityEvent[]
+  operator_notes: string
+  next_action: string
+  last_activity_at: string | null
+  tags: string[]
+  activity: Array<ProspectActivityEvent | ProspectActivityRow>
   summary: string | null
   pain_points: unknown[]
   cta: string | null
@@ -73,6 +87,8 @@ export function buildProspectViews(input: {
   prospects: ProspectRecordRow[]
   actions: ProspectActionRow[]
   approvals: ProspectApprovalRow[]
+  activitiesByProspectId?: Record<string, ProspectActivityRow[]>
+  nowIso?: string
 }): ProspectRecordView[] {
   const approvalsByActionId = new Map(input.approvals.map((approval) => [approval.action_id, approval]))
 
@@ -84,12 +100,19 @@ export function buildProspectViews(input: {
     const action = pickActionForProspect(row.id, input.actions)
     const approval = action ? approvalsByActionId.get(action.id) ?? null : null
     const state = deriveProspectApprovalState({ action, approval })
-    const activity = Array.isArray(metadata.activity) ? (metadata.activity as ProspectActivityEvent[]) : []
+    const activity = input.activitiesByProspectId?.[row.id] ?? (
+      Array.isArray(metadata.activity) ? (metadata.activity as ProspectActivityEvent[]) : []
+    )
     const draftProvider = typeof row.draft_provider === 'string' ? row.draft_provider : null
     const draftExternalId = typeof row.draft_external_id === 'string' ? row.draft_external_id : null
     const status = typeof row.status === 'string' ? row.status : 'new'
+    const storedPipeline = asProspectPipelineStatus(row.pipeline_status ?? status)
 
-    let pipelineStatus: ProspectPipelineStatus = status as ProspectPipelineStatus
+    let pipelineStatus = derivePipelineStatus({
+      pipelineStatus: storedPipeline,
+      nextFollowupAt: typeof row.next_followup_at === 'string' ? row.next_followup_at : null,
+      nowIso: input.nowIso,
+    })
     if (state.approvalStatus === 'awaiting_approval') pipelineStatus = 'awaiting_approval'
     else if (draftProvider && draftExternalId) pipelineStatus = 'draft_created'
     else if (state.approvalStatus === 'approved_to_send') pipelineStatus = 'approved_to_send'
@@ -102,6 +125,10 @@ export function buildProspectViews(input: {
       outreach_approval_id: approval?.id ?? null,
       draft_provider: draftProvider,
       draft_external_id: draftExternalId,
+      operator_notes: typeof row.operator_notes === 'string' ? row.operator_notes : '',
+      next_action: typeof row.next_action === 'string' ? row.next_action : '',
+      last_activity_at: typeof row.last_activity_at === 'string' ? row.last_activity_at : null,
+      tags: normalizeProspectTags(row.tags),
       activity,
       summary: typeof metadata.summary === 'string' ? metadata.summary : null,
       pain_points: Array.isArray(metadata.pain_points) ? metadata.pain_points : [],
@@ -126,6 +153,9 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       if (row.pipeline_status === 'draft_created') acc.draftCreated += 1
       if (row.pipeline_status === 'sent') acc.sent += 1
       if (row.pipeline_status === 'replied') acc.replied += 1
+      if (row.pipeline_status === 'won') acc.won += 1
+      if (row.pipeline_status === 'lost') acc.lost += 1
+      if (row.pipeline_status === 'follow_up_due') acc.followUpDue += 1
       return acc
     },
     {
@@ -139,6 +169,9 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       draftCreated: 0,
       sent: 0,
       replied: 0,
+      won: 0,
+      lost: 0,
+      followUpDue: 0,
     }
   )
 }

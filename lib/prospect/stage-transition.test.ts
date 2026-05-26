@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildProspectStagePatch } from './stage-transition'
+import { buildProspectStageActivity, buildProspectStagePatch } from './stage-transition'
 
 describe('buildProspectStagePatch', () => {
   it('stamps sent transitions with last_contacted_at', () => {
@@ -28,7 +28,15 @@ describe('buildProspectStagePatch', () => {
 
     expect(patch).toMatchObject({
       status: 'won',
+      pipeline_status: 'won',
       closed_at: '2026-05-26T11:00:00.000Z',
+    })
+  })
+
+  it('builds stage activity metadata for sent transitions', () => {
+    expect(buildProspectStageActivity({ nextStatus: 'sent' })).toMatchObject({
+      eventType: 'marked_sent',
+      pipelineStatus: 'sent',
     })
   })
 })

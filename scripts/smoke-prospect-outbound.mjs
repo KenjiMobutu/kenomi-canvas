@@ -187,4 +187,29 @@ assert(
   `unexpected final pipeline status: ${finalProspect.pipeline_status}`
 )
 
-process.stdout.write(`smoke prospect outbound ok ${baseUrl} · final=${finalProspect.pipeline_status}\n`)
+const crmPatch = await request('/api/studio/prospects', {
+  method: 'PATCH',
+  body: JSON.stringify({
+    id: finalProspect.id,
+    operator_notes: `Smoke note ${runTag}`,
+    next_action: 'Review reply inbox',
+    tags: ['smoke', 'phase2'],
+  }),
+})
+assert(crmPatch.response.status === 200, `crm patch failed: ${crmPatch.response.status} ${crmPatch.text}`)
+process.stdout.write(`ok crm patch ${finalProspect.id}\n`)
+
+const crmUpdatedProspect = await waitForProspect(
+  companyName,
+  (candidate) =>
+    typeof candidate.operator_notes === 'string' &&
+    candidate.operator_notes.includes(runTag) &&
+    candidate.next_action === 'Review reply inbox' &&
+    Array.isArray(candidate.tags) &&
+    candidate.tags.includes('smoke') &&
+    candidate.tags.includes('phase2'),
+  'crm updated prospect'
+)
+assert(crmUpdatedProspect, 'prospect missing after crm patch')
+
+process.stdout.write(`smoke prospect outbound ok ${baseUrl} · final=${crmUpdatedProspect.pipeline_status}\n`)

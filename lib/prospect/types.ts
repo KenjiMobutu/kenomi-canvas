@@ -18,6 +18,7 @@ export type ProspectPipelineStatus =
   | 'replied'
   | 'won'
   | 'lost'
+  | 'follow_up_due'
 
 export type ProspectActivityEvent = {
   type:
@@ -26,6 +27,9 @@ export type ProspectActivityEvent = {
     | 'approval_approved'
     | 'approval_rejected'
     | 'gmail_draft_created'
+    | 'note_updated'
+    | 'tags_updated'
+    | 'next_action_updated'
     | 'marked_sent'
     | 'marked_replied'
     | 'marked_won'
@@ -33,6 +37,18 @@ export type ProspectActivityEvent = {
   actor: 'system' | 'operator'
   at: string
   detail: string
+}
+
+export type ProspectActivityType = ProspectActivityEvent['type']
+
+export interface ProspectActivityRow {
+  id: string
+  prospect_id: string
+  user_id: string
+  type: ProspectActivityType
+  detail: string
+  metadata: Record<string, unknown>
+  created_at: string
 }
 
 export interface ProspectScoreInput {

@@ -103,6 +103,7 @@ npm run dev
 | `SOURCE_COMMIT`                 | Commit embarqué dans le runtime, affiché par le diagnostic infra |
 | `EXPECTED_SOURCE_COMMIT`        | Commit attendu pour la parité prod, optionnel                    |
 | `SMOKE_STUDIO_COOKIE`           | Cookie Studio de test pour `npm run smoke:prospect`              |
+| `AUTONOMY_WORKER_SECRET`        | Secret worker pour drainer explicitement la queue autonomie      |
 
 ### Health check
 
@@ -198,6 +199,7 @@ Le script vérifie:
 - l'approbation `send_outreach`
 - la création d'un draft local Gmail (`pipeline_status=draft_created`)
 - la transition opérateur `sent`
+- la persistance CRM locale de `operator_notes`, `next_action` et `tags`
 
 Si le worker Prospect n'est pas déclenché en continu sur l'environnement ciblé, définir `AUTONOMY_WORKER_SECRET` permet au smoke de déclencher explicitement `POST /api/studio/autonomy/jobs` pendant le test.
 

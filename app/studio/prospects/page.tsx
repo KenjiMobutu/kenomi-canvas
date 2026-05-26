@@ -35,10 +35,15 @@ type ProspectRow = {
   outreach_approval_id: string | null
   draft_provider: string | null
   draft_external_id: string | null
+  operator_notes?: string | null
+  next_action?: string | null
+  last_activity_at?: string | null
+  tags?: string[] | null
   activity?: Array<{
     type: string
-    actor: string
-    at: string
+    actor?: string
+    at?: string
+    created_at?: string
     detail: string
   }>
   created_at: string
@@ -63,6 +68,9 @@ type ProspectSummary = {
   draftCreated: number
   sent: number
   replied: number
+  won: number
+  lost: number
+  followUpDue: number
 }
 
 type ProspectApiPayload = {
@@ -191,6 +199,12 @@ export default function ProspectPage() {
   const [running, setRunning] = useState(false)
   const [approvalPendingKey, setApprovalPendingKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [bandFilter, setBandFilter] = useState('all')
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [tagFilter, setTagFilter] = useState('')
+  const [searchFilter, setSearchFilter] = useState('')
+  const [crmDrafts, setCrmDrafts] = useState<Record<string, { notes: string; nextAction: string; tags: string }>>({})
   const [prompt, setPrompt] = useState(
     'Trouve un prospect qualifié sur les sources configurées et rédige un message de prospection prêt à envoyer.'
   )
@@ -199,8 +213,15 @@ export default function ProspectPage() {
     setLoading(true)
     let nextError: string | null = null
     try {
+      const prospectsUrl = new URL('/api/studio/prospects', window.location.origin)
+      if (statusFilter !== 'all') prospectsUrl.searchParams.set('status', statusFilter)
+      if (bandFilter !== 'all') prospectsUrl.searchParams.set('band', bandFilter)
+      if (sourceFilter !== 'all') prospectsUrl.searchParams.set('source', sourceFilter)
+      if (tagFilter.trim()) prospectsUrl.searchParams.set('tag', tagFilter.trim().toLowerCase())
+      if (searchFilter.trim()) prospectsUrl.searchParams.set('q', searchFilter.trim())
+
       const [prospectsRes, jobsRes] = await Promise.all([
-        fetch('/api/studio/prospects', { cache: 'no-store' }),
+        fetch(prospectsUrl.toString(), { cache: 'no-store' }),
         fetch('/api/studio/autonomy/jobs?agent_id=prospect', { cache: 'no-store' }),
       ])
 
@@ -209,6 +230,18 @@ export default function ProspectPage() {
 
       setPayload(prospectsJson)
       setJobsPayload(jobsJson)
+      setCrmDrafts(
+        Object.fromEntries(
+          (prospectsJson.prospects ?? []).map((prospect) => [
+            prospect.id,
+            {
+              notes: typeof prospect.operator_notes === 'string' ? prospect.operator_notes : '',
+              nextAction: typeof prospect.next_action === 'string' ? prospect.next_action : '',
+              tags: Array.isArray(prospect.tags) ? prospect.tags.join(', ') : '',
+            },
+          ])
+        )
+      )
 
       if (!prospectsRes.ok) {
         nextError =
@@ -224,7 +257,7 @@ export default function ProspectPage() {
       setError(nextError)
       setLoading(false)
     }
-  }, [])
+  }, [bandFilter, searchFilter, sourceFilter, statusFilter, tagFilter])
 
   useEffect(() => {
     if (!user) return
@@ -246,6 +279,9 @@ export default function ProspectPage() {
     draftCreated: 0,
     sent: 0,
     replied: 0,
+    won: 0,
+    lost: 0,
+    followUpDue: 0,
   }
 
   const topProspects = useMemo(() => prospects.slice(0, 8), [prospects])
@@ -323,6 +359,40 @@ export default function ProspectPage() {
     }
   }
 
+  async function saveProspectCrm(prospectId: string) {
+    const draft = crmDrafts[prospectId]
+    if (!draft) return
+
+    const key = `${prospectId}:crm`
+    setApprovalPendingKey(key)
+    setError(null)
+    try {
+      const res = await fetch('/api/studio/prospects', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: prospectId,
+          operator_notes: draft.notes,
+          next_action: draft.nextAction,
+          tags: draft.tags
+            .split(',')
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'CRM update failed')
+      toast.success('CRM updated')
+      await load()
+    } catch (updateError) {
+      const message = updateError instanceof Error ? updateError.message : String(updateError)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setApprovalPendingKey(null)
+    }
+  }
+
   function approvalTone(status: ProspectApprovalStatus): 'muted' | 'hot' | 'warm' | 'cold' {
     if (status === 'awaiting_approval') return 'warm'
     if (status === 'approved_to_send') return 'hot'
@@ -344,6 +414,8 @@ export default function ProspectPage() {
       <Chip label={`${summary.awaitingApproval} awaiting`} tone="warm" />
       <Chip label={`${summary.approvedToSend} approved`} tone="hot" />
       <Chip label={`${summary.draftCreated} drafted`} tone="cold" />
+      <Chip label={`${summary.followUpDue} due`} tone="warm" />
+      <Chip label={`${summary.won} won`} tone="hot" />
       <button
         type="button"
         onClick={() => void load()}
@@ -446,6 +518,8 @@ export default function ProspectPage() {
                   { label: 'Ready', value: summary.readyToContact, color: emerald },
                   { label: 'Awaiting', value: summary.awaitingApproval, color: amber },
                   { label: 'Drafted', value: summary.draftCreated, color: cyan },
+                  { label: 'Won', value: summary.won, color: emerald },
+                  { label: 'Lost', value: summary.lost, color: rose },
                 ].map((card) => (
                   <div
                     key={card.label}
@@ -679,6 +753,63 @@ export default function ProspectPage() {
           action={<Chip label={loading ? 'loading' : `${topProspects.length} shown`} tone="cold" />}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, minmax(0, 1fr))',
+                gap: 10,
+              }}
+            >
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                  Status
+                </span>
+                <select className="ck-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  {['all', 'awaiting_approval', 'approved_to_send', 'draft_created', 'sent', 'replied', 'won', 'lost', 'follow_up_due'].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                  Band
+                </span>
+                <select className="ck-input" value={bandFilter} onChange={(event) => setBandFilter(event.target.value)}>
+                  {['all', 'hot', 'warm', 'cold'].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                  Source
+                </span>
+                <select className="ck-input" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+                  {['all', ...sources].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                  Tag
+                </span>
+                <input className="ck-input" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} placeholder="saas" />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                  Search
+                </span>
+                <input className="ck-input" value={searchFilter} onChange={(event) => setSearchFilter(event.target.value)} placeholder="company or note" />
+              </label>
+            </div>
+
             {topProspects.length === 0 ? (
               <div
                 style={{
@@ -776,6 +907,9 @@ export default function ProspectPage() {
                       <Chip label={approvalLabel(prospect.approval_status)} tone={approvalTone(prospect.approval_status)} />
                       <Chip label={`next ${fmtDate(prospect.next_followup_at)}`} tone="cold" />
                       <Chip label={prospect.crm_record_id ? 'synced' : 'local'} tone="cold" />
+                      {prospect.tags?.map((tag) => (
+                        <Chip key={`${prospect.id}:${tag}`} label={`tag ${tag}`} tone="cold" />
+                      ))}
                       <Chip
                         label={
                           prospect.draft_provider && prospect.draft_external_id
@@ -784,6 +918,103 @@ export default function ProspectPage() {
                         }
                         tone="cold"
                       />
+                    </div>
+
+                    <div
+                      style={{
+                        padding: 10,
+                        borderRadius: 8,
+                        border: `1px solid ${line}`,
+                        background: surface,
+                        display: 'grid',
+                        gridTemplateColumns: '1fr',
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                        CRM
+                      </div>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Notes</span>
+                        <textarea
+                          rows={3}
+                          className="ck-input"
+                          value={crmDrafts[prospect.id]?.notes ?? ''}
+                          onChange={(event) =>
+                            setCrmDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                notes: event.target.value,
+                                nextAction: current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
+                                tags: current[prospect.id]?.tags ?? (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Next action</span>
+                        <input
+                          className="ck-input"
+                          value={crmDrafts[prospect.id]?.nextAction ?? ''}
+                          onChange={(event) =>
+                            setCrmDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                notes: current[prospect.id]?.notes ?? prospect.operator_notes ?? '',
+                                nextAction: event.target.value,
+                                tags: current[prospect.id]?.tags ?? (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Tags</span>
+                        <input
+                          className="ck-input"
+                          value={crmDrafts[prospect.id]?.tags ?? ''}
+                          onChange={(event) =>
+                            setCrmDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                notes: current[prospect.id]?.notes ?? prospect.operator_notes ?? '',
+                                nextAction: current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
+                                tags: event.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2 }}>
+                          Last activity {fmtDate(prospect.last_activity_at ?? null)}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void saveProspectCrm(prospect.id)}
+                          disabled={approvalPendingKey !== null}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minHeight: 32,
+                            padding: '6px 11px',
+                            borderRadius: 8,
+                            border: `1px solid ${cyan}35`,
+                            background: `${cyan}14`,
+                            color: cyan,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            letterSpacing: '.12em',
+                            textTransform: 'uppercase',
+                            cursor: approvalPendingKey ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <Clock3 size={13} />
+                          {approvalPendingKey === `${prospect.id}:crm` ? 'Saving...' : 'Save CRM'}
+                        </button>
+                      </div>
                     </div>
 
                     {prospect.outreach_approval_id && prospect.approval_status === 'awaiting_approval' ? (
@@ -975,7 +1206,7 @@ export default function ProspectPage() {
                         </div>
                         {prospect.activity.slice(-4).map((event) => (
                           <div
-                            key={`${event.type}:${event.at}`}
+                            key={`${event.type}:${event.at ?? event.created_at ?? 'unknown'}`}
                             style={{
                               fontFamily: 'var(--font-mono)',
                               fontSize: 10.5,
@@ -983,7 +1214,7 @@ export default function ProspectPage() {
                               lineHeight: 1.45,
                             }}
                           >
-                            {fmtDate(event.at)} · {event.detail}
+                            {fmtDate(event.at ?? event.created_at ?? null)} · {event.detail}
                           </div>
                         ))}
                       </div>

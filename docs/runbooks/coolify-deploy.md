@@ -46,6 +46,12 @@ npm run smoke:prospect
 
 If the autonomy worker is not drained continuously in production, `AUTONOMY_WORKER_SECRET` lets the smoke trigger the queue worker explicitly through `/api/studio/autonomy/jobs`.
 
+The Prospect smoke is only considered green if it also confirms the Phase 2 CRM-local mutation path:
+
+- `operator_notes`
+- `next_action`
+- `tags`
+
 ## Normal Flow
 
 1. `POST /api/studio/deployments` creates an `autonomy_actions` row with

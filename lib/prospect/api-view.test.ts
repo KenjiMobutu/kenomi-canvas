@@ -42,6 +42,47 @@ describe('buildProspectViews', () => {
       cta: 'Can I show a concrete workflow?',
     })
   })
+
+  it('returns crm-local fields and derived follow_up_due status', () => {
+    const [view] = buildProspectViews({
+      prospects: [
+        {
+          id: 'prospect-1',
+          company_name: 'Acme',
+          source: 'linkedin',
+          band: 'warm',
+          score: 71,
+          pipeline_status: 'sent',
+          next_followup_at: '2026-05-25T10:00:00.000Z',
+          tags: ['saas'],
+          operator_notes: 'Waiting for reply',
+          next_action: 'Send follow-up',
+          metadata: {},
+        },
+      ],
+      actions: [],
+      approvals: [],
+      activitiesByProspectId: {
+        'prospect-1': [
+          {
+            id: 'a1',
+            prospect_id: 'prospect-1',
+            user_id: 'user-1',
+            type: 'note_updated',
+            detail: 'Waiting for reply',
+            metadata: {},
+            created_at: '2026-05-26T10:00:00.000Z',
+          },
+        ],
+      },
+      nowIso: '2026-05-26T12:00:00.000Z',
+    })
+
+    expect(view.pipeline_status).toBe('follow_up_due')
+    expect(view.tags).toEqual(['saas'])
+    expect(view.operator_notes).toBe('Waiting for reply')
+    expect(view.activity).toHaveLength(1)
+  })
 })
 
 describe('summarizeProspects', () => {
@@ -59,6 +100,10 @@ describe('summarizeProspects', () => {
           outreach_approval_id: 'approval-1',
           draft_provider: null,
           draft_external_id: null,
+          operator_notes: '',
+          next_action: '',
+          last_activity_at: null,
+          tags: [],
           activity: [],
           summary: null,
           pain_points: [],
@@ -75,6 +120,10 @@ describe('summarizeProspects', () => {
           outreach_approval_id: 'approval-2',
           draft_provider: 'gmail',
           draft_external_id: 'draft-1',
+          operator_notes: '',
+          next_action: '',
+          last_activity_at: null,
+          tags: [],
           activity: [],
           summary: null,
           pain_points: [],
@@ -95,6 +144,9 @@ describe('summarizeProspects', () => {
       draftCreated: 1,
       sent: 0,
       replied: 0,
+      won: 0,
+      lost: 0,
+      followUpDue: 0,
     })
   })
 
@@ -117,6 +169,57 @@ describe('summarizeProspects', () => {
       pipeline_status: 'draft_created',
       draft_provider: 'gmail',
       draft_external_id: 'draft-1',
+    })
+  })
+
+  it('counts derived follow-up due and terminal crm states', () => {
+    const summary = summarizeProspects(
+      [
+        {
+          id: 'prospect-1',
+          band: 'warm',
+          status: 'sent',
+          pipeline_status: 'follow_up_due',
+          approval_status: 'approved_to_send',
+          outreach_action_id: 'action-1',
+          outreach_approval_id: 'approval-1',
+          draft_provider: 'gmail',
+          draft_external_id: 'draft-1',
+          operator_notes: '',
+          next_action: '',
+          last_activity_at: null,
+          tags: [],
+          activity: [],
+          summary: null,
+          pain_points: [],
+          cta: null,
+        },
+        {
+          id: 'prospect-2',
+          band: 'hot',
+          status: 'won',
+          pipeline_status: 'won',
+          approval_status: 'no_approval',
+          outreach_action_id: null,
+          outreach_approval_id: null,
+          draft_provider: null,
+          draft_external_id: null,
+          operator_notes: '',
+          next_action: '',
+          last_activity_at: null,
+          tags: [],
+          activity: [],
+          summary: null,
+          pain_points: [],
+          cta: null,
+        },
+      ],
+      new Date('2026-05-26T10:00:00.000Z').getTime()
+    )
+
+    expect(summary).toMatchObject({
+      followUpDue: 1,
+      won: 1,
     })
   })
 })
