@@ -73,12 +73,42 @@ function findProspectByCompany(prospects, companyName) {
   return prospects.find((prospect) => prospect?.company_name === companyName) ?? null
 }
 
+function findJobById(jobs, jobId) {
+  if (!Array.isArray(jobs)) return null
+  return jobs.find((job) => job?.id === jobId) ?? null
+}
+
+async function waitForJob(jobId, label, timeoutMs = 45000) {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (workerSecret) {
+      await triggerWorker(10)
+    }
+
+    const result = await request('/api/studio/autonomy/jobs?agent_id=prospect')
+    assert(
+      result.response.status === 200 || result.response.status === 207,
+      `${label}: jobs fetch failed ${result.response.status} ${result.text}`
+    )
+
+    const job = findJobById(result.json?.jobs, jobId)
+    if (job && job.status !== 'queued' && job.status !== 'running') {
+      return job
+    }
+
+    await sleep(1500)
+  }
+
+  throw new Error(`${label}: timed out waiting for job ${jobId}`)
+}
+
 async function waitForProspect(companyName, predicate, label, timeoutMs = 45000) {
   const startedAt = Date.now()
 
   while (Date.now() - startedAt < timeoutMs) {
     if (workerSecret) {
-      await triggerWorker(1)
+      await triggerWorker(10)
     }
 
     const result = await request('/api/studio/prospects')
@@ -122,18 +152,27 @@ const run = await request('/api/studio/prospects/run', {
 })
 
 assert(run.response.status === 202, `prospect run failed: ${run.response.status} ${run.text}`)
-process.stdout.write(`ok queued prospect run (${run.json?.jobId ?? 'no-job-id'})\n`)
+const jobId = run.json?.jobId
+assert(typeof jobId === 'string' && jobId.length > 0, `missing job id in run response: ${run.text}`)
+process.stdout.write(`ok queued prospect run (${jobId})\n`)
 
 const jobs = await request('/api/studio/autonomy/jobs?agent_id=prospect')
 assert(jobs.response.status === 200, `jobs fetch failed: ${jobs.response.status} ${jobs.text}`)
 process.stdout.write(`ok jobs endpoint (${Array.isArray(jobs.json?.jobs) ? jobs.json.jobs.length : 0} jobs)\n`)
 
 if (workerSecret) {
-  const worker = await triggerWorker(1)
+  const worker = await triggerWorker(10)
   process.stdout.write(
     `ok worker trigger (${Array.isArray(worker?.processed) ? worker.processed.length : 0} jobs processed)\n`
   )
 }
+
+const completedJob = await waitForJob(jobId, 'prospect job')
+assert(
+  completedJob.status === 'completed',
+  `prospect job did not complete successfully: ${completedJob.status} ${completedJob.last_error ?? ''}`
+)
+process.stdout.write(`ok job completed ${jobId}\n`)
 
 const prospect = await waitForProspect(
   companyName,

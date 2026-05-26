@@ -6,6 +6,7 @@ import {
   resolveHumanApproval,
   type ApprovalExecutorSupabase,
 } from '@/lib/autonomy/approval-executor'
+import { runAgentStep, type RunAgentStepSupabase } from '@/lib/autonomy/run-agent-step'
 import { processQueuedAutonomyJobs, type AutonomyJobRunnerSupabase } from '@/lib/autonomy/job-runner'
 import {
   cancelAutonomyJob,
@@ -140,6 +141,14 @@ export async function POST(request: NextRequest) {
       supabase: supabaseAdmin as unknown as AutonomyJobRunnerSupabase,
       limit: parsed.data.limit ?? 1,
       now: new Date(),
+      runAgentStep: (input) =>
+        runAgentStep({
+          supabase: input.supabase as RunAgentStepSupabase,
+          userId: input.userId,
+          agentId: input.agentId,
+          ventureId: input.ventureId,
+          prompt: input.prompt,
+        }),
     })
 
     return NextResponse.json({
