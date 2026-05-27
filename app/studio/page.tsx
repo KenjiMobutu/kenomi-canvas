@@ -399,11 +399,12 @@ function CkHeader({
   const isMobile = useIsMobile()
   const navItems = [
     { label: 'Cockpit', href: '/studio' },
+    { label: 'Prospects', href: '/studio/prospects' },
+    { label: 'Revenue', href: '/studio/revenue' },
+    { label: 'Automations', href: '/studio/automations' },
+    { label: 'Infrastructure', href: '/studio/infrastructure' },
     { label: 'Ventures', href: '/studio/ventures' },
     { label: 'Agents', href: '/studio/agents' },
-    { label: 'Prospects', href: '/studio/prospects' },
-    { label: 'Marketing', href: '/studio/marketing' },
-    { label: 'Analytics', href: '/studio/analytics' },
   ]
   return (
     <header
@@ -461,7 +462,7 @@ function CkHeader({
                 textTransform: 'uppercase',
               }}
             >
-              Kenomi · cockpit
+              Kenomi · revenue OS
             </div>
           )}
           <div
@@ -475,7 +476,7 @@ function CkHeader({
               whiteSpace: 'nowrap',
             }}
           >
-            {isMobile ? 'Cockpit' : 'Decisions today'}
+            {isMobile ? 'Revenue' : 'Cash actions today'}
           </div>
         </div>
         {!isMobile && (
@@ -827,17 +828,10 @@ function ChartWithTooltip({
         >
           {!hasSeries && (
             <g>
-              <line
-                x1="8"
-                x2="92"
-                y1={H / 2}
-                y2={H / 2}
-                stroke={line}
-                strokeDasharray="2 4"
-              />
+              <line x1="8" x2="92" y1={H / 2} y2={H / 2} stroke={line} strokeDasharray="2 4" />
               <text
                 x={W / 2}
-                y={(H / 2) + 6}
+                y={H / 2 + 6}
                 textAnchor="middle"
                 fontSize="8"
                 fill={muted}
@@ -1816,6 +1810,197 @@ function RevenueFirstStrip({ snapshot }: { snapshot: RevenueLoopSnapshotPayload 
             : 'Aucune boucle revenue active à débloquer.'}
         </div>
       </a>
+    </section>
+  )
+}
+
+function CashFocusPanel({ snapshot }: { snapshot: RevenueLoopSnapshotPayload | null }) {
+  const summary = snapshot?.summary
+  const action = summary?.recommendedAction
+  const cards = [
+    {
+      label: 'Leads à traiter',
+      value: String(summary?.pendingApprovals ?? 0),
+      tone: (summary?.pendingApprovals ?? 0) > 0 ? amber : muted2,
+      href: '/studio/prospects',
+    },
+    {
+      label: 'Checkouts prêts',
+      value: String(summary?.readyCheckouts ?? 0),
+      tone: (summary?.readyCheckouts ?? 0) > 0 ? emerald : muted2,
+      href: '/studio/revenue',
+    },
+    {
+      label: 'Boucles actives',
+      value: String(summary?.activeLoops ?? 0),
+      tone: (summary?.activeLoops ?? 0) > 0 ? accent : muted2,
+      href: '/studio/revenue',
+    },
+  ]
+
+  return (
+    <section
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 12,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.18em',
+              color: muted,
+              textTransform: 'uppercase',
+            }}
+          >
+            Revenue focus
+          </div>
+          <h3
+            style={{
+              margin: '6px 0 0',
+              fontFamily: 'var(--font-display)',
+              fontSize: 18,
+              fontWeight: 800,
+              letterSpacing: '-.02em',
+              color: text,
+            }}
+          >
+            Ce qui rapproche du cash maintenant
+          </h3>
+        </div>
+        <a
+          href="/studio/revenue"
+          style={{
+            color: accent,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Revenue loop
+        </a>
+      </div>
+
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 10,
+          border: `1px solid ${action ? `${accent}44` : line}`,
+          background: action ? `${accent}12` : surface2,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: action ? accent : muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            fontWeight: 800,
+          }}
+        >
+          {action ? 'Action prioritaire' : 'Aucune priorité revenue'}
+        </div>
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 13,
+            fontWeight: 700,
+            color: text,
+          }}
+        >
+          {action ? action.ventureName : 'Choisir une offre et un canal principal'}
+        </div>
+        <div style={{ marginTop: 4, fontSize: 12, color: muted, lineHeight: 1.5 }}>
+          {action
+            ? `${action.reason} · potentiel bloqué ${formatEuro(action.blockedRevenueEur)}`
+            : 'Le cockpit doit te pousser vers une seule boucle commerciale active.'}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+        {cards.map((card) => (
+          <a
+            key={card.label}
+            href={card.href}
+            style={{
+              textDecoration: 'none',
+              padding: '12px 12px 10px',
+              borderRadius: 10,
+              border: `1px solid ${line}`,
+              background: surface2,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                color: muted,
+                textTransform: 'uppercase',
+                letterSpacing: '.12em',
+              }}
+            >
+              {card.label}
+            </span>
+            <strong
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 24,
+                lineHeight: 1,
+                color: card.tone,
+              }}
+            >
+              {card.value}
+            </strong>
+          </a>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Ouvrir Prospects', href: '/studio/prospects', tone: accent, fill: true },
+          { label: 'Ouvrir Revenue', href: '/studio/revenue', tone: emerald, fill: false },
+          { label: 'Voir Automations', href: '/studio/automations', tone: accent, fill: false },
+        ].map((item) => (
+          <a
+            key={item.label}
+            href={item.href}
+            style={{
+              textDecoration: 'none',
+              padding: '9px 12px',
+              borderRadius: 999,
+              border: `1px solid ${item.fill ? `${item.tone}66` : line2}`,
+              background: item.fill ? `${item.tone}22` : surface,
+              color: item.fill ? item.tone : text,
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            {item.label}
+          </a>
+        ))}
+      </div>
     </section>
   )
 }
@@ -2948,6 +3133,7 @@ export default function CockpitPage() {
           style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, minHeight: 0 }}
         >
           {isMobile && <RevenueFirstStrip snapshot={revenueSnapshot} />}
+          <CashFocusPanel snapshot={revenueSnapshot} />
           {loading && (
             <div
               style={{

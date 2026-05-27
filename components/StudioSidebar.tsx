@@ -27,17 +27,17 @@ import { useIsMobile } from '@/lib/studio-utils'
 
 const nav = [
   { href: '/studio', label: 'Cockpit', icon: LayoutDashboard, group: 'Studio' },
-  { href: '/studio/ventures', label: 'Ventures', icon: GitBranch, group: 'Studio' },
-  { href: '/studio/agents', label: 'Agents', icon: Bot, group: 'Studio' },
   { href: '/studio/prospects', label: 'Prospects', icon: Target, group: 'Studio' },
   { href: '/studio/revenue', label: 'Revenue', icon: CircleDollarSign, group: 'Studio' },
-  { href: '/studio/marketing', label: 'Marketing', icon: Megaphone, group: 'Studio' },
-  { href: '/studio/analytics', label: 'Analytics', icon: BarChart3, group: 'Studio' },
   { href: '/studio/automations', label: 'Automations', icon: Workflow, group: 'Studio' },
   { href: '/studio/infrastructure', label: 'Infrastructure', icon: Server, group: 'Studio' },
+  { href: '/studio/ventures', label: 'Ventures', icon: GitBranch, group: 'Studio' },
+  { href: '/studio/agents', label: 'Agents', icon: Bot, group: 'Studio' },
+  { href: '/studio/marketing', label: 'Marketing', icon: Megaphone, group: 'Studio' },
+  { href: '/studio/analytics', label: 'Analytics', icon: BarChart3, group: 'Studio' },
   { href: '/studio/gamification', label: 'Gamification', icon: Trophy, group: 'Studio' },
-  { href: '/studio/chat', label: 'Command Chat', icon: MessageSquare, group: 'System' },
   { href: '/studio/documents', label: 'Documents', icon: FileText, group: 'System' },
+  { href: '/studio/chat', label: 'Command Chat', icon: MessageSquare, group: 'System' },
   { href: '/studio/api-keys', label: 'API Keys', icon: KeyRound, group: 'System' },
   { href: '/studio/settings', label: 'Settings', icon: Settings, group: 'System' },
 ]
@@ -60,10 +60,10 @@ const SB = {
 
 const BOTTOM_NAV = [
   { href: '/studio', label: 'Cockpit', icon: LayoutDashboard },
-  { href: '/studio/ventures', label: 'Ventures', icon: GitBranch },
-  { href: '/studio/agents', label: 'Agents', icon: Bot },
+  { href: '/studio/prospects', label: 'Prospects', icon: Target },
+  { href: '/studio/revenue', label: 'Revenue', icon: CircleDollarSign },
+  { href: '/studio/automations', label: 'Ops', icon: Workflow },
   { href: '/studio/chat', label: 'Chat', icon: MessageSquare },
-  { href: '/studio/analytics', label: 'Stats', icon: BarChart3 },
 ]
 
 const ALL_NAV_EXTRA = nav.filter((n) => !BOTTOM_NAV.some((b) => b.href === n.href))
