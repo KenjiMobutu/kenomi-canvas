@@ -1,9 +1,19 @@
 const baseUrl = process.env.SMOKE_BASE_URL ?? 'http://localhost:3000'
 const studioCookie = process.env.SMOKE_STUDIO_COOKIE
+const workerSecret = process.env.AUTONOMY_WORKER_SECRET
+const schedulerSecret = process.env.AUTONOMY_SCHEDULER_SECRET ?? workerSecret
 
 if (!studioCookie) {
   console.error('SMOKE_STUDIO_COOKIE is required')
   console.error('Example: export SMOKE_STUDIO_COOKIE="sb-supabase-auth-token=base64-..."')
+  process.exit(1)
+}
+if (!workerSecret) {
+  console.error('AUTONOMY_WORKER_SECRET is required')
+  process.exit(1)
+}
+if (!schedulerSecret) {
+  console.error('AUTONOMY_SCHEDULER_SECRET or AUTONOMY_WORKER_SECRET is required')
   process.exit(1)
 }
 
@@ -36,18 +46,64 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-const run = await request('/api/studio/agents/run', {
-  method: 'POST',
+const schedulesRes = await request('/api/studio/schedules')
+assert(schedulesRes.response.status === 200, `schedules fetch failed: ${schedulesRes.response.status} ${schedulesRes.text}`)
+const devopsSchedule = Array.isArray(schedulesRes.json?.schedules)
+  ? schedulesRes.json.schedules.find((schedule) => schedule?.schedule_key === 'devops')
+  : null
+assert(devopsSchedule?.id, `missing devops schedule: ${schedulesRes.text}`)
+process.stdout.write(`ok schedules endpoint (${schedulesRes.json.schedules.length} schedules)\n`)
+
+const runNow = await request('/api/studio/schedules', {
+  method: 'PATCH',
   body: JSON.stringify({
-    agentId: 'devops',
-    prompt: 'Synthétise les diagnostics infra réels et les incidents récents sans proposer d action automatique.',
+    scheduleKey: 'devops',
+    runNow: true,
   }),
 })
+assert(runNow.response.status === 200, `schedule run_now failed: ${runNow.response.status} ${runNow.text}`)
+process.stdout.write('ok marked devops schedule due\n')
 
-assert(run.response.status === 200, `devops run failed: ${run.response.status} ${run.text}`)
-assert(run.json?.ok === true, `devops run did not return ok=true: ${run.text}`)
-assert(run.json?.parsedOutput?.global_status, `missing devops parsedOutput: ${run.text}`)
-process.stdout.write(`ok devops run ${run.json.parsedOutput.global_status}\n`)
+const schedulerRun = await fetch(new URL('/api/internal/autonomy/scheduler/run', baseUrl), {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-autonomy-scheduler-token': schedulerSecret,
+  },
+  body: JSON.stringify({
+    limit: 4,
+    schedule_keys: ['devops'],
+  }),
+})
+const schedulerText = await schedulerRun.text()
+const schedulerJson = schedulerText ? JSON.parse(schedulerText) : null
+assert(
+  schedulerRun.status === 200,
+  `scheduler trigger failed: ${schedulerRun.status} ${schedulerText}`
+)
+assert(schedulerJson?.enqueued >= 1, `scheduler did not enqueue devops: ${schedulerText}`)
+process.stdout.write(`ok scheduler enqueued ${schedulerJson.enqueued}\n`)
+
+const workerRun = await fetch(new URL('/api/internal/autonomy/worker/drain', baseUrl), {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-autonomy-worker-token': workerSecret,
+  },
+  body: JSON.stringify({
+    worker_id: 'smoke:devops',
+    limit: 4,
+    allowed_job_kinds: ['run_agent'],
+  }),
+})
+const workerText = await workerRun.text()
+const workerJson = workerText ? JSON.parse(workerText) : null
+assert(workerRun.status === 200, `worker drain failed: ${workerRun.status} ${workerText}`)
+assert(
+  Array.isArray(workerJson?.processed) && workerJson.processed.length >= 1,
+  `worker processed nothing: ${workerText}`
+)
+process.stdout.write(`ok worker processed ${workerJson.processed.length}\n`)
 
 const diagnosticsRes = await request('/api/studio/infra/diagnostics')
 assert(

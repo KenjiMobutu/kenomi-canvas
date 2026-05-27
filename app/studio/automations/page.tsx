@@ -55,6 +55,17 @@ interface N8nWorkflow {
   updatedAt: string
 }
 
+interface BusinessSchedule {
+  id: string
+  schedule_key: 'scout' | 'prospect' | 'follow_ups' | 'devops'
+  label: string
+  status: 'active' | 'paused'
+  interval_minutes: number
+  last_enqueued_at: string | null
+  last_completed_at: string | null
+  next_run_at: string
+}
+
 const TYPE_META: Record<string, { color: string; label: string }> = {
   trigger: { color: '#22d3ee', label: 'TRIG' },
   agent: { color: '', label: 'AGT' },
@@ -680,6 +691,199 @@ function ServiceHealth() {
   )
 }
 
+function SchedulesPanel({
+  schedules,
+  loading,
+  busyKey,
+  onToggle,
+  onRunNow,
+}: {
+  schedules: BusinessSchedule[]
+  loading: boolean
+  busyKey: string | null
+  onToggle: (schedule: BusinessSchedule) => void
+  onRunNow: (scheduleKey: BusinessSchedule['schedule_key']) => void
+}) {
+  const statusColor = (status: BusinessSchedule['status']) => (status === 'active' ? emerald : muted2)
+
+  return (
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 14,
+              fontWeight: 700,
+              color: text,
+            }}
+          >
+            Business Schedules
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted2,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+              marginTop: 2,
+            }}
+          >
+            scheduler -&gt; autonomy_jobs -&gt; worker
+          </div>
+        </div>
+        {loading && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted }}>
+            Chargement…
+          </span>
+        )}
+      </div>
+      {schedules.length === 0 ? (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>
+          Aucun schedule disponible.
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 10,
+          }}
+        >
+          {schedules.map((schedule) => {
+            const color = statusColor(schedule.status)
+            const isBusy = busyKey === schedule.schedule_key
+            return (
+              <div
+                key={schedule.id}
+                style={{
+                  padding: 12,
+                  borderRadius: 10,
+                  background: surface2,
+                  border: `1px solid ${line}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  borderLeft: `3px solid ${color}`,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: text }}>{schedule.label}</div>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        color: muted2,
+                        letterSpacing: '.14em',
+                        textTransform: 'uppercase',
+                        marginTop: 2,
+                      }}
+                    >
+                      {schedule.schedule_key}
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      alignSelf: 'flex-start',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      padding: '3px 7px',
+                      borderRadius: 4,
+                      background: `${color}22`,
+                      color,
+                      letterSpacing: 1,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {schedule.status === 'active' ? 'ACTIF' : 'PAUSÉ'}
+                  </span>
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted }}>
+                  Toutes les {schedule.interval_minutes} min
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  <AuStatBox
+                    label="Next"
+                    value={
+                      schedule.next_run_at
+                        ? new Date(schedule.next_run_at).toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : '—'
+                    }
+                    color={cyan}
+                  />
+                  <AuStatBox
+                    label="Last"
+                    value={
+                      schedule.last_completed_at
+                        ? new Date(schedule.last_completed_at).toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : '—'
+                    }
+                    color={violet}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => onToggle(schedule)}
+                    disabled={isBusy}
+                    style={{
+                      flex: 1,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      border: `1px solid ${line2}`,
+                      background: surface,
+                      color: text,
+                      cursor: isBusy ? 'default' : 'pointer',
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {schedule.status === 'active' ? 'Pause' : 'Resume'}
+                  </button>
+                  <button
+                    onClick={() => onRunNow(schedule.schedule_key)}
+                    disabled={isBusy}
+                    style={{
+                      flex: 1,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: accent,
+                      color: '#0b0d12',
+                      cursor: isBusy ? 'default' : 'pointer',
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Run now
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function NewWorkflowForm({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
   const { user } = useAuth()
   const [name, setName] = useState('')
@@ -1174,6 +1378,9 @@ export default function AutomationsPage() {
   const [n8nLoading, setN8nLoading] = useState(false)
   const [n8nError, setN8nError] = useState<string | null>(null)
   const [n8nSelectedId, setN8nSelectedId] = useState<string | null>(null)
+  const [schedules, setSchedules] = useState<BusinessSchedule[]>([])
+  const [schedulesLoading, setSchedulesLoading] = useState(false)
+  const [scheduleBusyKey, setScheduleBusyKey] = useState<string | null>(null)
 
   const selectedDbWorkflow = dbWorkflows.find((w) => w.id === dbSelectedId) ?? null
   const selectedN8nWorkflow = n8nWorkflows.find((w) => w.id === n8nSelectedId) ?? null
@@ -1210,6 +1417,25 @@ export default function AutomationsPage() {
       toast.error('Erreur réseau')
     } finally {
       setRunsLoading(false)
+    }
+  }, [])
+
+  const loadSchedules = useCallback(async () => {
+    setSchedulesLoading(true)
+    try {
+      const res = await fetch('/api/studio/schedules')
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSchedules([])
+        toast.error(json.error || 'Erreur chargement schedules')
+        return
+      }
+      setSchedules((json.schedules as BusinessSchedule[]) ?? [])
+    } catch {
+      setSchedules([])
+      toast.error('Erreur réseau schedules')
+    } finally {
+      setSchedulesLoading(false)
     }
   }, [])
 
@@ -1264,6 +1490,10 @@ export default function AutomationsPage() {
   useEffect(() => {
     if (user) loadWorkflows()
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (user) loadSchedules()
+  }, [user, loadSchedules])
 
   useEffect(() => {
     setN8nLoading(true)
@@ -1336,6 +1566,27 @@ export default function AutomationsPage() {
       toast.success('Workflow déclenché !')
       loadWorkflows()
       loadRuns(id)
+    }
+  }
+
+  async function patchSchedule(body: Record<string, unknown>, busyKey: string) {
+    setScheduleBusyKey(busyKey)
+    try {
+      const res = await fetch('/api/studio/schedules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error || 'Erreur schedule')
+        return
+      }
+      setSchedules((json.schedules as BusinessSchedule[]) ?? [])
+    } catch {
+      toast.error('Erreur réseau schedule')
+    } finally {
+      setScheduleBusyKey(null)
     }
   }
 
@@ -1451,6 +1702,22 @@ export default function AutomationsPage() {
         >
           source automation_runs · {totalRuns === 0 ? 'aucun run enregistré' : 'historique réel'}
         </div>
+
+        <SchedulesPanel
+          schedules={schedules}
+          loading={schedulesLoading}
+          busyKey={scheduleBusyKey}
+          onToggle={(schedule) =>
+            patchSchedule(
+              {
+                scheduleKey: schedule.schedule_key,
+                status: schedule.status === 'active' ? 'paused' : 'active',
+              },
+              schedule.schedule_key
+            )
+          }
+          onRunNow={(scheduleKey) => patchSchedule({ scheduleKey, runNow: true }, scheduleKey)}
+        />
 
         {/* DAG + workflows list */}
         <div

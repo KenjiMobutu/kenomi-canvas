@@ -70,6 +70,16 @@ export interface ProcessQueuedAutonomyJobsInput {
     agentRunId: string | null
     parsedOutput: unknown
   }>
+  runFollowUpScan?: (input: {
+    supabase: unknown
+    userId: string
+    nowIso: string
+  }) => Promise<{ processed: number }>
+  onJobCompleted?: (input: {
+    supabase: AutonomyJobRunnerSupabase
+    job: AutonomyJobRow
+    now: Date
+  }) => Promise<void>
 }
 
 export interface ProcessedAutonomyJob {
@@ -354,6 +364,11 @@ async function getQueuedJobRunnerInput(job: AutonomyJobRow): Promise<{
   }
 }
 
+function getScheduleKey(job: AutonomyJobRow): string | null {
+  const payload = job.payload as AutonomyJobPayload
+  return typeof payload.scheduleKey === 'string' ? payload.scheduleKey : null
+}
+
 export async function processQueuedAutonomyJobs(
   input: ProcessQueuedAutonomyJobsInput
 ): Promise<ProcessedAutonomyJob[]> {
@@ -361,6 +376,7 @@ export async function processQueuedAutonomyJobs(
   const now = input.now ?? new Date()
   const max = Math.max(1, input.limit ?? 1)
   const runAgentStep = input.runAgentStep
+  const nowIso = now.toISOString()
 
   for (let i = 0; i < max; i++) {
     await recoverStaleRunningJob(input.supabase, {
@@ -376,34 +392,56 @@ export async function processQueuedAutonomyJobs(
     if (!job) break
 
     try {
-      const runnerInput = await getQueuedJobRunnerInput(job)
-      const result = await (runAgentStep ??
-        (async () => {
-          throw new Error('runAgentStep manquant')
-        }))({
-        supabase: input.supabase,
-        userId: job.user_id,
-        agentId: runnerInput.agentId,
-        ventureId: runnerInput.ventureId,
-        prompt: runnerInput.prompt,
-      })
+      let output: Record<string, unknown>
+      let result: unknown
 
-      const completed = await completeJob(
-        input.supabase,
-        job.id,
-        {
-          agentRunId: result.agentRunId,
-          content: result.content,
-          durationMs: result.durationMs,
-          model: result.model,
-          parsedOutput: result.parsedOutput,
-        },
-        now
-      )
+      if (job.kind === 'follow_up_scan') {
+        const followUpResult = await (input.runFollowUpScan ??
+          (async () => {
+            throw new Error('runFollowUpScan manquant')
+          }))({
+          supabase: input.supabase,
+          userId: job.user_id,
+          nowIso,
+        })
+        output = {
+          processed: followUpResult.processed,
+          scheduleKey: getScheduleKey(job),
+        }
+        result = followUpResult
+      } else {
+        const runnerInput = await getQueuedJobRunnerInput(job)
+        const agentResult = await (runAgentStep ??
+          (async () => {
+            throw new Error('runAgentStep manquant')
+          }))({
+          supabase: input.supabase,
+          userId: job.user_id,
+          agentId: runnerInput.agentId,
+          ventureId: runnerInput.ventureId,
+          prompt: runnerInput.prompt,
+        })
+        output = {
+          agentRunId: agentResult.agentRunId,
+          content: agentResult.content,
+          durationMs: agentResult.durationMs,
+          model: agentResult.model,
+          parsedOutput: agentResult.parsedOutput,
+        }
+        result = agentResult
+      }
+
+      const completed = await completeJob(input.supabase, job.id, output, now)
 
       if (!completed) {
         throw new Error('Impossible de finaliser le job autonomie')
       }
+
+      await input.onJobCompleted?.({
+        supabase: input.supabase,
+        job: completed,
+        now,
+      })
 
       processed.push({ job: completed, result })
     } catch (error) {

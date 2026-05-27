@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { processQueuedAutonomyJobs, type AutonomyJobRunnerSupabase } from '@/lib/autonomy/job-runner'
 import { runAgentStep, type RunAgentStepSupabase } from '@/lib/autonomy/run-agent-step'
+import {
+  markBusinessScheduleCompleted,
+  type BusinessScheduleKey,
+  type BusinessScheduleSupabase,
+} from '@/lib/autonomy/scheduler'
+import { processDueProspectFollowUps } from '@/lib/prospect/scheduled-follow-ups'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const workerDrainSchema = z.object({
@@ -31,7 +37,7 @@ export async function POST(request: NextRequest) {
     now: new Date(),
     limit: parsed.data.limit ?? 1,
     workerId: parsed.data.worker_id,
-    allowedJobKinds: parsed.data.allowed_job_kinds ?? ['run_agent'],
+    allowedJobKinds: parsed.data.allowed_job_kinds ?? ['run_agent', 'follow_up_scan'],
     runAgentStep: (input) =>
       runAgentStep({
         supabase: input.supabase as RunAgentStepSupabase,
@@ -40,6 +46,28 @@ export async function POST(request: NextRequest) {
         ventureId: input.ventureId,
         prompt: input.prompt,
       }),
+    runFollowUpScan: ({ supabase, userId, nowIso }) =>
+      processDueProspectFollowUps({
+        supabase: supabase as Parameters<typeof processDueProspectFollowUps>[0]['supabase'],
+        userId,
+        nowIso,
+      }),
+    onJobCompleted: async ({ supabase, job, now }) => {
+      const scheduleKey = job.payload?.scheduleKey
+      if (
+        scheduleKey === 'scout' ||
+        scheduleKey === 'prospect' ||
+        scheduleKey === 'follow_ups' ||
+        scheduleKey === 'devops'
+      ) {
+        await markBusinessScheduleCompleted({
+          supabase: supabase as unknown as BusinessScheduleSupabase,
+          userId: job.user_id,
+          scheduleKey: scheduleKey as BusinessScheduleKey,
+          now,
+        })
+      }
+    },
   })
 
   return NextResponse.json({

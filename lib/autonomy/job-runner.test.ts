@@ -230,6 +230,45 @@ describe('processQueuedAutonomyJobs', () => {
       },
     })
   })
+
+  it('exécute un follow_up_scan et persiste son output', async () => {
+    const supabase = createFakeSupabase([
+      {
+        ...baseJob,
+        id: 'job-follow-ups',
+        kind: 'follow_up_scan',
+        payload: {
+          scheduleKey: 'follow_ups',
+          scheduled: true,
+        },
+      },
+    ])
+    const completions: string[] = []
+
+    const processed = await processQueuedAutonomyJobs({
+      supabase,
+      now: new Date('2026-05-18T10:00:00.000Z'),
+      workerId: 'worker:test:followups',
+      allowedJobKinds: ['follow_up_scan'],
+      runFollowUpScan: async () => ({ processed: 3 }),
+      onJobCompleted: async ({ job }) => {
+        completions.push(job.id)
+      },
+    })
+
+    expect(processed).toHaveLength(1)
+    expect(processed[0]?.job.status).toBe('completed')
+    expect(processed[0]?.result).toMatchObject({ processed: 3 })
+    expect(supabase.jobs[0]?.payload).toEqual({
+      scheduleKey: 'follow_ups',
+      scheduled: true,
+      output: {
+        processed: 3,
+        scheduleKey: 'follow_ups',
+      },
+    })
+    expect(completions).toEqual(['job-follow-ups'])
+  })
 })
 
 describe('job state transitions', () => {
