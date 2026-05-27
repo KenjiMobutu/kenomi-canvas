@@ -22,6 +22,9 @@ describe('buildProspectMemoryPoint', () => {
       tags: ['saas'],
     })
     expect(point.text).toContain('Acme')
+    expect(point.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    )
     expect(point.metadata).toMatchObject({ memory_kind: 'prospect_created', tags: ['saas'] })
   })
 })

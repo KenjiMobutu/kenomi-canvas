@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { getMemoryConfig } from './config'
 import { embedText } from './embeddings'
 import { createQdrantClient } from './qdrant-client'
@@ -31,6 +32,15 @@ function nonEmptyStrings(values: string[] | null | undefined) {
   return (values ?? []).filter((value) => value.trim().length > 0)
 }
 
+function buildProspectMemoryPointId(input: Pick<BuildProspectMemoryPointInput, 'prospectId' | 'memoryKind' | 'createdAt'>) {
+  const hex = createHash('sha256')
+    .update(`${input.prospectId}:${input.memoryKind}:${input.createdAt}`)
+    .digest('hex')
+    .slice(0, 32)
+
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
+}
+
 export function buildProspectMemoryText(input: Omit<BuildProspectMemoryPointInput, 'userId' | 'prospectId' | 'createdAt'>) {
   const lines = [
     `${input.companyName} · ${input.memoryKind} · ${input.band} lead from ${input.source}.`,
@@ -45,7 +55,7 @@ export function buildProspectMemoryText(input: Omit<BuildProspectMemoryPointInpu
 
 export function buildProspectMemoryPoint(input: BuildProspectMemoryPointInput) {
   return {
-    id: `${input.prospectId}:${input.memoryKind}:${input.createdAt}`,
+    id: buildProspectMemoryPointId(input),
     userId: input.userId,
     namespace: 'prospects',
     prospectId: input.prospectId,
