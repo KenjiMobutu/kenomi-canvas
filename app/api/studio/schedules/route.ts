@@ -16,6 +16,7 @@ const schedulePatchSchema = z.object({
   status: z.enum(['active', 'paused']).optional(),
   runNow: z.boolean().optional(),
   intervalMinutes: z.number().int().min(5).max(1440).optional(),
+  nextRunAt: z.string().datetime().optional(),
 })
 
 function sortSchedules<T extends { schedule_key: BusinessScheduleKey }>(rows: T[]): T[] {
@@ -59,7 +60,8 @@ export async function PATCH(request: Request) {
   if (
     parsed.data.status !== undefined ||
     parsed.data.intervalMinutes !== undefined ||
-    parsed.data.runNow !== true
+    parsed.data.runNow !== true ||
+    parsed.data.nextRunAt !== undefined
   ) {
     await updateBusinessSchedule({
       supabase: supabase as unknown as BusinessScheduleSupabase,
@@ -68,7 +70,7 @@ export async function PATCH(request: Request) {
       now: new Date(),
       status: parsed.data.status as BusinessScheduleStatus | undefined,
       intervalMinutes: parsed.data.intervalMinutes,
-      nextRunAt: parsed.data.runNow ? new Date().toISOString() : undefined,
+      nextRunAt: parsed.data.nextRunAt ?? (parsed.data.runNow ? new Date().toISOString() : undefined),
     })
   }
 

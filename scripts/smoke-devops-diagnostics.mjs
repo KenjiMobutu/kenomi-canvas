@@ -58,10 +58,10 @@ const runNow = await request('/api/studio/schedules', {
   method: 'PATCH',
   body: JSON.stringify({
     scheduleKey: 'devops',
-    runNow: true,
+    nextRunAt: new Date().toISOString(),
   }),
 })
-assert(runNow.response.status === 200, `schedule run_now failed: ${runNow.response.status} ${runNow.text}`)
+assert(runNow.response.status === 200, `schedule nextRunAt failed: ${runNow.response.status} ${runNow.text}`)
 process.stdout.write('ok marked devops schedule due\n')
 
 const schedulerRun = await fetch(new URL('/api/internal/autonomy/scheduler/run', baseUrl), {
