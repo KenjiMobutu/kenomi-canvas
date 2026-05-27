@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildCashActions } from './cash-queue'
 
 describe('buildCashActions', () => {
-  it('prioritizes approval, follow-up, send, and revenue actions with operator intents', () => {
+  it('prioritizes the strongest cash actions with operator intents', () => {
     const actions = buildCashActions({
       prospects: [
         {
@@ -55,25 +55,26 @@ describe('buildCashActions', () => {
           },
         },
       },
+      nowIso: '2026-05-28T12:00:00.000Z',
     })
 
     expect(actions.map((action) => action.kind)).toEqual([
-      'approval',
       'follow_up',
+      'approval',
       'send',
       'revenue',
     ])
     expect(actions[0].intent).toEqual({
       method: 'PATCH',
-      endpoint: '/api/studio/autonomy/jobs',
-      body: { approvalId: 'approval-1', decision: 'approved' },
-      successMessage: 'Draft approved',
-    })
-    expect(actions[1].intent).toEqual({
-      method: 'PATCH',
       endpoint: '/api/studio/prospects',
       body: { id: 'p-follow-up', action: 'mark_follow_up_sent' },
       successMessage: 'Follow-up marked sent',
+    })
+    expect(actions[1].intent).toEqual({
+      method: 'PATCH',
+      endpoint: '/api/studio/autonomy/jobs',
+      body: { approvalId: 'approval-1', decision: 'approved' },
+      successMessage: 'Draft approved',
     })
     expect(actions[2].intent).toEqual({
       method: 'PATCH',
@@ -100,6 +101,7 @@ describe('buildCashActions', () => {
         },
       ],
       revenueSnapshot: null,
+      nowIso: '2026-05-28T12:00:00.000Z',
     })
 
     expect(actions).toHaveLength(1)
@@ -108,6 +110,46 @@ describe('buildCashActions', () => {
       label: 'Travailler Lead Co',
       href: '/studio/prospects',
       intent: null,
+    })
+  })
+
+  it('chooses the strongest candidate within a kind instead of the first one', () => {
+    const actions = buildCashActions({
+      prospects: [
+        {
+          id: 'p-cold',
+          company_name: 'Cold Approval Co',
+          band: 'cold',
+          score: 35,
+          pipeline_status: 'awaiting_approval',
+          approval_status: 'awaiting_approval',
+          outreach_approval_id: 'approval-cold',
+          next_followup_at: null,
+          last_outreach_kind: 'initial',
+        },
+        {
+          id: 'p-hot',
+          company_name: 'Hot Approval Co',
+          band: 'hot',
+          score: 93,
+          pipeline_status: 'awaiting_approval',
+          approval_status: 'awaiting_approval',
+          outreach_approval_id: 'approval-hot',
+          next_followup_at: null,
+          last_outreach_kind: 'initial',
+        },
+      ],
+      revenueSnapshot: null,
+      nowIso: '2026-05-28T12:00:00.000Z',
+    })
+
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({
+      kind: 'approval',
+      label: 'Approuver Hot Approval Co',
+    })
+    expect(actions[0].intent).toMatchObject({
+      body: { approvalId: 'approval-hot', decision: 'approved' },
     })
   })
 })

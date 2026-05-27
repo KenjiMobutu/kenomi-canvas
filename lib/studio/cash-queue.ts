@@ -48,6 +48,8 @@ export type CashAction = {
   intent: CashActionIntent | null
 }
 
+type ScoredCashAction = CashAction & { priority: number }
+
 function formatEuro(amount: number) {
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
@@ -56,16 +58,42 @@ function formatEuro(amount: number) {
   }).format(amount)
 }
 
+function bandBonus(band: ProspectCashRow['band']) {
+  if (band === 'hot') return 18
+  if (band === 'warm') return 10
+  return 2
+}
+
+function scoreBonus(score: number) {
+  return Math.round(score * 0.25)
+}
+
+function overdueHours(nextFollowupAt: string | null | undefined, nowIso: string) {
+  if (!nextFollowupAt) return 0
+  const dueMs = new Date(nextFollowupAt).getTime()
+  const nowMs = new Date(nowIso).getTime()
+  if (!Number.isFinite(dueMs) || !Number.isFinite(nowMs) || dueMs >= nowMs) return 0
+  return Math.min(24, Math.round((nowMs - dueMs) / 3_600_000))
+}
+
 export function buildCashActions(input: {
   prospects: ProspectCashRow[]
   revenueSnapshot: RevenueLoopSnapshotPayload | null
+  nowIso?: string
 }): CashAction[] {
-  const actions: CashAction[] = []
-  const hotApproval = input.prospects.find(
-    (prospect) =>
-      prospect.approval_status === 'awaiting_approval' &&
-      typeof prospect.outreach_approval_id === 'string'
-  )
+  const actions: ScoredCashAction[] = []
+  const nowIso = input.nowIso ?? new Date().toISOString()
+  const hotApproval = input.prospects
+    .filter(
+      (prospect) =>
+        prospect.approval_status === 'awaiting_approval' &&
+        typeof prospect.outreach_approval_id === 'string'
+    )
+    .sort((left, right) => {
+      const leftScore = 120 + bandBonus(left.band) + scoreBonus(left.score)
+      const rightScore = 120 + bandBonus(right.band) + scoreBonus(right.score)
+      return rightScore - leftScore
+    })[0]
   if (hotApproval && hotApproval.outreach_approval_id) {
     actions.push({
       id: `approval:${hotApproval.id}`,
@@ -81,12 +109,25 @@ export function buildCashActions(input: {
         body: { approvalId: hotApproval.outreach_approval_id, decision: 'approved' },
         successMessage: 'Draft approved',
       },
+      priority: 120 + bandBonus(hotApproval.band) + scoreBonus(hotApproval.score),
     })
   }
 
-  const followUpDue = input.prospects.find(
-    (prospect) => prospect.pipeline_status === 'follow_up_due'
-  )
+  const followUpDue = input.prospects
+    .filter((prospect) => prospect.pipeline_status === 'follow_up_due')
+    .sort((left, right) => {
+      const leftScore =
+        112 +
+        bandBonus(left.band) +
+        scoreBonus(left.score) +
+        overdueHours(left.next_followup_at, nowIso)
+      const rightScore =
+        112 +
+        bandBonus(right.band) +
+        scoreBonus(right.score) +
+        overdueHours(right.next_followup_at, nowIso)
+      return rightScore - leftScore
+    })[0]
   if (followUpDue) {
     actions.push({
       id: `followup:${followUpDue.id}`,
@@ -102,12 +143,21 @@ export function buildCashActions(input: {
         body: { id: followUpDue.id, action: 'mark_follow_up_sent' },
         successMessage: 'Follow-up marked sent',
       },
+      priority:
+        112 +
+        bandBonus(followUpDue.band) +
+        scoreBonus(followUpDue.score) +
+        overdueHours(followUpDue.next_followup_at, nowIso),
     })
   }
 
-  const draftCreated = input.prospects.find(
-    (prospect) => prospect.pipeline_status === 'draft_created'
-  )
+  const draftCreated = input.prospects
+    .filter((prospect) => prospect.pipeline_status === 'draft_created')
+    .sort((left, right) => {
+      const leftScore = 98 + bandBonus(left.band) + scoreBonus(left.score)
+      const rightScore = 98 + bandBonus(right.band) + scoreBonus(right.score)
+      return rightScore - leftScore
+    })[0]
   if (draftCreated) {
     actions.push({
       id: `draft:${draftCreated.id}`,
@@ -123,6 +173,7 @@ export function buildCashActions(input: {
         body: { id: draftCreated.id, status: 'sent' },
         successMessage: 'Prospect marked sent',
       },
+      priority: 98 + bandBonus(draftCreated.band) + scoreBonus(draftCreated.score),
     })
   }
 
@@ -137,14 +188,24 @@ export function buildCashActions(input: {
       tone: 'accent',
       badge: 'revenue',
       intent: null,
+      priority:
+        88 +
+        Math.round(revenueAction.priorityScore * 0.2) +
+        Math.round(revenueAction.blockedRevenueEur / 250),
     })
   }
 
-  const hotLead = input.prospects.find(
-    (prospect) =>
-      prospect.band === 'hot' &&
-      (prospect.pipeline_status === 'new' || prospect.pipeline_status === 'ready_to_contact')
-  )
+  const hotLead = input.prospects
+    .filter(
+      (prospect) =>
+        prospect.band === 'hot' &&
+        (prospect.pipeline_status === 'new' || prospect.pipeline_status === 'ready_to_contact')
+    )
+    .sort((left, right) => {
+      const leftScore = 84 + scoreBonus(left.score)
+      const rightScore = 84 + scoreBonus(right.score)
+      return rightScore - leftScore
+    })[0]
   if (hotLead) {
     actions.push({
       id: `lead:${hotLead.id}`,
@@ -155,8 +216,12 @@ export function buildCashActions(input: {
       tone: 'rose',
       badge: 'lead',
       intent: null,
+      priority: 84 + scoreBonus(hotLead.score),
     })
   }
 
-  return actions.slice(0, 4)
+  return actions
+    .sort((left, right) => right.priority - left.priority)
+    .slice(0, 4)
+    .map(({ priority: _priority, ...action }) => action)
 }
