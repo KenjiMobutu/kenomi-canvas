@@ -67,6 +67,7 @@ export function nextAgentInChain(agentId: string): ChainAgent | null {
 export function isAgentUnlocked(agentId: string, pipeline: AgentOutputs | null): boolean {
   if (agentId === 'scout') return true
   if (agentId === 'prospect') return true
+  if (agentId === 'devops') return true
   if (!pipeline || pipeline.status !== 'approved') return false
   switch (agentId) {
     case 'validation':
@@ -199,6 +200,12 @@ Tu dois éviter toute invention de données personnelles. Si un contact n'est pa
 Réponds en JSON strict :
 {"company_name": "<nom de l'entreprise>", "source": "linkedin|malt|upwork|indeed|reddit|other", "contact_name": "<nom de contact optionnel>", "score": <0-100>, "band": "hot|warm|cold", "summary": "<résumé commercial en 1-2 phrases>", "pain_points": ["<pain point 1>", "<pain point 2>"], "outreach_subject": "<sujet court>", "outreach_body": "<message clair, humain, crédible>", "cta": "<appel à l'action simple>"}
 Le message doit être concis, concret, et aligné sur le score et la bande.` ,
+
+    devops: `Tu es DevOps, agent d'observabilité et de synthèse incident.
+Ta mission : résumer l'état infra réel à partir des diagnostics fournis, sans inventer de causes ni d'actions non justifiées.
+Réponds en JSON strict :
+{"global_status":"ok|degraded|down","headline":"<statut opérateur court>","services":[{"id":"<service_id>","status":"ok|degraded|down","severity":"low|medium|high","reason":"<cause probable ancrée dans le diagnostic>","next_step":"<étape manuelle concrète>"}],"summary":"<synthèse 2-4 phrases grounded>","operator_next_step":"<meilleure action opérateur unique>"}
+Ne propose aucune action automatique, aucun shell, et aucun accès privilégié implicite.`,
 
     decision: `Tu es Decision, agent de commande stratégique.${ctx}
 Score validation : ${pipeline?.validation_score ?? '—'}/100

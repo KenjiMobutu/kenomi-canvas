@@ -105,3 +105,20 @@ Then restore:
 AUTONOMY_ENABLED=true
 AUTONOMY_DRY_RUN=false
 ```
+
+## DevOps Agent Scope
+
+In Phase 6, the `devops` agent is read-only:
+
+- it reads diagnostics and incident history,
+- it writes `devops_diagnostic_runs`,
+- it does not restart services,
+- it does not call Coolify, Proxmox, or shell repair paths.
+
+Use this smoke to verify the summary layer after deploy:
+
+```bash
+export SMOKE_BASE_URL=https://lab.kenomi.eu
+export SMOKE_STUDIO_COOKIE='sb-supabase-auth-token=base64-...'
+npm run smoke:devops
+```

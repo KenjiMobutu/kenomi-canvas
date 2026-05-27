@@ -185,6 +185,7 @@ ls supabase/migrations/
 npm test
 npm run smoke:prospect
 npm run smoke:scout
+npm run smoke:devops
 ```
 
 ### Prospect outbound smoke
@@ -228,6 +229,23 @@ Le script vérifie:
 - la création ou mise à jour du dernier `venture_pipeline`
 - la présence d'un bloc `scoutSignals` live dans `/api/studio/agents/pipeline`
 - la présence d'au moins un signal Reddit persistant avec URL source valide
+
+### DevOps diagnostics smoke
+
+Le smoke DevOps suppose lui aussi une session Studio authentifiée:
+
+```bash
+export SMOKE_BASE_URL=https://lab.kenomi.eu
+export SMOKE_STUDIO_COOKIE='sb-supabase-auth-token=base64-...'
+npm run smoke:devops
+```
+
+Le script vérifie:
+
+- le run `DevOps` via `/api/studio/agents/run`
+- la présence d'un `devopsSummary` dans `/api/studio/infra/diagnostics`
+- l'exposition de `recentIncidents` et `deploymentParity`
+- la disponibilité du journal `/api/studio/infra/diagnostics/history`
 
 ## Structure du projet
 

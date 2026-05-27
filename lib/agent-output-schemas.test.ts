@@ -52,6 +52,32 @@ describe('parseAgentOutput', () => {
     })
   })
 
+  it('valide une sortie DevOps structurée', () => {
+    const parsed = parseAgentOutput(
+      'devops',
+      JSON.stringify({
+        global_status: 'degraded',
+        headline: '1 service degraded',
+        services: [
+          {
+            id: 'ollama',
+            status: 'down',
+            severity: 'high',
+            reason: 'network timeout',
+            next_step: 'verify Ollama reachability on the private host',
+          },
+        ],
+        summary: 'Ollama is unavailable and blocks local inference.',
+        operator_next_step: 'Verify Ollama reachability on the private host.',
+      })
+    )
+
+    expect(parsed).toMatchObject({
+      global_status: 'degraded',
+      services: [{ id: 'ollama', status: 'down', severity: 'high' }],
+    })
+  })
+
   it('parse le format Scout legacy en objet structuré', () => {
     const parsed = parseAgentOutput(
       'scout',

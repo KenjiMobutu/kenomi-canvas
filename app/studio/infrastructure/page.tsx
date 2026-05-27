@@ -207,6 +207,24 @@ type InfraDiagnostics = {
   services: DiagnosticLine[]
   proxmox: DiagnosticLine
 }
+type DevopsSummary = {
+  id: string
+  status: 'ok' | 'degraded' | 'down'
+  headline: string
+  summary: string
+  operatorNextStep: string
+  checkedAt: string
+  createdAt: string
+  runtimeCommit: string | null
+  parity: DeploymentParity | null
+  services: Array<Record<string, unknown>>
+  incidents: InfraIncident[]
+}
+type InfraDiagnosticsResponse = InfraDiagnostics & {
+  devopsSummary?: DevopsSummary | null
+  recentIncidents?: InfraIncident[]
+  deploymentParity?: DeploymentParity | null
+}
 type DiagnosticActionId = 'recheck' | 'record_incident'
 type DiagnosticActionResult = {
   ok: boolean
@@ -1182,7 +1200,7 @@ function DiagnosticsPanel({
   actionError,
   onAction,
 }: {
-  diagnostics: InfraDiagnostics | null
+  diagnostics: InfraDiagnosticsResponse | null
   error: string | null
   isMobile: boolean
   pendingAction: string | null
@@ -1192,6 +1210,9 @@ function DiagnosticsPanel({
 }) {
   const rows = diagnostics ? [...diagnostics.services, diagnostics.proxmox] : []
   const summaryColor = diagnostics?.summary.ok ? emerald : diagnostics ? amber : muted
+  const devopsSummary = diagnostics?.devopsSummary ?? null
+  const devopsColor = devopsSummary ? diagnosticStatusColor(devopsSummary.status) : muted
+  const recentIncidents = diagnostics?.recentIncidents ?? []
 
   return (
     <div
@@ -1308,6 +1329,113 @@ function DiagnosticsPanel({
         </div>
       )}
 
+      {devopsSummary && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.4fr) minmax(0, 1fr)',
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              background: surface2,
+              border: `1px solid ${line}`,
+              borderRadius: 10,
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: muted2,
+                  letterSpacing: '.14em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Incident Summary
+              </span>
+              <span
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: 5,
+                  background: `${devopsColor}18`,
+                  color: devopsColor,
+                  border: `1px solid ${devopsColor}30`,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  letterSpacing: '.1em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {devopsSummary.status}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: text }}>{devopsSummary.headline}</div>
+            <div style={{ color: muted, fontSize: 11, lineHeight: 1.55 }}>{devopsSummary.summary}</div>
+            <div
+              style={{
+                padding: '8px 9px',
+                borderRadius: 8,
+                background: bg,
+                border: `1px solid ${line}`,
+                color: devopsColor,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                lineHeight: 1.5,
+              }}
+            >
+              Next · {devopsSummary.operatorNextStep}
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: surface2,
+              border: `1px solid ${line}`,
+              borderRadius: 10,
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                color: muted2,
+                letterSpacing: '.14em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Last DevOps Run
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <InfraStat label="Checked" value={minutesAgo(devopsSummary.checkedAt)} color={emerald} />
+              <InfraStat label="Runtime" value={devopsSummary.runtimeCommit ?? '—'} color={muted} />
+              <InfraStat
+                label="Parity"
+                value={devopsSummary.parity?.status ?? 'unknown'}
+                color={
+                  devopsSummary.parity?.status === 'ok'
+                    ? emerald
+                    : devopsSummary.parity?.status === 'mismatch'
+                      ? rose
+                      : amber
+                }
+              />
+              <InfraStat label="Incidents" value={`${recentIncidents.length}`} color={rose} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {diagnostics && (
         <>
           <div
@@ -1362,6 +1490,67 @@ function DiagnosticsPanel({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {recentIncidents.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Recent Incidents
+                </div>
+                {recentIncidents.slice(0, 3).map((incident) => {
+                  const color = incident.status === 'open' ? rose : emerald
+                  return (
+                    <div
+                      key={incident.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: isMobile ? '1fr' : '120px 1fr 84px',
+                        gap: 8,
+                        alignItems: 'center',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        background: bg,
+                        border: `1px solid ${line}`,
+                      }}
+                    >
+                      <span style={{ color: text, fontSize: 11, fontWeight: 800 }}>{incident.targetLabel}</span>
+                      <span
+                        style={{
+                          color: muted2,
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9.5,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={incident.lastError}
+                      >
+                        {incident.lastError}
+                      </span>
+                      <span
+                        style={{
+                          color,
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          letterSpacing: '.1em',
+                          textTransform: 'uppercase',
+                          justifySelf: isMobile ? 'start' : 'end',
+                        }}
+                      >
+                        {incident.status}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             {rows.map((row) => {
               const color = diagnosticStatusColor(row.status)
               return (
@@ -1884,7 +2073,7 @@ export default function InfrastructurePage() {
   const loadDiagnostics = useCallback(async () => {
     try {
       const res = await fetch('/api/studio/infra/diagnostics')
-      const data = (await res.json().catch(() => null)) as InfraDiagnostics | null
+      const data = (await res.json().catch(() => null)) as InfraDiagnosticsResponse | null
       if (data) {
         setDiagnostics(data)
         setDiagnosticsError(null)

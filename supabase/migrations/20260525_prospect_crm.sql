@@ -156,3 +156,30 @@ CREATE INDEX IF NOT EXISTS scout_signals_user_created_idx
 
 CREATE INDEX IF NOT EXISTS scout_signals_user_source_idx
   ON public.scout_signals(user_id, source_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.devops_diagnostic_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  summary_status text NOT NULL DEFAULT 'ok',
+  checked_at timestamptz NOT NULL,
+  runtime_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  summary_payload jsonb,
+  services_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  proxmox_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  timeline_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.devops_diagnostic_runs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "devops_diagnostic_runs_own" ON public.devops_diagnostic_runs;
+CREATE POLICY "devops_diagnostic_runs_own" ON public.devops_diagnostic_runs
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.devops_diagnostic_runs TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.devops_diagnostic_runs TO service_role;
+
+CREATE INDEX IF NOT EXISTS devops_diagnostic_runs_user_created_idx
+  ON public.devops_diagnostic_runs(user_id, created_at DESC);

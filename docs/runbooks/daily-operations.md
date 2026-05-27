@@ -21,6 +21,7 @@ npm run lint
 ```bash
 npm run build
 npm run smoke
+npm run smoke:devops
 ```
 
 `npm run smoke` accepte `SMOKE_BASE_URL` pour cibler une URL distante:
@@ -204,6 +205,7 @@ npm run build
 - Base / RLS: lancer `npm run supabase:validate`.
 - Documents: verifier le bucket `documents` via `/api/health`.
 - Autonomie: ouvrir `/studio/agents`, puis verifier jobs, actions et approvals.
+- DevOps lecture seule: lancer `npm run smoke:devops`, puis verifier `/studio/infrastructure`.
 - Stripe: utiliser [Webhook Stripe](stripe-webhook.md).
 - Coolify: utiliser [Deploiement Coolify](coolify-deploy.md).
 - Migrations: utiliser [Migrations Supabase](database-migrations.md).

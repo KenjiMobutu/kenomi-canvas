@@ -99,6 +99,22 @@ const decisionSchema = z.object({
   next_step: z.string().min(1),
 })
 
+const devopsServiceSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(['ok', 'degraded', 'down']),
+  severity: z.enum(['low', 'medium', 'high']),
+  reason: z.string().min(1),
+  next_step: z.string().min(1),
+})
+
+const devopsSchema = z.object({
+  global_status: z.enum(['ok', 'degraded', 'down']),
+  headline: z.string().min(1),
+  services: z.array(devopsServiceSchema),
+  summary: z.string().min(1),
+  operator_next_step: z.string().min(1),
+})
+
 const schemas = {
   scout: scoutSchema,
   validation: validationSchema,
@@ -107,6 +123,7 @@ const schemas = {
   payment: paymentSchema,
   marketing: marketingSchema,
   decision: decisionSchema,
+  devops: devopsSchema,
 } as const
 
 type AgentId = keyof typeof schemas
@@ -157,6 +174,7 @@ export type AgentOutput =
   | z.infer<typeof paymentSchema>
   | z.infer<typeof marketingSchema>
   | z.infer<typeof decisionSchema>
+  | z.infer<typeof devopsSchema>
 
 export type ScoutOutput = z.infer<typeof scoutSchema>
 export type ValidationOutput = z.infer<typeof validationSchema>
@@ -165,6 +183,7 @@ export type BuilderOutput = z.infer<typeof builderSchema>
 export type PaymentOutput = z.infer<typeof paymentSchema>
 export type MarketingOutput = z.infer<typeof marketingSchema>
 export type DecisionOutput = z.infer<typeof decisionSchema>
+export type DevopsOutput = z.infer<typeof devopsSchema>
 
 export function parseAgentOutput(agentId: string, content: string): AgentOutput {
   const schema = schemas[agentId as AgentId]

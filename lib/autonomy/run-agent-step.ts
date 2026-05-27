@@ -1,5 +1,6 @@
 import { insertAuditEvent } from '@/lib/audit-log'
 import { parseAgentOutput, type AgentOutput } from '@/lib/agent-output-schemas'
+import type { BuilderOutput } from '@/lib/agent-output-schemas'
 import { llmChat, computeCostUsd, type LLMMessage, type LLMResponse } from '@/lib/llm-client'
 import {
   aggregateVentureMetrics,
@@ -37,6 +38,13 @@ import {
   type ScoutSourceCollection,
 } from '@/lib/scout/free-sources'
 import { appendScoutSignals } from '@/lib/scout/signal-log'
+import {
+  collectInfraDiagnostics,
+  type InfraDiagnosticsSupabase,
+} from '@/lib/infra-diagnostics-runner'
+import { buildDeploymentParity, buildInfraOpsTimeline, type InfraOpsEventRow } from '@/lib/infra-ops-timeline'
+import { appendDevopsDiagnosticRun } from '@/lib/devops/diagnostic-log'
+import { buildDevopsSummaryContext } from '@/lib/devops/summary'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -84,6 +92,8 @@ export interface RunAgentStepInput {
     now: () => Date
   }) => Promise<ScoutSourceCollection>
   appendScoutSignals?: typeof appendScoutSignals
+  collectInfraDiagnostics?: typeof collectInfraDiagnostics
+  appendDevopsDiagnosticRun?: typeof appendDevopsDiagnosticRun
   writeProspectMemory?: typeof writeProspectMemory
   retrieveProspectMemories?: typeof retrieveProspectMemories
   now?: () => Date
@@ -97,6 +107,21 @@ export interface RunAgentStepResult {
   agentRunId: string | null
   parsedOutput: AgentOutput | null
   pipeline?: Record<string, unknown>
+}
+
+async function getRecentInfraEvents(
+  supabase: RunAgentStepSupabase,
+  userId: string
+): Promise<InfraOpsEventRow[]> {
+  const { data, error } = await supabase
+    .from('agent_events')
+    .select('id,event_type,severity,metadata,created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(40)
+
+  if (error) throw new RunAgentStepError(error.message, 500)
+  return (data ?? []) as InfraOpsEventRow[]
 }
 
 export class RunAgentStepError extends Error {
@@ -300,6 +325,17 @@ function isDecisionOutput(output: AgentOutput | null): output is DecisionOutput 
     'confidence' in output &&
     'rationale' in output &&
     'next_step' in output
+  )
+}
+
+function isBuilderOutput(output: AgentOutput | null): output is BuilderOutput {
+  return Boolean(
+    output &&
+      'headline' in output &&
+      'subline' in output &&
+      'cta' in output &&
+      'features' in output &&
+      Array.isArray(output.features)
   )
 }
 
@@ -507,7 +543,7 @@ async function getProspectSettingsContext(
 export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentStepResult> {
   const { supabase, userId, agentId } = input
   if (!agentId) throw new RunAgentStepError('agentId requis', 400)
-  const supportedAgents = new Set(['scout', 'prospect', ...AGENT_CHAIN])
+  const supportedAgents = new Set(['scout', 'prospect', 'devops', ...AGENT_CHAIN])
   if (!supportedAgents.has(agentId)) {
     throw new RunAgentStepError(`Agent inconnu: ${agentId}`, 400)
   }
@@ -565,6 +601,35 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     agentId === 'prospect'
       ? formatRetrievedProspectMemories(prospectMemoryRows)
       : ''
+  const devopsDiagnostics =
+    agentId === 'devops'
+      ? await (input.collectInfraDiagnostics ?? collectInfraDiagnostics)({
+          supabase: supabase as unknown as InfraDiagnosticsSupabase,
+          userId,
+        })
+      : null
+  const devopsTimeline =
+    agentId === 'devops' && devopsDiagnostics
+      ? buildInfraOpsTimeline({
+          events: await getRecentInfraEvents(supabase, userId),
+          diagnostics: devopsDiagnostics,
+        })
+      : null
+  const devopsParity =
+    agentId === 'devops' && devopsDiagnostics
+      ? buildDeploymentParity({
+          runtime: devopsDiagnostics.runtime,
+          expectedCommit: process.env.EXPECTED_SOURCE_COMMIT ?? process.env.GITHUB_SHA ?? null,
+        })
+      : null
+  const devopsContext =
+    agentId === 'devops' && devopsDiagnostics && devopsTimeline
+      ? `\n${buildDevopsSummaryContext({
+          diagnostics: devopsDiagnostics,
+          timeline: devopsTimeline,
+          parity: devopsParity,
+        })}`
+      : ''
 
   const model = cfg?.model ?? 'qwen3:8b'
   const baseSystemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
@@ -578,7 +643,9 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       ? 'Lance une mission de découverte et trouve-moi la meilleure opportunité de micro-SaaS du moment.'
       : agentId === 'prospect'
         ? 'Trouve un prospect qualifié, score-le, et rédige un message de prospection prêt à envoyer.'
-      : 'Exécute ta mission.')
+      : agentId === 'devops'
+        ? 'Synthétise l état infra actuel et les incidents récents.'
+        : 'Exécute ta mission.')
   const scoutSourceCollection =
     agentId === 'scout'
       ? await (input.scoutSourceCollector ?? collectFreeScoutSignals)({
@@ -590,7 +657,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     agentId === 'scout' && scoutSourceCollection
       ? `\n\n${buildScoutSourceBrief(scoutSourceCollection)}`
       : ''
-  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}${scoutSourceContext}${prospectContext.context}${prospectMemoryContext ? `\n${prospectMemoryContext}` : ''}`
+  const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}${scoutSourceContext}${prospectContext.context}${prospectMemoryContext ? `\n${prospectMemoryContext}` : ''}${devopsContext}`
 
   const startMs = now().getTime()
 
@@ -669,6 +736,41 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     })
 
     const parsedOutput = parseOutputSafely(agentId, content)
+
+    if (agentId === 'devops') {
+      try {
+        await (input.appendDevopsDiagnosticRun ?? appendDevopsDiagnosticRun)({
+          supabase,
+          userId,
+          diagnostics: devopsDiagnostics,
+          timeline: devopsTimeline,
+          parity: devopsParity,
+          summaryPayload:
+            parsedOutput && typeof parsedOutput === 'object'
+              ? (parsedOutput as Record<string, unknown>)
+              : null,
+        })
+      } catch (error) {
+        console.error('devops diagnostic snapshot write failed', error)
+      }
+
+      await syncAgentRunStats({
+        supabase,
+        userId,
+        agentId,
+        nowIso: now().toISOString(),
+        defaultModel: undefined,
+      })
+
+      return {
+        ok: true,
+        content,
+        durationMs,
+        model: usedModel,
+        agentRunId: agentRun?.id ?? null,
+        parsedOutput,
+      }
+    }
 
     if (agentId === 'scout') {
       const parsed = parsePipelineIdea(content)
@@ -855,16 +957,12 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
 
       await supabase.from('venture_pipeline').update(extraFields).eq('id', pipeline.id)
 
-      if (
-        agentId === 'builder' &&
-        pipeline.venture_id &&
-        parsedOutput &&
-        'headline' in parsedOutput
-      ) {
+      if (agentId === 'builder' && pipeline.venture_id && isBuilderOutput(parsedOutput)) {
+        const builderOutput: BuilderOutput = parsedOutput
         await materializeBuilderOutput({
           ventureId: pipeline.venture_id,
           ventureName: pipeline.idea_title,
-          builderOutput: parsedOutput,
+          builderOutput,
           insertLandingPage: async (payload) => {
             const { error } = await supabase.from('landing_pages').insert(payload)
             return { error }

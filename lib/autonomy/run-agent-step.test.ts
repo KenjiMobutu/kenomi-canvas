@@ -17,6 +17,7 @@ type TableName =
   | 'user_settings'
   | 'prospects'
   | 'scout_signals'
+  | 'devops_diagnostic_runs'
 
 interface TableRow {
   id?: string
@@ -44,6 +45,7 @@ function createFakeSupabase(
     user_settings: seed?.user_settings ?? [],
     prospects: seed?.prospects ?? [],
     scout_signals: seed?.scout_signals ?? [],
+    devops_diagnostic_runs: seed?.devops_diagnostic_runs ?? [],
   }
 
   return {
@@ -302,6 +304,114 @@ describe('runAgentStep', () => {
         companyName: 'Acme Studio',
       }),
     ])
+  })
+
+  it('runs the DevOps agent from grounded diagnostics context and persists a snapshot', async () => {
+    const supabase = createFakeSupabase({
+      agent_events: [
+        {
+          id: 'event-1',
+          user_id: 'user-1',
+          event_type: 'infra.diagnostic.record_incident',
+          severity: 'error',
+          metadata: {
+            target_id: 'ollama',
+            target_label: 'Ollama',
+            status: 'down',
+            last_error: 'timeout',
+            repair_action: 'Verify Ollama reachability on the private host.',
+          },
+          created_at: '2026-05-27T10:00:00.000Z',
+        },
+      ],
+    })
+    let capturedSystem = ''
+    const llm = async (
+      _messages: Parameters<NonNullable<Parameters<typeof runAgentStep>[0]['llm']>>[0],
+      config: Parameters<NonNullable<Parameters<typeof runAgentStep>[0]['llm']>>[1]
+    ): Promise<LLMResponse> => {
+      capturedSystem = config.system
+      return {
+        content: JSON.stringify({
+          global_status: 'down',
+          headline: '1 open infra incident',
+          services: [
+            {
+              id: 'ollama',
+              status: 'down',
+              severity: 'high',
+              reason: 'timeout',
+              next_step: 'Verify Ollama reachability on the private host.',
+            },
+          ],
+          summary: 'Ollama is unavailable and blocks local inference.',
+          operator_next_step: 'Verify Ollama reachability on the private host.',
+        }),
+        provider: 'ollama',
+        model: 'qwen3:8b',
+        fallback_triggered: false,
+      }
+    }
+
+    const result = await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'devops',
+      llm,
+      collectInfraDiagnostics: async () => ({
+        checkedAt: '2026-05-27T10:00:00.000Z',
+        runtime: {
+          environment: 'production',
+          sourceCommit: 'abc123456789',
+          commitShort: 'abc1234',
+        },
+        summary: {
+          ok: false,
+          checksOk: 2,
+          checksTotal: 3,
+        },
+        services: [
+          {
+            id: 'ollama',
+            label: 'Ollama',
+            status: 'down',
+            source: 'settings',
+            urlLabel: '192.168.0.14:11434',
+            latencyMs: 5000,
+            lastError: 'timeout',
+            repairAction: 'Verify Ollama reachability on the private host.',
+            checkedAt: '2026-05-27T10:00:00.000Z',
+          },
+        ],
+        proxmox: {
+          id: 'proxmox',
+          label: 'Proxmox',
+          status: 'ok',
+          source: 'settings',
+          urlLabel: '192.168.0.10:8006/api2/json/nodes/proxmox/status',
+          latencyMs: 45,
+          lastError: null,
+          repairAction: 'Aucune action',
+          checkedAt: '2026-05-27T10:00:00.000Z',
+          detail: '1 node · 4 VMs',
+        },
+      }),
+      now: () => new Date('2026-05-27T10:00:00.000Z'),
+    })
+
+    expect(result.parsedOutput).toMatchObject({
+      global_status: 'down',
+      services: [{ id: 'ollama', status: 'down' }],
+    })
+    expect(capturedSystem).toContain('DevOps diagnostics snapshot')
+    expect(capturedSystem).toContain('Global status: down')
+    expect(supabase.tables.devops_diagnostic_runs).toHaveLength(1)
+    expect(supabase.tables.devops_diagnostic_runs[0]).toMatchObject({
+      user_id: 'user-1',
+      summary_status: 'down',
+    })
+    expect(supabase.tables.autonomy_actions).toHaveLength(0)
+    expect(supabase.tables.human_approvals).toHaveLength(0)
   })
 
   it('injecte les métriques business réelles dans le prompt Decision', async () => {
