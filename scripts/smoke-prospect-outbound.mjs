@@ -36,13 +36,17 @@ async function request(path, init = {}) {
 async function triggerWorker(limit = 1) {
   if (!workerSecret) return null
 
-  const response = await fetch(new URL('/api/studio/autonomy/jobs', baseUrl), {
+  const response = await fetch(new URL('/api/internal/autonomy/worker/drain', baseUrl), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-autonomy-worker-token': workerSecret,
     },
-    body: JSON.stringify({ limit }),
+    body: JSON.stringify({
+      worker_id: 'smoke:prospect',
+      limit,
+      allowed_job_kinds: ['run_agent'],
+    }),
   })
 
   const text = await response.text()

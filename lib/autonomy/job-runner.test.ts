@@ -5,6 +5,7 @@ import {
   completeJob,
   failJob,
   processQueuedAutonomyJobs,
+  recoverStaleRunningJob,
   rescheduleJob,
   type AutonomyJobRow,
 } from './job-runner'
@@ -35,12 +36,19 @@ function createFakeSupabase(initialJobs: AutonomyJobRow[]) {
           state.lteFilter = { field, value }
           return builder
         },
+        in: (field: string, values: unknown[]) => {
+          state.filters.push({ field, value: values })
+          return builder
+        },
         order: () => builder,
         limit: () => builder,
         maybeSingle: async () => {
           const row = jobs.find((job) => {
             const matchesEq = state.filters.every(
-              (filter) => job[filter.field as keyof AutonomyJobRow] === filter.value
+              (filter) =>
+                Array.isArray(filter.value)
+                  ? filter.value.includes(job[filter.field as keyof AutonomyJobRow] as never)
+                  : job[filter.field as keyof AutonomyJobRow] === filter.value
             )
             const matchesLte =
               !state.lteFilter ||
@@ -64,6 +72,9 @@ const baseJob: AutonomyJobRow = {
   kind: 'run_agent',
   status: 'queued',
   locked_at: null,
+  locked_by: null,
+  lock_expires_at: null,
+  runner_type: null,
   attempt_count: 0,
   next_run_at: '2026-05-18T09:00:00.000Z',
   payload: { agentId: 'scout' },
@@ -99,12 +110,61 @@ describe('claimNextQueuedJob', () => {
       { ...baseJob, id: 'job-due', user_id: 'user-1', next_run_at: '2026-05-18T09:00:00.000Z' },
     ])
 
-    const claimed = await claimNextQueuedJob(supabase, new Date('2026-05-18T10:00:00.000Z'))
+    const claimed = await claimNextQueuedJob(supabase, {
+      now: new Date('2026-05-18T10:00:00.000Z'),
+      workerId: 'worker:test:1',
+      allowedJobKinds: ['run_agent'],
+    })
 
     expect(claimed?.id).toBe('job-old')
     expect(claimed?.status).toBe('running')
     expect(claimed?.attempt_count).toBe(1)
     expect(claimed?.locked_at).toBe('2026-05-18T10:00:00.000Z')
+    expect(claimed?.locked_by).toBe('worker:test:1')
+    expect(claimed?.runner_type).toBe('internal_worker')
+    expect(claimed?.lock_expires_at).toBe('2026-05-18T10:05:00.000Z')
+  })
+
+  it('ignore les kinds non allowlistés et claim le prochain compatible', async () => {
+    const supabase = createFakeSupabase([
+      { ...baseJob, id: 'job-blocked', kind: 'sync_email', next_run_at: '2026-05-18T08:00:00.000Z' },
+      { ...baseJob, id: 'job-allowed', kind: 'run_agent', next_run_at: '2026-05-18T09:00:00.000Z' },
+    ])
+
+    const claimed = await claimNextQueuedJob(supabase, {
+      now: new Date('2026-05-18T10:00:00.000Z'),
+      workerId: 'worker:test:1',
+      allowedJobKinds: ['run_agent'],
+    })
+
+    expect(claimed?.id).toBe('job-allowed')
+  })
+})
+
+describe('recoverStaleRunningJob', () => {
+  it('requeue un job running expiré', async () => {
+    const supabase = createFakeSupabase([
+      {
+        ...baseJob,
+        id: 'job-stale',
+        status: 'running',
+        locked_at: '2026-05-18T09:00:00.000Z',
+        locked_by: 'worker:old',
+        lock_expires_at: '2026-05-18T09:05:00.000Z',
+      },
+    ])
+
+    const recovered = await recoverStaleRunningJob(supabase, {
+      now: new Date('2026-05-18T10:00:00.000Z'),
+      allowedJobKinds: ['run_agent'],
+    })
+
+    expect(recovered?.id).toBe('job-stale')
+    expect(recovered?.status).toBe('queued')
+    expect(recovered?.locked_at).toBeNull()
+    expect(recovered?.locked_by).toBeNull()
+    expect(recovered?.lock_expires_at).toBeNull()
+    expect(recovered?.last_error).toContain('stale_lock_recovered')
   })
 })
 
@@ -127,6 +187,8 @@ describe('processQueuedAutonomyJobs', () => {
     const processed = await processQueuedAutonomyJobs({
       supabase,
       now: new Date('2026-05-18T10:00:00.000Z'),
+      workerId: 'worker:test:1',
+      allowedJobKinds: ['run_agent'],
       runAgentStep: async () => ({
         ok: true,
         content: 'done',
@@ -142,6 +204,8 @@ describe('processQueuedAutonomyJobs', () => {
       id: 'job-queued',
       status: 'completed',
       locked_at: null,
+      locked_by: null,
+      lock_expires_at: null,
     })
     expect(processed[0]?.result).toMatchObject({
       ok: true,
@@ -181,6 +245,8 @@ describe('job state transitions', () => {
     expect(completed?.status).toBe('completed')
     expect(completed?.payload).toEqual({ agentId: 'scout', output: { ok: true } })
     expect(completed?.locked_at).toBeNull()
+    expect(completed?.locked_by).toBeNull()
+    expect(completed?.lock_expires_at).toBeNull()
   })
 
   it('marque un job comme failed avec last_error', async () => {
@@ -195,6 +261,8 @@ describe('job state transitions', () => {
     expect(failed?.status).toBe('failed')
     expect(failed?.last_error).toBe('LLM unavailable')
     expect(failed?.locked_at).toBeNull()
+    expect(failed?.locked_by).toBeNull()
+    expect(failed?.lock_expires_at).toBeNull()
   })
 
   it('reschedule un job pour une prochaine exécution', async () => {
@@ -209,5 +277,7 @@ describe('job state transitions', () => {
     expect(rescheduled?.status).toBe('queued')
     expect(rescheduled?.next_run_at).toBe('2026-05-18T11:00:00.000Z')
     expect(rescheduled?.locked_at).toBeNull()
+    expect(rescheduled?.locked_by).toBeNull()
+    expect(rescheduled?.lock_expires_at).toBeNull()
   })
 })

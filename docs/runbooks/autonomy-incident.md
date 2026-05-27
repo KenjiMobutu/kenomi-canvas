@@ -79,10 +79,10 @@ side effects.
 If jobs stay queued, trigger the internal worker endpoint from the Coolify VM:
 
 ```bash
-curl -X POST "$APP_BASE_URL/api/studio/autonomy/jobs" \
+curl -X POST "$APP_BASE_URL/api/internal/autonomy/worker/drain" \
   -H "x-autonomy-worker-token: $AUTONOMY_WORKER_SECRET" \
   -H "content-type: application/json" \
-  -d '{"limit":5}'
+  -d '{"worker_id":"incident:manual","limit":5,"allowed_job_kinds":["run_agent"]}'
 ```
 
 Expected behavior: queued jobs move to `running`, then `completed` or `failed`,

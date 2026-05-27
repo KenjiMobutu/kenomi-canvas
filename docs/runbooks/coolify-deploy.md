@@ -55,7 +55,7 @@ npm run smoke:scout
 
 6. Approve or unblock the autonomy action only after the public UI, private LLM, Prospect outbound loop, and Scout Reddit loop all pass.
 
-If the autonomy worker is not drained continuously in production, `AUTONOMY_WORKER_SECRET` lets the smoke trigger the queue worker explicitly through `/api/studio/autonomy/jobs`.
+If the autonomy worker is not drained continuously in production, `AUTONOMY_WORKER_SECRET` lets the smoke trigger the queue worker explicitly through `/api/internal/autonomy/worker/drain`.
 
 The Prospect smoke is only considered green if it also confirms the Phase 2 CRM-local mutation path:
 

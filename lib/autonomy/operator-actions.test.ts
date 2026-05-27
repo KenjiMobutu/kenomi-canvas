@@ -12,6 +12,9 @@ interface JobRow {
   status: string
   attempt_count: number
   locked_at: string | null
+  locked_by?: string | null
+  lock_expires_at?: string | null
+  runner_type?: string | null
   next_run_at: string
   last_error: string | null
   updated_at: string
@@ -81,6 +84,9 @@ const baseJob: JobRow = {
   status: 'failed',
   attempt_count: 2,
   locked_at: '2026-05-19T09:00:00.000Z',
+  locked_by: 'worker:stale',
+  lock_expires_at: '2026-05-19T09:05:00.000Z',
+  runner_type: 'internal_worker',
   next_run_at: '2026-05-19T09:30:00.000Z',
   last_error: 'boom',
   updated_at: '2026-05-19T09:00:00.000Z',
@@ -102,6 +108,8 @@ describe('operator autonomy actions', () => {
       status: 'queued',
       attempt_count: 2,
       locked_at: null,
+      locked_by: null,
+      lock_expires_at: null,
       last_error: null,
       next_run_at: '2026-05-19T10:00:00.000Z',
     })
@@ -121,6 +129,8 @@ describe('operator autonomy actions', () => {
     expect(supabase.rows[0]).toMatchObject({
       status: 'cancelled',
       locked_at: null,
+      locked_by: null,
+      lock_expires_at: null,
       updated_at: '2026-05-19T10:00:00.000Z',
     })
   })

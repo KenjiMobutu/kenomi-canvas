@@ -6,8 +6,6 @@ import {
   resolveHumanApproval,
   type ApprovalExecutorSupabase,
 } from '@/lib/autonomy/approval-executor'
-import { runAgentStep, type RunAgentStepSupabase } from '@/lib/autonomy/run-agent-step'
-import { processQueuedAutonomyJobs, type AutonomyJobRunnerSupabase } from '@/lib/autonomy/job-runner'
 import {
   cancelAutonomyJob,
   deleteApprovalGate,
@@ -15,7 +13,6 @@ import {
   type OperatorSupabase,
 } from '@/lib/autonomy/operator-actions'
 import { requireAllowedUser } from '@/lib/auth-server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const approvalResolutionSchema = z.object({
   approvalId: z.string().min(1),
@@ -31,16 +28,6 @@ const approvalDeleteSchema = z.object({
   approvalId: z.string().min(1),
 })
 
-const processQueueSchema = z.object({
-  limit: z.number().int().min(1).max(10).optional(),
-})
-
-function isWorkerAuthorized(request: NextRequest): boolean {
-  const secret = process.env.AUTONOMY_WORKER_SECRET
-  if (!secret) return false
-  return request.headers.get('x-autonomy-worker-token') === secret
-}
-
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
@@ -52,7 +39,7 @@ export async function GET(request: NextRequest) {
     supabase
       .from('autonomy_jobs')
       .select(
-        'id, venture_id, kind, status, attempt_count, next_run_at, locked_at, last_error, payload, created_at, updated_at'
+        'id, venture_id, kind, status, attempt_count, next_run_at, locked_at, locked_by, lock_expires_at, runner_type, last_error, payload, created_at, updated_at'
       )
       .eq('user_id', user!.id)
       .order('created_at', { ascending: false })
@@ -131,37 +118,6 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST(request: NextRequest) {
-  if (isWorkerAuthorized(request)) {
-    const parsed = processQueueSchema.safeParse(await request.json().catch(() => ({})))
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Payload worker invalide' }, { status: 400 })
-    }
-
-    const processed = await processQueuedAutonomyJobs({
-      supabase: supabaseAdmin as unknown as AutonomyJobRunnerSupabase,
-      limit: parsed.data.limit ?? 1,
-      now: new Date(),
-      runAgentStep: (input) =>
-        runAgentStep({
-          supabase: input.supabase as RunAgentStepSupabase,
-          userId: input.userId,
-          agentId: input.agentId,
-          ventureId: input.ventureId,
-          prompt: input.prompt,
-        }),
-    })
-
-    return NextResponse.json({
-      ok: true,
-      mode: 'worker',
-      processed: processed.map((item) => ({
-        jobId: item.job.id,
-        status: item.job.status,
-        result: item.result,
-      })),
-    })
-  }
-
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response

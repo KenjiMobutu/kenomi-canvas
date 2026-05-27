@@ -7,6 +7,9 @@ export interface AutonomyJobRow {
   kind: string
   status: AutonomyJobStatus
   locked_at: string | null
+  locked_by: string | null
+  lock_expires_at: string | null
+  runner_type: string | null
   attempt_count: number
   next_run_at: string
   payload: Record<string, unknown>
@@ -32,6 +35,7 @@ interface AutonomyJobQuery {
   select(columns?: string): AutonomyJobQuery
   update(patch: Partial<AutonomyJobRow>): AutonomyJobQuery
   eq(field: string, value: unknown): AutonomyJobQuery
+  in?(field: string, values: unknown[]): AutonomyJobQuery
   lte(field: string, value: string): AutonomyJobQuery
   order(field: string, options?: { ascending?: boolean }): AutonomyJobQuery
   limit(count: number): AutonomyJobQuery
@@ -50,6 +54,8 @@ export interface ProcessQueuedAutonomyJobsInput {
   supabase: AutonomyJobRunnerSupabase
   now?: Date
   limit?: number
+  workerId: string
+  allowedJobKinds: string[]
   runAgentStep?: (input: {
     supabase: unknown
     userId: string
@@ -70,6 +76,15 @@ export interface ProcessedAutonomyJob {
   job: AutonomyJobRow
   result: unknown
 }
+
+interface WorkerClaimInput {
+  now?: Date
+  workerId: string
+  allowedJobKinds: string[]
+  leaseMs?: number
+}
+
+const DEFAULT_LEASE_MS = 5 * 60_000
 
 function throwIfError<T>(result: QueryResult<T>): T | null {
   if (result.error) throw new Error(result.error.message)
@@ -134,19 +149,62 @@ export async function claimNextJob(
 
 export async function claimNextQueuedJob(
   supabase: AutonomyJobRunnerSupabase,
-  now = new Date()
+  input: WorkerClaimInput
 ): Promise<AutonomyJobRow | null> {
+  const now = input.now ?? new Date()
   const nowIso = now.toISOString()
-  const result = await supabase
+  const lockExpiresAt = new Date(now.getTime() + (input.leaseMs ?? DEFAULT_LEASE_MS)).toISOString()
+  const allowedKinds = input.allowedJobKinds.filter(Boolean)
+  if (allowedKinds.length === 0) return null
+
+  let query = supabase
     .from('autonomy_jobs')
     .select('*')
     .eq('status', 'queued')
     .lte('next_run_at', nowIso)
     .order('next_run_at', { ascending: true })
     .limit(1)
-    .maybeSingle()
 
-  const job = throwIfError(result)
+  if (allowedKinds.length === 1) {
+    query = query.eq('kind', allowedKinds[0])
+  } else if (typeof query.in === 'function') {
+    query = query.in('kind', allowedKinds)
+  }
+
+  const job = throwIfError(await query.maybeSingle())
+
+  if (!job && allowedKinds.length > 1 && typeof query.in !== 'function') {
+    for (const kind of allowedKinds) {
+      const fallback = await supabase
+        .from('autonomy_jobs')
+        .select('*')
+        .eq('status', 'queued')
+        .eq('kind', kind)
+        .lte('next_run_at', nowIso)
+        .order('next_run_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      const candidate = throwIfError(fallback)
+      if (candidate) {
+        return patchJob(
+          supabase,
+          candidate.id,
+          {
+            status: 'running',
+            locked_at: nowIso,
+            locked_by: input.workerId,
+            lock_expires_at: lockExpiresAt,
+            runner_type: 'internal_worker',
+            attempt_count: candidate.attempt_count + 1,
+            updated_at: nowIso,
+          },
+          'queued'
+        )
+      }
+    }
+    return null
+  }
+
   if (!job) return null
 
   return patchJob(
@@ -155,11 +213,74 @@ export async function claimNextQueuedJob(
     {
       status: 'running',
       locked_at: nowIso,
+      locked_by: input.workerId,
+      lock_expires_at: lockExpiresAt,
+      runner_type: 'internal_worker',
       attempt_count: job.attempt_count + 1,
       updated_at: nowIso,
     },
     'queued'
   )
+}
+
+export async function recoverStaleRunningJob(
+  supabase: AutonomyJobRunnerSupabase,
+  input: { now?: Date; allowedJobKinds: string[] }
+): Promise<AutonomyJobRow | null> {
+  const now = input.now ?? new Date()
+  const nowIso = now.toISOString()
+  const allowedKinds = input.allowedJobKinds.filter(Boolean)
+  if (allowedKinds.length === 0) return null
+
+  const tryRecover = async (kind?: string) => {
+    let query = supabase
+      .from('autonomy_jobs')
+      .select('*')
+      .eq('status', 'running')
+      .lte('lock_expires_at', nowIso)
+      .order('lock_expires_at', { ascending: true })
+      .limit(1)
+
+    if (kind) query = query.eq('kind', kind)
+    const candidate = throwIfError(await query.maybeSingle())
+    if (!candidate) return null
+
+    return patchJob(supabase, candidate.id, {
+      status: 'queued',
+      locked_at: null,
+      locked_by: null,
+      lock_expires_at: null,
+      last_error: [candidate.last_error, `stale_lock_recovered:${nowIso}`].filter(Boolean).join(' | '),
+      updated_at: nowIso,
+    })
+  }
+
+  if (allowedKinds.length === 1 || typeof supabase.from('autonomy_jobs').in !== 'function') {
+    for (const kind of allowedKinds) {
+      const recovered = await tryRecover(kind)
+      if (recovered) return recovered
+    }
+    return null
+  }
+
+  let query = supabase
+    .from('autonomy_jobs')
+    .select('*')
+    .eq('status', 'running')
+    .lte('lock_expires_at', nowIso)
+    .order('lock_expires_at', { ascending: true })
+    .limit(1)
+  query = query.in?.('kind', allowedKinds) ?? query
+  const candidate = throwIfError(await query.maybeSingle())
+  if (!candidate) return null
+  return patchJob(supabase, candidate.id, {
+    status: 'queued',
+    locked_at: null,
+    locked_by: null,
+    lock_expires_at: null,
+    last_error: [candidate.last_error, `stale_lock_recovered:${nowIso}`].filter(Boolean).join(' | '),
+    updated_at: nowIso,
+  })
 }
 
 export async function completeJob(
@@ -174,6 +295,8 @@ export async function completeJob(
   return patchJob(supabase, jobId, {
     status: 'completed',
     locked_at: null,
+    locked_by: null,
+    lock_expires_at: null,
     payload: { ...job.payload, output },
     last_error: null,
     updated_at: now.toISOString(),
@@ -189,6 +312,8 @@ export async function failJob(
   return patchJob(supabase, jobId, {
     status: 'failed',
     locked_at: null,
+    locked_by: null,
+    lock_expires_at: null,
     last_error: message,
     updated_at: now.toISOString(),
   })
@@ -203,6 +328,8 @@ export async function rescheduleJob(
   return patchJob(supabase, jobId, {
     status: 'queued',
     locked_at: null,
+    locked_by: null,
+    lock_expires_at: null,
     next_run_at: nextRunAt,
     updated_at: now.toISOString(),
   })
@@ -236,7 +363,16 @@ export async function processQueuedAutonomyJobs(
   const runAgentStep = input.runAgentStep
 
   for (let i = 0; i < max; i++) {
-    const job = await claimNextQueuedJob(input.supabase, now)
+    await recoverStaleRunningJob(input.supabase, {
+      now,
+      allowedJobKinds: input.allowedJobKinds,
+    })
+
+    const job = await claimNextQueuedJob(input.supabase, {
+      now,
+      workerId: input.workerId,
+      allowedJobKinds: input.allowedJobKinds,
+    })
     if (!job) break
 
     try {

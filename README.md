@@ -211,7 +211,7 @@ Le script vérifie:
 - l'approbation de `follow_up_1`, puis sa transition `sent`
 - la mise à jour de la séquence (`follow_up_count=1` et prochaine échéance)
 
-Si le worker Prospect n'est pas déclenché en continu sur l'environnement ciblé, définir `AUTONOMY_WORKER_SECRET` permet au smoke de déclencher explicitement `POST /api/studio/autonomy/jobs` pendant le test.
+Si le worker Prospect n'est pas déclenché en continu sur l'environnement ciblé, définir `AUTONOMY_WORKER_SECRET` permet au smoke de déclencher explicitement `POST /api/internal/autonomy/worker/drain` pendant le test.
 
 ### Scout Reddit smoke
 

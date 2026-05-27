@@ -6,6 +6,8 @@ interface OperatorJobRow {
   status: OperatorJobStatus | string
   attempt_count?: number | null
   locked_at?: string | null
+  locked_by?: string | null
+  lock_expires_at?: string | null
   next_run_at?: string | null
   last_error?: string | null
   updated_at?: string | null
@@ -121,6 +123,8 @@ export async function retryAutonomyJob(input: {
     patch: {
       status: 'queued',
       locked_at: null,
+      locked_by: null,
+      lock_expires_at: null,
       last_error: null,
       next_run_at: nowIso,
       updated_at: nowIso,
@@ -161,6 +165,8 @@ export async function cancelAutonomyJob(input: {
     patch: {
       status: 'cancelled',
       locked_at: null,
+      locked_by: null,
+      lock_expires_at: null,
       updated_at: nowIso,
     },
   })
