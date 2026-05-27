@@ -14,6 +14,7 @@ const workerDrainSchema = z.object({
   worker_id: z.string().trim().min(1),
   limit: z.number().int().min(1).max(10).optional(),
   allowed_job_kinds: z.array(z.string().trim().min(1)).min(1).max(10).optional(),
+  async: z.boolean().optional(),
 })
 
 function isWorkerAuthorized(request: NextRequest): boolean {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Payload worker invalide' }, { status: 400 })
   }
 
-  const processed = await processQueuedAutonomyJobs({
+  const runnerInput = {
     supabase: supabaseAdmin as unknown as AutonomyJobRunnerSupabase,
     now: new Date(),
     limit: parsed.data.limit ?? 1,
@@ -68,7 +69,25 @@ export async function POST(request: NextRequest) {
         })
       }
     },
-  })
+  } satisfies Parameters<typeof processQueuedAutonomyJobs>[0]
+
+  if (parsed.data.async) {
+    void processQueuedAutonomyJobs(runnerInput).catch((error) => {
+      console.error('async worker drain failed', error)
+    })
+
+    return NextResponse.json(
+      {
+        ok: true,
+        mode: 'worker',
+        workerId: parsed.data.worker_id,
+        accepted: true,
+      },
+      { status: 202 }
+    )
+  }
+
+  const processed = await processQueuedAutonomyJobs(runnerInput)
 
   return NextResponse.json({
     ok: true,

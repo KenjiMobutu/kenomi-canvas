@@ -46,6 +46,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 const schedulesRes = await request('/api/studio/schedules')
 assert(schedulesRes.response.status === 200, `schedules fetch failed: ${schedulesRes.response.status} ${schedulesRes.text}`)
 const devopsSchedule = Array.isArray(schedulesRes.json?.schedules)
@@ -92,18 +96,44 @@ const workerRun = await fetch(new URL('/api/internal/autonomy/worker/drain', bas
   },
   body: JSON.stringify({
     worker_id: 'smoke:devops',
-    limit: 4,
+    limit: 1,
     allowed_job_kinds: ['run_agent'],
+    async: true,
   }),
 })
 const workerText = await workerRun.text()
-const workerJson = workerText ? JSON.parse(workerText) : null
-assert(workerRun.status === 200, `worker drain failed: ${workerRun.status} ${workerText}`)
+let workerJson = null
+try {
+  workerJson = workerText ? JSON.parse(workerText) : null
+} catch {
+  workerJson = null
+}
 assert(
-  Array.isArray(workerJson?.processed) && workerJson.processed.length >= 1,
-  `worker processed nothing: ${workerText}`
+  workerRun.status === 200 || workerRun.status === 202,
+  `worker drain failed: ${workerRun.status} ${workerText}`
 )
-process.stdout.write(`ok worker processed ${workerJson.processed.length}\n`)
+process.stdout.write(`ok worker accepted ${workerJson?.accepted === true ? 1 : 0}\n`)
+
+let completedJob = null
+for (let attempt = 0; attempt < 30; attempt += 1) {
+  const jobsRes = await request('/api/studio/autonomy/jobs?agent_id=devops')
+  assert(
+    jobsRes.response.status === 200 || jobsRes.response.status === 207,
+    `jobs endpoint failed: ${jobsRes.response.status} ${jobsRes.text}`
+  )
+  completedJob = Array.isArray(jobsRes.json?.jobs)
+    ? jobsRes.json.jobs.find(
+        (job) =>
+          job?.payload?.scheduleKey === 'devops' &&
+          (job?.status === 'completed' || job?.status === 'failed')
+      ) ?? null
+    : null
+  if (completedJob) break
+  await sleep(2000)
+}
+assert(completedJob, 'timed out waiting for devops scheduled job completion')
+assert(completedJob.status === 'completed', `scheduled devops job failed: ${completedJob.last_error ?? ''}`)
+process.stdout.write(`ok worker completed ${completedJob.id}\n`)
 
 const diagnosticsRes = await request('/api/studio/infra/diagnostics')
 assert(
