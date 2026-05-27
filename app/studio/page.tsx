@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { buildCashActions, type CashAction, type ProspectCashRow } from '@/lib/studio/cash-queue'
-import { buildProspectHref } from '@/lib/studio/prospect-filters'
+import { buildProspectHref, buildRateDrilldownHref } from '@/lib/studio/prospect-filters'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Venture {
@@ -2231,14 +2231,62 @@ function CashOutcomePanel({
             }}
           >
             {[
-              ['Reply 7j', `${outcomes?.rates.replyRate7d ?? 0}%`],
-              ['Win 7j', `${outcomes?.rates.winRate7d ?? 0}%`],
-              ['Reply 30j', `${outcomes?.rates.replyRate30d ?? 0}%`],
-              ['Win 30j', `${outcomes?.rates.winRate30d ?? 0}%`],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <div style={{ color: muted2, fontSize: 11 }}>{label}</div>
-                <div style={{ marginTop: 4, color: text, fontSize: 18, fontWeight: 700 }}>{value}</div>
+              {
+                label: 'Reply 7j',
+                value: `${outcomes?.rates.replyRate7d ?? 0}%`,
+                href: buildRateDrilldownHref('reply'),
+              },
+              {
+                label: 'Win 7j',
+                value: `${outcomes?.rates.winRate7d ?? 0}%`,
+                href: buildRateDrilldownHref('win'),
+              },
+              {
+                label: 'Reply 30j',
+                value: `${outcomes?.rates.replyRate30d ?? 0}%`,
+                href: buildRateDrilldownHref('reply'),
+              },
+              {
+                label: 'Win 30j',
+                value: `${outcomes?.rates.winRate30d ?? 0}%`,
+                href: buildRateDrilldownHref('win'),
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  border: `1px solid ${line}`,
+                  borderRadius: 8,
+                  padding: '10px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                }}
+              >
+                <div>
+                  <div style={{ color: muted2, fontSize: 11 }}>{item.label}</div>
+                  <div style={{ marginTop: 4, color: text, fontSize: 18, fontWeight: 700 }}>{item.value}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = item.href
+                  }}
+                  style={{
+                    borderRadius: 999,
+                    border: `1px solid ${accent}55`,
+                    background: `${accent}18`,
+                    color: accent,
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Open
+                </button>
               </div>
             ))}
           </div>

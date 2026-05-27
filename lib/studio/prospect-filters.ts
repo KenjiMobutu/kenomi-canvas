@@ -24,3 +24,9 @@ export function buildProspectHref(input: { source?: string | null; status?: stri
   const query = params.toString()
   return query ? `/studio/prospects?${query}` : '/studio/prospects'
 }
+
+export function buildRateDrilldownHref(metric: 'reply' | 'win') {
+  return buildProspectHref({
+    status: metric === 'reply' ? 'follow_up_due' : 'replied',
+  })
+}
