@@ -245,6 +245,18 @@ function parseOutputSafely(agentId: string, content: string): AgentOutput | null
   }
 }
 
+function buildDevopsRepairPrompt(content: string): string {
+  return [
+    'Repair the following malformed DevOps JSON.',
+    'Return strict JSON only.',
+    'Preserve the original meaning.',
+    'Required shape:',
+    '{"global_status":"ok|degraded|down","headline":"...","services":[{"id":"...","status":"ok|degraded|down","severity":"low|medium|high","reason":"...","next_step":"..."}],"summary":"...","operator_next_step":"..."}',
+    'Malformed JSON:',
+    content,
+  ].join('\n')
+}
+
 async function ensureProspectOutreachApproval(input: {
   supabase: RunAgentStepSupabase
   userId: string
@@ -691,11 +703,32 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       max_tokens: cfg?.max_tokens ?? 512,
     })
 
-    const content = llmResult.content
+    let content = llmResult.content
     const durationMs = Math.max(0, now().getTime() - startMs)
     const usedModel = llmResult.model
     const usage = llmResult.usage
     const costUsd = usage ? computeCostUsd(usedModel, usage) : null
+    let parsedOutput = parseOutputSafely(agentId, content)
+
+    if (agentId === 'devops' && !parsedOutput) {
+      try {
+        const repairedResult = await (input.llm ?? llmChat)([
+          { role: 'user', content: buildDevopsRepairPrompt(content) },
+        ], {
+          model,
+          system: 'Return strict JSON only.',
+          temperature: 0,
+          max_tokens: cfg?.max_tokens ?? 512,
+        })
+        const repairedParsed = parseOutputSafely(agentId, repairedResult.content)
+        if (repairedParsed) {
+          content = repairedResult.content
+          parsedOutput = repairedParsed
+        }
+      } catch {
+        // Best effort only; keep the original malformed content for auditability.
+      }
+    }
 
     const agentRun = await single<{ id?: string }>(
       supabase
@@ -734,8 +767,6 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         fallback_triggered: llmResult.fallback_triggered,
       },
     })
-
-    const parsedOutput = parseOutputSafely(agentId, content)
 
     if (agentId === 'devops') {
       try {

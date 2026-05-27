@@ -414,6 +414,104 @@ describe('runAgentStep', () => {
     expect(supabase.tables.human_approvals).toHaveLength(0)
   })
 
+  it('repairs malformed DevOps JSON before persisting the snapshot', async () => {
+    const supabase = createFakeSupabase()
+    let callCount = 0
+    const llm = async (): Promise<LLMResponse> => {
+      callCount += 1
+      if (callCount === 1) {
+        return {
+          content: `{
+  "global_status": "ok",
+  "headline": "Infra healthy",
+  "services": [
+    {"id": "Proxmox", "status": "ok", "severity": "low", "reason": "healthy", "next
+  ],
+  "summary": "Infra healthy",
+  "operator_next_step": "Aucune action"
+}`,
+          provider: 'ollama',
+          model: 'qwen3:8b',
+          fallback_triggered: false,
+        }
+      }
+
+      return {
+        content: JSON.stringify({
+          global_status: 'ok',
+          headline: 'Infra healthy',
+          services: [
+            {
+              id: 'Proxmox',
+              status: 'ok',
+              severity: 'low',
+              reason: 'healthy',
+              next_step: 'Aucune action',
+            },
+          ],
+          summary: 'Infra healthy',
+          operator_next_step: 'Aucune action',
+        }),
+        provider: 'ollama',
+        model: 'qwen3:8b',
+        fallback_triggered: false,
+      }
+    }
+
+    const result = await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'devops',
+      llm,
+      collectInfraDiagnostics: async () => ({
+        checkedAt: '2026-05-27T10:00:00.000Z',
+        runtime: {
+          environment: 'production',
+          sourceCommit: 'abc123456789',
+          commitShort: 'abc1234',
+        },
+        summary: {
+          ok: true,
+          checksOk: 2,
+          checksTotal: 2,
+        },
+        services: [
+          {
+            id: 'proxmox',
+            label: 'Proxmox',
+            status: 'ok',
+            source: 'settings',
+            urlLabel: '10.0.0.1',
+            latencyMs: 30,
+            lastError: null,
+            repairAction: 'Aucune action',
+            checkedAt: '2026-05-27T10:00:00.000Z',
+          },
+        ],
+        proxmox: {
+          id: 'proxmox-node',
+          label: 'Proxmox',
+          status: 'ok',
+          source: 'settings',
+          urlLabel: '10.0.0.2',
+          latencyMs: 40,
+          lastError: null,
+          repairAction: 'Aucune action',
+          checkedAt: '2026-05-27T10:00:00.000Z',
+          detail: '1 node · 0 incident',
+        },
+      }),
+      now: () => new Date('2026-05-27T10:00:00.000Z'),
+    })
+
+    expect(callCount).toBe(2)
+    expect(result.parsedOutput).toMatchObject({
+      global_status: 'ok',
+      services: [{ id: 'Proxmox', next_step: 'Aucune action' }],
+    })
+    expect(supabase.tables.devops_diagnostic_runs).toHaveLength(1)
+  })
+
   it('injecte les métriques business réelles dans le prompt Decision', async () => {
     let systemPrompt = ''
     const supabase = createFakeSupabase({
