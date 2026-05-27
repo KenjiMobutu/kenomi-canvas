@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import { useAuth } from '@/lib/auth-context'
 import { useIsMobile } from '@/lib/studio-utils'
+import { readProspectFiltersFromSearch } from '@/lib/studio/prospect-filters'
 import {
   surface,
   surface2,
@@ -243,6 +244,16 @@ export default function ProspectPage() {
   const [prompt, setPrompt] = useState(
     'Trouve un prospect qualifié sur les sources configurées et rédige un message de prospection prêt à envoyer.'
   )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const next = readProspectFiltersFromSearch(window.location.search)
+    setStatusFilter(next.statusFilter)
+    setSourceFilter(next.sourceFilter)
+    setBandFilter(next.bandFilter)
+    setTagFilter(next.tagFilter)
+    setSearchFilter(next.searchFilter)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)

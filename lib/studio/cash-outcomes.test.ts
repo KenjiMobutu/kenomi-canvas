@@ -71,5 +71,31 @@ describe('buildCashOutcomeSnapshot', () => {
       { key: 'draft_created', label: 'Drafts to send', count: 1 },
       { key: 'follow_up_due', label: 'Follow-ups due', count: 1 },
     ])
+    expect(snapshot.blockerActions).toEqual([
+      {
+        key: 'awaiting_approval',
+        label: 'Awaiting approval',
+        count: 1,
+        source: 'linkedin',
+        ctaLabel: 'Review LinkedIn approval',
+        href: '/studio/prospects?status=awaiting_approval&source=linkedin',
+      },
+      {
+        key: 'draft_created',
+        label: 'Drafts to send',
+        count: 1,
+        source: 'other',
+        ctaLabel: 'Send Other draft',
+        href: '/studio/prospects?status=draft_created&source=other',
+      },
+      {
+        key: 'follow_up_due',
+        label: 'Follow-ups due',
+        count: 1,
+        source: 'reddit',
+        ctaLabel: 'Run Reddit follow-up',
+        href: '/studio/prospects?status=follow_up_due&source=reddit',
+      },
+    ])
   })
 })

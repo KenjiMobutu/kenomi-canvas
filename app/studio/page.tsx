@@ -132,6 +132,14 @@ type CashOutcomeSnapshot = {
     label: string
     count: number
   }>
+  blockerActions: Array<{
+    key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
+    label: string
+    count: number
+    source: string
+    ctaLabel: string
+    href: string
+  }>
 }
 
 type ProspectCashPayload = {
@@ -2256,15 +2264,52 @@ function CashOutcomePanel({
           >
             Blockers
           </div>
-          {(outcomes?.blockers ?? []).map((blocker) => (
-            <div
-              key={blocker.key}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
-            >
-              <span style={{ color: muted2, fontSize: 11 }}>{blocker.label}</span>
-              <strong style={{ color: text, fontSize: 15 }}>{blocker.count}</strong>
-            </div>
-          ))}
+          {(outcomes?.blockerActions ?? []).filter((blocker) => blocker.count > 0).length ? (
+            (outcomes?.blockerActions ?? [])
+              .filter((blocker) => blocker.count > 0)
+              .map((blocker) => (
+                <div
+                  key={blocker.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    border: `1px solid ${line}`,
+                    borderRadius: 8,
+                    padding: '10px 10px',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ color: text, fontSize: 12, fontWeight: 700 }}>{blocker.label}</div>
+                    <div style={{ color: muted2, fontSize: 11, marginTop: 4 }}>
+                      {blocker.count} blocked · {blocker.source}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = blocker.href
+                    }}
+                    style={{
+                      borderRadius: 999,
+                      border: `1px solid ${accent}55`,
+                      background: `${accent}18`,
+                      color: accent,
+                      padding: '6px 10px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {blocker.ctaLabel}
+                  </button>
+                </div>
+              ))
+          ) : (
+            <div style={{ color: muted2, fontSize: 11 }}>No active blockers.</div>
+          )}
         </div>
       </div>
       <div

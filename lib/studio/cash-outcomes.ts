@@ -28,6 +28,14 @@ export type CashOutcomeSnapshot = {
     label: string
     count: number
   }>
+  blockerActions: Array<{
+    key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
+    label: string
+    count: number
+    source: string
+    ctaLabel: string
+    href: string
+  }>
 }
 
 type ProspectActivityRow = {
@@ -47,6 +55,8 @@ type ProspectRow = {
   pipeline_status?: string | null
   approval_status?: string | null
 }
+
+type BlockerKey = 'awaiting_approval' | 'draft_created' | 'follow_up_due'
 
 function toNumber(value: unknown) {
   const number = Number(value)
@@ -74,6 +84,49 @@ function diffWindow(current: CashOutcomeWindow, previous: CashOutcomeWindow): Ca
     replies: current.replies - previous.replies,
     deals: current.deals - previous.deals,
     cashEur: Number((current.cashEur - previous.cashEur).toFixed(2)),
+  }
+}
+
+function titleCaseSource(source: string) {
+  if (!source) return 'Prospect'
+  if (source === 'linkedin') return 'LinkedIn'
+  if (source === 'upwork') return 'Upwork'
+  if (source === 'reddit') return 'Reddit'
+  return source.charAt(0).toUpperCase() + source.slice(1)
+}
+
+function buildBlockerAction(input: {
+  key: BlockerKey
+  label: string
+  count: number
+  prospects: ProspectRow[]
+}) {
+  const sourceCounts = new Map<string, number>()
+  for (const prospect of input.prospects) {
+    const source = prospect.source?.trim() || 'other'
+    sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1)
+  }
+
+  const source =
+    Array.from(sourceCounts.entries()).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] ??
+    'other'
+
+  const href = `/studio/prospects?status=${input.key}&source=${source}`
+  const sourceLabel = titleCaseSource(source)
+  const ctaLabel =
+    input.key === 'awaiting_approval'
+      ? `Review ${sourceLabel} approval`
+      : input.key === 'draft_created'
+        ? `Send ${sourceLabel} draft`
+        : `Run ${sourceLabel} follow-up`
+
+  return {
+    key: input.key,
+    label: input.label,
+    count: input.count,
+    source,
+    ctaLabel,
+    href,
   }
 }
 
@@ -148,6 +201,9 @@ export function buildCashOutcomeSnapshot(input: {
   let awaitingApproval = 0
   let draftCreated = 0
   let followUpDue = 0
+  const awaitingApprovalProspects: ProspectRow[] = []
+  const draftCreatedProspects: ProspectRow[] = []
+  const followUpDueProspects: ProspectRow[] = []
 
   for (const prospect of input.prospects ?? []) {
     const source = prospect.source?.trim() || 'other'
@@ -169,10 +225,25 @@ export function buildCashOutcomeSnapshot(input: {
     if (pipeline === 'won') entry.won += 1
     sourceMap.set(source, entry)
 
-    if (approvalStatus === 'awaiting_approval' || pipeline === 'awaiting_approval') awaitingApproval += 1
-    if (pipeline === 'draft_created') draftCreated += 1
-    if (pipeline === 'follow_up_due') followUpDue += 1
+    if (approvalStatus === 'awaiting_approval' || pipeline === 'awaiting_approval') {
+      awaitingApproval += 1
+      awaitingApprovalProspects.push(prospect)
+    }
+    if (pipeline === 'draft_created') {
+      draftCreated += 1
+      draftCreatedProspects.push(prospect)
+    }
+    if (pipeline === 'follow_up_due') {
+      followUpDue += 1
+      followUpDueProspects.push(prospect)
+    }
   }
+
+  const blockers = [
+    { key: 'awaiting_approval' as const, label: 'Awaiting approval', count: awaitingApproval },
+    { key: 'draft_created' as const, label: 'Drafts to send', count: draftCreated },
+    { key: 'follow_up_due' as const, label: 'Follow-ups due', count: followUpDue },
+  ]
 
   return {
     last7d,
@@ -190,10 +261,26 @@ export function buildCashOutcomeSnapshot(input: {
     sourceBreakdown: Array.from(sourceMap.values())
       .sort((left, right) => right.won - left.won || right.replied - left.replied || right.active - left.active)
       .slice(0, 4),
-    blockers: [
-      { key: 'awaiting_approval', label: 'Awaiting approval', count: awaitingApproval },
-      { key: 'draft_created', label: 'Drafts to send', count: draftCreated },
-      { key: 'follow_up_due', label: 'Follow-ups due', count: followUpDue },
+    blockers,
+    blockerActions: [
+      buildBlockerAction({
+        key: 'awaiting_approval',
+        label: 'Awaiting approval',
+        count: awaitingApproval,
+        prospects: awaitingApprovalProspects,
+      }),
+      buildBlockerAction({
+        key: 'draft_created',
+        label: 'Drafts to send',
+        count: draftCreated,
+        prospects: draftCreatedProspects,
+      }),
+      buildBlockerAction({
+        key: 'follow_up_due',
+        label: 'Follow-ups due',
+        count: followUpDue,
+        prospects: followUpDueProspects,
+      }),
     ],
   }
 }
