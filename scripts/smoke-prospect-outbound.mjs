@@ -33,6 +33,17 @@ async function request(path, init = {}) {
   return { response, json, text }
 }
 
+async function refreshProspects() {
+  const result = await request('/api/studio/prospects/refresh', {
+    method: 'POST',
+  })
+  assert(
+    result.response.status === 200,
+    `prospect refresh failed: ${result.response.status} ${result.text}`
+  )
+  return result.json
+}
+
 async function triggerWorker(limit = 1) {
   if (!workerSecret) return null
 
@@ -115,6 +126,8 @@ async function waitForProspect(companyName, predicate, label, timeoutMs = 45000)
       await triggerWorker(10)
     }
 
+    await refreshProspects()
+
     const result = await request('/api/studio/prospects')
     assert(
       result.response.status === 200 || result.response.status === 207,
@@ -162,7 +175,9 @@ process.stdout.write(`ok queued prospect run (${jobId})\n`)
 
 const jobs = await request('/api/studio/autonomy/jobs?agent_id=prospect')
 assert(jobs.response.status === 200, `jobs fetch failed: ${jobs.response.status} ${jobs.text}`)
-process.stdout.write(`ok jobs endpoint (${Array.isArray(jobs.json?.jobs) ? jobs.json.jobs.length : 0} jobs)\n`)
+process.stdout.write(
+  `ok jobs endpoint (${Array.isArray(jobs.json?.jobs) ? jobs.json.jobs.length : 0} jobs)\n`
+)
 
 if (workerSecret) {
   const worker = await triggerWorker(10)
@@ -191,7 +206,10 @@ if (prospect.approval_status === 'awaiting_approval' && prospect.outreach_approv
     method: 'PATCH',
     body: JSON.stringify({ approvalId: prospect.outreach_approval_id, decision: 'approved' }),
   })
-  assert(approval.response.status === 200, `approval failed: ${approval.response.status} ${approval.text}`)
+  assert(
+    approval.response.status === 200,
+    `approval failed: ${approval.response.status} ${approval.text}`
+  )
   process.stdout.write(`ok approved outreach ${prospect.outreach_approval_id}\n`)
 }
 
@@ -205,7 +223,8 @@ const approvedProspect = await waitForProspect(
 )
 assert(approvedProspect, 'prospect missing after approval refresh')
 assert(
-  approvedProspect.pipeline_status === 'draft_created' || approvedProspect.pipeline_status === 'approved_to_send',
+  approvedProspect.pipeline_status === 'draft_created' ||
+    approvedProspect.pipeline_status === 'approved_to_send',
   `unexpected pipeline status after approval: ${approvedProspect.pipeline_status}`
 )
 process.stdout.write(`ok pipeline after approval = ${approvedProspect.pipeline_status}\n`)
@@ -215,13 +234,17 @@ if (approvedProspect.pipeline_status === 'draft_created') {
     method: 'PATCH',
     body: JSON.stringify({ id: approvedProspect.id, status: 'sent' }),
   })
-  assert(markedSent.response.status === 200, `mark sent failed: ${markedSent.response.status} ${markedSent.text}`)
+  assert(
+    markedSent.response.status === 200,
+    `mark sent failed: ${markedSent.response.status} ${markedSent.text}`
+  )
   process.stdout.write(`ok marked sent ${approvedProspect.id}\n`)
 }
 
 const finalProspect = await waitForProspect(
   companyName,
-  (candidate) => ['draft_created', 'sent', 'replied', 'won', 'lost'].includes(candidate.pipeline_status),
+  (candidate) =>
+    ['draft_created', 'sent', 'replied', 'won', 'lost'].includes(candidate.pipeline_status),
   'final prospect'
 )
 assert(finalProspect, 'prospect missing in final fetch')
@@ -239,7 +262,10 @@ const crmPatch = await request('/api/studio/prospects', {
     tags: ['smoke', 'phase2'],
   }),
 })
-assert(crmPatch.response.status === 200, `crm patch failed: ${crmPatch.response.status} ${crmPatch.text}`)
+assert(
+  crmPatch.response.status === 200,
+  `crm patch failed: ${crmPatch.response.status} ${crmPatch.text}`
+)
 process.stdout.write(`ok crm patch ${finalProspect.id}\n`)
 
 const crmUpdatedProspect = await waitForProspect(
@@ -271,7 +297,8 @@ process.stdout.write(`ok forced follow-up due ${crmUpdatedProspect.id}\n`)
 const firstFollowUp = await waitForProspect(
   companyName,
   (candidate) =>
-    candidate.approval_status === 'awaiting_approval' && candidate.last_outreach_kind === 'follow_up_1',
+    candidate.approval_status === 'awaiting_approval' &&
+    candidate.last_outreach_kind === 'follow_up_1',
   'first follow-up'
 )
 assert(firstFollowUp?.outreach_approval_id, 'missing first follow-up approval id')
@@ -289,7 +316,8 @@ process.stdout.write(`ok approved first follow-up ${firstFollowUp.outreach_appro
 
 const followUpDraft = await waitForProspect(
   companyName,
-  (candidate) => candidate.pipeline_status === 'draft_created' && candidate.last_outreach_kind === 'follow_up_1',
+  (candidate) =>
+    candidate.pipeline_status === 'draft_created' && candidate.last_outreach_kind === 'follow_up_1',
   'follow-up draft'
 )
 assert(followUpDraft, 'follow-up draft missing after approval')

@@ -13,11 +13,13 @@ import {
 } from '@/lib/prospect/follow-up'
 import {
   materializeFollowUpDraft,
-  processDueProspectFollowUps,
   type ProspectScheduleSupabase,
   writeProspectMemoryBestEffort,
 } from '@/lib/prospect/scheduled-follow-ups'
-import { buildProspectStageActivity, buildProspectStagePatch } from '@/lib/prospect/stage-transition'
+import {
+  buildProspectStageActivity,
+  buildProspectStagePatch,
+} from '@/lib/prospect/stage-transition'
 import type {
   ProspectActivityRow,
   ProspectActivityType,
@@ -35,7 +37,10 @@ interface QueryBuilder {
   single(): Promise<{ data: unknown; error: { message: string } | null }>
   then<TResult1 = { data: unknown; error: { message: string } | null }, TResult2 = never>(
     onfulfilled?:
-      | ((value: { data: unknown; error: { message: string } | null }) => TResult1 | PromiseLike<TResult1>)
+      | ((value: {
+          data: unknown
+          error: { message: string } | null
+        }) => TResult1 | PromiseLike<TResult1>)
       | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2>
@@ -91,9 +96,7 @@ async function single<T>(query: SingleQueryBuilder): Promise<T | null> {
   return data as T | null
 }
 
-async function maybeSingle<T>(
-  query: Pick<SingleQueryBuilder, 'maybeSingle'>
-): Promise<T | null> {
+async function maybeSingle<T>(query: Pick<SingleQueryBuilder, 'maybeSingle'>): Promise<T | null> {
   const { data, error } = await query.maybeSingle()
   if (error) throw new Error(error.message)
   return data as T | null
@@ -128,11 +131,6 @@ export async function GET(request: Request) {
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
   const nowIso = new Date().toISOString()
-  await processDueProspectFollowUps({
-    supabase: supabase as unknown as ProspectScheduleSupabase,
-    userId: user!.id,
-    nowIso,
-  })
 
   const url = new URL(request.url)
   const statusFilter = url.searchParams.get('status')
@@ -322,8 +320,8 @@ export async function PATCH(request: Request) {
       supabase
         .from('prospects')
         .select(
-          'metadata, pipeline_status, status, operator_notes, next_action, tags, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, company_name, contact_name, contact_email, outreach_subject, outreach_body'
-          + ', source, band'
+          'metadata, pipeline_status, status, operator_notes, next_action, tags, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, company_name, contact_name, contact_email, outreach_subject, outreach_body' +
+            ', source, band'
         )
         .eq('id', parsed.data.id)
         .eq('user_id', user!.id)
@@ -413,7 +411,10 @@ export async function PATCH(request: Request) {
     const currentKind = asOutreachKind(current.last_outreach_kind)
     const currentRank = getFollowUpRank(currentKind)
     if (currentKind === 'initial' || currentRank === 0) {
-      return NextResponse.json({ error: 'Aucune relance en cours pour ce prospect' }, { status: 409 })
+      return NextResponse.json(
+        { error: 'Aucune relance en cours pour ce prospect' },
+        { status: 409 }
+      )
     }
 
     if (parsed.data.action === 'mark_follow_up_sent') {
@@ -453,7 +454,10 @@ export async function PATCH(request: Request) {
 
     if (parsed.data.action === 'regenerate_follow_up') {
       if (currentKind === 'follow_up_1') {
-        return NextResponse.json({ error: 'Regenerate is reserved for queued follow-ups without approval' }, { status: 409 })
+        return NextResponse.json(
+          { error: 'Regenerate is reserved for queued follow-ups without approval' },
+          { status: 409 }
+        )
       }
       const metadata =
         current.metadata && typeof current.metadata === 'object'
@@ -551,7 +555,10 @@ export async function PATCH(request: Request) {
       prospectId: parsed.data.id,
       companyName: current.company_name ?? 'Unknown company',
       memoryKind: 'operator_note',
-      pipelineStatus: typeof patch.pipeline_status === 'string' ? patch.pipeline_status : (current.pipeline_status ?? 'new'),
+      pipelineStatus:
+        typeof patch.pipeline_status === 'string'
+          ? patch.pipeline_status
+          : (current.pipeline_status ?? 'new'),
       band: current.band ?? 'warm',
       source: current.source ?? 'other',
       createdAt: nowIso,
@@ -559,12 +566,18 @@ export async function PATCH(request: Request) {
       painPoints: Array.isArray(metadata.pain_points)
         ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
         : [],
-      tags: Array.isArray(current.tags) ? current.tags.filter((value): value is string => typeof value === 'string') : [],
+      tags: Array.isArray(current.tags)
+        ? current.tags.filter((value): value is string => typeof value === 'string')
+        : [],
       operatorNote: parsed.data.operator_notes,
     })
   }
 
-  if (parsed.data.status === 'replied' || parsed.data.status === 'won' || parsed.data.status === 'lost') {
+  if (
+    parsed.data.status === 'replied' ||
+    parsed.data.status === 'won' ||
+    parsed.data.status === 'lost'
+  ) {
     await writeProspectMemoryBestEffort({
       userId: user!.id,
       prospectId: parsed.data.id,
@@ -583,7 +596,9 @@ export async function PATCH(request: Request) {
       painPoints: Array.isArray(metadata.pain_points)
         ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
         : [],
-      tags: Array.isArray(current.tags) ? current.tags.filter((value): value is string => typeof value === 'string') : [],
+      tags: Array.isArray(current.tags)
+        ? current.tags.filter((value): value is string => typeof value === 'string')
+        : [],
       result: parsed.data.status,
       outreachKind: current.last_outreach_kind ?? null,
     })

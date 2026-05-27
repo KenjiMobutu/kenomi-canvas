@@ -6,7 +6,20 @@ import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import { useAuth } from '@/lib/auth-context'
 import { useIsMobile } from '@/lib/studio-utils'
-import { surface, surface2, line, line2, text, muted, muted2, accent, emerald, amber, cyan, rose } from '@/lib/ck-vars'
+import {
+  surface,
+  surface2,
+  line,
+  line2,
+  text,
+  muted,
+  muted2,
+  accent,
+  emerald,
+  amber,
+  cyan,
+  rose,
+} from '@/lib/ck-vars'
 import type { ProspectApprovalStatus, ProspectOutreachKind } from '@/lib/prospect/types'
 
 type ProspectRow = {
@@ -154,7 +167,13 @@ function Panel({
   )
 }
 
-function Chip({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 'hot' | 'warm' | 'cold' }) {
+function Chip({
+  label,
+  tone = 'muted',
+}: {
+  label: string
+  tone?: 'muted' | 'hot' | 'warm' | 'cold'
+}) {
   const color = tone === 'hot' ? rose : tone === 'warm' ? amber : tone === 'cold' ? cyan : muted
   return (
     <span
@@ -183,7 +202,13 @@ function bandTone(band: ProspectRow['band']): 'hot' | 'warm' | 'cold' {
 }
 
 function followUpLabel(kind: ProspectOutreachKind) {
-  return kind === 'follow_up_1' ? 'F/U 1' : kind === 'follow_up_2' ? 'F/U 2' : kind === 'follow_up_3' ? 'F/U 3' : 'Initial'
+  return kind === 'follow_up_1'
+    ? 'F/U 1'
+    : kind === 'follow_up_2'
+      ? 'F/U 2'
+      : kind === 'follow_up_3'
+        ? 'F/U 3'
+        : 'Initial'
 }
 
 function fmtDate(value: string | null) {
@@ -212,7 +237,9 @@ export default function ProspectPage() {
   const [sourceFilter, setSourceFilter] = useState('all')
   const [tagFilter, setTagFilter] = useState('')
   const [searchFilter, setSearchFilter] = useState('')
-  const [crmDrafts, setCrmDrafts] = useState<Record<string, { notes: string; nextAction: string; tags: string }>>({})
+  const [crmDrafts, setCrmDrafts] = useState<
+    Record<string, { notes: string; nextAction: string; tags: string }>
+  >({})
   const [prompt, setPrompt] = useState(
     'Trouve un prospect qualifié sur les sources configurées et rédige un message de prospection prêt à envoyer.'
   )
@@ -228,7 +255,11 @@ export default function ProspectPage() {
       if (tagFilter.trim()) prospectsUrl.searchParams.set('tag', tagFilter.trim().toLowerCase())
       if (searchFilter.trim()) prospectsUrl.searchParams.set('q', searchFilter.trim())
 
-      const [prospectsRes, jobsRes] = await Promise.all([
+      const [refreshRes, prospectsRes, jobsRes] = await Promise.all([
+        fetch('/api/studio/prospects/refresh', {
+          method: 'POST',
+          cache: 'no-store',
+        }),
         fetch(prospectsUrl.toString(), { cache: 'no-store' }),
         fetch('/api/studio/autonomy/jobs?agent_id=prospect', { cache: 'no-store' }),
       ])
@@ -254,7 +285,10 @@ export default function ProspectPage() {
       if (!prospectsRes.ok) {
         nextError =
           prospectsJson.errors?.map((item) => `${item.section}: ${item.message}`).join(' · ') ??
-            'Impossible de charger les prospects'
+          'Impossible de charger les prospects'
+      }
+      if (!refreshRes.ok && !nextError) {
+        nextError = 'Impossible de rafraîchir les relances Prospect'
       }
       if (!jobsRes.ok && !nextError) {
         nextError = 'Impossible de charger les jobs Prospect'
@@ -294,7 +328,9 @@ export default function ProspectPage() {
 
   const topProspects = useMemo(() => prospects.slice(0, 8), [prospects])
   const recentJobs = useMemo(() => jobs.slice(0, 6), [jobs])
-  const sources = settings?.prospect_sources?.length ? settings.prospect_sources : ['linkedin', 'malt', 'upwork']
+  const sources = settings?.prospect_sources?.length
+    ? settings.prospect_sources
+    : ['linkedin', 'malt', 'upwork']
 
   async function runProspect() {
     setRunning(true)
@@ -711,7 +747,11 @@ export default function ProspectPage() {
             </div>
           </Panel>
 
-          <Panel title="Runtime" icon={<Activity size={16} />} action={<Chip label={`${jobs.length} jobs`} tone="cold" />}>
+          <Panel
+            title="Runtime"
+            icon={<Activity size={16} />}
+            action={<Chip label={`${jobs.length} jobs`} tone="cold" />}
+          >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {recentJobs.length === 0 ? (
                 <div
@@ -750,7 +790,14 @@ export default function ProspectPage() {
                         gap: 6,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                        }}
+                      >
                         <strong style={{ fontSize: 12, color: text }}>job {job.id}</strong>
                         <span
                           style={{
@@ -801,11 +848,33 @@ export default function ProspectPage() {
               }}
             >
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
                   Status
                 </span>
-                <select className="ck-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  {['all', 'awaiting_approval', 'approved_to_send', 'draft_created', 'sent', 'replied', 'won', 'lost', 'follow_up_due'].map((value) => (
+                <select
+                  className="ck-input"
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                >
+                  {[
+                    'all',
+                    'awaiting_approval',
+                    'approved_to_send',
+                    'draft_created',
+                    'sent',
+                    'replied',
+                    'won',
+                    'lost',
+                    'follow_up_due',
+                  ].map((value) => (
                     <option key={value} value={value}>
                       {value}
                     </option>
@@ -813,10 +882,22 @@ export default function ProspectPage() {
                 </select>
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
                   Band
                 </span>
-                <select className="ck-input" value={bandFilter} onChange={(event) => setBandFilter(event.target.value)}>
+                <select
+                  className="ck-input"
+                  value={bandFilter}
+                  onChange={(event) => setBandFilter(event.target.value)}
+                >
                   {['all', 'hot', 'warm', 'cold'].map((value) => (
                     <option key={value} value={value}>
                       {value}
@@ -825,10 +906,22 @@ export default function ProspectPage() {
                 </select>
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
                   Source
                 </span>
-                <select className="ck-input" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+                <select
+                  className="ck-input"
+                  value={sourceFilter}
+                  onChange={(event) => setSourceFilter(event.target.value)}
+                >
                   {['all', ...sources].map((value) => (
                     <option key={value} value={value}>
                       {value}
@@ -837,16 +930,42 @@ export default function ProspectPage() {
                 </select>
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
                   Tag
                 </span>
-                <input className="ck-input" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} placeholder="saas" />
+                <input
+                  className="ck-input"
+                  value={tagFilter}
+                  onChange={(event) => setTagFilter(event.target.value)}
+                  placeholder="saas"
+                />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
                   Search
                 </span>
-                <input className="ck-input" value={searchFilter} onChange={(event) => setSearchFilter(event.target.value)} placeholder="company or note" />
+                <input
+                  className="ck-input"
+                  value={searchFilter}
+                  onChange={(event) => setSearchFilter(event.target.value)}
+                  placeholder="company or note"
+                />
               </label>
             </div>
 
@@ -878,7 +997,9 @@ export default function ProspectPage() {
                   }}
                 >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
+                    >
                       <h3
                         style={{
                           margin: 0,
@@ -930,13 +1051,28 @@ export default function ProspectPage() {
                         gap: 6,
                       }}
                     >
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          color: muted2,
+                          letterSpacing: '.14em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
                         Outreach
                       </div>
                       <div style={{ fontSize: 12, color: text, fontWeight: 700 }}>
                         {prospect.outreach_subject}
                       </div>
-                      <div style={{ fontSize: 11, color: muted, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: muted,
+                          lineHeight: 1.55,
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
                         {prospect.outreach_body}
                       </div>
                     </div>
@@ -944,7 +1080,10 @@ export default function ProspectPage() {
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <Chip label={`status ${prospect.status}`} tone={bandTone(prospect.band)} />
                       <Chip label={`pipeline ${prospect.pipeline_status}`} tone="cold" />
-                      <Chip label={approvalLabel(prospect.approval_status)} tone={approvalTone(prospect.approval_status)} />
+                      <Chip
+                        label={approvalLabel(prospect.approval_status)}
+                        tone={approvalTone(prospect.approval_status)}
+                      />
                       <Chip label={followUpLabel(prospect.last_outreach_kind)} tone="cold" />
                       <Chip label={`next ${fmtDate(prospect.next_followup_at)}`} tone="cold" />
                       <Chip label={prospect.crm_record_id ? 'synced' : 'local'} tone="cold" />
@@ -972,7 +1111,15 @@ export default function ProspectPage() {
                         gap: 8,
                       }}
                     >
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          color: muted2,
+                          letterSpacing: '.14em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
                         CRM
                       </div>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -986,8 +1133,11 @@ export default function ProspectPage() {
                               ...current,
                               [prospect.id]: {
                                 notes: event.target.value,
-                                nextAction: current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
-                                tags: current[prospect.id]?.tags ?? (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                                nextAction:
+                                  current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
+                                tags:
+                                  current[prospect.id]?.tags ??
+                                  (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
                               },
                             }))
                           }
@@ -1004,7 +1154,9 @@ export default function ProspectPage() {
                               [prospect.id]: {
                                 notes: current[prospect.id]?.notes ?? prospect.operator_notes ?? '',
                                 nextAction: event.target.value,
-                                tags: current[prospect.id]?.tags ?? (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                                tags:
+                                  current[prospect.id]?.tags ??
+                                  (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
                               },
                             }))
                           }
@@ -1020,15 +1172,26 @@ export default function ProspectPage() {
                               ...current,
                               [prospect.id]: {
                                 notes: current[prospect.id]?.notes ?? prospect.operator_notes ?? '',
-                                nextAction: current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
+                                nextAction:
+                                  current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
                                 tags: event.target.value,
                               },
                             }))
                           }
                         />
                       </label>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 8,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div
+                          style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2 }}
+                        >
                           Last activity {fmtDate(prospect.last_activity_at ?? null)}
                         </div>
                         <button
@@ -1058,11 +1221,14 @@ export default function ProspectPage() {
                       </div>
                     </div>
 
-                    {prospect.outreach_approval_id && prospect.approval_status === 'awaiting_approval' ? (
+                    {prospect.outreach_approval_id &&
+                    prospect.approval_status === 'awaiting_approval' ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button
                           type="button"
-                          onClick={() => void resolveApproval(prospect.outreach_approval_id!, 'approved')}
+                          onClick={() =>
+                            void resolveApproval(prospect.outreach_approval_id!, 'approved')
+                          }
                           disabled={approvalPendingKey !== null}
                           style={{
                             display: 'inline-flex',
@@ -1082,11 +1248,15 @@ export default function ProspectPage() {
                           }}
                         >
                           <Check size={13} />
-                          {approvalPendingKey === `${prospect.outreach_approval_id}:approved` ? '...' : 'Approve'}
+                          {approvalPendingKey === `${prospect.outreach_approval_id}:approved`
+                            ? '...'
+                            : 'Approve'}
                         </button>
                         <button
                           type="button"
-                          onClick={() => void resolveApproval(prospect.outreach_approval_id!, 'rejected')}
+                          onClick={() =>
+                            void resolveApproval(prospect.outreach_approval_id!, 'rejected')
+                          }
                           disabled={approvalPendingKey !== null}
                           style={{
                             display: 'inline-flex',
@@ -1106,7 +1276,9 @@ export default function ProspectPage() {
                           }}
                         >
                           <X size={13} />
-                          {approvalPendingKey === `${prospect.outreach_approval_id}:rejected` ? '...' : 'Reject'}
+                          {approvalPendingKey === `${prospect.outreach_approval_id}:rejected`
+                            ? '...'
+                            : 'Reject'}
                         </button>
                       </div>
                     ) : null}
@@ -1217,11 +1389,15 @@ export default function ProspectPage() {
                           }}
                         >
                           <Send size={13} />
-                          {approvalPendingKey === `${prospect.id}:mark_follow_up_sent` ? '...' : 'Mark follow-up sent'}
+                          {approvalPendingKey === `${prospect.id}:mark_follow_up_sent`
+                            ? '...'
+                            : 'Mark follow-up sent'}
                         </button>
                         <button
                           type="button"
-                          onClick={() => void runProspectAction(prospect.id, 'regenerate_follow_up')}
+                          onClick={() =>
+                            void runProspectAction(prospect.id, 'regenerate_follow_up')
+                          }
                           disabled={approvalPendingKey !== null}
                           style={{
                             display: 'inline-flex',
@@ -1241,7 +1417,9 @@ export default function ProspectPage() {
                           }}
                         >
                           <RefreshCw size={13} />
-                          {approvalPendingKey === `${prospect.id}:regenerate_follow_up` ? '...' : 'Regenerate'}
+                          {approvalPendingKey === `${prospect.id}:regenerate_follow_up`
+                            ? '...'
+                            : 'Regenerate'}
                         </button>
                         <button
                           type="button"
