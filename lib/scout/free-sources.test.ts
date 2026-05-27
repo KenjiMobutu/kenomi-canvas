@@ -3,6 +3,7 @@ import {
   buildScoutSourceStatuses,
   buildScoutSourceBrief,
   collectFreeScoutSignals,
+  buildSellableOffer,
   FREE_SCOUT_SOURCES,
 } from './free-sources'
 
@@ -22,52 +23,44 @@ describe('FREE_SCOUT_SOURCES', () => {
 describe('collectFreeScoutSignals', () => {
   it('normalise les signaux gratuits en opportunités scorées', async () => {
     const fetchImpl = async (url: string): Promise<Response> => {
-      if (url.includes('hn.algolia.com')) {
+      if (url.includes('reddit.com')) {
         return new Response(
           JSON.stringify({
-            hits: [
-              {
-                title: 'Ask HN: Best tool to reconcile Stripe revenue?',
-                url: 'https://news.ycombinator.com/item?id=1',
-                points: 120,
-                num_comments: 44,
-                created_at: '2026-05-20T00:00:00.000Z',
-              },
-            ],
-          })
-        )
-      }
-
-      if (url.includes('registry.npmjs.org')) {
-        return new Response(
-          JSON.stringify({
-            objects: [
-              {
-                package: {
-                  name: 'stripe-reconcile',
-                  description: 'Reconcile Stripe payments and invoices',
-                  links: { npm: 'https://www.npmjs.com/package/stripe-reconcile' },
+            data: {
+              children: [
+                {
+                  data: {
+                    title: 'Need a tool to stop manual recruiting ops',
+                    selftext:
+                      'We are still using spreadsheets to coordinate applicants and it is slow.',
+                    permalink: '/r/smallbusiness/comments/1/manual_recruiting',
+                    subreddit: 'smallbusiness',
+                    score: 56,
+                    num_comments: 19,
+                    over_18: false,
+                    is_self: true,
+                    created_utc: '2026-05-20T00:00:00.000Z',
+                  },
                 },
-                score: { final: 0.74 },
-              },
-            ],
+              ],
+            },
           })
         )
       }
 
-      return new Response(JSON.stringify({ items: [] }))
+      return new Response(JSON.stringify({ data: { children: [] } }))
     }
 
     const result = await collectFreeScoutSignals({
-      query: 'stripe revenue reconciliation',
+      query: 'recruiting operations',
       fetchImpl,
       now: () => new Date('2026-05-20T08:00:00.000Z'),
     })
 
-    expect(result.signals.map((signal) => signal.sourceId)).toEqual(['hacker-news', 'npm'])
+    expect(result.signals.map((signal) => signal.sourceId)).toEqual(['reddit'])
     expect(result.signals[0]).toMatchObject({
-      sourceLabel: 'Hacker News',
-      title: 'Ask HN: Best tool to reconcile Stripe revenue?',
+      sourceLabel: 'Reddit',
+      title: 'Need a tool to stop manual recruiting ops',
       signalType: 'pain',
       sellableOffer: {
         buyer: expect.any(String),
@@ -75,12 +68,11 @@ describe('collectFreeScoutSignals', () => {
         concretePromise: expect.any(String),
         offer: expect.any(String),
         priceHypothesisEur: expect.any(Number),
-        acquisitionChannel: expect.any(String),
+        acquisitionChannel: 'reddit',
         landingAngle: expect.any(String),
-        evidenceUrl: 'https://news.ycombinator.com/item?id=1',
+        evidenceUrl: 'https://www.reddit.com/r/smallbusiness/comments/1/manual_recruiting',
       },
     })
-    expect(result.signals[0].score).toBeGreaterThan(result.signals[1].score)
   })
 })
 
@@ -90,32 +82,30 @@ describe('buildScoutSourceBrief', () => {
       generatedAt: '2026-05-20T08:00:00.000Z',
       signals: [
         {
-          sourceId: 'hacker-news',
-          sourceLabel: 'Hacker News',
+          sourceId: 'reddit',
+          sourceLabel: 'Reddit',
           signalType: 'pain',
-          title: 'Ask HN: Best tool to reconcile Stripe revenue?',
-          url: 'https://news.ycombinator.com/item?id=1',
+          title: 'Need a tool to stop manual recruiting ops',
+          url: 'https://www.reddit.com/r/smallbusiness/comments/1/manual_recruiting',
           score: 86,
-          evidence: '120 points, 44 commentaires',
-          sellableOffer: {
-            buyer: 'Finance ops teams using Stripe',
-            urgentPain: 'Stripe revenue reconciliation is slow and error-prone',
-            concretePromise: 'Reconcile Stripe revenue discrepancies before month-end close',
-            offer: 'Stripe revenue reconciliation assistant',
-            priceHypothesisEur: 79,
-            acquisitionChannel: 'Hacker News founder discussions',
-            landingAngle: 'Close Stripe revenue faster with fewer manual checks',
-            evidenceUrl: 'https://news.ycombinator.com/item?id=1',
-          },
+          evidence: 'r/smallbusiness · 56 upvotes · 19 comments',
+          sellableOffer: buildSellableOffer({
+            sourceId: 'reddit',
+            signalType: 'pain',
+            title: 'Need a tool to stop manual recruiting ops',
+            url: 'https://www.reddit.com/r/smallbusiness/comments/1/manual_recruiting',
+            evidence: 'r/smallbusiness · 56 upvotes · 19 comments',
+          }),
         },
       ],
       failures: [],
     })
 
     expect(brief).toContain('Sources gratuites Scout')
-    expect(brief).toContain('Hacker News')
+    expect(brief).toContain('Reddit')
     expect(brief).toContain('buyer_likelihood')
     expect(brief).toContain('scale/cut')
+    expect(brief).toContain('https://www.reddit.com/')
   })
 })
 
@@ -125,35 +115,32 @@ describe('buildScoutSourceStatuses', () => {
       generatedAt: '2026-05-20T08:00:00.000Z',
       signals: [
         {
-          sourceId: 'hacker-news',
-          sourceLabel: 'Hacker News',
+          sourceId: 'reddit',
+          sourceLabel: 'Reddit',
           signalType: 'pain',
-          title: 'Ask HN: Best tool to reconcile Stripe revenue?',
-          url: 'https://news.ycombinator.com/item?id=1',
+          title: 'Need a tool to stop manual recruiting ops',
+          url: 'https://www.reddit.com/r/smallbusiness/comments/1/manual_recruiting',
           score: 86,
-          evidence: '120 points, 44 commentaires',
-          sellableOffer: {
-            buyer: 'Finance ops teams using Stripe',
-            urgentPain: 'Stripe revenue reconciliation is slow and error-prone',
-            concretePromise: 'Reconcile Stripe revenue discrepancies before month-end close',
-            offer: 'Stripe revenue reconciliation assistant',
-            priceHypothesisEur: 79,
-            acquisitionChannel: 'Hacker News founder discussions',
-            landingAngle: 'Close Stripe revenue faster with fewer manual checks',
-            evidenceUrl: 'https://news.ycombinator.com/item?id=1',
-          },
+          evidence: 'r/smallbusiness · 56 upvotes · 19 comments',
+          sellableOffer: buildSellableOffer({
+            sourceId: 'reddit',
+            signalType: 'pain',
+            title: 'Need a tool to stop manual recruiting ops',
+            url: 'https://www.reddit.com/r/smallbusiness/comments/1/manual_recruiting',
+            evidence: 'r/smallbusiness · 56 upvotes · 19 comments',
+          }),
         },
       ],
-      failures: [{ sourceId: 'reddit', reason: 'HTTP 403' }],
+      failures: [{ sourceId: 'hacker-news', reason: 'HTTP 403' }],
     })
 
     expect(statuses.summary).toEqual({ live: 1, degraded: 1, configRequired: 1, planned: 6 })
-    expect(statuses.sources.find((source) => source.id === 'hacker-news')).toMatchObject({
+    expect(statuses.sources.find((source) => source.id === 'reddit')).toMatchObject({
       status: 'live',
       signalCount: 1,
-      topSignal: 'Ask HN: Best tool to reconcile Stripe revenue?',
+      topSignal: 'Need a tool to stop manual recruiting ops',
     })
-    expect(statuses.sources.find((source) => source.id === 'reddit')).toMatchObject({
+    expect(statuses.sources.find((source) => source.id === 'hacker-news')).toMatchObject({
       status: 'degraded',
       lastError: 'HTTP 403',
     })

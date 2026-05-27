@@ -107,7 +107,7 @@ npm run dev
 | `TRUSTED_PRIVATE_HOSTS`         | Hosts privés autorisés pour appels serveur, séparés par virgules |
 | `SOURCE_COMMIT`                 | Commit embarqué dans le runtime, affiché par le diagnostic infra |
 | `EXPECTED_SOURCE_COMMIT`        | Commit attendu pour la parité prod, optionnel                    |
-| `SMOKE_STUDIO_COOKIE`           | Cookie Studio de test pour `npm run smoke:prospect`              |
+| `SMOKE_STUDIO_COOKIE`           | Cookie Studio de test pour `npm run smoke:prospect` et `smoke:scout` |
 | `AUTONOMY_WORKER_SECRET`        | Secret worker pour drainer explicitement la queue autonomie      |
 
 ### Health check
@@ -184,6 +184,7 @@ ls supabase/migrations/
 ```bash
 npm test
 npm run smoke:prospect
+npm run smoke:scout
 ```
 
 ### Prospect outbound smoke
@@ -210,6 +211,23 @@ Le script vérifie:
 - la mise à jour de la séquence (`follow_up_count=1` et prochaine échéance)
 
 Si le worker Prospect n'est pas déclenché en continu sur l'environnement ciblé, définir `AUTONOMY_WORKER_SECRET` permet au smoke de déclencher explicitement `POST /api/studio/autonomy/jobs` pendant le test.
+
+### Scout Reddit smoke
+
+Le smoke Scout valide le flux Reddit-only introduit par la Phase 5. Il suppose lui aussi une session Studio authentifiée:
+
+```bash
+export SMOKE_BASE_URL=https://lab.kenomi.eu
+export SMOKE_STUDIO_COOKIE='sb-supabase-auth-token=base64-...'
+npm run smoke:scout
+```
+
+Le script vérifie:
+
+- le run `Scout` via `/api/studio/agents/run`
+- la création ou mise à jour du dernier `venture_pipeline`
+- la présence d'un bloc `scoutSignals` live dans `/api/studio/agents/pipeline`
+- la présence d'au moins un signal Reddit persistant avec URL source valide
 
 ## Structure du projet
 

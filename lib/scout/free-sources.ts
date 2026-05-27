@@ -1,3 +1,5 @@
+import { collectRedditSignals } from './reddit'
+
 export type ScoutSourceId =
   | 'reddit'
   | 'hacker-news'
@@ -26,6 +28,7 @@ export interface ScoutSourceSignal {
   sourceId: ScoutSourceId
   sourceLabel: string
   signalType: ScoutSignalType
+  subreddit?: string | null
   title: string
   url: string
   score: number
@@ -177,7 +180,7 @@ export const FREE_SCOUT_SOURCES: FreeScoutSource[] = [
   },
 ]
 
-function clampScore(score: number): number {
+export function clampScore(score: number): number {
   if (!Number.isFinite(score)) return 0
   return Math.max(0, Math.min(100, Math.round(score)))
 }
@@ -218,7 +221,7 @@ function acquisitionChannelForSource(sourceId: ScoutSourceId): string {
   return 'content'
 }
 
-function buildSellableOffer(input: {
+export function buildSellableOffer(input: {
   sourceId: ScoutSourceId
   signalType: ScoutSignalType
   title: string
@@ -348,39 +351,7 @@ async function collectNpm(query: string, fetchImpl: FetchImpl): Promise<ScoutSou
 }
 
 async function collectReddit(query: string, fetchImpl: FetchImpl): Promise<ScoutSourceSignal[]> {
-  const data = asRecord(
-    await fetchJson(
-      fetchImpl,
-      buildUrl('https://www.reddit.com/search.json', {
-        q: query,
-        sort: 'new',
-        limit: 3,
-      })
-    )
-  )
-  const children = asArray(asRecord(data.data).children)
-  return children
-    .map((item) => {
-      const row = asRecord(asRecord(item).data)
-      const title = asText(row.title)
-      if (!title) return null
-      const score = asNumber(row.score)
-      const comments = asNumber(row.num_comments)
-      const signal = {
-        sourceId: 'reddit' as const,
-        sourceLabel: 'Reddit',
-        signalType: 'pain' as const,
-        title,
-        url: `https://www.reddit.com${asText(row.permalink)}`,
-        score: clampScore(40 + score * 0.16 + comments * 0.5),
-        evidence: `${score} votes, ${comments} commentaires`,
-      }
-      return {
-        ...signal,
-        sellableOffer: buildSellableOffer(signal),
-      }
-    })
-    .filter(notEmpty)
+  return collectRedditSignals({ query, fetchImpl, buildSellableOffer })
 }
 
 async function collectGithub(query: string, fetchImpl: FetchImpl): Promise<ScoutSourceSignal[]> {
@@ -463,10 +434,6 @@ const LIVE_COLLECTORS: Array<{
   run: (query: string, fetchImpl: FetchImpl) => Promise<ScoutSourceSignal[]>
 }> = [
   { sourceId: 'reddit', run: collectReddit },
-  { sourceId: 'hacker-news', run: collectHackerNews },
-  { sourceId: 'github', run: collectGithub },
-  { sourceId: 'npm', run: collectNpm },
-  { sourceId: 'stack-exchange', run: collectStackExchange },
 ]
 
 export async function collectFreeScoutSignals(input: {
@@ -515,7 +482,7 @@ export function buildScoutSourceBrief(collection: ScoutSourceCollection): string
         .slice(0, 8)
         .map(
           (signal, index) =>
-            `${index + 1}. ${signal.sourceLabel} [${signal.signalType}] score ${signal.score}/100 - ${signal.title} (${signal.evidence})`
+            `${index + 1}. ${signal.sourceLabel} [${signal.signalType}] score ${signal.score}/100 - ${signal.title} (${signal.evidence}) · ${signal.url}`
         )
         .join('\n')
     : FREE_SCOUT_SOURCES.slice(0, 5)
@@ -544,7 +511,7 @@ Scoring obligatoire avant proposition :
 - buildability : produit/service vendable rapidement par solo founder.
 - revenue_path : landing + checkout + campagne mesurable.
 
-Ne propose qu'une venture avec chemin de revenu clair. Si les signaux sont faibles, choisis un angle plus étroit. La suite devra pouvoir décider scale/cut sur ROI attribuable.
+Ne propose qu'une venture avec chemin de revenu clair. Si les signaux sont faibles, choisis un angle plus étroit. Appuie-toi d'abord sur Reddit, puis reste conservateur sur les inférences. La suite devra pouvoir décider scale/cut sur ROI attribuable.
 `.trim()
 }
 

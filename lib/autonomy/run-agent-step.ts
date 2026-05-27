@@ -36,6 +36,7 @@ import {
   collectFreeScoutSignals,
   type ScoutSourceCollection,
 } from '@/lib/scout/free-sources'
+import { appendScoutSignals } from '@/lib/scout/signal-log'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -82,6 +83,7 @@ export interface RunAgentStepInput {
     query: string
     now: () => Date
   }) => Promise<ScoutSourceCollection>
+  appendScoutSignals?: typeof appendScoutSignals
   writeProspectMemory?: typeof writeProspectMemory
   retrieveProspectMemories?: typeof retrieveProspectMemories
   now?: () => Date
@@ -577,14 +579,16 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       : agentId === 'prospect'
         ? 'Trouve un prospect qualifié, score-le, et rédige un message de prospection prêt à envoyer.'
       : 'Exécute ta mission.')
-  const scoutSourceContext =
+  const scoutSourceCollection =
     agentId === 'scout'
-      ? `\n\n${buildScoutSourceBrief(
-          await (input.scoutSourceCollector ?? collectFreeScoutSignals)({
-            query: userPrompt,
-            now,
-          })
-        )}`
+      ? await (input.scoutSourceCollector ?? collectFreeScoutSignals)({
+          query: userPrompt,
+          now,
+        })
+      : null
+  const scoutSourceContext =
+    agentId === 'scout' && scoutSourceCollection
+      ? `\n\n${buildScoutSourceBrief(scoutSourceCollection)}`
       : ''
   const systemPrompt = `${baseSystemPrompt}${decisionBundle.context}${scoutSourceContext}${prospectContext.context}${prospectMemoryContext ? `\n${prospectMemoryContext}` : ''}`
 
@@ -598,6 +602,21 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
   }
 
   try {
+    if (agentId === 'scout' && scoutSourceCollection) {
+      try {
+        await (input.appendScoutSignals ?? appendScoutSignals)({
+          supabase,
+          userId,
+          collection: scoutSourceCollection,
+        })
+      } catch (error) {
+        console.warn(
+          'scout signal append failed',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+
     const llmResult = await (input.llm ?? llmChat)([{ role: 'user', content: userPrompt }], {
       model,
       system: systemPrompt,

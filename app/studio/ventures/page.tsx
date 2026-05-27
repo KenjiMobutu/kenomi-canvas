@@ -70,6 +70,24 @@ interface DV extends Venture {
   agentIds: string[]
 }
 
+interface ScoutSignalView {
+  sourceId: string
+  sourceLabel: string
+  signalType: string
+  subreddit: string | null
+  title: string
+  url: string
+  score: number
+  evidence: string
+  createdAt: string
+}
+
+interface ScoutSignalsPanelData {
+  status: 'live' | 'degraded'
+  lastFetchedAt: string | null
+  signals: ScoutSignalView[]
+}
+
 function parseNum(s: string | number): number {
   const str = String(s || '0')
   const n = parseFloat(str.replace(/[€$, ]/g, '').replace('%', ''))
@@ -298,6 +316,142 @@ function MiniArea({ label, spark, color }: { label: string; spark: number[]; col
         <path d={areaPath(spark, 100, 30, 2)} fill={`url(#ma-${uid})`} />
         <path d={sparkPath(spark, 100, 30, 2)} fill="none" stroke={color} strokeWidth="1.4" />
       </svg>
+    </div>
+  )
+}
+
+function ScoutSignalsPanel({ data }: { data: ScoutSignalsPanelData | null }) {
+  const status = data?.status ?? 'degraded'
+  const statusColor = status === 'live' ? em : am
+
+  return (
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: '12px 18px',
+        marginBottom: 14,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginBottom: 10,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Scout Signals
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 15,
+              fontWeight: 700,
+              marginTop: 2,
+              color: text,
+            }}
+          >
+            Reddit source {status}
+          </div>
+        </div>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            padding: '3px 8px',
+            borderRadius: 4,
+            border: `1px solid ${statusColor}55`,
+            color: statusColor,
+            letterSpacing: '.1em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {data?.signals.length ?? 0} signals
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 8,
+        }}
+      >
+        {(data?.signals ?? []).slice(0, 4).map((signal) => (
+          <a
+            key={`${signal.createdAt}:${signal.url}`}
+            href={signal.url}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              textDecoration: 'none',
+              color: text,
+              padding: 10,
+              borderRadius: 10,
+              background: surface2,
+              border: `1px solid ${line}`,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: cy,
+                  letterSpacing: '.12em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {signal.subreddit ? `r/${signal.subreddit}` : signal.sourceLabel}
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: em,
+                }}
+              >
+                {signal.score}/100
+              </span>
+            </div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.3 }}>{signal.title}</div>
+            <div style={{ fontSize: 11, color: muted, lineHeight: 1.45 }}>
+              {signal.evidence.length > 120 ? `${signal.evidence.slice(0, 117)}...` : signal.evidence}
+            </div>
+          </a>
+        ))}
+        {(!data || data.signals.length === 0) && (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 10,
+              border: `1px dashed ${line2}`,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: muted2,
+              letterSpacing: '.1em',
+            }}
+          >
+            Aucun signal Reddit récent.
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1136,6 +1290,7 @@ export default function VenturesPage() {
   const { agentLevels } = useGamification()
   const [items, setItems] = useState<DV[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [scoutSignals, setScoutSignals] = useState<ScoutSignalsPanelData | null>(null)
   const [commerceReadinessByVenture, setCommerceReadinessByVenture] = useState<
     Map<string, VentureCommerceReadiness>
   >(new Map())
@@ -1220,15 +1375,17 @@ export default function VenturesPage() {
     if (!user) return
     let cancelled = false
     async function load() {
-      const { data, error } = await supabase
-        .from('ventures')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('score', { ascending: false })
+      const [{ data, error }, pipelineRes] = await Promise.all([
+        supabase.from('ventures').select('*').eq('user_id', user!.id).order('score', { ascending: false }),
+        fetch('/api/studio/agents/pipeline').then((res) => res.json().catch(() => null)),
+      ])
       if (cancelled) return
       if (error) {
         toast.error(error.message)
         return
+      }
+      if (pipelineRes?.scoutSignals) {
+        setScoutSignals(pipelineRes.scoutSignals as ScoutSignalsPanelData)
       }
       const dvs = ((data as Venture[]) || []).map(toDisplay)
       setItems(dvs)
@@ -1243,11 +1400,13 @@ export default function VenturesPage() {
 
   async function reload() {
     if (!user) return
-    const { data } = await supabase
-      .from('ventures')
-      .select('*')
-      .eq('user_id', user!.id)
-      .order('score', { ascending: false })
+    const [{ data }, pipelineRes] = await Promise.all([
+      supabase.from('ventures').select('*').eq('user_id', user!.id).order('score', { ascending: false }),
+      fetch('/api/studio/agents/pipeline').then((res) => res.json().catch(() => null)),
+    ])
+    if (pipelineRes?.scoutSignals) {
+      setScoutSignals(pipelineRes.scoutSignals as ScoutSignalsPanelData)
+    }
     const dvs = ((data as Venture[]) || []).map(toDisplay)
     setItems(dvs)
     await refreshCommerceCoverage(dvs)
@@ -1494,6 +1653,8 @@ export default function VenturesPage() {
       )}
 
       {/* Funnel strip */}
+      <ScoutSignalsPanel data={scoutSignals} />
+
       <div
         style={{
           background: surface,

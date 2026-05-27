@@ -124,3 +124,35 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.prospect_activities TO service_ro
 
 CREATE INDEX IF NOT EXISTS prospect_activities_user_prospect_idx
   ON public.prospect_activities(user_id, prospect_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.scout_signals (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  source_id text NOT NULL,
+  source_label text NOT NULL,
+  signal_type text NOT NULL,
+  subreddit text,
+  title text NOT NULL,
+  url text NOT NULL,
+  score integer NOT NULL DEFAULT 0,
+  evidence text NOT NULL DEFAULT '',
+  normalized_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.scout_signals ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "scout_signals_own" ON public.scout_signals;
+CREATE POLICY "scout_signals_own" ON public.scout_signals
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.scout_signals TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.scout_signals TO service_role;
+
+CREATE INDEX IF NOT EXISTS scout_signals_user_created_idx
+  ON public.scout_signals(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS scout_signals_user_source_idx
+  ON public.scout_signals(user_id, source_id, created_at DESC);

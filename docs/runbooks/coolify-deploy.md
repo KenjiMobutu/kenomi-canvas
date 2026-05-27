@@ -45,7 +45,15 @@ export AUTONOMY_WORKER_SECRET='...'
 npm run smoke:prospect
 ```
 
-6. Approve or unblock the autonomy action only after the public UI, private LLM, and Prospect outbound loop all pass.
+Then re-run the Scout Reddit smoke loop:
+
+```bash
+export SMOKE_BASE_URL=https://lab.kenomi.eu
+export SMOKE_STUDIO_COOKIE='sb-supabase-auth-token=base64-...'
+npm run smoke:scout
+```
+
+6. Approve or unblock the autonomy action only after the public UI, private LLM, Prospect outbound loop, and Scout Reddit loop all pass.
 
 If the autonomy worker is not drained continuously in production, `AUTONOMY_WORKER_SECRET` lets the smoke trigger the queue worker explicitly through `/api/studio/autonomy/jobs`.
 
@@ -64,6 +72,12 @@ For Phase 3, the same smoke must also validate the first follow-up loop:
 - `follow_up_count=1` with the next due date scheduled
 
 Phase 4 adds Qdrant-backed Prospect memory, but the outbound smoke must remain runnable even when `QDRANT_URL` or `EMBEDDING_MODEL` are absent. Memory writes and retrieval are best effort only; a disabled or failing Qdrant must not block the Prospect loop.
+
+Phase 5 adds persisted Reddit Scout signals. The Scout smoke is only green if `/api/studio/agents/pipeline` returns:
+
+- `scoutSignals.status = live`
+- at least one persisted Reddit signal
+- a valid Reddit URL in the top signal
 
 ## Normal Flow
 

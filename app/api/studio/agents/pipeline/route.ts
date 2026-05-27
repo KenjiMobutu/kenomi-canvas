@@ -4,23 +4,37 @@ import { requireAllowedUser } from '@/lib/auth-server'
 import { apiError, apiOk } from '@/lib/api-response'
 import { isRateLimited } from '@/lib/rate-limit'
 import { findAvailableSlug, materializeValidatedIdea } from '@/lib/venture-materializer'
+import { buildScoutSignalsApiView } from '@/lib/scout/api-view'
 
 export async function GET() {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
-  const { data, error } = await supabase
-    .from('venture_pipeline')
-    .select('*')
-    .eq('user_id', user!.id)
-    .not('status', 'eq', 'rejected')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const [{ data, error }, { data: scoutSignals, error: scoutSignalsError }] = await Promise.all([
+    supabase
+      .from('venture_pipeline')
+      .select('*')
+      .eq('user_id', user!.id)
+      .not('status', 'eq', 'rejected')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('scout_signals')
+      .select('source_id, source_label, signal_type, subreddit, title, url, score, evidence, created_at')
+      .eq('user_id', user!.id)
+      .order('created_at', { ascending: false })
+      .limit(6),
+  ])
 
   if (error) return apiError(error.message, 500)
-  return apiOk({ pipeline: data })
+  if (scoutSignalsError) return apiError(scoutSignalsError.message, 500)
+
+  return apiOk({
+    pipeline: data,
+    scoutSignals: buildScoutSignalsApiView((scoutSignals as never[]) ?? []),
+  })
 }
 
 export async function POST(req: NextRequest) {

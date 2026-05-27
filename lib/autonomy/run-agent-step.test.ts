@@ -16,6 +16,7 @@ type TableName =
   | 'campaign_drafts'
   | 'user_settings'
   | 'prospects'
+  | 'scout_signals'
 
 interface TableRow {
   id?: string
@@ -42,6 +43,7 @@ function createFakeSupabase(
     campaign_drafts: seed?.campaign_drafts ?? [],
     user_settings: seed?.user_settings ?? [],
     prospects: seed?.prospects ?? [],
+    scout_signals: seed?.scout_signals ?? [],
   }
 
   return {
@@ -183,6 +185,11 @@ describe('runAgentStep', () => {
       user_id: 'user-1',
       idea_title: 'InboxPulse',
       status: 'pending_validation',
+    })
+    expect(supabase.tables.scout_signals[0]).toMatchObject({
+      user_id: 'user-1',
+      source_id: 'hacker-news',
+      title: 'Ask HN: Best tool to reconcile Stripe revenue?',
     })
   })
 
