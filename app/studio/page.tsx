@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { buildCashActions, type CashAction, type ProspectCashRow } from '@/lib/studio/cash-queue'
+import { buildProspectHref } from '@/lib/studio/prospect-filters'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Venture {
@@ -2347,24 +2348,49 @@ function CashOutcomePanel({
                 border: `1px solid ${line}`,
                 padding: '10px 10px',
                 minWidth: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
               }}
             >
-              <div
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    color: text,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    letterSpacing: '.12em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {source.source}
+                </div>
+                <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
+                  <span>{source.active} active</span>
+                  <span>{source.replied} replies</span>
+                  <span>{source.won} won</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = buildProspectHref({ source: source.source })
+                }}
                 style={{
-                  color: text,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  letterSpacing: '.12em',
-                  textTransform: 'uppercase',
+                  borderRadius: 999,
+                  border: `1px solid ${accent}55`,
+                  background: `${accent}18`,
+                  color: accent,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                {source.source}
-              </div>
-              <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
-                <span>{source.active} active</span>
-                <span>{source.replied} replies</span>
-                <span>{source.won} won</span>
-              </div>
+                Open
+              </button>
             </div>
           ))}
         </div>

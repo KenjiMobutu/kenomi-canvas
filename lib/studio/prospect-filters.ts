@@ -16,3 +16,11 @@ export function readProspectFiltersFromSearch(search: string): ProspectFilters {
     searchFilter: params.get('q')?.trim() || '',
   }
 }
+
+export function buildProspectHref(input: { source?: string | null; status?: string | null }) {
+  const params = new URLSearchParams()
+  if (input.source?.trim()) params.set('source', input.source.trim())
+  if (input.status?.trim()) params.set('status', input.status.trim())
+  const query = params.toString()
+  return query ? `/studio/prospects?${query}` : '/studio/prospects'
+}

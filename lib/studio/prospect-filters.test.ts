@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readProspectFiltersFromSearch } from './prospect-filters'
+import { buildProspectHref, readProspectFiltersFromSearch } from './prospect-filters'
 
 describe('readProspectFiltersFromSearch', () => {
   it('reads supported prospect filters from the URL query string', () => {
@@ -24,5 +24,12 @@ describe('readProspectFiltersFromSearch', () => {
       tagFilter: '',
       searchFilter: '',
     })
+  })
+
+  it('builds prospect links with source and optional status filters', () => {
+    expect(buildProspectHref({ source: 'reddit' })).toBe('/studio/prospects?source=reddit')
+    expect(buildProspectHref({ source: 'linkedin', status: 'awaiting_approval' })).toBe(
+      '/studio/prospects?source=linkedin&status=awaiting_approval'
+    )
   })
 })
