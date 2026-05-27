@@ -175,6 +175,48 @@ assert(
 )
 process.stdout.write(`ok scheduler enqueued ${schedulerJson.enqueued}\n`)
 
+const cancelJob = await request('/api/studio/autonomy/jobs', {
+  method: 'POST',
+  body: JSON.stringify({
+    type: 'cancel_job',
+    jobId: scheduledJobId,
+  }),
+})
+assert(
+  cancelJob.response.status === 200,
+  `cancel job failed: ${cancelJob.response.status} ${cancelJob.text}`
+)
+assert(cancelJob.json?.ok === true, `cancel job did not return ok: ${cancelJob.text}`)
+process.stdout.write(`ok cancelled scheduled job ${scheduledJobId}\n`)
+
+const schedulesAfterCancel = await request('/api/studio/schedules')
+assert(
+  schedulesAfterCancel.response.status === 200,
+  `schedules after cancel failed: ${schedulesAfterCancel.response.status} ${schedulesAfterCancel.text}`
+)
+const devopsAfterCancel = Array.isArray(schedulesAfterCancel.json?.schedules)
+  ? schedulesAfterCancel.json.schedules.find((schedule) => schedule?.schedule_key === 'devops')
+  : null
+assert(
+  devopsAfterCancel?.observability?.latestCancelledJob?.id === scheduledJobId,
+  `schedule observability missing cancelled job: ${schedulesAfterCancel.text}`
+)
+process.stdout.write('ok schedule observability cancelled job\n')
+
+const retryJob = await request('/api/studio/autonomy/jobs', {
+  method: 'POST',
+  body: JSON.stringify({
+    type: 'retry_job',
+    jobId: scheduledJobId,
+  }),
+})
+assert(
+  retryJob.response.status === 200,
+  `retry job failed: ${retryJob.response.status} ${retryJob.text}`
+)
+assert(retryJob.json?.ok === true, `retry job did not return ok: ${retryJob.text}`)
+process.stdout.write(`ok retried scheduled job ${scheduledJobId}\n`)
+
 const workerRun = await fetch(new URL('/api/internal/autonomy/worker/drain', baseUrl), {
   method: 'POST',
   headers: {
@@ -236,6 +278,28 @@ assert(
   `scheduled devops job failed: ${completedJob.last_error ?? ''}`
 )
 process.stdout.write(`ok worker completed ${scheduledJobId}\n`)
+
+const schedulesAfterWorker = await request('/api/studio/schedules')
+assert(
+  schedulesAfterWorker.response.status === 200,
+  `schedules after worker failed: ${schedulesAfterWorker.response.status} ${schedulesAfterWorker.text}`
+)
+const devopsAfterWorker = Array.isArray(schedulesAfterWorker.json?.schedules)
+  ? schedulesAfterWorker.json.schedules.find((schedule) => schedule?.schedule_key === 'devops')
+  : null
+assert(
+  devopsAfterWorker?.observability?.lastJob?.id === scheduledJobId,
+  `schedule observability missing completed job: ${schedulesAfterWorker.text}`
+)
+assert(
+  devopsAfterWorker?.observability?.lastJob?.status === 'completed',
+  `schedule observability did not report completed job: ${schedulesAfterWorker.text}`
+)
+assert(
+  schedulesAfterWorker.json?.workerBacklog,
+  `missing workerBacklog: ${schedulesAfterWorker.text}`
+)
+process.stdout.write('ok schedule observability completed job\n')
 
 const diagnosticsRes = await request('/api/studio/infra/diagnostics')
 assert(

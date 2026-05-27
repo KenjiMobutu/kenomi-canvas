@@ -64,6 +64,39 @@ interface BusinessSchedule {
   last_enqueued_at: string | null
   last_completed_at: string | null
   next_run_at: string
+  observability?: ScheduleObservability
+}
+
+interface ScheduleJob {
+  id: string
+  kind: string
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | string
+  attempt_count: number | null
+  next_run_at: string | null
+  locked_at: string | null
+  locked_by: string | null
+  lock_expires_at: string | null
+  runner_type: string | null
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface ScheduleObservability {
+  queued: number
+  running: number
+  failed: number
+  cancelled: number
+  lastJob: ScheduleJob | null
+  latestFailedJob: ScheduleJob | null
+  latestQueuedJob: ScheduleJob | null
+  latestRunningJob: ScheduleJob | null
+  latestCancelledJob: ScheduleJob | null
+  alert: {
+    type: 'stale_running' | 'schedule_late' | 'job_failed'
+    jobId?: string
+    nextRunAt?: string
+  } | null
 }
 
 interface AutonomyControl {
@@ -78,6 +111,7 @@ interface AutonomyBacklog {
   queued: number
   running: number
   failed: number
+  cancelled?: number
 }
 
 const TYPE_META: Record<string, { color: string; label: string }> = {
@@ -783,16 +817,22 @@ function AutonomyControlPanel({
 
 function SchedulesPanel({
   schedules,
+  workerBacklog,
   loading,
   busyKey,
+  jobBusyId,
   onToggle,
   onRunNow,
+  onJobAction,
 }: {
   schedules: BusinessSchedule[]
+  workerBacklog: AutonomyBacklog
   loading: boolean
   busyKey: string | null
+  jobBusyId: string | null
   onToggle: (schedule: BusinessSchedule) => void
   onRunNow: (scheduleKey: BusinessSchedule['schedule_key']) => void
+  onJobAction: (type: 'retry_job' | 'cancel_job', jobId: string) => void
 }) {
   const statusColor = (status: BusinessSchedule['status']) =>
     status === 'active' ? emerald : muted2
@@ -834,11 +874,34 @@ function SchedulesPanel({
             scheduler -&gt; autonomy_jobs -&gt; worker
           </div>
         </div>
-        {loading && (
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted }}>
-            Chargement…
-          </span>
-        )}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {[
+            { label: `Q ${workerBacklog.queued}`, color: cyan },
+            { label: `R ${workerBacklog.running}`, color: violet },
+            { label: `F ${workerBacklog.failed}`, color: workerBacklog.failed > 0 ? rose : muted2 },
+          ].map((item) => (
+            <span
+              key={item.label}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                padding: '3px 7px',
+                borderRadius: 4,
+                background: `${item.color}1f`,
+                color: item.color,
+                letterSpacing: 1,
+                fontWeight: 800,
+              }}
+            >
+              {item.label}
+            </span>
+          ))}
+          {loading && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted }}>
+              Chargement…
+            </span>
+          )}
+        </div>
       </div>
       {schedules.length === 0 ? (
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>
@@ -853,8 +916,22 @@ function SchedulesPanel({
           }}
         >
           {schedules.map((schedule) => {
-            const color = statusColor(schedule.status)
+            const obs = schedule.observability
+            const color = obs?.alert ? rose : statusColor(schedule.status)
             const isBusy = busyKey === schedule.schedule_key
+            const retryJob = obs?.latestFailedJob ?? obs?.latestCancelledJob
+            const cancelJob = obs?.latestQueuedJob
+            const lastJob = obs?.lastJob
+            const lastJobColor =
+              lastJob?.status === 'completed'
+                ? emerald
+                : lastJob?.status === 'failed'
+                  ? rose
+                  : lastJob?.status === 'running'
+                    ? violet
+                    : lastJob?.status === 'queued'
+                      ? cyan
+                      : muted2
             return (
               <div
                 key={schedule.id}
@@ -900,13 +977,13 @@ function SchedulesPanel({
                       fontWeight: 700,
                     }}
                   >
-                    {schedule.status === 'active' ? 'ACTIF' : 'PAUSÉ'}
+                    {obs?.alert ? 'ALERTE' : schedule.status === 'active' ? 'ACTIF' : 'PAUSÉ'}
                   </span>
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted }}>
                   Toutes les {schedule.interval_minutes} min
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                   <AuStatBox
                     label="Next"
                     value={
@@ -931,6 +1008,35 @@ function SchedulesPanel({
                     }
                     color={violet}
                   />
+                  <AuStatBox label="Queue" value={String(obs?.queued ?? 0)} color={cyan} />
+                  <AuStatBox
+                    label="Fail"
+                    value={String(obs?.failed ?? 0)}
+                    color={(obs?.failed ?? 0) > 0 ? rose : muted2}
+                  />
+                </div>
+                <div
+                  style={{
+                    padding: '7px 9px',
+                    borderRadius: 8,
+                    background: surface,
+                    border: `1px solid ${line}`,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    color: muted,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={lastJob?.last_error ?? lastJob?.id ?? undefined}
+                >
+                  <span style={{ color: lastJobColor, fontWeight: 800 }}>
+                    {lastJob?.status?.toUpperCase() ?? 'NO JOB'}
+                  </span>
+                  {lastJob
+                    ? ` · ${lastJob.id.slice(0, 8)} · tries ${lastJob.attempt_count ?? 0}`
+                    : ''}
+                  {lastJob?.last_error ? ` · ${lastJob.last_error}` : ''}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
@@ -968,6 +1074,48 @@ function SchedulesPanel({
                     Run now
                   </button>
                 </div>
+                {(retryJob || cancelJob) && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {retryJob && (
+                      <button
+                        onClick={() => onJobAction('retry_job', retryJob.id)}
+                        disabled={jobBusyId === retryJob.id}
+                        style={{
+                          flex: 1,
+                          padding: '7px 9px',
+                          borderRadius: 8,
+                          border: `1px solid ${emerald}55`,
+                          background: `${emerald}1f`,
+                          color: emerald,
+                          cursor: jobBusyId === retryJob.id ? 'default' : 'pointer',
+                          fontSize: 11,
+                          fontWeight: 800,
+                        }}
+                      >
+                        Retry job
+                      </button>
+                    )}
+                    {cancelJob && (
+                      <button
+                        onClick={() => onJobAction('cancel_job', cancelJob.id)}
+                        disabled={jobBusyId === cancelJob.id}
+                        style={{
+                          flex: 1,
+                          padding: '7px 9px',
+                          borderRadius: 8,
+                          border: `1px solid ${rose}55`,
+                          background: `${rose}1f`,
+                          color: rose,
+                          cursor: jobBusyId === cancelJob.id ? 'default' : 'pointer',
+                          fontSize: 11,
+                          fontWeight: 800,
+                        }}
+                      >
+                        Cancel job
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -1472,8 +1620,15 @@ export default function AutomationsPage() {
   const [n8nError, setN8nError] = useState<string | null>(null)
   const [n8nSelectedId, setN8nSelectedId] = useState<string | null>(null)
   const [schedules, setSchedules] = useState<BusinessSchedule[]>([])
+  const [scheduleWorkerBacklog, setScheduleWorkerBacklog] = useState<AutonomyBacklog>({
+    queued: 0,
+    running: 0,
+    failed: 0,
+    cancelled: 0,
+  })
   const [schedulesLoading, setSchedulesLoading] = useState(false)
   const [scheduleBusyKey, setScheduleBusyKey] = useState<string | null>(null)
+  const [jobBusyId, setJobBusyId] = useState<string | null>(null)
   const [autonomyControl, setAutonomyControl] = useState<AutonomyControl | null>(null)
   const [autonomyBacklog, setAutonomyBacklog] = useState<AutonomyBacklog>({
     queued: 0,
@@ -1528,12 +1683,22 @@ export default function AutomationsPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSchedules([])
+        setScheduleWorkerBacklog({ queued: 0, running: 0, failed: 0, cancelled: 0 })
         toast.error(json.error || 'Erreur chargement schedules')
         return
       }
       setSchedules((json.schedules as BusinessSchedule[]) ?? [])
+      setScheduleWorkerBacklog(
+        (json.workerBacklog as AutonomyBacklog) ?? {
+          queued: 0,
+          running: 0,
+          failed: 0,
+          cancelled: 0,
+        }
+      )
     } catch {
       setSchedules([])
+      setScheduleWorkerBacklog({ queued: 0, running: 0, failed: 0, cancelled: 0 })
       toast.error('Erreur réseau schedules')
     } finally {
       setSchedulesLoading(false)
@@ -1706,10 +1871,40 @@ export default function AutomationsPage() {
         return
       }
       setSchedules((json.schedules as BusinessSchedule[]) ?? [])
+      setScheduleWorkerBacklog(
+        (json.workerBacklog as AutonomyBacklog) ?? {
+          queued: 0,
+          running: 0,
+          failed: 0,
+          cancelled: 0,
+        }
+      )
     } catch {
       toast.error('Erreur réseau schedule')
     } finally {
       setScheduleBusyKey(null)
+    }
+  }
+
+  async function runJobAction(type: 'retry_job' | 'cancel_job', jobId: string) {
+    setJobBusyId(jobId)
+    try {
+      const res = await fetch('/api/studio/autonomy/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, jobId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json.ok === false) {
+        toast.error(json.message || json.error || 'Erreur action job')
+        return
+      }
+      toast.success(type === 'retry_job' ? 'Job remis en file' : 'Job annulé')
+      await Promise.all([loadSchedules(), loadAutonomyControl()])
+    } catch {
+      toast.error('Erreur réseau action job')
+    } finally {
+      setJobBusyId(null)
     }
   }
 
@@ -1864,8 +2059,10 @@ export default function AutomationsPage() {
 
         <SchedulesPanel
           schedules={schedules}
+          workerBacklog={scheduleWorkerBacklog}
           loading={schedulesLoading}
           busyKey={scheduleBusyKey}
+          jobBusyId={jobBusyId}
           onToggle={(schedule) =>
             patchSchedule(
               {
@@ -1876,6 +2073,7 @@ export default function AutomationsPage() {
             )
           }
           onRunNow={(scheduleKey) => patchSchedule({ scheduleKey, runNow: true }, scheduleKey)}
+          onJobAction={runJobAction}
         />
 
         {/* DAG + workflows list */}
