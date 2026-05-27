@@ -8,10 +8,15 @@ import {
 
 type TableRow = Record<string, unknown>
 
-function createFakeSupabase(initialSchedules: BusinessScheduleRow[] = [], initialJobs: TableRow[] = []) {
+function createFakeSupabase(
+  initialSchedules: BusinessScheduleRow[] = [],
+  initialJobs: TableRow[] = [],
+  initialControls: TableRow[] = []
+) {
   const tables = {
     business_schedules: initialSchedules.map((row) => ({ ...row })) as TableRow[],
     autonomy_jobs: initialJobs.map((row) => ({ ...row })) as TableRow[],
+    autonomy_controls: initialControls.map((row) => ({ ...row })) as TableRow[],
   }
 
   return {
@@ -221,6 +226,89 @@ describe('runBusinessScheduler', () => {
 
     expect(report).toHaveLength(0)
     expect(supabase.tables.autonomy_jobs).toHaveLength(0)
+  })
+
+  it('ignore les schedules quand le contrôle global utilisateur est en pause', async () => {
+    const supabase = createFakeSupabase(
+      [
+        createSchedule({
+          id: 'sched-devops',
+          schedule_key: 'devops',
+          label: 'DevOps Diagnostics',
+          interval_minutes: 30,
+          payload: { agentId: 'devops' },
+        }),
+      ],
+      [],
+      [
+        {
+          user_id: 'user-1',
+          status: 'paused',
+          reason: 'incident',
+          max_scheduler_jobs_per_run: 10,
+          max_worker_jobs_per_drain: 10,
+          paused_at: '2026-05-27T08:55:00.000Z',
+          created_at: '2026-05-27T08:55:00.000Z',
+          updated_at: '2026-05-27T08:55:00.000Z',
+        },
+      ]
+    )
+
+    const report = await runBusinessScheduler({
+      supabase,
+      now: new Date('2026-05-27T09:00:00.000Z'),
+      limit: 10,
+    })
+
+    expect(report).toEqual([
+      {
+        userId: 'user-1',
+        scheduleKey: 'devops',
+        status: 'skipped',
+        reason: 'autonomy_paused',
+      },
+    ])
+    expect(supabase.tables.autonomy_jobs).toHaveLength(0)
+  })
+
+  it('respecte le plafond scheduler par utilisateur', async () => {
+    const supabase = createFakeSupabase(
+      [
+        createSchedule({
+          id: 'sched-scout',
+          schedule_key: 'scout',
+          payload: { agentId: 'scout' },
+        }),
+        createSchedule({
+          id: 'sched-devops',
+          schedule_key: 'devops',
+          payload: { agentId: 'devops' },
+        }),
+      ],
+      [],
+      [
+        {
+          user_id: 'user-1',
+          status: 'active',
+          reason: null,
+          max_scheduler_jobs_per_run: 1,
+          max_worker_jobs_per_drain: 10,
+          paused_at: null,
+          created_at: '2026-05-27T08:55:00.000Z',
+          updated_at: '2026-05-27T08:55:00.000Z',
+        },
+      ]
+    )
+
+    const report = await runBusinessScheduler({
+      supabase,
+      now: new Date('2026-05-27T09:00:00.000Z'),
+      limit: 10,
+    })
+
+    expect(report.map((item) => item.status)).toEqual(['enqueued', 'skipped'])
+    expect(report[1]).toMatchObject({ reason: 'scheduler_limit_reached' })
+    expect(supabase.tables.autonomy_jobs).toHaveLength(1)
   })
 })
 

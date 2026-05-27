@@ -1,3 +1,10 @@
+import { getAutonomyConfig } from './config'
+import {
+  ensureAutonomyControlForUser,
+  type AutonomyControlRow,
+  type AutonomyControlSupabase,
+} from './controls'
+
 export type BusinessScheduleKey = 'scout' | 'prospect' | 'follow_ups' | 'devops'
 export type BusinessScheduleStatus = 'active' | 'paused'
 
@@ -64,7 +71,12 @@ const SCHEDULE_DEFAULTS: Array<{
     intervalMinutes: 30,
     payload: { mode: 'follow_ups' },
   },
-  { key: 'devops', label: 'DevOps Diagnostics', intervalMinutes: 30, payload: { agentId: 'devops' } },
+  {
+    key: 'devops',
+    label: 'DevOps Diagnostics',
+    intervalMinutes: 30,
+    payload: { agentId: 'devops' },
+  },
 ]
 
 function defaultPromptForSchedule(key: BusinessScheduleKey): string {
@@ -202,7 +214,8 @@ function buildScheduleJob(input: {
     }
   }
 
-  const agentId = typeof payload.agentId === 'string' ? payload.agentId : input.schedule.schedule_key
+  const agentId =
+    typeof payload.agentId === 'string' ? payload.agentId : input.schedule.schedule_key
 
   return {
     user_id: input.schedule.user_id,
@@ -272,6 +285,7 @@ export async function runBusinessScheduler(input: {
   limit?: number
   userId?: string
   scheduleKeys?: BusinessScheduleKey[]
+  autonomyEnabled?: boolean
 }): Promise<ScheduledEnqueueReportItem[]> {
   const now = input.now ?? new Date()
   const nowIso = now.toISOString()
@@ -303,8 +317,54 @@ export async function runBusinessScheduler(input: {
   }
 
   const report: ScheduledEnqueueReportItem[] = []
+  const autonomyEnabled = input.autonomyEnabled ?? getAutonomyConfig().enabled
+  const controlsByUser = new Map<string, AutonomyControlRow>()
+  const enqueuedByUser = new Map<string, number>()
+
   for (const schedule of dueSchedules) {
+    if (!autonomyEnabled) {
+      report.push({
+        userId: schedule.user_id,
+        scheduleKey: schedule.schedule_key,
+        status: 'skipped',
+        reason: 'autonomy_env_disabled',
+      })
+      continue
+    }
+
+    let control = controlsByUser.get(schedule.user_id)
+    if (!control) {
+      control = await ensureAutonomyControlForUser({
+        supabase: input.supabase as unknown as AutonomyControlSupabase,
+        userId: schedule.user_id,
+        now,
+      })
+      controlsByUser.set(schedule.user_id, control)
+    }
+
+    if (control.status === 'paused') {
+      report.push({
+        userId: schedule.user_id,
+        scheduleKey: schedule.schedule_key,
+        status: 'skipped',
+        reason: 'autonomy_paused',
+      })
+      continue
+    }
+
+    const userEnqueued = enqueuedByUser.get(schedule.user_id) ?? 0
+    if (userEnqueued >= control.max_scheduler_jobs_per_run) {
+      report.push({
+        userId: schedule.user_id,
+        scheduleKey: schedule.schedule_key,
+        status: 'skipped',
+        reason: 'scheduler_limit_reached',
+      })
+      continue
+    }
+
     report.push(await enqueueSchedule({ supabase: input.supabase, schedule, now }))
+    enqueuedByUser.set(schedule.user_id, userEnqueued + 1)
   }
   return report
 }

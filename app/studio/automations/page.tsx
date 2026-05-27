@@ -66,6 +66,20 @@ interface BusinessSchedule {
   next_run_at: string
 }
 
+interface AutonomyControl {
+  status: 'active' | 'paused'
+  reason: string | null
+  max_scheduler_jobs_per_run: number
+  max_worker_jobs_per_drain: number
+  paused_at: string | null
+}
+
+interface AutonomyBacklog {
+  queued: number
+  running: number
+  failed: number
+}
+
 const TYPE_META: Record<string, { color: string; label: string }> = {
   trigger: { color: '#22d3ee', label: 'TRIG' },
   agent: { color: '', label: 'AGT' },
@@ -155,12 +169,7 @@ function AuKpi({
           preserveAspectRatio="none"
           style={{ width: '100%', height: 20, marginTop: 4, display: 'block' }}
         >
-          <path
-            d={sparkPath(trend, 100, 22, 1)}
-            fill="none"
-            stroke={color}
-            strokeWidth="1.4"
-          />
+          <path d={sparkPath(trend, 100, 22, 1)} fill="none" stroke={color} strokeWidth="1.4" />
         </svg>
       ) : (
         <div
@@ -691,6 +700,87 @@ function ServiceHealth() {
   )
 }
 
+function AutonomyControlPanel({
+  control,
+  backlog,
+  loading,
+  busy,
+  onToggle,
+}: {
+  control: AutonomyControl | null
+  backlog: AutonomyBacklog
+  loading: boolean
+  busy: boolean
+  onToggle: () => void
+}) {
+  const isPaused = control?.status === 'paused'
+  const color = isPaused ? amber : emerald
+
+  return (
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))',
+        gap: 10,
+        alignItems: 'center',
+      }}
+    >
+      <div>
+        <div
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 14,
+            fontWeight: 700,
+            color: text,
+          }}
+        >
+          Autonomy Guardrails
+        </div>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            marginTop: 2,
+          }}
+        >
+          global scheduler pause · runtime limits
+        </div>
+      </div>
+      <AuStatBox
+        label="Status"
+        value={loading ? '…' : isPaused ? 'PAUSÉ' : 'ACTIF'}
+        color={color}
+      />
+      <AuStatBox label="Queued" value={String(backlog.queued)} color={cyan} />
+      <AuStatBox label="Running" value={String(backlog.running)} color={violet} />
+      <button
+        onClick={onToggle}
+        disabled={busy || !control}
+        style={{
+          minWidth: 118,
+          padding: '9px 12px',
+          borderRadius: 8,
+          border: `1px solid ${isPaused ? emerald + '55' : amber + '55'}`,
+          background: isPaused ? emerald + '22' : amber + '22',
+          color: isPaused ? emerald : amber,
+          cursor: busy || !control ? 'default' : 'pointer',
+          fontSize: 12,
+          fontWeight: 800,
+        }}
+      >
+        {isPaused ? 'Resume all' : 'Pause all'}
+      </button>
+    </div>
+  )
+}
+
 function SchedulesPanel({
   schedules,
   loading,
@@ -704,7 +794,8 @@ function SchedulesPanel({
   onToggle: (schedule: BusinessSchedule) => void
   onRunNow: (scheduleKey: BusinessSchedule['schedule_key']) => void
 }) {
-  const statusColor = (status: BusinessSchedule['status']) => (status === 'active' ? emerald : muted2)
+  const statusColor = (status: BusinessSchedule['status']) =>
+    status === 'active' ? emerald : muted2
 
   return (
     <div
@@ -780,7 +871,9 @@ function SchedulesPanel({
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: text }}>{schedule.label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: text }}>
+                      {schedule.label}
+                    </div>
                     <div
                       style={{
                         fontFamily: 'var(--font-mono)',
@@ -1381,6 +1474,14 @@ export default function AutomationsPage() {
   const [schedules, setSchedules] = useState<BusinessSchedule[]>([])
   const [schedulesLoading, setSchedulesLoading] = useState(false)
   const [scheduleBusyKey, setScheduleBusyKey] = useState<string | null>(null)
+  const [autonomyControl, setAutonomyControl] = useState<AutonomyControl | null>(null)
+  const [autonomyBacklog, setAutonomyBacklog] = useState<AutonomyBacklog>({
+    queued: 0,
+    running: 0,
+    failed: 0,
+  })
+  const [autonomyLoading, setAutonomyLoading] = useState(false)
+  const [autonomyBusy, setAutonomyBusy] = useState(false)
 
   const selectedDbWorkflow = dbWorkflows.find((w) => w.id === dbSelectedId) ?? null
   const selectedN8nWorkflow = n8nWorkflows.find((w) => w.id === n8nSelectedId) ?? null
@@ -1439,6 +1540,24 @@ export default function AutomationsPage() {
     }
   }, [])
 
+  const loadAutonomyControl = useCallback(async () => {
+    setAutonomyLoading(true)
+    try {
+      const res = await fetch('/api/studio/autonomy/controls')
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error || 'Erreur chargement contrôle autonomie')
+        return
+      }
+      setAutonomyControl((json.control as AutonomyControl) ?? null)
+      setAutonomyBacklog((json.backlog as AutonomyBacklog) ?? { queued: 0, running: 0, failed: 0 })
+    } catch {
+      toast.error('Erreur réseau contrôle autonomie')
+    } finally {
+      setAutonomyLoading(false)
+    }
+  }, [])
+
   async function loadWorkflows() {
     if (!user) return
     const supabase = createSupabaseBrowser()
@@ -1494,6 +1613,10 @@ export default function AutomationsPage() {
   useEffect(() => {
     if (user) loadSchedules()
   }, [user, loadSchedules])
+
+  useEffect(() => {
+    if (user) loadAutonomyControl()
+  }, [user, loadAutonomyControl])
 
   useEffect(() => {
     setN8nLoading(true)
@@ -1587,6 +1710,34 @@ export default function AutomationsPage() {
       toast.error('Erreur réseau schedule')
     } finally {
       setScheduleBusyKey(null)
+    }
+  }
+
+  async function toggleAutonomyControl() {
+    if (!autonomyControl) return
+    setAutonomyBusy(true)
+    try {
+      const nextStatus = autonomyControl.status === 'active' ? 'paused' : 'active'
+      const res = await fetch('/api/studio/autonomy/controls', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: nextStatus,
+          reason: nextStatus === 'paused' ? 'studio_operator_pause' : null,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error || 'Erreur contrôle autonomie')
+        return
+      }
+      setAutonomyControl((json.control as AutonomyControl) ?? null)
+      setAutonomyBacklog((json.backlog as AutonomyBacklog) ?? { queued: 0, running: 0, failed: 0 })
+      toast.success(nextStatus === 'paused' ? 'Autonomie mise en pause' : 'Autonomie relancée')
+    } catch {
+      toast.error('Erreur réseau contrôle autonomie')
+    } finally {
+      setAutonomyBusy(false)
     }
   }
 
@@ -1702,6 +1853,14 @@ export default function AutomationsPage() {
         >
           source automation_runs · {totalRuns === 0 ? 'aucun run enregistré' : 'historique réel'}
         </div>
+
+        <AutonomyControlPanel
+          control={autonomyControl}
+          backlog={autonomyBacklog}
+          loading={autonomyLoading}
+          busy={autonomyBusy}
+          onToggle={toggleAutonomyControl}
+        />
 
         <SchedulesPanel
           schedules={schedules}
