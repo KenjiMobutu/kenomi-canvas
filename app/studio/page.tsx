@@ -102,6 +102,21 @@ type RevenueLoopSnapshotPayload = {
   }
 }
 
+type CashOutcomeWindow = {
+  replies: number
+  deals: number
+  cashEur: number
+}
+
+type CashOutcomeSnapshot = {
+  last7d: CashOutcomeWindow
+  previous7d: CashOutcomeWindow
+  last30d: CashOutcomeWindow
+  previous30d: CashOutcomeWindow
+  delta7d: CashOutcomeWindow
+  delta30d: CashOutcomeWindow
+}
+
 type ProspectCashPayload = {
   ok: boolean
   prospects: ProspectCashRow[]
@@ -2021,6 +2036,144 @@ function CashFocusPanel({ snapshot }: { snapshot: RevenueLoopSnapshotPayload | n
   )
 }
 
+function formatSignedNumber(value: number) {
+  if (value > 0) return `+${value}`
+  return `${value}`
+}
+
+function formatSignedEuro(value: number) {
+  const rounded = Number(value.toFixed(2))
+  if (rounded > 0) return `+${formatEuro(rounded)}`
+  if (rounded < 0) return `-${formatEuro(Math.abs(rounded))}`
+  return formatEuro(0)
+}
+
+function CashOutcomePanel({
+  outcomes,
+  isMobile,
+}: {
+  outcomes: CashOutcomeSnapshot | null
+  isMobile: boolean
+}) {
+  const cards = [
+    {
+      label: 'Replies 7j',
+      value: outcomes?.last7d.replies ?? 0,
+      delta: outcomes ? formatSignedNumber(outcomes.delta7d.replies) : '0',
+    },
+    {
+      label: 'Deals 7j',
+      value: outcomes?.last7d.deals ?? 0,
+      delta: outcomes ? formatSignedNumber(outcomes.delta7d.deals) : '0',
+    },
+    {
+      label: 'Cash 7j',
+      value: formatEuro(outcomes?.last7d.cashEur ?? 0),
+      delta: outcomes ? formatSignedEuro(outcomes.delta7d.cashEur) : formatEuro(0),
+    },
+    {
+      label: 'Cash 30j',
+      value: formatEuro(outcomes?.last30d.cashEur ?? 0),
+      delta: outcomes ? formatSignedEuro(outcomes.delta30d.cashEur) : formatEuro(0),
+    },
+  ]
+
+  return (
+    <section
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.18em',
+            color: muted,
+            textTransform: 'uppercase',
+          }}
+        >
+          Cash outcomes
+        </div>
+        <h3
+          style={{
+            margin: '6px 0 0',
+            fontFamily: 'var(--font-display)',
+            fontSize: 18,
+            fontWeight: 800,
+            letterSpacing: '-.02em',
+            color: text,
+          }}
+        >
+          Signal revenu
+        </h3>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
+          gap: 10,
+        }}
+      >
+        {cards.map((card) => (
+          <div
+            key={card.label}
+            style={{
+              borderRadius: 10,
+              border: `1px solid ${line}`,
+              background: surface2,
+              padding: '12px 12px',
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                letterSpacing: '.12em',
+                textTransform: 'uppercase',
+                color: muted,
+              }}
+            >
+              {card.label}
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                color: text,
+                fontSize: 21,
+                fontWeight: 800,
+                lineHeight: 1,
+              }}
+            >
+              {card.value}
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                color: muted2,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                letterSpacing: '.08em',
+                textTransform: 'uppercase',
+              }}
+            >
+              vs prev {card.delta}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function CashActionQueue({
   actions,
   actionState,
@@ -3164,6 +3317,7 @@ export default function CockpitPage() {
   const [opsSummary, setOpsSummary] = useState<OpsSummaryPayload | null>(null)
   const [opsHealth, setOpsHealth] = useState<OpsHealthSummaryPayload | null>(null)
   const [revenueSnapshot, setRevenueSnapshot] = useState<RevenueLoopSnapshotPayload | null>(null)
+  const [cashOutcomes, setCashOutcomes] = useState<CashOutcomeSnapshot | null>(null)
   const [prospectCash, setProspectCash] = useState<ProspectCashPayload | null>(null)
   const [cashActionState, setCashActionState] = useState<
     Record<string, 'idle' | 'running' | 'done' | 'error'>
@@ -3267,10 +3421,30 @@ export default function CockpitPage() {
     }
   }, [])
 
+  const loadCashOutcomes = useCallback(() => {
+    let cancelled = false
+    fetch('/api/studio/revenue/outcomes', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.ok) setCashOutcomes(data.outcomes as CashOutcomeSnapshot)
+      })
+      .catch(() => {
+        if (!cancelled) setCashOutcomes(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
     if (!user) return
     return loadRevenueSnapshot()
   }, [user, loadRevenueSnapshot])
+
+  useEffect(() => {
+    if (!user) return
+    return loadCashOutcomes()
+  }, [user, loadCashOutcomes])
 
   const loadProspectCash = useCallback(() => {
     let cancelled = false
@@ -3361,13 +3535,14 @@ export default function CockpitPage() {
         setCashActionState((current) => ({ ...current, [action.id]: 'done' }))
         loadProspectCash()
         loadRevenueSnapshot()
+        loadCashOutcomes()
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Cash action failed'
         toast.error(message)
         setCashActionState((current) => ({ ...current, [action.id]: 'error' }))
       }
     },
-    [loadProspectCash, loadRevenueSnapshot]
+    [loadCashOutcomes, loadProspectCash, loadRevenueSnapshot]
   )
 
   /* Keyboard shortcuts */
@@ -3455,6 +3630,7 @@ export default function CockpitPage() {
         >
           {isMobile && <RevenueFirstStrip snapshot={revenueSnapshot} />}
           <CashFocusPanel snapshot={revenueSnapshot} />
+          <CashOutcomePanel outcomes={cashOutcomes} isMobile={isMobile} />
           <CashActionQueue
             actions={cashActions}
             actionState={cashActionState}
