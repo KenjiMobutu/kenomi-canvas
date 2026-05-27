@@ -4,6 +4,8 @@ import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useAuth } from '@/lib/auth-context'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '@/lib/studio-utils'
+import { toast } from 'sonner'
+import { buildCashActions, type CashAction, type ProspectCashRow } from '@/lib/studio/cash-queue'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Venture {
@@ -100,18 +102,6 @@ type RevenueLoopSnapshotPayload = {
   }
 }
 
-type ProspectCashRow = {
-  id: string
-  company_name: string
-  band: 'hot' | 'warm' | 'cold'
-  score: number
-  pipeline_status: string
-  approval_status: string
-  next_action?: string | null
-  next_followup_at?: string | null
-  last_outreach_kind?: string | null
-}
-
 type ProspectCashPayload = {
   ok: boolean
   prospects: ProspectCashRow[]
@@ -124,15 +114,6 @@ type ProspectCashPayload = {
     followUpDue: number
     won: number
   }
-}
-
-type CashAction = {
-  id: string
-  label: string
-  detail: string
-  href: string
-  tone: string
-  badge: string
 }
 
 /* ─── Static design data ─────────────────────────────────────── */
@@ -2040,85 +2021,22 @@ function CashFocusPanel({ snapshot }: { snapshot: RevenueLoopSnapshotPayload | n
   )
 }
 
-function buildCashActions(input: {
-  prospects: ProspectCashRow[]
-  revenueSnapshot: RevenueLoopSnapshotPayload | null
-}): CashAction[] {
-  const actions: CashAction[] = []
-  const hotApproval = input.prospects.find(
-    (prospect) => prospect.approval_status === 'awaiting_approval'
-  )
-  if (hotApproval) {
-    actions.push({
-      id: `approval:${hotApproval.id}`,
-      label: `Approuver ${hotApproval.company_name}`,
-      detail: 'Draft prêt à valider pour débloquer l’envoi.',
-      href: '/studio/prospects?status=awaiting_approval',
-      tone: amber,
-      badge: 'approval',
-    })
+function CashActionQueue({
+  actions,
+  actionState,
+  onRunAction,
+}: {
+  actions: CashAction[]
+  actionState: Record<string, 'idle' | 'running' | 'done' | 'error'>
+  onRunAction: (action: CashAction) => void
+}) {
+  function resolveToneColor(tone: CashAction['tone']) {
+    if (tone === 'amber') return amber
+    if (tone === 'emerald') return emerald
+    if (tone === 'rose') return rose
+    return accent
   }
 
-  const followUpDue = input.prospects.find(
-    (prospect) => prospect.pipeline_status === 'follow_up_due'
-  )
-  if (followUpDue) {
-    actions.push({
-      id: `followup:${followUpDue.id}`,
-      label: `Relancer ${followUpDue.company_name}`,
-      detail: 'Suivi dû: traite la relance avant d’ouvrir une nouvelle boucle.',
-      href: '/studio/prospects?status=follow_up_due',
-      tone: accent,
-      badge: 'follow-up',
-    })
-  }
-
-  const draftCreated = input.prospects.find(
-    (prospect) => prospect.pipeline_status === 'draft_created'
-  )
-  if (draftCreated) {
-    actions.push({
-      id: `draft:${draftCreated.id}`,
-      label: `Envoyer ${draftCreated.company_name}`,
-      detail: 'Draft validé en attente d’envoi opérateur.',
-      href: '/studio/prospects?status=draft_created',
-      tone: emerald,
-      badge: 'send',
-    })
-  }
-
-  const revenueAction = input.revenueSnapshot?.summary.recommendedAction
-  if (revenueAction) {
-    actions.push({
-      id: `revenue:${revenueAction.type}:${revenueAction.ventureName}`,
-      label: revenueAction.ventureName,
-      detail: `${revenueAction.reason} · potentiel ${formatEuro(revenueAction.blockedRevenueEur)}`,
-      href: '/studio/revenue',
-      tone: accent,
-      badge: 'revenue',
-    })
-  }
-
-  const hotLead = input.prospects.find(
-    (prospect) =>
-      prospect.band === 'hot' &&
-      (prospect.pipeline_status === 'new' || prospect.pipeline_status === 'ready_to_contact')
-  )
-  if (hotLead) {
-    actions.push({
-      id: `lead:${hotLead.id}`,
-      label: `Travailler ${hotLead.company_name}`,
-      detail: 'Lead chaud encore non traité. Priorité avant les leads froids.',
-      href: '/studio/prospects',
-      tone: rose,
-      badge: 'lead',
-    })
-  }
-
-  return actions.slice(0, 4)
-}
-
-function CashActionQueue({ actions }: { actions: CashAction[] }) {
   return (
     <section
       style={{
@@ -2196,11 +2114,9 @@ function CashActionQueue({ actions }: { actions: CashAction[] }) {
         </div>
       ) : (
         actions.map((action, index) => (
-          <a
+          <div
             key={action.id}
-            href={action.href}
             style={{
-              textDecoration: 'none',
               display: 'grid',
               gridTemplateColumns: '28px 1fr auto',
               gap: 12,
@@ -2212,51 +2128,115 @@ function CashActionQueue({ actions }: { actions: CashAction[] }) {
               color: text,
             }}
           >
-            <span
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 999,
-                display: 'grid',
-                placeItems: 'center',
-                background: `${action.tone}1f`,
-                color: action.tone,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                fontWeight: 800,
-              }}
-            >
-              {index + 1}
-            </span>
-            <span style={{ minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>
-                {action.label}
-              </span>
-              <span
-                style={{
-                  display: 'block',
-                  marginTop: 3,
-                  fontSize: 11.5,
-                  color: muted,
-                  lineHeight: 1.45,
-                }}
-              >
-                {action.detail}
-              </span>
-            </span>
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9.5,
-                letterSpacing: '.12em',
-                textTransform: 'uppercase',
-                color: action.tone,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {action.badge}
-            </span>
-          </a>
+            {(() => {
+              const toneColor = resolveToneColor(action.tone)
+              const status = actionState[action.id] ?? 'idle'
+              const actionLabel = action.intent
+                ? status === 'running'
+                  ? 'Running...'
+                  : action.kind === 'approval'
+                    ? 'Approve'
+                    : action.kind === 'follow_up'
+                      ? 'Mark sent'
+                      : action.kind === 'send'
+                        ? 'Mark sent'
+                        : 'Run'
+                : 'Open'
+              return (
+                <>
+                  <span
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 999,
+                      display: 'grid',
+                      placeItems: 'center',
+                      background: `${toneColor}1f`,
+                      color: toneColor,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {index + 1}
+                  </span>
+                  <span style={{ minWidth: 0 }}>
+                    <a
+                      href={action.href}
+                      style={{
+                        display: 'block',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: text,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      {action.label}
+                    </a>
+                    <span
+                      style={{
+                        display: 'block',
+                        marginTop: 3,
+                        fontSize: 11.5,
+                        color: muted,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {action.detail}
+                    </span>
+                  </span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      gap: 6,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        letterSpacing: '.12em',
+                        textTransform: 'uppercase',
+                        color: toneColor,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {action.badge}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={status === 'running'}
+                      onClick={() => {
+                        if (action.intent) {
+                          onRunAction(action)
+                          return
+                        }
+                        window.location.href = action.href
+                      }}
+                      style={{
+                        minHeight: 30,
+                        padding: '0 10px',
+                        borderRadius: 8,
+                        border: `1px solid ${toneColor}35`,
+                        background: status === 'running' ? surface : `${toneColor}14`,
+                        color: status === 'running' ? muted2 : toneColor,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        letterSpacing: '.12em',
+                        textTransform: 'uppercase',
+                        cursor: status === 'running' ? 'wait' : 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {actionLabel}
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
         ))
       )}
     </section>
@@ -3169,6 +3149,9 @@ export default function CockpitPage() {
   const [opsHealth, setOpsHealth] = useState<OpsHealthSummaryPayload | null>(null)
   const [revenueSnapshot, setRevenueSnapshot] = useState<RevenueLoopSnapshotPayload | null>(null)
   const [prospectCash, setProspectCash] = useState<ProspectCashPayload | null>(null)
+  const [cashActionState, setCashActionState] = useState<
+    Record<string, 'idle' | 'running' | 'done' | 'error'>
+  >({})
   const [opsActionState, setOpsActionState] = useState<
     Record<string, 'idle' | 'running' | 'done' | 'error'>
   >({})
@@ -3253,8 +3236,7 @@ export default function CockpitPage() {
     }
   }, [user])
 
-  useEffect(() => {
-    if (!user) return
+  const loadRevenueSnapshot = useCallback(() => {
     let cancelled = false
     fetch('/api/studio/revenue/loop', { cache: 'no-store' })
       .then((res) => res.json())
@@ -3267,10 +3249,14 @@ export default function CockpitPage() {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [])
 
   useEffect(() => {
     if (!user) return
+    return loadRevenueSnapshot()
+  }, [user, loadRevenueSnapshot])
+
+  const loadProspectCash = useCallback(() => {
     let cancelled = false
     fetch('/api/studio/prospects', { cache: 'no-store' })
       .then((res) => res.json())
@@ -3283,7 +3269,12 @@ export default function CockpitPage() {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    return loadProspectCash()
+  }, [user, loadProspectCash])
 
   const runOpsAction = useCallback(
     async (action: OpsSummaryAction) => {
@@ -3330,6 +3321,37 @@ export default function CockpitPage() {
       }
     },
     [loadOpsSummary]
+  )
+
+  const runCashAction = useCallback(
+    async (action: CashAction) => {
+      if (!action.intent) {
+        window.location.href = action.href
+        return
+      }
+
+      setCashActionState((current) => ({ ...current, [action.id]: 'running' }))
+      try {
+        const response = await fetch(action.intent.endpoint, {
+          method: action.intent.method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(action.intent.body),
+        })
+        const payload = await response.json().catch(() => null)
+        if (!response.ok) {
+          throw new Error(payload?.error ?? 'Cash action failed')
+        }
+        toast.success(action.intent.successMessage)
+        setCashActionState((current) => ({ ...current, [action.id]: 'done' }))
+        loadProspectCash()
+        loadRevenueSnapshot()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Cash action failed'
+        toast.error(message)
+        setCashActionState((current) => ({ ...current, [action.id]: 'error' }))
+      }
+    },
+    [loadProspectCash, loadRevenueSnapshot]
   )
 
   /* Keyboard shortcuts */
@@ -3417,7 +3439,11 @@ export default function CockpitPage() {
         >
           {isMobile && <RevenueFirstStrip snapshot={revenueSnapshot} />}
           <CashFocusPanel snapshot={revenueSnapshot} />
-          <CashActionQueue actions={cashActions} />
+          <CashActionQueue
+            actions={cashActions}
+            actionState={cashActionState}
+            onRunAction={runCashAction}
+          />
           {loading && (
             <div
               style={{
