@@ -136,6 +136,27 @@ function parseJson(content: string, agentId: string): unknown {
   }
 }
 
+function normalizeDevopsObject(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value
+  const raw = value as Record<string, unknown>
+  const services = Array.isArray(raw.services)
+    ? raw.services.map((service) => {
+        if (!service || typeof service !== 'object') return service
+        const nextStep = (service as Record<string, unknown>)['next,step']
+        if (nextStep === undefined) return service
+        return {
+          ...(service as Record<string, unknown>),
+          next_step: (service as Record<string, unknown>).next_step ?? nextStep,
+        }
+      })
+    : raw.services
+
+  return {
+    ...raw,
+    services,
+  }
+}
+
 function parseScoutLegacy(content: string): z.infer<typeof scoutSchema> {
   const extract = (key: string) => {
     const match = content.match(new RegExp(`^${key}:\\s*(.+)$`, 'im'))
@@ -193,8 +214,8 @@ export function parseAgentOutput(agentId: string, content: string): AgentOutput 
     if (agentId === 'scout' && !content.trim().startsWith('{')) {
       return parseScoutLegacy(content)
     }
-
-    return schema.parse(parseJson(content, agentId))
+    const parsed = parseJson(content, agentId)
+    return schema.parse(agentId === 'devops' ? normalizeDevopsObject(parsed) : parsed)
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('Invalid')) {
       throw error
