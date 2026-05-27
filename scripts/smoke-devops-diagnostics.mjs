@@ -86,6 +86,8 @@ assert(
   `scheduler trigger failed: ${schedulerRun.status} ${schedulerText}`
 )
 assert(schedulerJson?.enqueued >= 1, `scheduler did not enqueue devops: ${schedulerText}`)
+const scheduledJobId = Array.isArray(schedulerJson?.report) ? schedulerJson.report[0]?.jobId : null
+assert(typeof scheduledJobId === 'string' && scheduledJobId.length > 0, `missing scheduled job id: ${schedulerText}`)
 process.stdout.write(`ok scheduler enqueued ${schedulerJson.enqueued}\n`)
 
 const workerRun = await fetch(new URL('/api/internal/autonomy/worker/drain', baseUrl), {
@@ -123,17 +125,28 @@ for (let attempt = 0; attempt < 30; attempt += 1) {
   )
   completedJob = Array.isArray(jobsRes.json?.jobs)
     ? jobsRes.json.jobs.find(
-        (job) =>
-          job?.payload?.scheduleKey === 'devops' &&
-          (job?.status === 'completed' || job?.status === 'failed')
+        (job) => job?.id === scheduledJobId && (job?.status === 'completed' || job?.status === 'failed')
       ) ?? null
     : null
   if (completedJob) break
+  await fetch(new URL('/api/internal/autonomy/worker/drain', baseUrl), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-autonomy-worker-token': workerSecret,
+    },
+    body: JSON.stringify({
+      worker_id: `smoke:devops:${attempt + 1}`,
+      limit: 1,
+      allowed_job_kinds: ['run_agent'],
+      async: true,
+    }),
+  }).catch(() => null)
   await sleep(2000)
 }
 assert(completedJob, 'timed out waiting for devops scheduled job completion')
 assert(completedJob.status === 'completed', `scheduled devops job failed: ${completedJob.last_error ?? ''}`)
-process.stdout.write(`ok worker completed ${completedJob.id}\n`)
+process.stdout.write(`ok worker completed ${scheduledJobId}\n`)
 
 const diagnosticsRes = await request('/api/studio/infra/diagnostics')
 assert(
