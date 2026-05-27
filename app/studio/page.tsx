@@ -2184,6 +2184,22 @@ function CashActionQueue({
                     >
                       {action.detail}
                     </span>
+                    <span
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        marginTop: 7,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        letterSpacing: '.1em',
+                        textTransform: 'uppercase',
+                        color: muted2,
+                      }}
+                    >
+                      <span>{action.impactLabel}</span>
+                      <span>{action.blockedLabel}</span>
+                    </span>
                   </span>
                   <div
                     style={{

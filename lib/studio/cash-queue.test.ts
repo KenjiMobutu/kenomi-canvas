@@ -70,11 +70,19 @@ describe('buildCashActions', () => {
       body: { id: 'p-follow-up', action: 'mark_follow_up_sent' },
       successMessage: 'Follow-up marked sent',
     })
+    expect(actions[0]).toMatchObject({
+      impactLabel: '82/100 lead',
+      blockedLabel: '4h blocked',
+    })
     expect(actions[1].intent).toEqual({
       method: 'PATCH',
       endpoint: '/api/studio/autonomy/jobs',
       body: { approvalId: 'approval-1', decision: 'approved' },
       successMessage: 'Draft approved',
+    })
+    expect(actions[3]).toMatchObject({
+      impactLabel: '900 €',
+      blockedLabel: '87 priority',
     })
     expect(actions[2].intent).toEqual({
       method: 'PATCH',
@@ -109,6 +117,8 @@ describe('buildCashActions', () => {
       kind: 'lead',
       label: 'Travailler Lead Co',
       href: '/studio/prospects',
+      impactLabel: '88/100 lead',
+      blockedLabel: 'new lead',
       intent: null,
     })
   })

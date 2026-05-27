@@ -42,6 +42,8 @@ export type CashAction = {
   kind: 'approval' | 'follow_up' | 'send' | 'revenue' | 'lead'
   label: string
   detail: string
+  impactLabel: string
+  blockedLabel: string
   href: string
   tone: 'amber' | 'accent' | 'emerald' | 'rose'
   badge: string
@@ -76,6 +78,12 @@ function overdueHours(nextFollowupAt: string | null | undefined, nowIso: string)
   return Math.min(24, Math.round((nowMs - dueMs) / 3_600_000))
 }
 
+function formatBlockedLabel(hours: number) {
+  if (hours <= 0) return 'now'
+  if (hours < 24) return `${hours}h blocked`
+  return '24h+ blocked'
+}
+
 export function buildCashActions(input: {
   prospects: ProspectCashRow[]
   revenueSnapshot: RevenueLoopSnapshotPayload | null
@@ -100,6 +108,8 @@ export function buildCashActions(input: {
       kind: 'approval',
       label: `Approuver ${hotApproval.company_name}`,
       detail: 'Draft prêt à valider pour débloquer l’envoi.',
+      impactLabel: `${hotApproval.score}/100 lead`,
+      blockedLabel: 'approval pending',
       href: '/studio/prospects?status=awaiting_approval',
       tone: 'amber',
       badge: 'approval',
@@ -129,11 +139,14 @@ export function buildCashActions(input: {
       return rightScore - leftScore
     })[0]
   if (followUpDue) {
+    const blockedHours = overdueHours(followUpDue.next_followup_at, nowIso)
     actions.push({
       id: `followup:${followUpDue.id}`,
       kind: 'follow_up',
       label: `Relancer ${followUpDue.company_name}`,
       detail: 'Suivi dû: traite la relance avant d’ouvrir une nouvelle boucle.',
+      impactLabel: `${followUpDue.score}/100 lead`,
+      blockedLabel: formatBlockedLabel(blockedHours),
       href: '/studio/prospects?status=follow_up_due',
       tone: 'accent',
       badge: 'follow-up',
@@ -143,11 +156,7 @@ export function buildCashActions(input: {
         body: { id: followUpDue.id, action: 'mark_follow_up_sent' },
         successMessage: 'Follow-up marked sent',
       },
-      priority:
-        112 +
-        bandBonus(followUpDue.band) +
-        scoreBonus(followUpDue.score) +
-        overdueHours(followUpDue.next_followup_at, nowIso),
+      priority: 112 + bandBonus(followUpDue.band) + scoreBonus(followUpDue.score) + blockedHours,
     })
   }
 
@@ -164,6 +173,8 @@ export function buildCashActions(input: {
       kind: 'send',
       label: `Envoyer ${draftCreated.company_name}`,
       detail: 'Draft validé en attente d’envoi opérateur.',
+      impactLabel: `${draftCreated.score}/100 lead`,
+      blockedLabel: 'ready to send',
       href: '/studio/prospects?status=draft_created',
       tone: 'emerald',
       badge: 'send',
@@ -184,6 +195,8 @@ export function buildCashActions(input: {
       kind: 'revenue',
       label: revenueAction.ventureName,
       detail: `${revenueAction.reason} · potentiel ${formatEuro(revenueAction.blockedRevenueEur)}`,
+      impactLabel: formatEuro(revenueAction.blockedRevenueEur),
+      blockedLabel: `${revenueAction.priorityScore} priority`,
       href: '/studio/revenue',
       tone: 'accent',
       badge: 'revenue',
@@ -212,6 +225,8 @@ export function buildCashActions(input: {
       kind: 'lead',
       label: `Travailler ${hotLead.company_name}`,
       detail: 'Lead chaud encore non traité. Priorité avant les leads froids.',
+      impactLabel: `${hotLead.score}/100 lead`,
+      blockedLabel: 'new lead',
       href: '/studio/prospects',
       tone: 'rose',
       badge: 'lead',
