@@ -115,6 +115,23 @@ type CashOutcomeSnapshot = {
   previous30d: CashOutcomeWindow
   delta7d: CashOutcomeWindow
   delta30d: CashOutcomeWindow
+  rates: {
+    replyRate7d: number
+    winRate7d: number
+    replyRate30d: number
+    winRate30d: number
+  }
+  sourceBreakdown: Array<{
+    source: string
+    active: number
+    replied: number
+    won: number
+  }>
+  blockers: Array<{
+    key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
+    label: string
+    count: number
+  }>
 }
 
 type ProspectCashPayload = {
@@ -2169,6 +2186,143 @@ function CashOutcomePanel({
             </div>
           </div>
         ))}
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '1.1fr .9fr',
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            borderRadius: 10,
+            border: `1px solid ${line}`,
+            background: surface2,
+            padding: '12px 12px',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              letterSpacing: '.12em',
+              textTransform: 'uppercase',
+              color: muted,
+            }}
+          >
+            Rates
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: 10,
+              marginTop: 10,
+            }}
+          >
+            {[
+              ['Reply 7j', `${outcomes?.rates.replyRate7d ?? 0}%`],
+              ['Win 7j', `${outcomes?.rates.winRate7d ?? 0}%`],
+              ['Reply 30j', `${outcomes?.rates.replyRate30d ?? 0}%`],
+              ['Win 30j', `${outcomes?.rates.winRate30d ?? 0}%`],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <div style={{ color: muted2, fontSize: 11 }}>{label}</div>
+                <div style={{ marginTop: 4, color: text, fontSize: 18, fontWeight: 700 }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div
+          style={{
+            borderRadius: 10,
+            border: `1px solid ${line}`,
+            background: surface2,
+            padding: '12px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              letterSpacing: '.12em',
+              textTransform: 'uppercase',
+              color: muted,
+            }}
+          >
+            Blockers
+          </div>
+          {(outcomes?.blockers ?? []).map((blocker) => (
+            <div
+              key={blocker.key}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
+            >
+              <span style={{ color: muted2, fontSize: 11 }}>{blocker.label}</span>
+              <strong style={{ color: text, fontSize: 15 }}>{blocker.count}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div
+        style={{
+          borderRadius: 10,
+          border: `1px solid ${line}`,
+          background: surface2,
+          padding: '12px 12px',
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            letterSpacing: '.12em',
+            textTransform: 'uppercase',
+            color: muted,
+          }}
+        >
+          Source mix
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
+            gap: 10,
+            marginTop: 10,
+          }}
+        >
+          {(outcomes?.sourceBreakdown ?? []).map((source) => (
+            <div
+              key={source.source}
+              style={{
+                borderRadius: 8,
+                border: `1px solid ${line}`,
+                padding: '10px 10px',
+                minWidth: 0,
+              }}
+            >
+              <div
+                style={{
+                  color: text,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  letterSpacing: '.12em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {source.source}
+              </div>
+              <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
+                <span>{source.active} active</span>
+                <span>{source.replied} replies</span>
+                <span>{source.won} won</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )

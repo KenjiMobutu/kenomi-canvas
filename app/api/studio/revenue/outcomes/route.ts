@@ -19,7 +19,7 @@ export async function GET() {
 
   try {
     const userId = user!.id
-    const [activities, payments] = await Promise.all([
+    const [activities, payments, prospects] = await Promise.all([
       readTable(
         supabase
           .from('prospect_activities')
@@ -36,11 +36,19 @@ export async function GET() {
           .order('created_at', { ascending: false })
           .limit(400)
       ),
+      readTable(
+        supabase
+          .from('prospects')
+          .select('source, pipeline_status, approval_status')
+          .eq('user_id', userId)
+          .order('updated_at', { ascending: false })
+          .limit(400)
+      ),
     ])
 
     return NextResponse.json({
       ok: true,
-      outcomes: buildCashOutcomeSnapshot({ activities, payments }),
+      outcomes: buildCashOutcomeSnapshot({ activities, payments, prospects }),
     })
   } catch (error) {
     return apiError(
