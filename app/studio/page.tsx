@@ -100,6 +100,41 @@ type RevenueLoopSnapshotPayload = {
   }
 }
 
+type ProspectCashRow = {
+  id: string
+  company_name: string
+  band: 'hot' | 'warm' | 'cold'
+  score: number
+  pipeline_status: string
+  approval_status: string
+  next_action?: string | null
+  next_followup_at?: string | null
+  last_outreach_kind?: string | null
+}
+
+type ProspectCashPayload = {
+  ok: boolean
+  prospects: ProspectCashRow[]
+  summary: {
+    total: number
+    awaitingApproval: number
+    approvedToSend: number
+    draftCreated: number
+    sent: number
+    followUpDue: number
+    won: number
+  }
+}
+
+type CashAction = {
+  id: string
+  label: string
+  detail: string
+  href: string
+  tone: string
+  badge: string
+}
+
 /* ─── Static design data ─────────────────────────────────────── */
 const AGENTS_STATIC = [
   {
@@ -2005,6 +2040,229 @@ function CashFocusPanel({ snapshot }: { snapshot: RevenueLoopSnapshotPayload | n
   )
 }
 
+function buildCashActions(input: {
+  prospects: ProspectCashRow[]
+  revenueSnapshot: RevenueLoopSnapshotPayload | null
+}): CashAction[] {
+  const actions: CashAction[] = []
+  const hotApproval = input.prospects.find(
+    (prospect) => prospect.approval_status === 'awaiting_approval'
+  )
+  if (hotApproval) {
+    actions.push({
+      id: `approval:${hotApproval.id}`,
+      label: `Approuver ${hotApproval.company_name}`,
+      detail: 'Draft prêt à valider pour débloquer l’envoi.',
+      href: '/studio/prospects?status=awaiting_approval',
+      tone: amber,
+      badge: 'approval',
+    })
+  }
+
+  const followUpDue = input.prospects.find(
+    (prospect) => prospect.pipeline_status === 'follow_up_due'
+  )
+  if (followUpDue) {
+    actions.push({
+      id: `followup:${followUpDue.id}`,
+      label: `Relancer ${followUpDue.company_name}`,
+      detail: 'Suivi dû: traite la relance avant d’ouvrir une nouvelle boucle.',
+      href: '/studio/prospects?status=follow_up_due',
+      tone: accent,
+      badge: 'follow-up',
+    })
+  }
+
+  const draftCreated = input.prospects.find(
+    (prospect) => prospect.pipeline_status === 'draft_created'
+  )
+  if (draftCreated) {
+    actions.push({
+      id: `draft:${draftCreated.id}`,
+      label: `Envoyer ${draftCreated.company_name}`,
+      detail: 'Draft validé en attente d’envoi opérateur.',
+      href: '/studio/prospects?status=draft_created',
+      tone: emerald,
+      badge: 'send',
+    })
+  }
+
+  const revenueAction = input.revenueSnapshot?.summary.recommendedAction
+  if (revenueAction) {
+    actions.push({
+      id: `revenue:${revenueAction.type}:${revenueAction.ventureName}`,
+      label: revenueAction.ventureName,
+      detail: `${revenueAction.reason} · potentiel ${formatEuro(revenueAction.blockedRevenueEur)}`,
+      href: '/studio/revenue',
+      tone: accent,
+      badge: 'revenue',
+    })
+  }
+
+  const hotLead = input.prospects.find(
+    (prospect) =>
+      prospect.band === 'hot' &&
+      (prospect.pipeline_status === 'new' || prospect.pipeline_status === 'ready_to_contact')
+  )
+  if (hotLead) {
+    actions.push({
+      id: `lead:${hotLead.id}`,
+      label: `Travailler ${hotLead.company_name}`,
+      detail: 'Lead chaud encore non traité. Priorité avant les leads froids.',
+      href: '/studio/prospects',
+      tone: rose,
+      badge: 'lead',
+    })
+  }
+
+  return actions.slice(0, 4)
+}
+
+function CashActionQueue({ actions }: { actions: CashAction[] }) {
+  return (
+    <section
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 12,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.18em',
+              color: muted,
+              textTransform: 'uppercase',
+            }}
+          >
+            Cash queue
+          </div>
+          <h3
+            style={{
+              margin: '6px 0 0',
+              fontFamily: 'var(--font-display)',
+              fontSize: 18,
+              fontWeight: 800,
+              letterSpacing: '-.02em',
+              color: text,
+            }}
+          >
+            Actions du jour
+          </h3>
+        </div>
+        <a
+          href="/studio/prospects"
+          style={{
+            color: accent,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Prospects
+        </a>
+      </div>
+      {actions.length === 0 ? (
+        <div
+          style={{
+            padding: '12px 14px',
+            borderRadius: 10,
+            border: `1px solid ${line}`,
+            background: surface2,
+            fontSize: 12,
+            color: muted,
+            lineHeight: 1.5,
+          }}
+        >
+          Aucune action cash prioritaire détectée. Utilise `Prospects` pour générer un nouveau lead
+          ou `Revenue` pour relancer une boucle existante.
+        </div>
+      ) : (
+        actions.map((action, index) => (
+          <a
+            key={action.id}
+            href={action.href}
+            style={{
+              textDecoration: 'none',
+              display: 'grid',
+              gridTemplateColumns: '28px 1fr auto',
+              gap: 12,
+              alignItems: 'center',
+              padding: '12px 12px',
+              borderRadius: 10,
+              border: `1px solid ${line}`,
+              background: surface2,
+              color: text,
+            }}
+          >
+            <span
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 999,
+                display: 'grid',
+                placeItems: 'center',
+                background: `${action.tone}1f`,
+                color: action.tone,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                fontWeight: 800,
+              }}
+            >
+              {index + 1}
+            </span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>
+                {action.label}
+              </span>
+              <span
+                style={{
+                  display: 'block',
+                  marginTop: 3,
+                  fontSize: 11.5,
+                  color: muted,
+                  lineHeight: 1.45,
+                }}
+              >
+                {action.detail}
+              </span>
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                letterSpacing: '.12em',
+                textTransform: 'uppercase',
+                color: action.tone,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {action.badge}
+            </span>
+          </a>
+        ))
+      )}
+    </section>
+  )
+}
+
 function OpsSummaryStrip({
   summary,
   actionState,
@@ -2910,6 +3168,7 @@ export default function CockpitPage() {
   const [opsSummary, setOpsSummary] = useState<OpsSummaryPayload | null>(null)
   const [opsHealth, setOpsHealth] = useState<OpsHealthSummaryPayload | null>(null)
   const [revenueSnapshot, setRevenueSnapshot] = useState<RevenueLoopSnapshotPayload | null>(null)
+  const [prospectCash, setProspectCash] = useState<ProspectCashPayload | null>(null)
   const [opsActionState, setOpsActionState] = useState<
     Record<string, 'idle' | 'running' | 'done' | 'error'>
   >({})
@@ -3010,6 +3269,22 @@ export default function CockpitPage() {
     }
   }, [user])
 
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetch('/api/studio/prospects', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.ok) setProspectCash(data as ProspectCashPayload)
+      })
+      .catch(() => {
+        if (!cancelled) setProspectCash(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
   const runOpsAction = useCallback(
     async (action: OpsSummaryAction) => {
       if (!action.intent || action.intent.method === 'GET') {
@@ -3093,6 +3368,14 @@ export default function CockpitPage() {
   const current = queue[selectedIdx] ?? queue[0]
   const isCold = !loading && ventures.length === 0
   const ckState = loading ? 'loading' : isCold ? 'cold' : 'normal'
+  const cashActions = useMemo(
+    () =>
+      buildCashActions({
+        prospects: prospectCash?.prospects ?? [],
+        revenueSnapshot,
+      }),
+    [prospectCash, revenueSnapshot]
+  )
 
   const ckVars = theme === 'dark' ? CK_DARK : CK_LIGHT
 
@@ -3134,6 +3417,7 @@ export default function CockpitPage() {
         >
           {isMobile && <RevenueFirstStrip snapshot={revenueSnapshot} />}
           <CashFocusPanel snapshot={revenueSnapshot} />
+          <CashActionQueue actions={cashActions} />
           {loading && (
             <div
               style={{
