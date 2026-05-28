@@ -3,6 +3,8 @@ import type { ConversionTruthSnapshot } from '@/lib/revenue/conversion-truth'
 export type WeeklyReviewInsight = {
   title: string
   detail: string
+  source?: string
+  band?: string
 }
 
 export type WeeklyRevenueReview = {
@@ -56,6 +58,7 @@ export function buildWeeklyRevenueReview(input: {
       ? {
           title: input.conversions.sourceClosesFastest.source,
           detail: `${input.conversions.sourceClosesFastest.paid} won · ${input.conversions.sourceClosesFastest.replyToCloseDays}d reply→close`,
+          source: input.conversions.sourceClosesFastest.source,
         }
       : {
           title: 'No source truth yet',
@@ -67,6 +70,8 @@ export function buildWeeklyRevenueReview(input: {
       ? {
           title: `${input.conversions.segmentRepliesNoPay.source}/${input.conversions.segmentRepliesNoPay.band} · ${input.conversions.segmentRepliesNoPay.offerName}`,
           detail: `${input.conversions.segmentRepliesNoPay.replied} replies · ${input.conversions.segmentRepliesNoPay.paid} won`,
+          source: input.conversions.segmentRepliesNoPay.source,
+          band: input.conversions.segmentRepliesNoPay.band,
         }
       : {
           title: 'No segment truth yet',
@@ -155,6 +160,8 @@ export function buildWeeklyRevenueReview(input: {
       focus: 'segment',
       title: `Fix close friction on ${input.conversions.segmentRepliesNoPay.source}/${input.conversions.segmentRepliesNoPay.band}`,
       detail: `Keep volume steady and test a tighter close for ${input.conversions.segmentRepliesNoPay.offerName}.`,
+      source: input.conversions.segmentRepliesNoPay.source,
+      band: input.conversions.segmentRepliesNoPay.band,
     }
   } else if (input.conversions.bestAngle) {
     nextExperiment = {

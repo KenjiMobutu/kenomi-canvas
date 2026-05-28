@@ -29,6 +29,7 @@ import {
   type RevenueFocus,
 } from '@/lib/studio/revenue-links'
 import { shouldEmphasizeRevenueLoopAction, sortRevenueLoopsByFocus } from '@/lib/studio/revenue-focus'
+import { buildWeeklyReviewHref } from '@/lib/studio/weekly-review-links'
 
 type RevenueAuditEvent = {
   id: string
@@ -165,6 +166,8 @@ type RevenueConversionsSnapshot = {
 type WeeklyRevenueReviewInsight = {
   title: string
   detail: string
+  source?: string
+  band?: string
 }
 
 type WeeklyRevenueReviewSnapshot = {
@@ -183,6 +186,8 @@ type WeeklyRevenueReviewSnapshot = {
   }
   nextExperiment: WeeklyRevenueReviewInsight & {
     focus: string
+    source?: string
+    band?: string
   }
 }
 
@@ -327,11 +332,15 @@ function TruthCard({
   title,
   detail,
   tone = C.text,
+  href,
+  ctaLabel,
 }: {
   label: string
   title: string
   detail: string
   tone?: string
+  href?: string
+  ctaLabel?: string
 }) {
   return (
     <div
@@ -356,6 +365,30 @@ function TruthCard({
       </div>
       <div style={{ color: tone, fontSize: 18, fontWeight: 700, lineHeight: 1.2 }}>{title}</div>
       <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>{detail}</div>
+      {href ? (
+        <Link
+          href={href}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 32,
+            width: 'fit-content',
+            padding: '0 10px',
+            borderRadius: 8,
+            border: `1px solid ${C.line2}`,
+            background: C.panel2,
+            color: C.text,
+            textDecoration: 'none',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            textTransform: 'uppercase',
+            letterSpacing: '.08em',
+          }}
+        >
+          {ctaLabel ?? 'Open'}
+        </Link>
+      ) : null}
     </div>
   )
 }
@@ -1003,12 +1036,61 @@ export default function RevenuePage() {
               gap: 12,
             }}
           >
-            <TruthCard label="Best source" title={weeklyReview.bestSource.title} detail={weeklyReview.bestSource.detail} tone={C.good} />
-            <TruthCard label="Best segment" title={weeklyReview.bestSegment.title} detail={weeklyReview.bestSegment.detail} tone={C.blue} />
-            <TruthCard label="Best offer" title={weeklyReview.bestOffer.title} detail={weeklyReview.bestOffer.detail} tone={C.accent} />
-            <TruthCard label="Best angle" title={weeklyReview.bestAngle.title} detail={weeklyReview.bestAngle.detail} tone={C.good} />
-            <TruthCard label="Top objection" title={weeklyReview.topObjection.title} detail={weeklyReview.topObjection.detail} tone={C.warn} />
-            <TruthCard label="Main leak" title={weeklyReview.mainLeak.title} detail={weeklyReview.mainLeak.detail} tone={C.bad} />
+            <TruthCard
+              label="Best source"
+              title={weeklyReview.bestSource.title}
+              detail={weeklyReview.bestSource.detail}
+              tone={C.good}
+              href={buildWeeklyReviewHref('best_source', {
+                source: weeklyReview.bestSource.source,
+              })}
+              ctaLabel="Open source"
+            />
+            <TruthCard
+              label="Best segment"
+              title={weeklyReview.bestSegment.title}
+              detail={weeklyReview.bestSegment.detail}
+              tone={C.blue}
+              href={buildWeeklyReviewHref('best_segment', {
+                source: weeklyReview.bestSegment.source,
+                band: weeklyReview.bestSegment.band,
+              })}
+              ctaLabel="Open segment"
+            />
+            <TruthCard
+              label="Best offer"
+              title={weeklyReview.bestOffer.title}
+              detail={weeklyReview.bestOffer.detail}
+              tone={C.accent}
+              href={buildWeeklyReviewHref('best_offer')}
+              ctaLabel="Open revenue"
+            />
+            <TruthCard
+              label="Best angle"
+              title={weeklyReview.bestAngle.title}
+              detail={weeklyReview.bestAngle.detail}
+              tone={C.good}
+              href={buildWeeklyReviewHref('best_angle')}
+              ctaLabel="Open revenue"
+            />
+            <TruthCard
+              label="Top objection"
+              title={weeklyReview.topObjection.title}
+              detail={weeklyReview.topObjection.detail}
+              tone={C.warn}
+              href={buildWeeklyReviewHref('top_objection')}
+              ctaLabel="Inspect replies"
+            />
+            <TruthCard
+              label="Main leak"
+              title={weeklyReview.mainLeak.title}
+              detail={weeklyReview.mainLeak.detail}
+              tone={C.bad}
+              href={buildWeeklyReviewHref('main_leak', {
+                stageKey: weeklyReview.mainLeak.stageKey,
+              })}
+              ctaLabel="Open leak"
+            />
           </div>
 
           <div
@@ -1037,6 +1119,32 @@ export default function RevenuePage() {
             <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>
               {weeklyReview.nextExperiment.detail}
             </div>
+            <Link
+              href={buildWeeklyReviewHref('next_experiment', {
+                focus: weeklyReview.nextExperiment.focus,
+                source: weeklyReview.nextExperiment.source,
+                band: weeklyReview.nextExperiment.band,
+              })}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 32,
+                width: 'fit-content',
+                padding: '0 10px',
+                borderRadius: 8,
+                border: `1px solid ${C.line2}`,
+                background: C.panel2,
+                color: C.text,
+                textDecoration: 'none',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '.08em',
+              }}
+            >
+              Act on this
+            </Link>
           </div>
         </section>
       ) : null}
