@@ -306,6 +306,40 @@ describe('runAgentStep', () => {
     ])
   })
 
+  it('defaults Prospect reasoning to Hermes when no model override is configured', async () => {
+    const supabase = createFakeSupabase()
+    let capturedModel = ''
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'prospect',
+      llm: async (_messages, config) => {
+        capturedModel = config.model
+        return {
+          content: JSON.stringify({
+            company_name: 'Acme Studio',
+            source: 'linkedin',
+            contact_name: 'Marie',
+            score: 82,
+            band: 'warm',
+            summary: 'Needs better follow-up visibility',
+            pain_points: ['manual triage'],
+            outreach_subject: 'Acme Studio — qualifier plus vite',
+            outreach_body: 'Bonjour Marie, proposition concise.',
+            cta: 'Reply to continue',
+          }),
+          provider: 'hermes',
+          model: 'hermes3:8b',
+          fallback_triggered: false,
+        }
+      },
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+    })
+
+    expect(capturedModel).toBe('hermes3:8b')
+  })
+
   it('runs the DevOps agent from grounded diagnostics context and persists a snapshot', async () => {
     const supabase = createFakeSupabase({
       agent_events: [
@@ -514,6 +548,7 @@ describe('runAgentStep', () => {
 
   it('injecte les métriques business réelles dans le prompt Decision', async () => {
     let systemPrompt = ''
+    let capturedModel = ''
     const supabase = createFakeSupabase({
       venture_pipeline: [
         {
@@ -541,6 +576,7 @@ describe('runAgentStep', () => {
     })
     const llm = async (_messages: unknown, config: { system: string }): Promise<LLMResponse> => {
       systemPrompt = config.system
+      capturedModel = (config as { model?: string }).model ?? ''
       return {
         content: JSON.stringify({
           verdict: 'continue',
@@ -565,6 +601,7 @@ describe('runAgentStep', () => {
     expect(systemPrompt).toContain('Métriques business réelles')
     expect(systemPrompt).toContain('Visites : 1')
     expect(systemPrompt).toContain('Revenu : 29.00 EUR')
+    expect(capturedModel).toBe('hermes3:8b')
   })
 
   it('transforme un verdict Decision continue en action de scaling bloquée par approbation', async () => {

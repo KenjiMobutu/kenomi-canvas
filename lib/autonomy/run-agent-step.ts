@@ -245,6 +245,14 @@ function parseOutputSafely(agentId: string, content: string): AgentOutput | null
   }
 }
 
+function getDefaultAgentModel(agentId: string): string {
+  if (agentId === 'prospect' || agentId === 'decision') {
+    return process.env.HERMES_DEFAULT_MODEL ?? 'hermes3:8b'
+  }
+
+  return 'qwen3:8b'
+}
+
 function buildDevopsRepairPrompt(content: string): string {
   return [
     'Repair the following malformed DevOps JSON.',
@@ -643,7 +651,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         })}`
       : ''
 
-  const model = cfg?.model ?? 'qwen3:8b'
+  const model = cfg?.model ?? getDefaultAgentModel(agentId)
   const baseSystemPrompt = buildSystemPrompt(agentId, pipeline, cfg?.system_prompt ?? '')
   const decisionBundle =
     agentId === 'decision'
