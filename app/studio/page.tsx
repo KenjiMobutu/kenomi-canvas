@@ -2786,14 +2786,16 @@ function CashActionQueue({
               const actionLabel = action.intent
                 ? status === 'running'
                   ? 'Running...'
-                  : action.kind === 'approval'
+                  : action.ctaLabel
+                    ? action.ctaLabel
+                    : action.kind === 'approval'
                     ? 'Approve'
                     : action.kind === 'follow_up'
                       ? 'Mark sent'
                       : action.kind === 'send'
                         ? 'Mark sent'
                         : 'Run'
-                : 'Open'
+                : action.ctaLabel ?? 'Open'
               return (
                 <>
                   <span

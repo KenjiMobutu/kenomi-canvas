@@ -248,6 +248,8 @@ describe('buildCashActions', () => {
       kind: 'lead',
       label: 'Travailler Volume Lead Co',
       playbookLabel: 'volume push',
+      ctaLabel: 'Open leads',
+      href: '/studio/prospects?source=reddit&band=hot',
     })
   })
 
@@ -288,6 +290,7 @@ describe('buildCashActions', () => {
       kind: 'follow_up',
       label: 'Relancer Win Follow-up Co',
       playbookLabel: 'win push',
+      ctaLabel: 'Follow up now',
     })
   })
 })

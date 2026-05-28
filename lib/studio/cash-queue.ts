@@ -47,6 +47,7 @@ export type CashAction = {
   blockedLabel: string
   boostLabel?: string | null
   playbookLabel?: string | null
+  ctaLabel?: string | null
   href: string
   tone: 'amber' | 'accent' | 'emerald' | 'rose'
   badge: string
@@ -90,6 +91,22 @@ function playbookActionLabel(playbookHint: string | undefined) {
   if (playbookHint === 'reply-heavy') return 'reply push'
   if (playbookHint === 'win-heavy') return 'win push'
   if (playbookHint === 'needs replies') return 'reply push'
+  return null
+}
+
+function playbookCtaLabel(kind: CashAction['kind'], playbookHint: string | undefined, hasIntent: boolean) {
+  if (!playbookHint) return null
+  if (playbookHint === 'needs volume') {
+    if (kind === 'lead') return 'Open leads'
+    if (kind === 'send' && hasIntent) return 'Send now'
+  }
+  if (playbookHint === 'reply-heavy' || playbookHint === 'needs replies') {
+    if (kind === 'approval' && hasIntent) return 'Approve now'
+    if (kind === 'send' && hasIntent) return 'Send now'
+  }
+  if (playbookHint === 'win-heavy' && kind === 'follow_up' && hasIntent) {
+    return 'Follow up now'
+  }
   return null
 }
 
@@ -186,6 +203,7 @@ export function buildCashActions(input: {
       blockedLabel: 'approval pending',
       boostLabel: boost.label,
       playbookLabel,
+      ctaLabel: playbookCtaLabel('approval', input.segmentFocus?.playbookHint, true),
       href: '/studio/prospects?status=awaiting_approval',
       tone: 'amber',
       badge: 'approval',
@@ -236,6 +254,7 @@ export function buildCashActions(input: {
       blockedLabel: formatBlockedLabel(blockedHours),
       boostLabel: boost.label,
       playbookLabel,
+      ctaLabel: playbookCtaLabel('follow_up', input.segmentFocus?.playbookHint, true),
       href: '/studio/prospects?status=follow_up_due',
       tone: 'accent',
       badge: 'follow-up',
@@ -279,6 +298,7 @@ export function buildCashActions(input: {
       blockedLabel: 'ready to send',
       boostLabel: boost.label,
       playbookLabel,
+      ctaLabel: playbookCtaLabel('send', input.segmentFocus?.playbookHint, true),
       href: '/studio/prospects?status=draft_created',
       tone: 'emerald',
       badge: 'send',
@@ -340,7 +360,13 @@ export function buildCashActions(input: {
       blockedLabel: 'new lead',
       boostLabel: boost.label,
       playbookLabel,
-      href: '/studio/prospects',
+      ctaLabel: playbookCtaLabel('lead', input.segmentFocus?.playbookHint, false),
+      href:
+        input.segmentFocus?.playbookHint === 'needs volume'
+          ? `/studio/prospects?source=${encodeURIComponent(input.segmentFocus.source)}&band=${encodeURIComponent(
+              input.segmentFocus.band
+            )}`
+          : '/studio/prospects',
       tone: 'rose',
       badge: 'lead',
       intent: null,
