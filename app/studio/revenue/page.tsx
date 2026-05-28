@@ -80,6 +80,72 @@ type RevenueProofAudit = {
   }>
 }
 
+type ConversionBreakdownItem = {
+  replyRate: number
+  qualifiedRate: number
+  closeRate: number
+  contacted: number
+  replied: number
+  qualifiedReplies: number
+  meetingsBooked: number
+  checkoutsCreated: number
+  paid: number
+}
+
+type RevenueConversionsSnapshot = {
+  overview: ConversionBreakdownItem & {
+    leadToReplyHours: number
+    replyToCloseDays: number
+  }
+  offerBreakdown: Array<
+    ConversionBreakdownItem & {
+      offerId: string | null
+      offerName: string
+      offerVariant: string | null
+    }
+  >
+  angleBreakdown: Array<
+    ConversionBreakdownItem & {
+      key: string
+      offerId: string | null
+      offerName: string
+      angle: string
+    }
+  >
+  segmentOfferBreakdown: Array<
+    ConversionBreakdownItem & {
+      key: string
+      source: string
+      band: string
+      offerId: string | null
+      offerName: string
+    }
+  >
+  bestOffer: (ConversionBreakdownItem & {
+    offerId: string | null
+    offerName: string
+    offerVariant: string | null
+  }) | null
+  bestAngle: (ConversionBreakdownItem & {
+    key: string
+    offerId: string | null
+    offerName: string
+    angle: string
+  }) | null
+  segmentRepliesNoPay: (ConversionBreakdownItem & {
+    key: string
+    source: string
+    band: string
+    offerId: string | null
+    offerName: string
+  }) | null
+  sourceClosesFastest: (ConversionBreakdownItem & {
+    source: string
+    leadToReplyHours: number
+    replyToCloseDays: number
+  }) | null
+}
+
 const C = {
   bg: '#07090d',
   panel: '#0e1118',
@@ -207,8 +273,47 @@ function Metric({
   )
 }
 
+function TruthCard({
+  label,
+  title,
+  detail,
+  tone = C.text,
+}: {
+  label: string
+  title: string
+  detail: string
+  tone?: string
+}) {
+  return (
+    <div
+      style={{
+        background: C.panel,
+        border: `1px solid ${C.line}`,
+        borderRadius: 8,
+        padding: 16,
+        display: 'grid',
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          color: C.muted,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ color: tone, fontSize: 18, fontWeight: 700, lineHeight: 1.2 }}>{title}</div>
+      <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>{detail}</div>
+    </div>
+  )
+}
+
 export default function RevenuePage() {
   const [snapshot, setSnapshot] = useState<RevenueLoopSnapshot | null>(null)
+  const [conversions, setConversions] = useState<RevenueConversionsSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [autopilotBusy, setAutopilotBusy] = useState(false)
@@ -236,14 +341,19 @@ export default function RevenuePage() {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const res = await fetch('/api/studio/revenue/loop', { cache: 'no-store' })
-    const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.snapshot) {
-      setError(json?.error ?? 'Chargement impossible')
+    const [loopRes, conversionsRes] = await Promise.all([
+      fetch('/api/studio/revenue/loop', { cache: 'no-store' }),
+      fetch('/api/studio/revenue/conversions', { cache: 'no-store' }),
+    ])
+    const loopJson = await loopRes.json().catch(() => null)
+    const conversionsJson = await conversionsRes.json().catch(() => null)
+    if (!loopRes.ok || !loopJson?.snapshot) {
+      setError(loopJson?.error ?? 'Chargement impossible')
       setLoading(false)
       return
     }
-    setSnapshot(json.snapshot)
+    setSnapshot(loopJson.snapshot)
+    setConversions(conversionsRes.ok ? ((conversionsJson?.conversions as RevenueConversionsSnapshot) ?? null) : null)
     setLoading(false)
   }, [])
 
@@ -548,6 +658,109 @@ export default function RevenuePage() {
           tone={snapshot?.summary.pendingApprovals ? 'bad' : 'good'}
         />
       </section>
+
+      {conversions ? (
+        <section
+          style={{
+            marginBottom: 18,
+            display: 'grid',
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'baseline',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: C.accent,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  marginBottom: 6,
+                }}
+              >
+                Conversion truth
+              </div>
+              <div style={{ color: C.muted, fontSize: 13 }}>
+                {conversions.overview.contacted} contacted · {conversions.overview.replied} replied ·{' '}
+                {conversions.overview.paid} closed won
+              </div>
+            </div>
+            <div style={{ color: C.muted, fontSize: 13 }}>
+              lead→reply {conversions.overview.leadToReplyHours}h · reply→close{' '}
+              {conversions.overview.replyToCloseDays}d
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 12,
+            }}
+          >
+            <TruthCard
+              label="Best offer"
+              title={conversions.bestOffer?.offerName ?? 'No offer truth yet'}
+              detail={
+                conversions.bestOffer
+                  ? `${conversions.bestOffer.paid} won · ${conversions.bestOffer.closeRate}% close · ${conversions.bestOffer.replyRate}% reply`
+                  : 'Assign offers to prospects and record replies.'
+              }
+              tone={C.good}
+            />
+            <TruthCard
+              label="Best angle"
+              title={
+                conversions.bestAngle
+                  ? `${conversions.bestAngle.offerName} · ${conversions.bestAngle.angle}`
+                  : 'No angle truth yet'
+              }
+              detail={
+                conversions.bestAngle
+                  ? `${conversions.bestAngle.paid} won · ${conversions.bestAngle.qualifiedReplies} qualified replies`
+                  : 'Set outreach angles on prospects to compare positioning.'
+              }
+              tone={C.blue}
+            />
+            <TruthCard
+              label="Replies without close"
+              title={
+                conversions.segmentRepliesNoPay
+                  ? `${conversions.segmentRepliesNoPay.source}/${conversions.segmentRepliesNoPay.band} · ${conversions.segmentRepliesNoPay.offerName}`
+                  : 'No stalled segment yet'
+              }
+              detail={
+                conversions.segmentRepliesNoPay
+                  ? `${conversions.segmentRepliesNoPay.replied} replies · ${conversions.segmentRepliesNoPay.paid} won`
+                  : 'When replies accumulate without wins, the segment will show here.'
+              }
+              tone={C.warn}
+            />
+            <TruthCard
+              label="Fastest close source"
+              title={
+                conversions.sourceClosesFastest
+                  ? conversions.sourceClosesFastest.source
+                  : 'No close source yet'
+              }
+              detail={
+                conversions.sourceClosesFastest
+                  ? `${conversions.sourceClosesFastest.replyToCloseDays}d reply→close · ${conversions.sourceClosesFastest.paid} won`
+                  : 'A source will appear here once at least one close is recorded.'
+              }
+              tone={C.accent}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {snapshot?.summary.recommendedAction && recommendedLoop && (
         <section
