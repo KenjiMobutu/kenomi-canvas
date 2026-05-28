@@ -30,6 +30,7 @@ import {
 } from '@/lib/studio/revenue-links'
 import { shouldEmphasizeRevenueLoopAction, sortRevenueLoopsByFocus } from '@/lib/studio/revenue-focus'
 import { buildWeeklyReviewHref } from '@/lib/studio/weekly-review-links'
+import type { HermesOperatorView } from '@/lib/studio/hermes-operator-view'
 
 type RevenueAuditEvent = {
   id: string
@@ -411,6 +412,7 @@ function formatTruthKey(value: string) {
 export default function RevenuePage() {
   const [snapshot, setSnapshot] = useState<RevenueLoopSnapshot | null>(null)
   const [conversions, setConversions] = useState<RevenueConversionsSnapshot | null>(null)
+  const [operatorView, setOperatorView] = useState<HermesOperatorView | null>(null)
   const [weeklyReview, setWeeklyReview] = useState<WeeklyRevenueReviewSnapshot | null>(null)
   const [lastReview, setLastReview] = useState<WeeklyRevenueReviewRecord | null>(null)
   const [loading, setLoading] = useState(true)
@@ -441,14 +443,16 @@ export default function RevenuePage() {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const [loopRes, conversionsRes, insightsRes] = await Promise.all([
+    const [loopRes, conversionsRes, insightsRes, operatorRes] = await Promise.all([
       fetch('/api/studio/revenue/loop', { cache: 'no-store' }),
       fetch('/api/studio/revenue/conversions', { cache: 'no-store' }),
       fetch('/api/studio/revenue/insights', { cache: 'no-store' }),
+      fetch('/api/studio/hermes/operator', { cache: 'no-store' }),
     ])
     const loopJson = await loopRes.json().catch(() => null)
     const conversionsJson = await conversionsRes.json().catch(() => null)
     const insightsJson = await insightsRes.json().catch(() => null)
+    const operatorJson = await operatorRes.json().catch(() => null)
     if (!loopRes.ok || !loopJson?.snapshot) {
       setError(loopJson?.error ?? 'Chargement impossible')
       setLoading(false)
@@ -456,6 +460,7 @@ export default function RevenuePage() {
     }
     setSnapshot(loopJson.snapshot)
     setConversions(conversionsRes.ok ? ((conversionsJson?.conversions as RevenueConversionsSnapshot) ?? null) : null)
+    setOperatorView(operatorRes.ok ? ((operatorJson?.view as HermesOperatorView) ?? null) : null)
     setWeeklyReview(insightsRes.ok ? ((insightsJson?.insights as WeeklyRevenueReviewSnapshot) ?? null) : null)
     setLastReview(insightsRes.ok ? ((insightsJson?.lastReview as WeeklyRevenueReviewRecord | null) ?? null) : null)
     setLoading(false)
@@ -778,6 +783,86 @@ export default function RevenuePage() {
           tone={snapshot?.summary.pendingApprovals ? 'bad' : 'good'}
         />
       </section>
+
+      {operatorView ? (
+        <section
+          style={{
+            marginBottom: 18,
+            background: C.panel,
+            border: `1px solid ${C.line}`,
+            borderRadius: 8,
+            padding: 16,
+            display: 'grid',
+            gap: 10,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div
+                style={{
+                  color: C.accent,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  marginBottom: 6,
+                }}
+              >
+                Hermes Operator
+              </div>
+              <div style={{ color: C.text, fontSize: 16, fontWeight: 700 }}>
+                {operatorView.lastRun?.summary ?? 'No Hermes business summary yet'}
+              </div>
+            </div>
+            <Link
+              href="/studio/automations"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 32,
+                width: 'fit-content',
+                padding: '0 10px',
+                borderRadius: 8,
+                border: `1px solid ${C.line2}`,
+                background: C.panel2,
+                color: C.text,
+                textDecoration: 'none',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '.08em',
+              }}
+            >
+              Open operator
+            </Link>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 12,
+            }}
+          >
+            <TruthCard
+              label="Top recommendation"
+              title={operatorView.topRecommendation?.title ?? 'No open recommendation'}
+              detail={operatorView.topRecommendation?.detail ?? 'Hermes has not produced an operator recommendation yet.'}
+              tone={C.good}
+              href="/studio/automations"
+              ctaLabel="Open operator"
+            />
+            <TruthCard
+              label="Top alert"
+              title={operatorView.topAlert?.headline ?? 'No active alert'}
+              detail={operatorView.topAlert?.detail ?? 'No current business alert from Hermes.'}
+              tone={operatorView.topAlert ? C.bad : C.muted}
+              href="/studio/automations"
+              ctaLabel="Review alerts"
+            />
+          </div>
+        </section>
+      ) : null}
 
       {conversions ? (
         <section

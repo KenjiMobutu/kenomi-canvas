@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { CkShell } from '@/components/CkShell'
 import {
   bg,
@@ -26,6 +27,10 @@ import {
   buildAutomationRunMetrics,
   type AutomationRunMetricInput,
 } from '@/lib/automation-run-metrics'
+import type {
+  HermesOperatorAlertViewRow,
+  HermesOperatorView,
+} from '@/lib/studio/hermes-operator-view'
 
 interface DbWorkflow {
   id: string
@@ -113,6 +118,8 @@ interface AutonomyBacklog {
   failed: number
   cancelled?: number
 }
+
+type HermesOperatorMode = 'observe' | 'recommend' | 'act'
 
 const TYPE_META: Record<string, { color: string; label: string }> = {
   trigger: { color: '#22d3ee', label: 'TRIG' },
@@ -1125,6 +1132,312 @@ function SchedulesPanel({
   )
 }
 
+function HermesOperatorPanel({
+  view,
+  alerts,
+  loading,
+  busy,
+  onModeChange,
+  onRunNow,
+}: {
+  view: HermesOperatorView | null
+  alerts: HermesOperatorAlertViewRow[]
+  loading: boolean
+  busy: HermesOperatorMode | 'run_now' | null
+  onModeChange: (mode: HermesOperatorMode) => void
+  onRunNow: () => void
+}) {
+  const activeMode = view?.currentMode ?? 'observe'
+  const modeColor =
+    activeMode === 'act' ? rose : activeMode === 'recommend' ? amber : emerald
+
+  return (
+    <div
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'grid',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 14,
+              fontWeight: 700,
+              color: text,
+            }}
+          >
+            Hermes Operator
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: muted2,
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+              marginTop: 2,
+            }}
+          >
+            business observer · recommendations · studio alerts
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              padding: '3px 7px',
+              borderRadius: 4,
+              background: `${modeColor}1f`,
+              color: modeColor,
+              letterSpacing: 1,
+              fontWeight: 800,
+            }}
+          >
+            {activeMode.toUpperCase()}
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              padding: '3px 7px',
+              borderRadius: 4,
+              background: `${cyan}1f`,
+              color: cyan,
+              letterSpacing: 1,
+              fontWeight: 800,
+            }}
+          >
+            REC {view?.openRecommendationsCount ?? 0}
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              padding: '3px 7px',
+              borderRadius: 4,
+              background: `${rose}1f`,
+              color: rose,
+              letterSpacing: 1,
+              fontWeight: 800,
+            }}
+          >
+            ALT {view?.openAlertsCount ?? 0}
+          </span>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 10,
+            background: surface2,
+            border: `1px solid ${line}`,
+            display: 'grid',
+            gap: 8,
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+            Last run
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: text }}>
+            {view?.lastRun?.status?.toUpperCase() ?? 'NO RUN'}
+          </div>
+          <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+            {view?.lastRun?.summary ?? 'No Hermes operator run recorded yet.'}
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2 }}>
+            {view?.lastRun
+              ? `${view.lastRun.model} · ${new Date(view.lastRun.createdAt).toLocaleString('fr-FR')}`
+              : 'Run Hermes once to create a baseline.'}
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 10,
+            background: surface2,
+            border: `1px solid ${line}`,
+            display: 'grid',
+            gap: 8,
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+            Top recommendation
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: text }}>
+            {view?.topRecommendation?.title ?? 'No open recommendation'}
+          </div>
+          <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+            {view?.topRecommendation?.detail ?? 'Hermes has not produced an operator recommendation yet.'}
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 10,
+            background: surface2,
+            border: `1px solid ${line}`,
+            display: 'grid',
+            gap: 8,
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+            Top alert
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: rose }}>
+            {view?.topAlert?.headline ?? 'No active alert'}
+          </div>
+          <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+            {view?.topAlert?.detail ?? 'No business alert currently requires attention.'}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {(['observe', 'recommend', 'act'] as HermesOperatorMode[]).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => onModeChange(mode)}
+            disabled={loading || busy !== null}
+            style={{
+              minWidth: 104,
+              padding: '8px 10px',
+              borderRadius: 8,
+              border: `1px solid ${activeMode === mode ? accent + '66' : line2}`,
+              background: activeMode === mode ? `${accent}22` : surface,
+              color: activeMode === mode ? accent : text,
+              cursor: loading || busy !== null ? 'default' : 'pointer',
+              fontSize: 12,
+              fontWeight: 800,
+              textTransform: 'capitalize',
+            }}
+          >
+            {mode}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={onRunNow}
+          disabled={loading || busy !== null}
+          style={{
+            minWidth: 118,
+            padding: '8px 10px',
+            borderRadius: 8,
+            border: 'none',
+            background: accent,
+            color: '#0b0d12',
+            cursor: loading || busy !== null ? 'default' : 'pointer',
+            fontSize: 12,
+            fontWeight: 800,
+          }}
+        >
+          Run now
+        </button>
+        <Link
+          href="/studio/revenue"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: 118,
+            padding: '8px 10px',
+            borderRadius: 8,
+            border: `1px solid ${line2}`,
+            background: surface,
+            color: text,
+            textDecoration: 'none',
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          Open revenue
+        </Link>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 10,
+        }}
+      >
+        {alerts.length > 0 ? (
+          alerts.slice(0, 3).map((alert) => (
+            <div
+              key={alert.id}
+              style={{
+                padding: 10,
+                borderRadius: 10,
+                background: surface2,
+                border: `1px solid ${line}`,
+                display: 'grid',
+                gap: 6,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: text }}>{alert.headline}</div>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    background:
+                      alert.severity === 'critical'
+                        ? `${rose}22`
+                        : alert.severity === 'warn'
+                          ? `${amber}22`
+                          : `${cyan}22`,
+                    color:
+                      alert.severity === 'critical'
+                        ? rose
+                        : alert.severity === 'warn'
+                          ? amber
+                          : cyan,
+                    letterSpacing: 1,
+                    fontWeight: 700,
+                  }}
+                >
+                  {alert.severity.toUpperCase()}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>{alert.detail}</div>
+            </div>
+          ))
+        ) : (
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>
+            No operator alerts yet.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function NewWorkflowForm({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
   const { user } = useAuth()
   const [name, setName] = useState('')
@@ -1635,6 +1948,10 @@ export default function AutomationsPage() {
     running: 0,
     failed: 0,
   })
+  const [hermesView, setHermesView] = useState<HermesOperatorView | null>(null)
+  const [hermesAlerts, setHermesAlerts] = useState<HermesOperatorAlertViewRow[]>([])
+  const [hermesLoading, setHermesLoading] = useState(false)
+  const [hermesBusy, setHermesBusy] = useState<HermesOperatorMode | 'run_now' | null>(null)
   const [autonomyLoading, setAutonomyLoading] = useState(false)
   const [autonomyBusy, setAutonomyBusy] = useState(false)
 
@@ -1723,6 +2040,32 @@ export default function AutomationsPage() {
     }
   }, [])
 
+  const loadHermesOperator = useCallback(async () => {
+    setHermesLoading(true)
+    try {
+      const [operatorRes, alertsRes] = await Promise.all([
+        fetch('/api/studio/hermes/operator'),
+        fetch('/api/studio/hermes/notifications'),
+      ])
+      const operatorJson = await operatorRes.json().catch(() => ({}))
+      const alertsJson = await alertsRes.json().catch(() => ({}))
+      if (!operatorRes.ok) {
+        setHermesView(null)
+        setHermesAlerts([])
+        toast.error(operatorJson.error || 'Erreur chargement Hermes')
+        return
+      }
+      setHermesView((operatorJson.view as HermesOperatorView) ?? null)
+      setHermesAlerts((alertsJson.alerts as HermesOperatorAlertViewRow[]) ?? [])
+    } catch {
+      setHermesView(null)
+      setHermesAlerts([])
+      toast.error('Erreur réseau Hermes')
+    } finally {
+      setHermesLoading(false)
+    }
+  }, [])
+
   async function loadWorkflows() {
     if (!user) return
     const supabase = createSupabaseBrowser()
@@ -1782,6 +2125,10 @@ export default function AutomationsPage() {
   useEffect(() => {
     if (user) loadAutonomyControl()
   }, [user, loadAutonomyControl])
+
+  useEffect(() => {
+    if (user) loadHermesOperator()
+  }, [user, loadHermesOperator])
 
   useEffect(() => {
     setN8nLoading(true)
@@ -1905,6 +2252,29 @@ export default function AutomationsPage() {
       toast.error('Erreur réseau action job')
     } finally {
       setJobBusyId(null)
+    }
+  }
+
+  async function patchHermesMode(mode: HermesOperatorMode) {
+    setHermesBusy(mode)
+    try {
+      const res = await fetch('/api/studio/hermes/operator', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error || 'Erreur mode Hermes')
+        return
+      }
+      setHermesView((json.view as HermesOperatorView) ?? null)
+      toast.success(`Hermes mode ${mode}`)
+      await loadHermesOperator()
+    } catch {
+      toast.error('Erreur réseau mode Hermes')
+    } finally {
+      setHermesBusy(null)
     }
   }
 
@@ -2074,6 +2444,23 @@ export default function AutomationsPage() {
           }
           onRunNow={(scheduleKey) => patchSchedule({ scheduleKey, runNow: true }, scheduleKey)}
           onJobAction={runJobAction}
+        />
+
+        <HermesOperatorPanel
+          view={hermesView}
+          alerts={hermesAlerts}
+          loading={hermesLoading}
+          busy={hermesBusy}
+          onModeChange={patchHermesMode}
+          onRunNow={() => {
+            setHermesBusy('run_now')
+            patchSchedule({ scheduleKey: 'hermes_operator', runNow: true }, 'hermes_operator').finally(
+              () => {
+                setHermesBusy(null)
+                void loadHermesOperator()
+              }
+            )
+          }}
         />
 
         {/* DAG + workflows list */}
