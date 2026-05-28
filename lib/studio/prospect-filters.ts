@@ -17,10 +17,15 @@ export function readProspectFiltersFromSearch(search: string): ProspectFilters {
   }
 }
 
-export function buildProspectHref(input: { source?: string | null; status?: string | null }) {
+export function buildProspectHref(input: {
+  source?: string | null
+  status?: string | null
+  band?: string | null
+}) {
   const params = new URLSearchParams()
   if (input.source?.trim()) params.set('source', input.source.trim())
   if (input.status?.trim()) params.set('status', input.status.trim())
+  if (input.band?.trim()) params.set('band', input.band.trim())
   const query = params.toString()
   return query ? `/studio/prospects?${query}` : '/studio/prospects'
 }

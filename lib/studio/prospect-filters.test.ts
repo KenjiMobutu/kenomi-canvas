@@ -31,6 +31,9 @@ describe('readProspectFiltersFromSearch', () => {
     expect(buildProspectHref({ source: 'linkedin', status: 'awaiting_approval' })).toBe(
       '/studio/prospects?source=linkedin&status=awaiting_approval'
     )
+    expect(buildProspectHref({ source: 'linkedin', band: 'warm' })).toBe(
+      '/studio/prospects?source=linkedin&band=warm'
+    )
   })
 
   it('builds rate drilldown links for reply and win queues', () => {

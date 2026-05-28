@@ -2583,7 +2583,7 @@ function CashOutcomePanel({
               <button
                 type="button"
                 onClick={() => {
-                  window.location.href = buildProspectHref({ source: item.source })
+                  window.location.href = buildProspectHref({ source: item.source, band: item.band })
                 }}
                 style={{
                   borderRadius: 999,
