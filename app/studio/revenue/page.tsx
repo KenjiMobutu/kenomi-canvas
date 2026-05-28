@@ -162,6 +162,39 @@ type RevenueConversionsSnapshot = {
   } | null
 }
 
+type WeeklyRevenueReviewInsight = {
+  title: string
+  detail: string
+}
+
+type WeeklyRevenueReviewSnapshot = {
+  window: {
+    weekStart: string
+    weekEnd: string
+    label: string
+  }
+  bestSource: WeeklyRevenueReviewInsight
+  bestSegment: WeeklyRevenueReviewInsight
+  bestOffer: WeeklyRevenueReviewInsight
+  bestAngle: WeeklyRevenueReviewInsight
+  topObjection: WeeklyRevenueReviewInsight
+  mainLeak: WeeklyRevenueReviewInsight & {
+    stageKey: string
+  }
+  nextExperiment: WeeklyRevenueReviewInsight & {
+    focus: string
+  }
+}
+
+type WeeklyRevenueReviewRecord = {
+  id: string
+  weekStart: string
+  weekEnd: string
+  status: string
+  createdAt: string
+  summary: WeeklyRevenueReviewSnapshot
+}
+
 const C = {
   bg: '#07090d',
   panel: '#0e1118',
@@ -334,10 +367,13 @@ function formatTruthKey(value: string) {
 export default function RevenuePage() {
   const [snapshot, setSnapshot] = useState<RevenueLoopSnapshot | null>(null)
   const [conversions, setConversions] = useState<RevenueConversionsSnapshot | null>(null)
+  const [weeklyReview, setWeeklyReview] = useState<WeeklyRevenueReviewSnapshot | null>(null)
+  const [lastReview, setLastReview] = useState<WeeklyRevenueReviewRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [autopilotBusy, setAutopilotBusy] = useState(false)
   const [proofBusy, setProofBusy] = useState<string | null>(null)
+  const [saveReviewBusy, setSaveReviewBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cycleAudit, setCycleAudit] = useState<RevenueAuditEvent[]>([])
   const [proofAudit, setProofAudit] = useState<RevenueProofAudit | null>(null)
@@ -361,12 +397,14 @@ export default function RevenuePage() {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const [loopRes, conversionsRes] = await Promise.all([
+    const [loopRes, conversionsRes, insightsRes] = await Promise.all([
       fetch('/api/studio/revenue/loop', { cache: 'no-store' }),
       fetch('/api/studio/revenue/conversions', { cache: 'no-store' }),
+      fetch('/api/studio/revenue/insights', { cache: 'no-store' }),
     ])
     const loopJson = await loopRes.json().catch(() => null)
     const conversionsJson = await conversionsRes.json().catch(() => null)
+    const insightsJson = await insightsRes.json().catch(() => null)
     if (!loopRes.ok || !loopJson?.snapshot) {
       setError(loopJson?.error ?? 'Chargement impossible')
       setLoading(false)
@@ -374,6 +412,8 @@ export default function RevenuePage() {
     }
     setSnapshot(loopJson.snapshot)
     setConversions(conversionsRes.ok ? ((conversionsJson?.conversions as RevenueConversionsSnapshot) ?? null) : null)
+    setWeeklyReview(insightsRes.ok ? ((insightsJson?.insights as WeeklyRevenueReviewSnapshot) ?? null) : null)
+    setLastReview(insightsRes.ok ? ((insightsJson?.lastReview as WeeklyRevenueReviewRecord | null) ?? null) : null)
     setLoading(false)
   }, [])
 
@@ -505,6 +545,22 @@ export default function RevenuePage() {
       toast.error(err instanceof Error ? err.message : 'Preuve revenue impossible')
     } finally {
       setProofBusy(null)
+    }
+  }
+
+  async function saveWeeklyReview() {
+    setSaveReviewBusy(true)
+    try {
+      const res = await fetch('/api/studio/revenue/insights', { method: 'POST' })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error ?? 'Weekly review impossible')
+      setLastReview((json?.review as WeeklyRevenueReviewRecord) ?? null)
+      toast.success('Weekly commercial review saved')
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Weekly review impossible')
+    } finally {
+      setSaveReviewBusy(false)
     }
   }
 
@@ -890,6 +946,96 @@ export default function RevenuePage() {
                   No lost-reason truth recorded yet.
                 </div>
               )}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {weeklyReview ? (
+        <section
+          style={{
+            marginBottom: 18,
+            display: 'grid',
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'baseline',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: C.accent,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  marginBottom: 6,
+                }}
+              >
+                Weekly commercial review
+              </div>
+              <div style={{ color: C.muted, fontSize: 13 }}>
+                {weeklyReview.window.label}
+                {lastReview ? ` · last saved ${new Date(lastReview.createdAt).toLocaleString('fr-FR')}` : ' · not saved yet'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={saveWeeklyReview}
+              disabled={saveReviewBusy}
+              style={buttonStyle('secondary')}
+            >
+              <Check size={15} />
+              Save review
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 12,
+            }}
+          >
+            <TruthCard label="Best source" title={weeklyReview.bestSource.title} detail={weeklyReview.bestSource.detail} tone={C.good} />
+            <TruthCard label="Best segment" title={weeklyReview.bestSegment.title} detail={weeklyReview.bestSegment.detail} tone={C.blue} />
+            <TruthCard label="Best offer" title={weeklyReview.bestOffer.title} detail={weeklyReview.bestOffer.detail} tone={C.accent} />
+            <TruthCard label="Best angle" title={weeklyReview.bestAngle.title} detail={weeklyReview.bestAngle.detail} tone={C.good} />
+            <TruthCard label="Top objection" title={weeklyReview.topObjection.title} detail={weeklyReview.topObjection.detail} tone={C.warn} />
+            <TruthCard label="Main leak" title={weeklyReview.mainLeak.title} detail={weeklyReview.mainLeak.detail} tone={C.bad} />
+          </div>
+
+          <div
+            style={{
+              background: C.panel,
+              border: `1px solid ${C.line}`,
+              borderRadius: 8,
+              padding: 16,
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            <div
+              style={{
+                color: C.muted,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                textTransform: 'uppercase',
+              }}
+            >
+              Next commercial experiment
+            </div>
+            <div style={{ color: C.text, fontSize: 18, fontWeight: 700 }}>
+              {weeklyReview.nextExperiment.title}
+            </div>
+            <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>
+              {weeklyReview.nextExperiment.detail}
             </div>
           </div>
         </section>
