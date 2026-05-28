@@ -25,6 +25,7 @@ export type CashOutcomeSnapshot = {
     replyRate: number
     winRate: number
     qualityScore: number
+    playbookHint: string
   }>
   sourceBandBreakdown: Array<{
     key: string
@@ -36,6 +37,7 @@ export type CashOutcomeSnapshot = {
     replyRate: number
     winRate: number
     qualityScore: number
+    playbookHint: string
   }>
   topSegment: {
     key: string
@@ -149,6 +151,20 @@ function buildBlockerAction(input: {
     ctaLabel,
     href,
   }
+}
+
+function buildPlaybookHint(input: {
+  active: number
+  replied: number
+  won: number
+  replyRate: number
+  winRate: number
+  qualityScore: number
+}) {
+  if (input.winRate >= 50 && input.won > 0) return 'win-heavy'
+  if (input.replyRate >= 50 && input.replied > 0) return 'reply-heavy'
+  if (input.qualityScore >= 35 && input.active <= 1) return 'needs volume'
+  return 'needs replies'
 }
 
 export function buildCashOutcomeSnapshot(input: {
@@ -329,6 +345,11 @@ export function buildCashOutcomeSnapshot(input: {
         ratio(entry.replied, entry.active) * 0.35 +
           ratio(entry.won, entry.replied || entry.active || entry.won) * 0.65
       ),
+      playbookHint: '',
+    }))
+    .map((entry) => ({
+      ...entry,
+      playbookHint: buildPlaybookHint(entry),
     }))
     .sort(
       (left, right) =>
@@ -361,6 +382,11 @@ export function buildCashOutcomeSnapshot(input: {
           ratio(entry.replied, entry.active) * 0.35 +
             ratio(entry.won, entry.replied || entry.active || entry.won) * 0.65
         ),
+        playbookHint: '',
+      }))
+      .map((entry) => ({
+        ...entry,
+        playbookHint: buildPlaybookHint(entry),
       }))
       .sort(
         (left, right) =>

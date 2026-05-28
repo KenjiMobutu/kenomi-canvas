@@ -136,6 +136,7 @@ type CashOutcomeSnapshot = {
     replyRate: number
     winRate: number
     qualityScore: number
+    playbookHint: string
   }>
   sourceBandBreakdown: Array<{
     key: string
@@ -147,6 +148,7 @@ type CashOutcomeSnapshot = {
     replyRate: number
     winRate: number
     qualityScore: number
+    playbookHint: string
   }>
   topSegment: {
     key: string
@@ -2480,6 +2482,9 @@ function CashOutcomePanel({
                     </span>
                   ) : null}
                   <span style={{ color: muted2, fontSize: 11 }}>{source.qualityScore}/100 quality</span>
+                  {index === 0 ? (
+                    <span style={{ color: emerald, fontSize: 11, fontWeight: 700 }}>{source.playbookHint}</span>
+                  ) : null}
                 </div>
                 <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
                   <span>{source.active} active</span>
@@ -2605,6 +2610,9 @@ function CashOutcomePanel({
                     </span>
                   ) : null}
                   <span style={{ color: muted2, fontSize: 11 }}>{item.qualityScore}/100 quality</span>
+                  {index === 0 ? (
+                    <span style={{ color: emerald, fontSize: 11, fontWeight: 700 }}>{item.playbookHint}</span>
+                  ) : null}
                 </div>
                 <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
                   <span>{item.active} active</span>

@@ -62,15 +62,15 @@ describe('buildCashOutcomeSnapshot', () => {
       winRate30d: 66.7,
     })
     expect(snapshot.sourceBreakdown).toEqual([
-      { source: 'reddit', active: 1, replied: 0, won: 1, replyRate: 0, winRate: 100, qualityScore: 65 },
-      { source: 'linkedin', active: 1, replied: 1, won: 0, replyRate: 100, winRate: 0, qualityScore: 35 },
-      { source: 'other', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
+      { source: 'reddit', active: 1, replied: 0, won: 1, replyRate: 0, winRate: 100, qualityScore: 65, playbookHint: 'win-heavy' },
+      { source: 'linkedin', active: 1, replied: 1, won: 0, replyRate: 100, winRate: 0, qualityScore: 35, playbookHint: 'reply-heavy' },
+      { source: 'other', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0, playbookHint: 'needs replies' },
     ])
     expect(snapshot.sourceBandBreakdown).toEqual([
-      { key: 'reddit:hot', source: 'reddit', band: 'hot', active: 0, replied: 0, won: 1, replyRate: 0, winRate: 100, qualityScore: 65 },
-      { key: 'linkedin:warm', source: 'linkedin', band: 'warm', active: 1, replied: 1, won: 0, replyRate: 100, winRate: 0, qualityScore: 35 },
-      { key: 'reddit:warm', source: 'reddit', band: 'warm', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
-      { key: 'other:cold', source: 'other', band: 'cold', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
+      { key: 'reddit:hot', source: 'reddit', band: 'hot', active: 0, replied: 0, won: 1, replyRate: 0, winRate: 100, qualityScore: 65, playbookHint: 'win-heavy' },
+      { key: 'linkedin:warm', source: 'linkedin', band: 'warm', active: 1, replied: 1, won: 0, replyRate: 100, winRate: 0, qualityScore: 35, playbookHint: 'reply-heavy' },
+      { key: 'reddit:warm', source: 'reddit', band: 'warm', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0, playbookHint: 'needs replies' },
+      { key: 'other:cold', source: 'other', band: 'cold', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0, playbookHint: 'needs replies' },
     ])
     expect(snapshot.topSegment).toEqual({
       key: 'reddit:hot',
