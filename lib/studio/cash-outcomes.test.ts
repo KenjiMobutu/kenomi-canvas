@@ -62,9 +62,9 @@ describe('buildCashOutcomeSnapshot', () => {
       winRate30d: 66.7,
     })
     expect(snapshot.sourceBreakdown).toEqual([
-      { source: 'reddit', active: 1, replied: 0, won: 1, replyRate: 0, winRate: 100 },
-      { source: 'linkedin', active: 1, replied: 1, won: 0, replyRate: 100, winRate: 0 },
-      { source: 'other', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0 },
+      { source: 'reddit', active: 1, replied: 0, won: 1, replyRate: 0, winRate: 100, qualityScore: 65 },
+      { source: 'linkedin', active: 1, replied: 1, won: 0, replyRate: 100, winRate: 0, qualityScore: 35 },
+      { source: 'other', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
     ])
     expect(snapshot.blockers).toEqual([
       { key: 'awaiting_approval', label: 'Awaiting approval', count: 1 },

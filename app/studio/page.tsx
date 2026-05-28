@@ -130,6 +130,7 @@ type CashOutcomeSnapshot = {
     won: number
     replyRate: number
     winRate: number
+    qualityScore: number
   }>
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
@@ -2414,7 +2415,7 @@ function CashOutcomePanel({
             marginTop: 10,
           }}
         >
-          {(outcomes?.sourceBreakdown ?? []).map((source) => (
+          {(outcomes?.sourceBreakdown ?? []).map((source, index) => (
             <div
               key={source.source}
               style={{
@@ -2439,6 +2440,24 @@ function CashOutcomePanel({
                   }}
                 >
                   {source.source}
+                </div>
+                <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {index === 0 ? (
+                    <span
+                      style={{
+                        borderRadius: 999,
+                        border: `1px solid ${accent}44`,
+                        background: `${accent}14`,
+                        color: accent,
+                        padding: '3px 7px',
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      Top source
+                    </span>
+                  ) : null}
+                  <span style={{ color: muted2, fontSize: 11 }}>{source.qualityScore}/100 quality</span>
                 </div>
                 <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
                   <span>{source.active} active</span>

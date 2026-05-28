@@ -24,6 +24,7 @@ export type CashOutcomeSnapshot = {
     won: number
     replyRate: number
     winRate: number
+    qualityScore: number
   }>
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
@@ -201,7 +202,15 @@ export function buildCashOutcomeSnapshot(input: {
 
   const sourceMap = new Map<
     string,
-    { source: string; active: number; replied: number; won: number; replyRate: number; winRate: number }
+    {
+      source: string
+      active: number
+      replied: number
+      won: number
+      replyRate: number
+      winRate: number
+      qualityScore: number
+    }
   >()
   let awaitingApproval = 0
   let draftCreated = 0
@@ -219,6 +228,7 @@ export function buildCashOutcomeSnapshot(input: {
       won: 0,
       replyRate: 0,
       winRate: 0,
+      qualityScore: 0,
     }
     const pipeline = prospect.pipeline_status ?? ''
     const approvalStatus = prospect.approval_status ?? ''
@@ -275,8 +285,15 @@ export function buildCashOutcomeSnapshot(input: {
         ...entry,
         replyRate: ratio(entry.replied, entry.active),
         winRate: ratio(entry.won, entry.replied || entry.active),
+        qualityScore: Math.round(ratio(entry.replied, entry.active) * 0.35 + ratio(entry.won, entry.replied || entry.active) * 0.65),
       }))
-      .sort((left, right) => right.won - left.won || right.replied - left.replied || right.active - left.active)
+      .sort(
+        (left, right) =>
+          right.qualityScore - left.qualityScore ||
+          right.won - left.won ||
+          right.replied - left.replied ||
+          right.active - left.active
+      )
       .slice(0, 4),
     blockers,
     blockerActions: [
