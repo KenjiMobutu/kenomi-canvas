@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkBudgetPolicy, requiresApproval } from './policy'
+import { canHermesAutoExecute, checkBudgetPolicy, requiresApproval } from './policy'
 import type { AutonomyAction } from './types'
 
 function action(overrides: Partial<AutonomyAction>): AutonomyAction {
@@ -130,5 +130,38 @@ describe('checkBudgetPolicy', () => {
       globalCapEur: 0,
     })
     expect(result).toMatchObject({ ok: false, reason: 'action_cap_exceeded' })
+  })
+})
+
+describe('canHermesAutoExecute', () => {
+  it('allows Hermes Operator to auto-enqueue low-risk agent work in recommend mode only', () => {
+    expect(
+      canHermesAutoExecute({
+        mode: 'recommend',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+      })
+    ).toBe(true)
+    expect(
+      canHermesAutoExecute({
+        mode: 'observe',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+      })
+    ).toBe(false)
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: 'deploy',
+        riskLevel: 'high',
+      })
+    ).toBe(false)
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: 'create_checkout',
+        riskLevel: 'low',
+      })
+    ).toBe(false)
   })
 })

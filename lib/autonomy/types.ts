@@ -75,3 +75,9 @@ export type DecisionActionStatus =
   | 'executed'
   | 'rejected'
   | 'failed'
+
+export interface HermesAutoExecutionInput {
+  mode: 'observe' | 'recommend' | 'act'
+  actionType: AutonomyActionType
+  riskLevel: AutonomyRiskLevel
+}

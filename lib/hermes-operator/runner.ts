@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import {
+  dispatchOperatorNotifications,
+  type HermesNotificationSupabase,
+} from '@/lib/hermes-operator/notifications'
 import { persistOperatorAlerts, type HermesAlertsSupabase } from '@/lib/hermes-operator/alerts'
 import { buildHermesOperatorContext, type HermesOperatorContextSupabase } from '@/lib/hermes-operator/context'
 import {
@@ -33,7 +37,8 @@ interface QueryBuilder<T = unknown> extends PromiseLike<QueryResult<T[]>> {
 export interface HermesOperatorRunnerSupabase
   extends HermesOperatorContextSupabase,
     HermesRecommendationsSupabase,
-    HermesAlertsSupabase {
+    HermesAlertsSupabase,
+    HermesNotificationSupabase {
   from(table: string): QueryBuilder<any>
 }
 
@@ -135,6 +140,13 @@ export async function runHermesOperatorTick(input: {
       supabase: input.supabase,
       userId: input.userId,
       runId,
+      alerts: engineResult.alerts,
+      now,
+    })
+
+    await dispatchOperatorNotifications({
+      supabase: input.supabase,
+      userId: input.userId,
       alerts: engineResult.alerts,
       now,
     })

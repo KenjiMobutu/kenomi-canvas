@@ -1,4 +1,4 @@
-import type { AutonomyAction } from './types'
+import type { AutonomyAction, HermesAutoExecutionInput } from './types'
 
 const ALWAYS_APPROVAL_ACTIONS = new Set(['publish_campaign', 'scale_budget', 'stop_venture'])
 
@@ -18,6 +18,12 @@ export function requiresApproval(action: AutonomyAction): boolean {
   }
 
   return action.riskLevel === 'critical'
+}
+
+export function canHermesAutoExecute(input: HermesAutoExecutionInput): boolean {
+  if (input.mode === 'observe') return false
+  if (input.riskLevel !== 'low') return false
+  return input.actionType === 'run_agent'
 }
 
 export type BudgetBreachReason =
