@@ -81,6 +81,16 @@ export const AGENTS_DATA = [
     color: '#ff6a3d',
     sigil: '✦',
   },
+  {
+    id: 'devops',
+    name: 'DevOps',
+    code: 'DVO',
+    role: 'Reliability',
+    tagline: 'Infra · incidents · diagnostics · parity',
+    model: 'Hermes',
+    color: '#22c55e',
+    sigil: '▣',
+  },
 ]
 
 export function agentById(id: string) {

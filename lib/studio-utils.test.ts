@@ -6,6 +6,11 @@ describe('AGENTS_DATA', () => {
     expect(AGENTS_DATA.some((agent) => agent.id === 'prospect')).toBe(true)
     expect(AGENTS_DATA.find((agent) => agent.id === 'prospect')?.name).toBe('Prospect')
   })
+
+  it('exposes devops as a first-class autonomous agent', () => {
+    expect(AGENTS_DATA.some((agent) => agent.id === 'devops')).toBe(true)
+    expect(AGENTS_DATA.find((agent) => agent.id === 'devops')?.name).toBe('DevOps')
+  })
 })
 
 describe('agentById', () => {
