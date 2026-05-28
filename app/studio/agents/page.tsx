@@ -101,6 +101,22 @@ interface AutonomyJobsPayload {
   errors?: { section: string; message: string }[]
 }
 
+interface DevopsInspectorSummary {
+  status: 'ok' | 'degraded' | 'down'
+  headline: string
+  summary: string
+  operatorNextStep: string
+  checkedAt: string
+  runtimeCommit: string | null
+  services: Array<Record<string, unknown>>
+  incidents: Array<{ severity?: string; title?: string; summary?: string }>
+}
+
+interface DevopsDiagnosticsResponse {
+  devopsSummary: DevopsInspectorSummary | null
+  recentIncidents?: Array<{ severity?: string; title?: string; summary?: string }>
+}
+
 function TunePanel({
   agentId,
   agentColor,
@@ -349,7 +365,13 @@ type AgentData = (typeof AGENTS_DATA)[0]
 type AgentLevelView = { level: number; xpBar: number }
 type AgentCard = AgentData & AgentLevelView
 
-const QUEUE: Record<string, string[]> = {}
+const QUEUE: Record<string, string[]> = {
+  devops: [
+    'Refresh infra diagnostics snapshot',
+    'Review deployment parity against live commit',
+    'Triage latest incidents and operator next step',
+  ],
+}
 
 function minutesAgo(isoDate: string): string {
   return `${Math.round((Date.now() - new Date(isoDate).getTime()) / 60000)}m`
@@ -1473,6 +1495,8 @@ function AgentInspector({
   const [dbState, setDbState] = useState<DbAgentState>({
     paused: false,
   })
+  const [devopsSummary, setDevopsSummary] = useState<DevopsInspectorSummary | null>(null)
+  const [devopsSummaryLoading, setDevopsSummaryLoading] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -1491,6 +1515,37 @@ function AgentInspector({
         else setDbState({ paused: false })
       })
   }, [agent.id, user])
+
+  useEffect(() => {
+    if (agent.id !== 'devops') {
+      setDevopsSummary(null)
+      setDevopsSummaryLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setDevopsSummaryLoading(true)
+    fetch('/api/studio/infra/diagnostics', { cache: 'no-store' })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => null)) as DevopsDiagnosticsResponse | null
+        if (cancelled) return
+        if (!res.ok) {
+          setDevopsSummary(null)
+          return
+        }
+        setDevopsSummary(data?.devopsSummary ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setDevopsSummary(null)
+      })
+      .finally(() => {
+        if (!cancelled) setDevopsSummaryLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [agent.id])
 
   async function handleRun() {
     setRunning(true)
@@ -1852,6 +1907,157 @@ function AgentInspector({
           )}
         </div>
       </div>
+
+      {agent.id === 'devops' && (
+        <div
+          style={{
+            padding: '12px 12px',
+            borderRadius: 10,
+            background: surface2,
+            border: `1px solid ${line}`,
+            display: 'grid',
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'baseline',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: muted,
+                letterSpacing: '.14em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Infra snapshot
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color:
+                  devopsSummary?.status === 'down'
+                    ? rose
+                    : devopsSummary?.status === 'degraded'
+                      ? amber
+                      : emerald,
+                letterSpacing: '.12em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {devopsSummaryLoading ? 'LOADING' : devopsSummary?.status ?? 'UNKNOWN'}
+            </div>
+          </div>
+
+          {devopsSummary ? (
+            <>
+              <div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: text,
+                  }}
+                >
+                  {devopsSummary.headline}
+                </div>
+                <div style={{ fontSize: 12, color: muted, marginTop: 4, lineHeight: 1.55 }}>
+                  {devopsSummary.summary}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                <StatBox
+                  label="Incidents"
+                  value={String(devopsSummary.incidents.length)}
+                  color={devopsSummary.incidents.length > 0 ? amber : emerald}
+                />
+                <StatBox
+                  label="Services"
+                  value={String(devopsSummary.services.length)}
+                  color={cyan}
+                />
+                <StatBox
+                  label="Commit"
+                  value={devopsSummary.runtimeCommit ?? '—'}
+                  color={violet}
+                />
+                <StatBox
+                  label="Check"
+                  value={minutesAgo(devopsSummary.checkedAt)}
+                  color={agent.color}
+                />
+              </div>
+
+              <div
+                style={{
+                  padding: '9px 10px',
+                  borderRadius: 8,
+                  border: `1px solid ${line2}`,
+                  background: surface,
+                  display: 'grid',
+                  gap: 4,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    color: muted,
+                    letterSpacing: '.12em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Operator next step
+                </div>
+                <div style={{ fontSize: 12, color: text, lineHeight: 1.5 }}>
+                  {devopsSummary.operatorNextStep}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = '/studio/infrastructure'
+                  }}
+                  style={{
+                    minHeight: 30,
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: `1px solid ${cyan}45`,
+                    background: `${cyan}12`,
+                    color: cyan,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    letterSpacing: '.12em',
+                    textTransform: 'uppercase',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Open infra
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 12, color: muted }}>
+              {devopsSummaryLoading
+                ? 'Chargement du dernier snapshot DevOps…'
+                : 'Aucun snapshot DevOps disponible pour cet opérateur.'}
+            </div>
+          )}
+        </div>
+      )}
 
       {runMetric.run_count === 0 && (
         <div
