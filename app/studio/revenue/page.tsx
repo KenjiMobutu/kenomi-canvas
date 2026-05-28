@@ -24,6 +24,7 @@ import type {
   RevenueLoopStageStatus,
 } from '@/lib/revenue-loop'
 import { readRevenueFocusFromSearch, type RevenueFocus } from '@/lib/studio/revenue-links'
+import { sortRevenueLoopsByFocus } from '@/lib/studio/revenue-focus'
 
 type RevenueAuditEvent = {
   id: string
@@ -257,7 +258,10 @@ export default function RevenuePage() {
     loadAudit()
   }, [load, loadAudit])
 
-  const loops = useMemo(() => snapshot?.loops ?? [], [snapshot])
+  const loops = useMemo(
+    () => sortRevenueLoopsByFocus(snapshot?.loops ?? [], focus),
+    [focus, snapshot?.loops]
+  )
   const recommendedLoop = useMemo(() => {
     const loopId = snapshot?.summary.recommendedAction?.loopId
     return loopId ? (loops.find((loop) => loop.id === loopId) ?? null) : null
