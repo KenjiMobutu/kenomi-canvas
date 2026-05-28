@@ -6,12 +6,14 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { buildCashActions, type CashAction, type ProspectCashRow } from '@/lib/studio/cash-queue'
+import { STUDIO_HOME_RIGHT_SECTIONS } from '@/lib/studio/studio-home-layout'
 import {
   buildProspectHref,
   buildRateDrilldownHref,
   buildSegmentPushHref,
   buildSourceFocusHref,
 } from '@/lib/studio/prospect-filters'
+import { getStudioCommandPaletteItems, STUDIO_PRIMARY_NAV } from '@/lib/studio/studio-nav'
 import { buildRevenueHref } from '@/lib/studio/revenue-links'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -495,15 +497,7 @@ function CkHeader({
 }) {
   const router = useRouter()
   const isMobile = useIsMobile()
-  const navItems = [
-    { label: 'Cockpit', href: '/studio' },
-    { label: 'Prospects', href: '/studio/prospects' },
-    { label: 'Revenue', href: '/studio/revenue' },
-    { label: 'Automations', href: '/studio/automations' },
-    { label: 'Infrastructure', href: '/studio/infrastructure' },
-    { label: 'Ventures', href: '/studio/ventures' },
-    { label: 'Agents', href: '/studio/agents' },
-  ]
+  const navItems = STUDIO_PRIMARY_NAV
   return (
     <header
       style={{
@@ -3553,26 +3547,30 @@ function CmdkPalette({ onClose, ventures }: { onClose: () => void; ventures: Ven
     href: '/studio/ventures',
   }))
 
+  const pageItems = getStudioCommandPaletteItems().map((item) => {
+    const hintByHref: Record<string, string> = {
+      '/studio/prospects': 'leads · CRM · outreach',
+      '/studio/revenue': 'cash · close · proof',
+      '/studio/automations': 'schedules · workers · ops',
+      '/studio/infrastructure': 'topology · services',
+      '/studio/ventures': 'kanban + funnel',
+      '/studio/agents': 'run · pause · config',
+      '/studio/analytics': 'MRR · cohort · attribution',
+      '/studio/marketing': 'campagnes · drafts',
+      '/studio/documents': 'storage · uploads',
+    }
+
+    return {
+      kind: 'page',
+      label: item.label,
+      hint: hintByHref[item.href],
+      href: item.href,
+    }
+  })
+
   const allItems = [
     ...ventureItems,
-    { kind: 'venture', label: 'Ventures', hint: 'kanban + funnel', href: '/studio/ventures' },
-    { kind: 'agent', label: 'Agents', hint: 'run · pause · config', href: '/studio/agents' },
-    { kind: 'page', label: 'Prospects', hint: 'leads · CRM · outreach', href: '/studio/prospects' },
-    {
-      kind: 'page',
-      label: 'Analytics',
-      hint: 'MRR · cohort · attribution',
-      href: '/studio/analytics',
-    },
-    { kind: 'page', label: 'Marketing', hint: 'campagnes · drafts', href: '/studio/marketing' },
-    {
-      kind: 'page',
-      label: 'Infrastructure',
-      hint: 'topology · services',
-      href: '/studio/infrastructure',
-    },
-    { kind: 'page', label: 'Automations', hint: 'n8n · webhooks', href: '/studio/automations' },
-    { kind: 'page', label: 'Documents', hint: 'storage · uploads', href: '/studio/documents' },
+    ...pageItems,
     { kind: 'action', label: 'Déconnexion', hint: 'logout', href: '/login' },
   ]
 
@@ -3831,8 +3829,6 @@ export default function CockpitPage() {
   const [confirmedIds, setConfirmedIds] = useState<string[]>([])
   const [showCmdk, setShowCmdk] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [opsSummary, setOpsSummary] = useState<OpsSummaryPayload | null>(null)
-  const [opsHealth, setOpsHealth] = useState<OpsHealthSummaryPayload | null>(null)
   const [revenueSnapshot, setRevenueSnapshot] = useState<RevenueLoopSnapshotPayload | null>(null)
   const [cashOutcomes, setCashOutcomes] = useState<CashOutcomeSnapshot | null>(null)
   const [revenueConversions, setRevenueConversions] = useState<RevenueConversionsSnapshot | null>(null)
@@ -3840,10 +3836,6 @@ export default function CockpitPage() {
   const [cashActionState, setCashActionState] = useState<
     Record<string, 'idle' | 'running' | 'done' | 'error'>
   >({})
-  const [opsActionState, setOpsActionState] = useState<
-    Record<string, 'idle' | 'running' | 'done' | 'error'>
-  >({})
-  const [opsActionMessage, setOpsActionMessage] = useState<Record<string, string>>({})
   const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -3887,42 +3879,6 @@ export default function CockpitPage() {
     }
     load()
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadOpsSummary = useCallback(() => {
-    let cancelled = false
-    fetch('/api/studio/ops/summary')
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && data?.ok) setOpsSummary(data.summary as OpsSummaryPayload)
-      })
-      .catch(() => {
-        if (!cancelled) setOpsSummary(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!user) return
-    return loadOpsSummary()
-  }, [user, loadOpsSummary])
-
-  useEffect(() => {
-    if (!user) return
-    let cancelled = false
-    fetch('/api/studio/ops/health', { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && data?.ok) setOpsHealth(data.summary as OpsHealthSummaryPayload)
-      })
-      .catch(() => {
-        if (!cancelled) setOpsHealth(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [user])
 
   const loadRevenueSnapshot = useCallback(() => {
     let cancelled = false
@@ -4003,53 +3959,6 @@ export default function CockpitPage() {
     if (!user) return
     return loadProspectCash()
   }, [user, loadProspectCash])
-
-  const runOpsAction = useCallback(
-    async (action: OpsSummaryAction) => {
-      if (!action.intent || action.intent.method === 'GET') {
-        window.location.href = action.href
-        return
-      }
-
-      if (action.intent.requiresConfirmation) {
-        const confirmed = window.confirm(`${action.label}\n\n${action.detail}`)
-        if (!confirmed) return
-      }
-
-      setOpsActionState((current) => ({ ...current, [action.id]: 'running' }))
-      setOpsActionMessage((current) => ({ ...current, [action.id]: '' }))
-
-      try {
-        const response = await fetch(action.intent.endpoint, {
-          method: action.intent.method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(action.intent.payload),
-        })
-        const payload = await response.json().catch(() => null)
-
-        setOpsActionState((current) => ({
-          ...current,
-          [action.id]: response.ok ? 'done' : 'error',
-        }))
-        setOpsActionMessage((current) => ({
-          ...current,
-          [action.id]:
-            payload?.message ??
-            payload?.error ??
-            (response.ok ? 'Action terminee.' : 'Action impossible.'),
-        }))
-
-        if (response.ok) loadOpsSummary()
-      } catch {
-        setOpsActionState((current) => ({ ...current, [action.id]: 'error' }))
-        setOpsActionMessage((current) => ({
-          ...current,
-          [action.id]: 'Action impossible depuis le navigateur.',
-        }))
-      }
-    },
-    [loadOpsSummary]
-  )
 
   const runCashAction = useCallback(
     async (action: CashAction) => {
@@ -4215,17 +4124,12 @@ export default function CockpitPage() {
         {/* Right rail — en bas sur mobile */}
         {!isMobile && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-            <RevenueFirstStrip snapshot={revenueSnapshot} />
-            <OpsHealthCard summary={opsHealth} />
-            <TodayRhythm />
-            <OpsSummaryStrip
-              summary={opsSummary}
-              actionState={opsActionState}
-              actionMessage={opsActionMessage}
-              onRunAction={runOpsAction}
-            />
-            <KpiGrid kpi={kpi} />
-            <MissionFeedCompact />
+            {STUDIO_HOME_RIGHT_SECTIONS.includes('revenue_strip') && (
+              <RevenueFirstStrip snapshot={revenueSnapshot} />
+            )}
+            {STUDIO_HOME_RIGHT_SECTIONS.includes('today_rhythm') && <TodayRhythm />}
+            {STUDIO_HOME_RIGHT_SECTIONS.includes('kpi_grid') && <KpiGrid kpi={kpi} />}
+            {STUDIO_HOME_RIGHT_SECTIONS.includes('mission_feed') && <MissionFeedCompact />}
           </div>
         )}
       </main>

@@ -22,24 +22,42 @@ import {
   Grid2x2,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import {
+  STUDIO_MOBILE_PRIMARY_NAV,
+  STUDIO_PRIMARY_NAV,
+  STUDIO_SECONDARY_NAV,
+} from '@/lib/studio/studio-nav'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { useIsMobile } from '@/lib/studio-utils'
 
+const iconByHref: Record<string, typeof LayoutDashboard> = {
+  '/studio': LayoutDashboard,
+  '/studio/prospects': Target,
+  '/studio/revenue': CircleDollarSign,
+  '/studio/automations': Workflow,
+  '/studio/infrastructure': Server,
+  '/studio/ventures': GitBranch,
+  '/studio/agents': Bot,
+  '/studio/marketing': Megaphone,
+  '/studio/analytics': BarChart3,
+  '/studio/gamification': Trophy,
+  '/studio/documents': FileText,
+  '/studio/chat': MessageSquare,
+  '/studio/api-keys': KeyRound,
+  '/studio/settings': Settings,
+} as const
+
 const nav = [
-  { href: '/studio', label: 'Cockpit', icon: LayoutDashboard, group: 'Studio' },
-  { href: '/studio/prospects', label: 'Prospects', icon: Target, group: 'Studio' },
-  { href: '/studio/revenue', label: 'Revenue', icon: CircleDollarSign, group: 'Studio' },
-  { href: '/studio/automations', label: 'Automations', icon: Workflow, group: 'Studio' },
-  { href: '/studio/infrastructure', label: 'Infrastructure', icon: Server, group: 'Studio' },
-  { href: '/studio/ventures', label: 'Ventures', icon: GitBranch, group: 'Studio' },
-  { href: '/studio/agents', label: 'Agents', icon: Bot, group: 'Studio' },
-  { href: '/studio/marketing', label: 'Marketing', icon: Megaphone, group: 'Studio' },
-  { href: '/studio/analytics', label: 'Analytics', icon: BarChart3, group: 'Studio' },
-  { href: '/studio/gamification', label: 'Gamification', icon: Trophy, group: 'Studio' },
-  { href: '/studio/documents', label: 'Documents', icon: FileText, group: 'System' },
-  { href: '/studio/chat', label: 'Command Chat', icon: MessageSquare, group: 'System' },
-  { href: '/studio/api-keys', label: 'API Keys', icon: KeyRound, group: 'System' },
-  { href: '/studio/settings', label: 'Settings', icon: Settings, group: 'System' },
+  ...STUDIO_PRIMARY_NAV.map((item) => ({
+    ...item,
+    icon: iconByHref[item.href],
+    group: 'Revenue',
+  })),
+  ...STUDIO_SECONDARY_NAV.map((item) => ({
+    ...item,
+    icon: iconByHref[item.href],
+    group: 'Support',
+  })),
 ]
 
 const MIN_WIDTH = 72
@@ -59,10 +77,7 @@ const SB = {
 }
 
 const BOTTOM_NAV = [
-  { href: '/studio', label: 'Cockpit', icon: LayoutDashboard },
-  { href: '/studio/prospects', label: 'Prospects', icon: Target },
-  { href: '/studio/revenue', label: 'Revenue', icon: CircleDollarSign },
-  { href: '/studio/automations', label: 'Ops', icon: Workflow },
+  ...STUDIO_MOBILE_PRIMARY_NAV.map((item) => ({ ...item, icon: iconByHref[item.href] })),
   { href: '/studio/chat', label: 'Chat', icon: MessageSquare },
 ]
 
