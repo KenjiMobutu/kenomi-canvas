@@ -73,6 +73,9 @@ const prospectSchema = z.object({
   outreach_subject: z.string().min(1),
   outreach_body: z.string().min(1),
   crm_record_id: z.string().nullable().optional(),
+  offer_id: z.string().uuid().nullable().optional(),
+  offer_variant: z.string().max(200).nullable().optional(),
+  outreach_angle: z.string().max(200).nullable().optional(),
   last_contacted_at: z.string().nullable().optional(),
   next_followup_at: z.string().nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -88,6 +91,9 @@ const prospectStageSchema = z.object({
   next_action: z.string().max(1000).optional(),
   tags: z.array(z.string().min(1)).max(20).optional(),
   next_followup_at: z.string().nullable().optional(),
+  offer_id: z.string().uuid().nullable().optional(),
+  offer_variant: z.string().max(200).nullable().optional(),
+  outreach_angle: z.string().max(200).nullable().optional(),
 })
 
 async function single<T>(query: SingleQueryBuilder): Promise<T | null> {
@@ -262,6 +268,9 @@ export async function POST(request: Request) {
     outreach_subject: parsed.data.outreach_subject,
     outreach_body: parsed.data.outreach_body,
     crm_record_id: parsed.data.crm_record_id ?? null,
+    offer_id: parsed.data.offer_id ?? null,
+    offer_variant: parsed.data.offer_variant?.trim() || null,
+    outreach_angle: parsed.data.outreach_angle?.trim() || null,
     last_contacted_at: parsed.data.last_contacted_at ?? null,
     next_followup_at: parsed.data.next_followup_at ?? null,
     metadata: parsed.data.metadata ?? {},
@@ -404,6 +413,36 @@ export async function PATCH(request: Request) {
       type: 'tags_updated',
       detail: 'Updated tags',
       metadata: { tags },
+    })
+  }
+
+  if (parsed.data.offer_id !== undefined) {
+    patch.offer_id = parsed.data.offer_id
+    patch.last_activity_at = nowIso
+    activitiesToInsert.push({
+      type: 'next_action_updated',
+      detail: 'Updated offer assignment',
+      metadata: { offer_id: parsed.data.offer_id ?? null },
+    })
+  }
+
+  if (parsed.data.offer_variant !== undefined) {
+    patch.offer_variant = parsed.data.offer_variant?.trim() || null
+    patch.last_activity_at = nowIso
+    activitiesToInsert.push({
+      type: 'next_action_updated',
+      detail: 'Updated offer variant',
+      metadata: { offer_variant: patch.offer_variant ?? null },
+    })
+  }
+
+  if (parsed.data.outreach_angle !== undefined) {
+    patch.outreach_angle = parsed.data.outreach_angle?.trim() || null
+    patch.last_activity_at = nowIso
+    activitiesToInsert.push({
+      type: 'next_action_updated',
+      detail: 'Updated outreach angle',
+      metadata: { outreach_angle: patch.outreach_angle ?? null },
     })
   }
 

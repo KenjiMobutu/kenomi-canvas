@@ -40,6 +40,9 @@ type ProspectRow = {
   outreach_subject: string
   outreach_body: string
   crm_record_id: string | null
+  offer_id?: string | null
+  offer_variant?: string | null
+  outreach_angle?: string | null
   last_contacted_at: string | null
   next_followup_at: string | null
   metadata: Record<string, unknown> | null
@@ -97,6 +100,21 @@ type ProspectApiPayload = {
   settings: ProspectSettings | null
   summary: ProspectSummary
   errors?: { section: string; message: string }[]
+}
+
+type OfferSnapshot = {
+  id: string
+  name: string
+  category: string | null
+  targetIcp: string | null
+  totalProspects: number
+  repliedProspects: number
+  wonProspects: number
+}
+
+type OffersApiPayload = {
+  ok: boolean
+  offers: OfferSnapshot[]
 }
 
 type JobsPayload = {
@@ -239,8 +257,19 @@ export default function ProspectPage() {
   const [tagFilter, setTagFilter] = useState('')
   const [searchFilter, setSearchFilter] = useState('')
   const [crmDrafts, setCrmDrafts] = useState<
-    Record<string, { notes: string; nextAction: string; tags: string }>
+    Record<
+      string,
+      {
+        notes: string
+        nextAction: string
+        tags: string
+        offerId: string
+        offerVariant: string
+        outreachAngle: string
+      }
+    >
   >({})
+  const [offers, setOffers] = useState<OfferSnapshot[]>([])
   const [prompt, setPrompt] = useState(
     'Trouve un prospect qualifié sur les sources configurées et rédige un message de prospection prêt à envoyer.'
   )
@@ -266,20 +295,23 @@ export default function ProspectPage() {
       if (tagFilter.trim()) prospectsUrl.searchParams.set('tag', tagFilter.trim().toLowerCase())
       if (searchFilter.trim()) prospectsUrl.searchParams.set('q', searchFilter.trim())
 
-      const [refreshRes, prospectsRes, jobsRes] = await Promise.all([
+      const [refreshRes, prospectsRes, jobsRes, offersRes] = await Promise.all([
         fetch('/api/studio/prospects/refresh', {
           method: 'POST',
           cache: 'no-store',
         }),
         fetch(prospectsUrl.toString(), { cache: 'no-store' }),
         fetch('/api/studio/autonomy/jobs?agent_id=prospect', { cache: 'no-store' }),
+        fetch('/api/studio/revenue/offers', { cache: 'no-store' }),
       ])
 
       const prospectsJson = (await prospectsRes.json()) as ProspectApiPayload
       const jobsJson = (await jobsRes.json()) as JobsPayload
+      const offersJson = (await offersRes.json()) as OffersApiPayload
 
       setPayload(prospectsJson)
       setJobsPayload(jobsJson)
+      setOffers(Array.isArray(offersJson.offers) ? offersJson.offers : [])
       setCrmDrafts(
         Object.fromEntries(
           (prospectsJson.prospects ?? []).map((prospect) => [
@@ -288,6 +320,9 @@ export default function ProspectPage() {
               notes: typeof prospect.operator_notes === 'string' ? prospect.operator_notes : '',
               nextAction: typeof prospect.next_action === 'string' ? prospect.next_action : '',
               tags: Array.isArray(prospect.tags) ? prospect.tags.join(', ') : '',
+              offerId: typeof prospect.offer_id === 'string' ? prospect.offer_id : '',
+              offerVariant: typeof prospect.offer_variant === 'string' ? prospect.offer_variant : '',
+              outreachAngle: typeof prospect.outreach_angle === 'string' ? prospect.outreach_angle : '',
             },
           ])
         )
@@ -303,6 +338,9 @@ export default function ProspectPage() {
       }
       if (!jobsRes.ok && !nextError) {
         nextError = 'Impossible de charger les jobs Prospect'
+      }
+      if (!offersRes.ok && !nextError) {
+        nextError = 'Impossible de charger les offers revenue'
       }
     } catch (loadError) {
       nextError = loadError instanceof Error ? loadError.message : String(loadError)
@@ -465,6 +503,9 @@ export default function ProspectPage() {
             .split(',')
             .map((tag) => tag.trim())
             .filter(Boolean),
+          offer_id: draft.offerId || null,
+          offer_variant: draft.offerVariant || null,
+          outreach_angle: draft.outreachAngle || null,
         }),
       })
       const json = await res.json()
@@ -503,6 +544,7 @@ export default function ProspectPage() {
       <Chip label={`${summary.draftCreated} drafted`} tone="cold" />
       <Chip label={`${summary.followUpDue} due`} tone="warm" />
       <Chip label={`${summary.won} won`} tone="hot" />
+      <Chip label={`${offers.length} offers`} tone="cold" />
       <button
         type="button"
         onClick={() => void load()}
@@ -1098,6 +1140,12 @@ export default function ProspectPage() {
                       <Chip label={followUpLabel(prospect.last_outreach_kind)} tone="cold" />
                       <Chip label={`next ${fmtDate(prospect.next_followup_at)}`} tone="cold" />
                       <Chip label={prospect.crm_record_id ? 'synced' : 'local'} tone="cold" />
+                      {prospect.offer_id ? (
+                        <Chip
+                          label={`offer ${offers.find((offer) => offer.id === prospect.offer_id)?.name ?? 'assigned'}`}
+                          tone="cold"
+                        />
+                      ) : null}
                       {prospect.tags?.map((tag) => (
                         <Chip key={`${prospect.id}:${tag}`} label={`tag ${tag}`} tone="cold" />
                       ))}
@@ -1149,6 +1197,15 @@ export default function ProspectPage() {
                                 tags:
                                   current[prospect.id]?.tags ??
                                   (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                                offerId:
+                                  current[prospect.id]?.offerId ??
+                                  (typeof prospect.offer_id === 'string' ? prospect.offer_id : ''),
+                                offerVariant:
+                                  current[prospect.id]?.offerVariant ??
+                                  (typeof prospect.offer_variant === 'string' ? prospect.offer_variant : ''),
+                                outreachAngle:
+                                  current[prospect.id]?.outreachAngle ??
+                                  (typeof prospect.outreach_angle === 'string' ? prospect.outreach_angle : ''),
                               },
                             }))
                           }
@@ -1168,6 +1225,15 @@ export default function ProspectPage() {
                                 tags:
                                   current[prospect.id]?.tags ??
                                   (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                                offerId:
+                                  current[prospect.id]?.offerId ??
+                                  (typeof prospect.offer_id === 'string' ? prospect.offer_id : ''),
+                                offerVariant:
+                                  current[prospect.id]?.offerVariant ??
+                                  (typeof prospect.offer_variant === 'string' ? prospect.offer_variant : ''),
+                                outreachAngle:
+                                  current[prospect.id]?.outreachAngle ??
+                                  (typeof prospect.outreach_angle === 'string' ? prospect.outreach_angle : ''),
                               },
                             }))
                           }
@@ -1186,6 +1252,103 @@ export default function ProspectPage() {
                                 nextAction:
                                   current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
                                 tags: event.target.value,
+                                offerId:
+                                  current[prospect.id]?.offerId ??
+                                  (typeof prospect.offer_id === 'string' ? prospect.offer_id : ''),
+                                offerVariant:
+                                  current[prospect.id]?.offerVariant ??
+                                  (typeof prospect.offer_variant === 'string' ? prospect.offer_variant : ''),
+                                outreachAngle:
+                                  current[prospect.id]?.outreachAngle ??
+                                  (typeof prospect.outreach_angle === 'string' ? prospect.outreach_angle : ''),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Offer</span>
+                        <select
+                          className="ck-input"
+                          value={crmDrafts[prospect.id]?.offerId ?? ''}
+                          onChange={(event) =>
+                            setCrmDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                notes: current[prospect.id]?.notes ?? prospect.operator_notes ?? '',
+                                nextAction:
+                                  current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
+                                tags:
+                                  current[prospect.id]?.tags ??
+                                  (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                                offerId: event.target.value,
+                                offerVariant:
+                                  current[prospect.id]?.offerVariant ??
+                                  (typeof prospect.offer_variant === 'string' ? prospect.offer_variant : ''),
+                                outreachAngle:
+                                  current[prospect.id]?.outreachAngle ??
+                                  (typeof prospect.outreach_angle === 'string' ? prospect.outreach_angle : ''),
+                              },
+                            }))
+                          }
+                        >
+                          <option value="">No offer</option>
+                          {offers.map((offer) => (
+                            <option key={offer.id} value={offer.id}>
+                              {offer.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Offer variant</span>
+                        <input
+                          className="ck-input"
+                          value={crmDrafts[prospect.id]?.offerVariant ?? ''}
+                          onChange={(event) =>
+                            setCrmDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                notes: current[prospect.id]?.notes ?? prospect.operator_notes ?? '',
+                                nextAction:
+                                  current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
+                                tags:
+                                  current[prospect.id]?.tags ??
+                                  (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                                offerId:
+                                  current[prospect.id]?.offerId ??
+                                  (typeof prospect.offer_id === 'string' ? prospect.offer_id : ''),
+                                offerVariant: event.target.value,
+                                outreachAngle:
+                                  current[prospect.id]?.outreachAngle ??
+                                  (typeof prospect.outreach_angle === 'string' ? prospect.outreach_angle : ''),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Outreach angle</span>
+                        <input
+                          className="ck-input"
+                          value={crmDrafts[prospect.id]?.outreachAngle ?? ''}
+                          onChange={(event) =>
+                            setCrmDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                notes: current[prospect.id]?.notes ?? prospect.operator_notes ?? '',
+                                nextAction:
+                                  current[prospect.id]?.nextAction ?? prospect.next_action ?? '',
+                                tags:
+                                  current[prospect.id]?.tags ??
+                                  (Array.isArray(prospect.tags) ? prospect.tags.join(', ') : ''),
+                                offerId:
+                                  current[prospect.id]?.offerId ??
+                                  (typeof prospect.offer_id === 'string' ? prospect.offer_id : ''),
+                                offerVariant:
+                                  current[prospect.id]?.offerVariant ??
+                                  (typeof prospect.offer_variant === 'string' ? prospect.offer_variant : ''),
+                                outreachAngle: event.target.value,
                               },
                             }))
                           }

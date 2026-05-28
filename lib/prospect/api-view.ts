@@ -60,6 +60,9 @@ export interface ProspectSummaryView {
 }
 
 export interface ProspectRecordView extends ProspectRecordRow {
+  offer_id?: string | null
+  offer_variant?: string | null
+  outreach_angle?: string | null
   pipeline_status: ProspectPipelineStatus
   approval_status: ProspectApprovalStatus
   outreach_action_id: string | null
