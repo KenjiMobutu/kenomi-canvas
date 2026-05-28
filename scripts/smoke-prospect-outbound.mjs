@@ -145,6 +145,24 @@ async function waitForProspect(companyName, predicate, label, timeoutMs = 45000)
   throw new Error(`${label}: timed out waiting for prospect ${companyName}`)
 }
 
+async function fetchConversions() {
+  const result = await request('/api/studio/revenue/conversions')
+  assert(
+    result.response.status === 200,
+    `revenue conversions failed: ${result.response.status} ${result.text}`
+  )
+  return result.json?.conversions
+}
+
+async function fetchInsights() {
+  const result = await request('/api/studio/revenue/insights')
+  assert(
+    result.response.status === 200,
+    `revenue insights failed: ${result.response.status} ${result.text}`
+  )
+  return result.json
+}
+
 const runTag = Date.now().toString(36)
 const companyName = `Smoke Prospect Co ${runTag}`
 const prompt = [
@@ -252,6 +270,12 @@ assert(
   ['draft_created', 'sent', 'replied', 'won', 'lost'].includes(finalProspect.pipeline_status),
   `unexpected final pipeline status: ${finalProspect.pipeline_status}`
 )
+assert(
+  Boolean(finalProspect.offer_id) ||
+    (typeof finalProspect.offer_variant === 'string' && finalProspect.offer_variant.length > 0),
+  'prospect missing offer truth'
+)
+process.stdout.write(`ok offer truth ${finalProspect.offer_id ?? finalProspect.offer_variant}\n`)
 
 const crmPatch = await request('/api/studio/prospects', {
   method: 'PATCH',
@@ -339,6 +363,69 @@ const sequencedProspect = await waitForProspect(
 )
 assert(sequencedProspect.next_followup_at, 'missing next follow-up date after first follow-up send')
 
+const repliedTruth = await request('/api/studio/prospects', {
+  method: 'PATCH',
+  body: JSON.stringify({
+    id: sequencedProspect.id,
+    status: 'replied',
+    conversationEventType: 'soft_interest',
+    conversationNotes: `Smoke reply ${runTag}`,
+  }),
+})
+assert(
+  repliedTruth.response.status === 200,
+  `mark replied failed: ${repliedTruth.response.status} ${repliedTruth.text}`
+)
+process.stdout.write(`ok marked replied ${sequencedProspect.id}\n`)
+
+const wonTruth = await request('/api/studio/prospects', {
+  method: 'PATCH',
+  body: JSON.stringify({
+    id: sequencedProspect.id,
+    status: 'won',
+    conversationEventType: 'closed_won',
+    conversationNotes: `Smoke win ${runTag}`,
+  }),
+})
+assert(
+  wonTruth.response.status === 200,
+  `mark won failed: ${wonTruth.response.status} ${wonTruth.text}`
+)
+process.stdout.write(`ok marked won ${sequencedProspect.id}\n`)
+
+const truthProspect = await waitForProspect(
+  companyName,
+  (candidate) =>
+    candidate.pipeline_status === 'won' &&
+    candidate.latest_conversation_event_type === 'closed_won' &&
+    typeof candidate.latest_conversation_notes === 'string' &&
+    candidate.latest_conversation_notes.includes(runTag),
+  'conversation truth prospect'
+)
+assert(
+  truthProspect.latest_conversation_event_type === 'closed_won',
+  'missing latest conversation truth on prospect'
+)
+process.stdout.write(`ok conversation truth latest=${truthProspect.latest_conversation_event_type}\n`)
+
+const conversions = await fetchConversions()
+assert(
+  conversions?.bestOffer || (Array.isArray(conversions?.offerBreakdown) && conversions.offerBreakdown.length > 0),
+  'missing offer metrics in conversions'
+)
+assert(
+  Array.isArray(conversions?.segmentOfferBreakdown) && conversions.segmentOfferBreakdown.length > 0,
+  'missing segment metrics in conversions'
+)
 process.stdout.write(
-  `smoke prospect outbound ok ${baseUrl} · final=${sequencedProspect.pipeline_status} · fu=${sequencedProspect.follow_up_count}\n`
+  `ok revenue conversions offers=${Array.isArray(conversions?.offerBreakdown) ? conversions.offerBreakdown.length : 0} segments=${Array.isArray(conversions?.segmentOfferBreakdown) ? conversions.segmentOfferBreakdown.length : 0}\n`
+)
+
+const insights = await fetchInsights()
+assert(insights?.insights?.bestOffer?.title, 'missing weekly best offer insight')
+assert(insights?.insights?.nextExperiment?.title, 'missing weekly next experiment insight')
+process.stdout.write(`ok weekly insights ${insights.insights.window?.label ?? 'present'}\n`)
+
+process.stdout.write(
+  `smoke prospect outbound ok ${baseUrl} · final=${truthProspect.pipeline_status} · fu=${truthProspect.follow_up_count}\n`
 )
