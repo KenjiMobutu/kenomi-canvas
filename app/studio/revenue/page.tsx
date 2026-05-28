@@ -122,6 +122,12 @@ type RevenueConversionsSnapshot = {
       offerName: string
     }
   >
+  modelBreakdown: Array<
+    ConversionBreakdownItem & {
+      model: string
+      modelFamily: string
+    }
+  >
   bestOffer: (ConversionBreakdownItem & {
     offerId: string | null
     offerName: string
@@ -144,6 +150,10 @@ type RevenueConversionsSnapshot = {
     source: string
     leadToReplyHours: number
     replyToCloseDays: number
+  }) | null
+  bestModel: (ConversionBreakdownItem & {
+    model: string
+    modelFamily: string
   }) | null
   commonObjections: Array<{
     type: string
@@ -214,6 +224,7 @@ const C = {
   warn: '#f4b740',
   bad: '#ff5f6d',
   blue: '#6aa7ff',
+  purple: '#a785ff',
 }
 
 function euro(value: number) {
@@ -866,6 +877,20 @@ export default function RevenuePage() {
                   : 'A source will appear here once at least one close is recorded.'
               }
               tone={C.accent}
+            />
+            <TruthCard
+              label="Best prospect model"
+              title={
+                conversions.bestModel
+                  ? `${conversions.bestModel.modelFamily} · ${conversions.bestModel.model}`
+                  : 'No model truth yet'
+              }
+              detail={
+                conversions.bestModel
+                  ? `${conversions.bestModel.paid} won · ${conversions.bestModel.closeRate}% close · ${conversions.bestModel.replyRate}% reply`
+                  : 'Prospect runs need model-tagged data before model truth appears.'
+              }
+              tone={C.purple}
             />
           </div>
 

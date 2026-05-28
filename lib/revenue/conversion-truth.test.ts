@@ -13,6 +13,7 @@ describe('conversion truth snapshot', () => {
           id: 'p1',
           offer_id: 'offer-a',
           outreach_angle: 'speed',
+          metadata: { model: 'hermes3:8b', model_family: 'hermes' },
           source: 'linkedin',
           band: 'warm',
           pipeline_status: 'won',
@@ -22,6 +23,7 @@ describe('conversion truth snapshot', () => {
           id: 'p2',
           offer_id: 'offer-a',
           outreach_angle: 'speed',
+          metadata: { model: 'hermes3:8b', model_family: 'hermes' },
           source: 'linkedin',
           band: 'warm',
           pipeline_status: 'replied',
@@ -31,6 +33,7 @@ describe('conversion truth snapshot', () => {
           id: 'p3',
           offer_id: 'offer-b',
           outreach_angle: 'roi',
+          metadata: { model: 'qwen3:8b', model_family: 'qwen' },
           source: 'reddit',
           band: 'hot',
           pipeline_status: 'sent',
@@ -100,6 +103,17 @@ describe('conversion truth snapshot', () => {
       contacted: 2,
       replied: 2,
       paid: 1,
+    })
+    expect(snapshot.bestModel).toMatchObject({
+      model: 'hermes3:8b',
+      modelFamily: 'hermes',
+      contacted: 2,
+      replied: 2,
+      paid: 1,
+    })
+    expect(snapshot.modelBreakdown[0]).toMatchObject({
+      model: 'hermes3:8b',
+      modelFamily: 'hermes',
     })
   })
 })

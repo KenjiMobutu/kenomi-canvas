@@ -23,6 +23,7 @@ function makeSupabase() {
         id: 'p1',
         offer_id: 'offer-a',
         outreach_angle: 'speed',
+        metadata: { model: 'hermes3:8b', model_family: 'hermes' },
         source: 'linkedin',
         band: 'warm',
         pipeline_status: 'won',
@@ -74,6 +75,10 @@ describe('revenue conversions route', () => {
     expect(body.conversions.bestOffer).toMatchObject({
       offerId: 'offer-a',
       offerName: 'Outbound Sprint',
+    })
+    expect(body.conversions.bestModel).toMatchObject({
+      model: 'hermes3:8b',
+      modelFamily: 'hermes',
     })
     expect(body.conversions.offerBreakdown).toHaveLength(1)
   })

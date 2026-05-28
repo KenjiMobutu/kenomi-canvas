@@ -14,6 +14,10 @@ type ProspectRow = {
   outreach_angle?: string | null
   pipeline_status?: string | null
   created_at?: string | null
+  metadata?: {
+    model?: string | null
+    model_family?: string | null
+  } | null
 }
 
 type ProspectActivityRow = {
@@ -77,6 +81,12 @@ export type ConversionTruthSnapshot = {
       offerName: string
     }
   >
+  modelBreakdown: Array<
+    BreakdownBase & {
+      model: string
+      modelFamily: string
+    }
+  >
   bestOffer:
     | (BreakdownBase & {
         offerId: string | null
@@ -106,6 +116,12 @@ export type ConversionTruthSnapshot = {
         source: string
         leadToReplyHours: number
         replyToCloseDays: number
+      })
+    | null
+  bestModel:
+    | (BreakdownBase & {
+        model: string
+        modelFamily: string
       })
     | null
   commonObjections: ReasonSummary[]
@@ -236,6 +252,10 @@ export function buildConversionTruthSnapshot(input: {
     string,
     StageRollup & { key: string; source: string; band: string; offerId: string | null; offerName: string }
   >()
+  const modelMap = new Map<
+    string,
+    StageRollup & { model: string; modelFamily: string }
+  >()
   const sourceVelocityMap = new Map<
     string,
     StageRollup & { source: string; leadToReplyMs: number[]; replyToCloseMs: number[] }
@@ -260,6 +280,8 @@ export function buildConversionTruthSnapshot(input: {
     const band = normalize(prospect.band, 'warm')
     const angle = normalize(prospect.outreach_angle, 'unassigned')
     const variant = prospect.offer_variant?.trim() || null
+    const model = normalize(prospect.metadata?.model, 'unknown')
+    const modelFamily = normalize(prospect.metadata?.model_family, 'other')
     const pipelineStatus = normalize(prospect.pipeline_status, 'new')
     const sentAt = firstSentAt.get(prospectId)
     const repliedAt = firstReplyAt.get(prospectId)
@@ -299,6 +321,7 @@ export function buildConversionTruthSnapshot(input: {
     const offerKey = offerId ?? 'unassigned'
     const angleKey = `${offerKey}:${angle}`
     const segmentKey = `${source}:${band}:${offerKey}`
+    const modelKey = `${modelFamily}:${model}`
 
     if (!offerMap.has(offerKey)) {
       offerMap.set(offerKey, {
@@ -342,6 +365,18 @@ export function buildConversionTruthSnapshot(input: {
         paid: 0,
       })
     }
+    if (!modelMap.has(modelKey)) {
+      modelMap.set(modelKey, {
+        model,
+        modelFamily,
+        contacted: 0,
+        replied: 0,
+        qualifiedReplies: 0,
+        meetingsBooked: 0,
+        checkoutsCreated: 0,
+        paid: 0,
+      })
+    }
     if (!sourceVelocityMap.has(source)) {
       sourceVelocityMap.set(source, {
         source,
@@ -360,6 +395,7 @@ export function buildConversionTruthSnapshot(input: {
       offerMap.get(offerKey)!,
       angleMap.get(angleKey)!,
       segmentOfferMap.get(segmentKey)!,
+      modelMap.get(modelKey)!,
       sourceVelocityMap.get(source)!,
     ]
 
@@ -386,6 +422,7 @@ export function buildConversionTruthSnapshot(input: {
   const segmentOfferBreakdown = Array.from(segmentOfferMap.values())
     .map(addRates)
     .sort(sortByBusinessValue)
+  const modelBreakdown = Array.from(modelMap.values()).map(addRates).sort(sortByBusinessValue)
 
   const sourceClosesFastest = Array.from(sourceVelocityMap.values())
     .map((entry) => ({
@@ -448,6 +485,7 @@ export function buildConversionTruthSnapshot(input: {
     offerBreakdown,
     angleBreakdown,
     segmentOfferBreakdown,
+    modelBreakdown,
     bestOffer: offerBreakdown[0] ?? null,
     bestAngle: angleBreakdown[0] ?? null,
     segmentRepliesNoPay:
@@ -457,6 +495,7 @@ export function buildConversionTruthSnapshot(input: {
       segmentOfferBreakdown[0] ??
       null,
     sourceClosesFastest,
+    bestModel: modelBreakdown[0] ?? null,
     commonObjections,
     lostReasons,
     repeatNext,
