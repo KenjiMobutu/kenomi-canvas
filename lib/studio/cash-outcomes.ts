@@ -22,6 +22,8 @@ export type CashOutcomeSnapshot = {
     active: number
     replied: number
     won: number
+    replyRate: number
+    winRate: number
   }>
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
@@ -197,7 +199,10 @@ export function buildCashOutcomeSnapshot(input: {
     }
   }
 
-  const sourceMap = new Map<string, { source: string; active: number; replied: number; won: number }>()
+  const sourceMap = new Map<
+    string,
+    { source: string; active: number; replied: number; won: number; replyRate: number; winRate: number }
+  >()
   let awaitingApproval = 0
   let draftCreated = 0
   let followUpDue = 0
@@ -207,7 +212,14 @@ export function buildCashOutcomeSnapshot(input: {
 
   for (const prospect of input.prospects ?? []) {
     const source = prospect.source?.trim() || 'other'
-    const entry = sourceMap.get(source) ?? { source, active: 0, replied: 0, won: 0 }
+    const entry = sourceMap.get(source) ?? {
+      source,
+      active: 0,
+      replied: 0,
+      won: 0,
+      replyRate: 0,
+      winRate: 0,
+    }
     const pipeline = prospect.pipeline_status ?? ''
     const approvalStatus = prospect.approval_status ?? ''
     if (
@@ -259,6 +271,11 @@ export function buildCashOutcomeSnapshot(input: {
       winRate30d: ratio(last30d.deals, last30d.replies),
     },
     sourceBreakdown: Array.from(sourceMap.values())
+      .map((entry) => ({
+        ...entry,
+        replyRate: ratio(entry.replied, entry.active),
+        winRate: ratio(entry.won, entry.replied || entry.active),
+      }))
       .sort((left, right) => right.won - left.won || right.replied - left.replied || right.active - left.active)
       .slice(0, 4),
     blockers,

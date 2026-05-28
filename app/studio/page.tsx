@@ -128,6 +128,8 @@ type CashOutcomeSnapshot = {
     active: number
     replied: number
     won: number
+    replyRate: number
+    winRate: number
   }>
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
@@ -2442,6 +2444,8 @@ function CashOutcomePanel({
                   <span>{source.active} active</span>
                   <span>{source.replied} replies</span>
                   <span>{source.won} won</span>
+                  <span>{source.replyRate}% reply</span>
+                  <span>{source.winRate}% win</span>
                 </div>
               </div>
               <button
