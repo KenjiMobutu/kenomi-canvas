@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { CSSProperties } from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bot,
   Check,
@@ -23,6 +23,7 @@ import type {
   RevenueLoopSnapshot,
   RevenueLoopStageStatus,
 } from '@/lib/revenue-loop'
+import { readRevenueFocusFromSearch, type RevenueFocus } from '@/lib/studio/revenue-links'
 
 type RevenueAuditEvent = {
   id: string
@@ -163,10 +164,12 @@ function Metric({
   label,
   value,
   tone,
+  highlighted = false,
 }: {
   label: string
   value: string
   tone?: 'good' | 'warn' | 'bad'
+  highlighted?: boolean
 }) {
   const color =
     tone === 'good' ? C.good : tone === 'warn' ? C.warn : tone === 'bad' ? C.bad : C.text
@@ -174,7 +177,8 @@ function Metric({
     <div
       style={{
         background: C.panel,
-        border: `1px solid ${C.line}`,
+        border: `1px solid ${highlighted ? `${C.accent}66` : C.line}`,
+        boxShadow: highlighted ? `0 0 0 1px ${C.accent}33 inset` : 'none',
         borderRadius: 8,
         padding: 16,
         minHeight: 90,
@@ -207,6 +211,7 @@ export default function RevenuePage() {
   const [error, setError] = useState<string | null>(null)
   const [cycleAudit, setCycleAudit] = useState<RevenueAuditEvent[]>([])
   const [proofAudit, setProofAudit] = useState<RevenueProofAudit | null>(null)
+  const [focus, setFocus] = useState<RevenueFocus | null>(null)
   const [cadence, setCadence] = useState<RevenueCadenceStatus>({
     status: 'missing',
     lastRunAt: null,
@@ -214,6 +219,14 @@ export default function RevenuePage() {
     hoursSinceLastRun: null,
     detail: 'Aucun daily cycle revenue audité.',
   })
+  const summaryRef = useRef<HTMLElement | null>(null)
+  const recommendationRef = useRef<HTMLElement | null>(null)
+  const loopsRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setFocus(readRevenueFocusFromSearch(window.location.search))
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -249,6 +262,17 @@ export default function RevenuePage() {
     const loopId = snapshot?.summary.recommendedAction?.loopId
     return loopId ? (loops.find((loop) => loop.id === loopId) ?? null) : null
   }, [loops, snapshot?.summary.recommendedAction?.loopId])
+
+  useEffect(() => {
+    if (!focus) return
+    const target =
+      focus === 'ready_checkouts'
+        ? loopsRef.current
+        : focus === 'blocked'
+          ? recommendationRef.current ?? summaryRef.current
+          : summaryRef.current
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [focus, recommendedLoop, snapshot])
 
   async function callAction(loop: RevenueLoopItem, decision?: 'approved' | 'rejected') {
     const action = loop.nextAction
@@ -445,6 +469,7 @@ export default function RevenuePage() {
       )}
 
       <section
+        ref={summaryRef}
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
@@ -452,17 +477,24 @@ export default function RevenuePage() {
           marginBottom: 18,
         }}
       >
-        <Metric label="Revenu prouvé" value={euro(snapshot?.summary.revenueEur ?? 0)} tone="good" />
+        <Metric
+          label="Revenu prouvé"
+          value={euro(snapshot?.summary.revenueEur ?? 0)}
+          tone="good"
+          highlighted={focus === 'cash_7d' || focus === 'cash_30d'}
+        />
         <Metric
           label="Revenu bloqué"
           value={euro(snapshot?.summary.blockedRevenueEur ?? 0)}
           tone={(snapshot?.summary.blockedRevenueEur ?? 0) > 0 ? 'bad' : 'good'}
+          highlighted={focus === 'blocked'}
         />
         <Metric label="Boucles actives" value={String(snapshot?.summary.activeLoops ?? 0)} />
         <Metric
           label="Checkouts prêts"
           value={String(snapshot?.summary.readyCheckouts ?? 0)}
           tone="warn"
+          highlighted={focus === 'ready_checkouts'}
         />
         <Metric
           label="Approvals"
@@ -473,9 +505,10 @@ export default function RevenuePage() {
 
       {snapshot?.summary.recommendedAction && recommendedLoop && (
         <section
+          ref={recommendationRef}
           style={{
             background: `linear-gradient(135deg, ${C.accent}18, ${C.panel})`,
-            border: `1px solid ${C.accent}66`,
+            border: `1px solid ${focus === 'blocked' ? `${C.accent}` : `${C.accent}66`}`,
             borderRadius: 8,
             padding: 16,
             marginBottom: 18,
@@ -517,6 +550,7 @@ export default function RevenuePage() {
       )}
 
       <section
+        ref={loopsRef}
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))',
