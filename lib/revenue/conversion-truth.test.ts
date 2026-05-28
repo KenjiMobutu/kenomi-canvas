@@ -49,6 +49,8 @@ describe('conversion truth snapshot', () => {
         { prospect_id: 'p1', event_type: 'meeting_booked', created_at: '2026-05-21T10:00:00.000Z' },
         { prospect_id: 'p1', event_type: 'closed_won', created_at: '2026-05-24T13:00:00.000Z' },
         { prospect_id: 'p2', event_type: 'soft_interest', created_at: '2026-05-22T11:10:00.000Z' },
+        { prospect_id: 'p3', event_type: 'budget_block', created_at: '2026-05-23T09:00:00.000Z' },
+        { prospect_id: 'p3', event_type: 'closed_lost', created_at: '2026-05-24T09:00:00.000Z' },
       ],
     })
 
@@ -79,6 +81,19 @@ describe('conversion truth snapshot', () => {
     expect(snapshot.sourceClosesFastest).toMatchObject({
       source: 'linkedin',
       paid: 1,
+    })
+    expect(snapshot.commonObjections[0]).toMatchObject({
+      type: 'budget_block',
+      count: 1,
+    })
+    expect(snapshot.lostReasons[0]).toMatchObject({
+      count: 1,
+    })
+    expect(snapshot.repeatNext).toMatchObject({
+      title: 'Outbound Sprint · speed',
+    })
+    expect(snapshot.stopNext).toMatchObject({
+      title: 'reddit/hot · Audit Retainer',
     })
     expect(snapshot.offerBreakdown[0]).toMatchObject({
       offerId: 'offer-a',

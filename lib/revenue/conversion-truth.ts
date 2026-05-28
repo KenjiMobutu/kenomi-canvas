@@ -28,6 +28,11 @@ type ConversationEventRow = {
   created_at?: string | null
 }
 
+type ReasonSummary = {
+  type: string
+  count: number
+}
+
 type StageRollup = {
   contacted: number
   replied: number
@@ -103,6 +108,16 @@ export type ConversionTruthSnapshot = {
         replyToCloseDays: number
       })
     | null
+  commonObjections: ReasonSummary[]
+  lostReasons: ReasonSummary[]
+  repeatNext: {
+    title: string
+    detail: string
+  } | null
+  stopNext: {
+    title: string
+    detail: string
+  } | null
 }
 
 function normalize(value: unknown, fallback: string) {
@@ -183,6 +198,8 @@ export function buildConversionTruthSnapshot(input: {
   }
 
   const latestConversationType = new Map<string, string>()
+  const objectionCounts = new Map<string, number>()
+  const lostReasonCounts = new Map<string, number>()
   for (const event of input.conversationEvents) {
     const prospectId = event.prospect_id?.trim()
     const eventType = event.event_type?.trim()
@@ -194,6 +211,12 @@ export function buildConversionTruthSnapshot(input: {
     }
     if (eventType === 'closed_won' && !firstWonAt.has(prospectId)) {
       firstWonAt.set(prospectId, createdAt)
+    }
+    if (['budget_block', 'timing_block', 'wrong_person', 'hard_no'].includes(eventType)) {
+      objectionCounts.set(eventType, (objectionCounts.get(eventType) ?? 0) + 1)
+    }
+    if (['closed_lost', 'budget_block', 'timing_block', 'wrong_person', 'hard_no'].includes(eventType)) {
+      lostReasonCounts.set(eventType, (lostReasonCounts.get(eventType) ?? 0) + 1)
     }
     const currentType = latestConversationType.get(prospectId)
     if (!currentType || (createdAt >= toTimestamp(input.conversationEvents.find((row) => row.prospect_id === prospectId && row.event_type === currentType)?.created_at))) {
@@ -378,6 +401,44 @@ export function buildConversionTruthSnapshot(input: {
         right.replyRate - left.replyRate
     )[0] ?? null
 
+  const commonObjections = Array.from(objectionCounts.entries())
+    .map(([type, count]) => ({ type, count }))
+    .sort((left, right) => right.count - left.count || left.type.localeCompare(right.type))
+    .slice(0, 4)
+
+  const lostReasons = Array.from(lostReasonCounts.entries())
+    .map(([type, count]) => ({ type, count }))
+    .sort((left, right) => right.count - left.count || left.type.localeCompare(right.type))
+    .slice(0, 4)
+
+  const repeatNext = angleBreakdown[0]
+    ? {
+        title: `${angleBreakdown[0].offerName} · ${angleBreakdown[0].angle}`,
+        detail: `${angleBreakdown[0].paid} won · ${angleBreakdown[0].closeRate}% close. Repeat this positioning next.`,
+      }
+    : null
+
+  const stopCandidate =
+    segmentOfferBreakdown
+      .filter(
+        (entry) =>
+          entry.paid === 0 &&
+          (entry.replied > 0 || entry.qualifiedReplies > 0 || entry.contacted > 0)
+      )
+      .sort(
+        (left, right) =>
+          right.replied - left.replied ||
+          right.qualifiedReplies - left.qualifiedReplies ||
+          right.contacted - left.contacted
+      )[0] ?? null
+
+  const stopNext = stopCandidate
+    ? {
+        title: `${stopCandidate.source}/${stopCandidate.band} · ${stopCandidate.offerName}`,
+        detail: `${stopCandidate.replied} replies with ${stopCandidate.paid} close. Change offer, angle, or sequence before adding more volume.`,
+      }
+    : null
+
   return {
     overview: {
       ...addRates(overview),
@@ -396,5 +457,9 @@ export function buildConversionTruthSnapshot(input: {
       segmentOfferBreakdown[0] ??
       null,
     sourceClosesFastest,
+    commonObjections,
+    lostReasons,
+    repeatNext,
+    stopNext,
   }
 }

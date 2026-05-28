@@ -144,6 +144,22 @@ type RevenueConversionsSnapshot = {
     leadToReplyHours: number
     replyToCloseDays: number
   }) | null
+  commonObjections: Array<{
+    type: string
+    count: number
+  }>
+  lostReasons: Array<{
+    type: string
+    count: number
+  }>
+  repeatNext: {
+    title: string
+    detail: string
+  } | null
+  stopNext: {
+    title: string
+    detail: string
+  } | null
 }
 
 const C = {
@@ -309,6 +325,10 @@ function TruthCard({
       <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>{detail}</div>
     </div>
   )
+}
+
+function formatTruthKey(value: string) {
+  return value.replaceAll('_', ' ')
 }
 
 export default function RevenuePage() {
@@ -758,6 +778,119 @@ export default function RevenuePage() {
               }
               tone={C.accent}
             />
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 12,
+            }}
+          >
+            <TruthCard
+              label="Repeat this next"
+              title={conversions.repeatNext?.title ?? 'No repeat signal yet'}
+              detail={
+                conversions.repeatNext?.detail ??
+                'Once offers and angles have enough volume, the next repetition candidate will appear here.'
+              }
+              tone={C.good}
+            />
+            <TruthCard
+              label="Stop this next"
+              title={conversions.stopNext?.title ?? 'No stop signal yet'}
+              detail={
+                conversions.stopNext?.detail ??
+                'When a segment produces replies without closes, this panel will tell you what to stop pushing.'
+              }
+              tone={C.bad}
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                background: C.panel,
+                border: `1px solid ${C.line}`,
+                borderRadius: 8,
+                padding: 16,
+                display: 'grid',
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  color: C.muted,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Common objections
+              </div>
+              {conversions.commonObjections.length ? (
+                conversions.commonObjections.map((item) => (
+                  <div
+                    key={item.type}
+                    style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
+                  >
+                    <span style={{ color: C.text, fontSize: 14 }}>{formatTruthKey(item.type)}</span>
+                    <span style={{ color: C.warn, fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                      {item.count}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div style={{ color: C.muted, fontSize: 13 }}>
+                  No objection truth recorded yet.
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                background: C.panel,
+                border: `1px solid ${C.line}`,
+                borderRadius: 8,
+                padding: 16,
+                display: 'grid',
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  color: C.muted,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Lost reasons
+              </div>
+              {conversions.lostReasons.length ? (
+                conversions.lostReasons.map((item) => (
+                  <div
+                    key={item.type}
+                    style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
+                  >
+                    <span style={{ color: C.text, fontSize: 14 }}>{formatTruthKey(item.type)}</span>
+                    <span style={{ color: C.bad, fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                      {item.count}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div style={{ color: C.muted, fontSize: 13 }}>
+                  No lost-reason truth recorded yet.
+                </div>
+              )}
+            </div>
           </div>
         </section>
       ) : null}
