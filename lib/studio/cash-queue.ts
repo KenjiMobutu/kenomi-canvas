@@ -1,9 +1,23 @@
+import { scoreCashActionCandidate } from '@/lib/revenue/action-engine'
+
 type RevenueRecommendedAction = {
   type: string
   ventureName: string
   reason: string
   priorityScore: number
   blockedRevenueEur: number
+}
+
+type ConversionSnapshotPayload = {
+  bestOffer: { offerId: string | null; closeRate: number } | null
+  bestAngle: { offerId: string | null; angle: string; closeRate: number } | null
+  segmentRepliesNoPay: {
+    source: string
+    band: string
+    offerId: string | null
+    replied: number
+    paid: number
+  } | null
 }
 
 type RevenueLoopSnapshotPayload = {
@@ -25,6 +39,9 @@ export type ProspectCashRow = {
   score: number
   pipeline_status: string
   approval_status: string
+  offer_id?: string | null
+  outreach_angle?: string | null
+  latest_conversation_event_type?: string | null
   outreach_approval_id?: string | null
   next_action?: string | null
   next_followup_at?: string | null
@@ -44,6 +61,8 @@ export type CashAction = {
   label: string
   detail: string
   impactLabel: string
+  expectedCashLabel?: string | null
+  reasonLabel?: string | null
   blockedLabel: string
   boostLabel?: string | null
   playbookLabel?: string | null
@@ -170,6 +189,7 @@ function segmentAffinity(prospect: ProspectCashRow, segmentFocus: SegmentFocus) 
 export function buildCashActions(input: {
   prospects: ProspectCashRow[]
   revenueSnapshot: RevenueLoopSnapshotPayload | null
+  conversions?: ConversionSnapshotPayload | null
   segmentFocus?: SegmentFocus
   nowIso?: string
 }): CashAction[] {
@@ -194,12 +214,26 @@ export function buildCashActions(input: {
   if (hotApproval && hotApproval.outreach_approval_id) {
     const boost = segmentAffinity(hotApproval, input.segmentFocus ?? null)
     const playbookLabel = playbookActionLabel(input.segmentFocus?.playbookHint)
+    const scored = scoreCashActionCandidate({
+      kind: 'approval',
+      basePriority:
+        120 +
+        bandBonus(hotApproval.band) +
+        scoreBonus(hotApproval.score) +
+        boost.bonus +
+        playbookPriorityBonus('approval', input.segmentFocus?.playbookHint),
+      prospect: hotApproval,
+      segmentFocus: input.segmentFocus ?? null,
+      conversions: input.conversions ?? null,
+    })
     actions.push({
       id: `approval:${hotApproval.id}`,
       kind: 'approval',
       label: `Approuver ${hotApproval.company_name}`,
       detail: 'Draft prêt à valider pour débloquer l’envoi.',
       impactLabel: `${hotApproval.score}/100 lead`,
+      expectedCashLabel: scored.expectedCashLabel,
+      reasonLabel: scored.reasonLabel,
       blockedLabel: 'approval pending',
       boostLabel: boost.label,
       playbookLabel,
@@ -213,12 +247,7 @@ export function buildCashActions(input: {
         body: { approvalId: hotApproval.outreach_approval_id, decision: 'approved' },
         successMessage: 'Draft approved',
       },
-      priority:
-        120 +
-        bandBonus(hotApproval.band) +
-        scoreBonus(hotApproval.score) +
-        boost.bonus +
-        playbookPriorityBonus('approval', input.segmentFocus?.playbookHint),
+      priority: scored.priority,
     })
   }
 
@@ -245,12 +274,27 @@ export function buildCashActions(input: {
     const blockedHours = overdueHours(followUpDue.next_followup_at, nowIso)
     const boost = segmentAffinity(followUpDue, input.segmentFocus ?? null)
     const playbookLabel = playbookActionLabel(input.segmentFocus?.playbookHint)
+    const scored = scoreCashActionCandidate({
+      kind: 'follow_up',
+      basePriority:
+        112 +
+        bandBonus(followUpDue.band) +
+        scoreBonus(followUpDue.score) +
+        boost.bonus +
+        blockedHours +
+        playbookPriorityBonus('follow_up', input.segmentFocus?.playbookHint),
+      prospect: followUpDue,
+      segmentFocus: input.segmentFocus ?? null,
+      conversions: input.conversions ?? null,
+    })
     actions.push({
       id: `followup:${followUpDue.id}`,
       kind: 'follow_up',
       label: `Relancer ${followUpDue.company_name}`,
       detail: 'Suivi dû: traite la relance avant d’ouvrir une nouvelle boucle.',
       impactLabel: `${followUpDue.score}/100 lead`,
+      expectedCashLabel: scored.expectedCashLabel,
+      reasonLabel: scored.reasonLabel,
       blockedLabel: formatBlockedLabel(blockedHours),
       boostLabel: boost.label,
       playbookLabel,
@@ -264,13 +308,7 @@ export function buildCashActions(input: {
         body: { id: followUpDue.id, action: 'mark_follow_up_sent' },
         successMessage: 'Follow-up marked sent',
       },
-      priority:
-        112 +
-        bandBonus(followUpDue.band) +
-        scoreBonus(followUpDue.score) +
-        boost.bonus +
-        blockedHours +
-        playbookPriorityBonus('follow_up', input.segmentFocus?.playbookHint),
+      priority: scored.priority,
     })
   }
 
@@ -289,12 +327,26 @@ export function buildCashActions(input: {
   if (draftCreated) {
     const boost = segmentAffinity(draftCreated, input.segmentFocus ?? null)
     const playbookLabel = playbookActionLabel(input.segmentFocus?.playbookHint)
+    const scored = scoreCashActionCandidate({
+      kind: 'send',
+      basePriority:
+        98 +
+        bandBonus(draftCreated.band) +
+        scoreBonus(draftCreated.score) +
+        boost.bonus +
+        playbookPriorityBonus('send', input.segmentFocus?.playbookHint),
+      prospect: draftCreated,
+      segmentFocus: input.segmentFocus ?? null,
+      conversions: input.conversions ?? null,
+    })
     actions.push({
       id: `draft:${draftCreated.id}`,
       kind: 'send',
       label: `Envoyer ${draftCreated.company_name}`,
       detail: 'Draft validé en attente d’envoi opérateur.',
       impactLabel: `${draftCreated.score}/100 lead`,
+      expectedCashLabel: scored.expectedCashLabel,
+      reasonLabel: scored.reasonLabel,
       blockedLabel: 'ready to send',
       boostLabel: boost.label,
       playbookLabel,
@@ -308,32 +360,34 @@ export function buildCashActions(input: {
         body: { id: draftCreated.id, status: 'sent' },
         successMessage: 'Prospect marked sent',
       },
-      priority:
-        98 +
-        bandBonus(draftCreated.band) +
-        scoreBonus(draftCreated.score) +
-        boost.bonus +
-        playbookPriorityBonus('send', input.segmentFocus?.playbookHint),
+      priority: scored.priority,
     })
   }
 
   const revenueAction = input.revenueSnapshot?.summary.recommendedAction
   if (revenueAction) {
+    const scored = scoreCashActionCandidate({
+      kind: 'revenue',
+      basePriority:
+        88 +
+        Math.round(revenueAction.priorityScore * 0.2) +
+        Math.round(revenueAction.blockedRevenueEur / 250),
+      conversions: input.conversions ?? null,
+    })
     actions.push({
       id: `revenue:${revenueAction.type}:${revenueAction.ventureName}`,
       kind: 'revenue',
       label: revenueAction.ventureName,
       detail: `${revenueAction.reason} · potentiel ${formatEuro(revenueAction.blockedRevenueEur)}`,
       impactLabel: formatEuro(revenueAction.blockedRevenueEur),
+      expectedCashLabel: `expected cash +${Math.round(revenueAction.blockedRevenueEur)} €`,
+      reasonLabel: 'blocked revenue',
       blockedLabel: `${revenueAction.priorityScore} priority`,
       href: '/studio/revenue',
       tone: 'accent',
       badge: 'revenue',
       intent: null,
-      priority:
-        88 +
-        Math.round(revenueAction.priorityScore * 0.2) +
-        Math.round(revenueAction.blockedRevenueEur / 250),
+      priority: scored.priority,
     })
   }
 
@@ -351,12 +405,25 @@ export function buildCashActions(input: {
   if (hotLead) {
     const boost = segmentAffinity(hotLead, input.segmentFocus ?? null)
     const playbookLabel = playbookActionLabel(input.segmentFocus?.playbookHint)
+    const scored = scoreCashActionCandidate({
+      kind: 'lead',
+      basePriority:
+        84 +
+        scoreBonus(hotLead.score) +
+        boost.bonus +
+        playbookPriorityBonus('lead', input.segmentFocus?.playbookHint),
+      prospect: hotLead,
+      segmentFocus: input.segmentFocus ?? null,
+      conversions: input.conversions ?? null,
+    })
     actions.push({
       id: `lead:${hotLead.id}`,
       kind: 'lead',
       label: `Travailler ${hotLead.company_name}`,
       detail: 'Lead chaud encore non traité. Priorité avant les leads froids.',
       impactLabel: `${hotLead.score}/100 lead`,
+      expectedCashLabel: scored.expectedCashLabel,
+      reasonLabel: scored.reasonLabel,
       blockedLabel: 'new lead',
       boostLabel: boost.label,
       playbookLabel,
@@ -370,11 +437,7 @@ export function buildCashActions(input: {
       tone: 'rose',
       badge: 'lead',
       intent: null,
-      priority:
-        84 +
-        scoreBonus(hotLead.score) +
-        boost.bonus +
-        playbookPriorityBonus('lead', input.segmentFocus?.playbookHint),
+      priority: scored.priority,
     })
   }
 

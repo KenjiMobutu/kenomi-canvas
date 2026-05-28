@@ -58,6 +58,11 @@ describe('buildCashActions', () => {
           },
         },
       },
+      conversions: {
+        bestOffer: { offerId: null, closeRate: 0 },
+        bestAngle: null,
+        segmentRepliesNoPay: { source: 'reddit', band: 'hot', offerId: null, replied: 3, paid: 0 },
+      },
       segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 65 },
       nowIso: '2026-05-28T12:00:00.000Z',
     })
@@ -77,6 +82,8 @@ describe('buildCashActions', () => {
     expect(actions[0]).toMatchObject({
       impactLabel: '82/100 lead',
       blockedLabel: '4h blocked',
+      expectedCashLabel: 'expected cash +523 €',
+      reasonLabel: 'stuck after reply',
     })
     expect(actions[1].intent).toEqual({
       method: 'PATCH',
@@ -114,6 +121,7 @@ describe('buildCashActions', () => {
         },
       ],
       revenueSnapshot: null,
+      conversions: null,
       nowIso: '2026-05-28T12:00:00.000Z',
     })
 
@@ -157,6 +165,7 @@ describe('buildCashActions', () => {
         },
       ],
       revenueSnapshot: null,
+      conversions: null,
       segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 65 },
       nowIso: '2026-05-28T12:00:00.000Z',
     })
@@ -200,6 +209,11 @@ describe('buildCashActions', () => {
         },
       ],
       revenueSnapshot: null,
+      conversions: {
+        bestOffer: null,
+        bestAngle: null,
+        segmentRepliesNoPay: null,
+      },
       segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 90 },
       nowIso: '2026-05-28T12:00:00.000Z',
     })
@@ -240,6 +254,7 @@ describe('buildCashActions', () => {
         },
       ],
       revenueSnapshot: null,
+      conversions: null,
       segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 65, playbookHint: 'needs volume' },
       nowIso: '2026-05-28T12:00:00.000Z',
     })
@@ -282,6 +297,7 @@ describe('buildCashActions', () => {
         },
       ],
       revenueSnapshot: null,
+      conversions: null,
       segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 65, playbookHint: 'win-heavy' },
       nowIso: '2026-05-28T12:00:00.000Z',
     })

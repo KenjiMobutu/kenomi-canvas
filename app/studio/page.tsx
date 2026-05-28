@@ -172,6 +172,18 @@ type CashOutcomeSnapshot = {
   }>
 }
 
+type RevenueConversionsSnapshot = {
+  bestOffer: { offerId: string | null; closeRate: number } | null
+  bestAngle: { offerId: string | null; angle: string; closeRate: number } | null
+  segmentRepliesNoPay: {
+    source: string
+    band: string
+    offerId: string | null
+    replied: number
+    paid: number
+  } | null
+}
+
 type ProspectCashPayload = {
   ok: boolean
   prospects: ProspectCashRow[]
@@ -2852,7 +2864,9 @@ function CashActionQueue({
                       }}
                     >
                       <span>{action.impactLabel}</span>
+                      {action.expectedCashLabel ? <span style={{ color: accent }}>{action.expectedCashLabel}</span> : null}
                       <span>{action.blockedLabel}</span>
+                      {action.reasonLabel ? <span style={{ color: amber }}>{action.reasonLabel}</span> : null}
                       {action.playbookLabel ? <span style={{ color: emerald }}>{action.playbookLabel}</span> : null}
                       {action.boostLabel ? <span style={{ color: toneColor }}>{action.boostLabel}</span> : null}
                     </span>
@@ -3821,6 +3835,7 @@ export default function CockpitPage() {
   const [opsHealth, setOpsHealth] = useState<OpsHealthSummaryPayload | null>(null)
   const [revenueSnapshot, setRevenueSnapshot] = useState<RevenueLoopSnapshotPayload | null>(null)
   const [cashOutcomes, setCashOutcomes] = useState<CashOutcomeSnapshot | null>(null)
+  const [revenueConversions, setRevenueConversions] = useState<RevenueConversionsSnapshot | null>(null)
   const [prospectCash, setProspectCash] = useState<ProspectCashPayload | null>(null)
   const [cashActionState, setCashActionState] = useState<
     Record<string, 'idle' | 'running' | 'done' | 'error'>
@@ -3939,6 +3954,21 @@ export default function CockpitPage() {
     }
   }, [])
 
+  const loadRevenueConversions = useCallback(() => {
+    let cancelled = false
+    fetch('/api/studio/revenue/conversions', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.ok) setRevenueConversions(data.conversions as RevenueConversionsSnapshot)
+      })
+      .catch(() => {
+        if (!cancelled) setRevenueConversions(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
     if (!user) return
     return loadRevenueSnapshot()
@@ -3948,6 +3978,11 @@ export default function CockpitPage() {
     if (!user) return
     return loadCashOutcomes()
   }, [user, loadCashOutcomes])
+
+  useEffect(() => {
+    if (!user) return
+    return loadRevenueConversions()
+  }, [user, loadRevenueConversions])
 
   const loadProspectCash = useCallback(() => {
     let cancelled = false
@@ -4039,13 +4074,14 @@ export default function CockpitPage() {
         loadProspectCash()
         loadRevenueSnapshot()
         loadCashOutcomes()
+        loadRevenueConversions()
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Cash action failed'
         toast.error(message)
         setCashActionState((current) => ({ ...current, [action.id]: 'error' }))
       }
     },
-    [loadCashOutcomes, loadProspectCash, loadRevenueSnapshot]
+    [loadCashOutcomes, loadProspectCash, loadRevenueConversions, loadRevenueSnapshot]
   )
 
   /* Keyboard shortcuts */
@@ -4089,9 +4125,10 @@ export default function CockpitPage() {
       buildCashActions({
         prospects: prospectCash?.prospects ?? [],
         revenueSnapshot,
+        conversions: revenueConversions,
         segmentFocus: cashOutcomes?.topSegment ?? null,
       }),
-    [cashOutcomes, prospectCash, revenueSnapshot]
+    [cashOutcomes, prospectCash, revenueConversions, revenueSnapshot]
   )
 
   const ckVars = theme === 'dark' ? CK_DARK : CK_LIGHT
