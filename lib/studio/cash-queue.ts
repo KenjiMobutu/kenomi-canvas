@@ -46,6 +46,7 @@ export type CashAction = {
   impactLabel: string
   blockedLabel: string
   boostLabel?: string | null
+  playbookLabel?: string | null
   href: string
   tone: 'amber' | 'accent' | 'emerald' | 'rose'
   badge: string
@@ -82,6 +83,14 @@ function playbookPriorityBonus(kind: CashAction['kind'], playbookHint: string | 
     if (kind === 'follow_up') return 8
   }
   return 0
+}
+
+function playbookActionLabel(playbookHint: string | undefined) {
+  if (playbookHint === 'needs volume') return 'volume push'
+  if (playbookHint === 'reply-heavy') return 'reply push'
+  if (playbookHint === 'win-heavy') return 'win push'
+  if (playbookHint === 'needs replies') return 'reply push'
+  return null
 }
 
 function formatEuro(amount: number) {
@@ -167,6 +176,7 @@ export function buildCashActions(input: {
     })[0]
   if (hotApproval && hotApproval.outreach_approval_id) {
     const boost = segmentAffinity(hotApproval, input.segmentFocus ?? null)
+    const playbookLabel = playbookActionLabel(input.segmentFocus?.playbookHint)
     actions.push({
       id: `approval:${hotApproval.id}`,
       kind: 'approval',
@@ -175,6 +185,7 @@ export function buildCashActions(input: {
       impactLabel: `${hotApproval.score}/100 lead`,
       blockedLabel: 'approval pending',
       boostLabel: boost.label,
+      playbookLabel,
       href: '/studio/prospects?status=awaiting_approval',
       tone: 'amber',
       badge: 'approval',
@@ -215,6 +226,7 @@ export function buildCashActions(input: {
   if (followUpDue) {
     const blockedHours = overdueHours(followUpDue.next_followup_at, nowIso)
     const boost = segmentAffinity(followUpDue, input.segmentFocus ?? null)
+    const playbookLabel = playbookActionLabel(input.segmentFocus?.playbookHint)
     actions.push({
       id: `followup:${followUpDue.id}`,
       kind: 'follow_up',
@@ -223,6 +235,7 @@ export function buildCashActions(input: {
       impactLabel: `${followUpDue.score}/100 lead`,
       blockedLabel: formatBlockedLabel(blockedHours),
       boostLabel: boost.label,
+      playbookLabel,
       href: '/studio/prospects?status=follow_up_due',
       tone: 'accent',
       badge: 'follow-up',
@@ -256,6 +269,7 @@ export function buildCashActions(input: {
     })[0]
   if (draftCreated) {
     const boost = segmentAffinity(draftCreated, input.segmentFocus ?? null)
+    const playbookLabel = playbookActionLabel(input.segmentFocus?.playbookHint)
     actions.push({
       id: `draft:${draftCreated.id}`,
       kind: 'send',
@@ -264,6 +278,7 @@ export function buildCashActions(input: {
       impactLabel: `${draftCreated.score}/100 lead`,
       blockedLabel: 'ready to send',
       boostLabel: boost.label,
+      playbookLabel,
       href: '/studio/prospects?status=draft_created',
       tone: 'emerald',
       badge: 'send',
@@ -315,6 +330,7 @@ export function buildCashActions(input: {
     })[0]
   if (hotLead) {
     const boost = segmentAffinity(hotLead, input.segmentFocus ?? null)
+    const playbookLabel = playbookActionLabel(input.segmentFocus?.playbookHint)
     actions.push({
       id: `lead:${hotLead.id}`,
       kind: 'lead',
@@ -323,6 +339,7 @@ export function buildCashActions(input: {
       impactLabel: `${hotLead.score}/100 lead`,
       blockedLabel: 'new lead',
       boostLabel: boost.label,
+      playbookLabel,
       href: '/studio/prospects',
       tone: 'rose',
       badge: 'lead',
