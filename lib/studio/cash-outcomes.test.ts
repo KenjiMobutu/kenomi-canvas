@@ -72,6 +72,12 @@ describe('buildCashOutcomeSnapshot', () => {
       { key: 'reddit:warm', source: 'reddit', band: 'warm', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
       { key: 'other:cold', source: 'other', band: 'cold', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
     ])
+    expect(snapshot.topSegment).toEqual({
+      key: 'reddit:hot',
+      source: 'reddit',
+      band: 'hot',
+      qualityScore: 65,
+    })
     expect(snapshot.blockers).toEqual([
       { key: 'awaiting_approval', label: 'Awaiting approval', count: 1 },
       { key: 'draft_created', label: 'Drafts to send', count: 1 },

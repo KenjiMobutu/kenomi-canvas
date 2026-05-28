@@ -143,6 +143,12 @@ type CashOutcomeSnapshot = {
     winRate: number
     qualityScore: number
   }>
+  topSegment: {
+    key: string
+    source: string
+    band: string
+    qualityScore: number
+  } | null
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
     label: string
@@ -4019,8 +4025,9 @@ export default function CockpitPage() {
       buildCashActions({
         prospects: prospectCash?.prospects ?? [],
         revenueSnapshot,
+        segmentFocus: cashOutcomes?.topSegment ?? null,
       }),
-    [prospectCash, revenueSnapshot]
+    [cashOutcomes, prospectCash, revenueSnapshot]
   )
 
   const ckVars = theme === 'dark' ? CK_DARK : CK_LIGHT

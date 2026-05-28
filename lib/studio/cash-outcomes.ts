@@ -37,6 +37,12 @@ export type CashOutcomeSnapshot = {
     winRate: number
     qualityScore: number
   }>
+  topSegment: {
+    key: string
+    source: string
+    band: string
+    qualityScore: number
+  } | null
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
     label: string
@@ -314,6 +320,25 @@ export function buildCashOutcomeSnapshot(input: {
     { key: 'follow_up_due' as const, label: 'Follow-ups due', count: followUpDue },
   ]
 
+  const sourceBandBreakdown = Array.from(sourceBandMap.values())
+    .map((entry) => ({
+      ...entry,
+      replyRate: ratio(entry.replied, entry.active),
+      winRate: ratio(entry.won, entry.replied || entry.active || entry.won),
+      qualityScore: Math.round(
+        ratio(entry.replied, entry.active) * 0.35 +
+          ratio(entry.won, entry.replied || entry.active || entry.won) * 0.65
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        right.qualityScore - left.qualityScore ||
+        right.won - left.won ||
+        right.replied - left.replied ||
+        right.active - left.active
+    )
+    .slice(0, 4)
+
   return {
     last7d,
     previous7d,
@@ -345,24 +370,15 @@ export function buildCashOutcomeSnapshot(input: {
           right.active - left.active
       )
       .slice(0, 4),
-    sourceBandBreakdown: Array.from(sourceBandMap.values())
-      .map((entry) => ({
-        ...entry,
-        replyRate: ratio(entry.replied, entry.active),
-        winRate: ratio(entry.won, entry.replied || entry.active || entry.won),
-        qualityScore: Math.round(
-          ratio(entry.replied, entry.active) * 0.35 +
-            ratio(entry.won, entry.replied || entry.active || entry.won) * 0.65
-        ),
-      }))
-      .sort(
-        (left, right) =>
-          right.qualityScore - left.qualityScore ||
-          right.won - left.won ||
-          right.replied - left.replied ||
-          right.active - left.active
-      )
-      .slice(0, 4),
+    sourceBandBreakdown,
+    topSegment: sourceBandBreakdown[0]
+      ? {
+          key: sourceBandBreakdown[0].key,
+          source: sourceBandBreakdown[0].source,
+          band: sourceBandBreakdown[0].band,
+          qualityScore: sourceBandBreakdown[0].qualityScore,
+        }
+      : null,
     blockers,
     blockerActions: [
       buildBlockerAction({

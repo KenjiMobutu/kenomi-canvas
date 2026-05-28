@@ -8,6 +8,7 @@ describe('buildCashActions', () => {
         {
           id: 'p-approval',
           company_name: 'Approve Co',
+          source: 'linkedin',
           band: 'warm',
           score: 71,
           pipeline_status: 'awaiting_approval',
@@ -19,6 +20,7 @@ describe('buildCashActions', () => {
         {
           id: 'p-follow-up',
           company_name: 'Follow-up Co',
+          source: 'reddit',
           band: 'hot',
           score: 82,
           pipeline_status: 'follow_up_due',
@@ -30,6 +32,7 @@ describe('buildCashActions', () => {
         {
           id: 'p-send',
           company_name: 'Send Co',
+          source: 'linkedin',
           band: 'hot',
           score: 92,
           pipeline_status: 'draft_created',
@@ -55,6 +58,7 @@ describe('buildCashActions', () => {
           },
         },
       },
+      segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 65 },
       nowIso: '2026-05-28T12:00:00.000Z',
     })
 
@@ -99,6 +103,7 @@ describe('buildCashActions', () => {
         {
           id: 'p-lead',
           company_name: 'Lead Co',
+          source: 'reddit',
           band: 'hot',
           score: 88,
           pipeline_status: 'new',
@@ -129,6 +134,7 @@ describe('buildCashActions', () => {
         {
           id: 'p-cold',
           company_name: 'Cold Approval Co',
+          source: 'linkedin',
           band: 'cold',
           score: 35,
           pipeline_status: 'awaiting_approval',
@@ -140,6 +146,7 @@ describe('buildCashActions', () => {
         {
           id: 'p-hot',
           company_name: 'Hot Approval Co',
+          source: 'reddit',
           band: 'hot',
           score: 93,
           pipeline_status: 'awaiting_approval',
@@ -150,6 +157,7 @@ describe('buildCashActions', () => {
         },
       ],
       revenueSnapshot: null,
+      segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 65 },
       nowIso: '2026-05-28T12:00:00.000Z',
     })
 
@@ -160,6 +168,45 @@ describe('buildCashActions', () => {
     })
     expect(actions[0].intent).toMatchObject({
       body: { approvalId: 'approval-hot', decision: 'approved' },
+    })
+  })
+
+  it('boosts prospects that match the best source-band segment', () => {
+    const actions = buildCashActions({
+      prospects: [
+        {
+          id: 'p-match',
+          company_name: 'Matched Lead',
+          source: 'reddit',
+          band: 'hot',
+          score: 80,
+          pipeline_status: 'draft_created',
+          approval_status: 'approved_to_send',
+          outreach_approval_id: null,
+          next_followup_at: null,
+          last_outreach_kind: 'initial',
+        },
+        {
+          id: 'p-nomatch',
+          company_name: 'Higher Score Lead',
+          source: 'linkedin',
+          band: 'warm',
+          score: 95,
+          pipeline_status: 'draft_created',
+          approval_status: 'approved_to_send',
+          outreach_approval_id: null,
+          next_followup_at: null,
+          last_outreach_kind: 'initial',
+        },
+      ],
+      revenueSnapshot: null,
+      segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 90 },
+      nowIso: '2026-05-28T12:00:00.000Z',
+    })
+
+    expect(actions[0]).toMatchObject({
+      kind: 'send',
+      label: 'Envoyer Matched Lead',
     })
   })
 })
