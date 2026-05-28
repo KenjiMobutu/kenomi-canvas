@@ -58,7 +58,31 @@ type SegmentFocus = {
   source: string
   band: string
   qualityScore: number
+  playbookHint?: string
 } | null
+
+function playbookPriorityBonus(kind: CashAction['kind'], playbookHint: string | undefined) {
+  if (!playbookHint) return 0
+  if (playbookHint === 'needs volume') {
+    if (kind === 'lead') return 34
+    if (kind === 'send') return -10
+    if (kind === 'follow_up') return -8
+  }
+  if (playbookHint === 'reply-heavy') {
+    if (kind === 'approval') return 8
+    if (kind === 'send') return 14
+  }
+  if (playbookHint === 'win-heavy') {
+    if (kind === 'follow_up') return 16
+    if (kind === 'send') return 8
+  }
+  if (playbookHint === 'needs replies') {
+    if (kind === 'approval') return 6
+    if (kind === 'send') return 10
+    if (kind === 'follow_up') return 8
+  }
+  return 0
+}
 
 function formatEuro(amount: number) {
   return new Intl.NumberFormat('fr-FR', {
@@ -164,7 +188,8 @@ export function buildCashActions(input: {
         120 +
         bandBonus(hotApproval.band) +
         scoreBonus(hotApproval.score) +
-        boost.bonus,
+        boost.bonus +
+        playbookPriorityBonus('approval', input.segmentFocus?.playbookHint),
     })
   }
 
@@ -212,7 +237,8 @@ export function buildCashActions(input: {
         bandBonus(followUpDue.band) +
         scoreBonus(followUpDue.score) +
         boost.bonus +
-        blockedHours,
+        blockedHours +
+        playbookPriorityBonus('follow_up', input.segmentFocus?.playbookHint),
     })
   }
 
@@ -251,7 +277,8 @@ export function buildCashActions(input: {
         98 +
         bandBonus(draftCreated.band) +
         scoreBonus(draftCreated.score) +
-        boost.bonus,
+        boost.bonus +
+        playbookPriorityBonus('send', input.segmentFocus?.playbookHint),
     })
   }
 
@@ -300,7 +327,11 @@ export function buildCashActions(input: {
       tone: 'rose',
       badge: 'lead',
       intent: null,
-      priority: 84 + scoreBonus(hotLead.score) + boost.bonus,
+      priority:
+        84 +
+        scoreBonus(hotLead.score) +
+        boost.bonus +
+        playbookPriorityBonus('lead', input.segmentFocus?.playbookHint),
     })
   }
 

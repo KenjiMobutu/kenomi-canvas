@@ -44,6 +44,7 @@ export type CashOutcomeSnapshot = {
     source: string
     band: string
     qualityScore: number
+    playbookHint: string
   } | null
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
@@ -403,6 +404,7 @@ export function buildCashOutcomeSnapshot(input: {
           source: sourceBandBreakdown[0].source,
           band: sourceBandBreakdown[0].band,
           qualityScore: sourceBandBreakdown[0].qualityScore,
+          playbookHint: sourceBandBreakdown[0].playbookHint,
         }
       : null,
     blockers,

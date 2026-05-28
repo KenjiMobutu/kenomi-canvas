@@ -77,6 +77,7 @@ describe('buildCashOutcomeSnapshot', () => {
       source: 'reddit',
       band: 'hot',
       qualityScore: 65,
+      playbookHint: 'win-heavy',
     })
     expect(snapshot.blockers).toEqual([
       { key: 'awaiting_approval', label: 'Awaiting approval', count: 1 },

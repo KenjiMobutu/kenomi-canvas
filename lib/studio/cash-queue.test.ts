@@ -210,4 +210,82 @@ describe('buildCashActions', () => {
       boostLabel: 'top segment · reddit/hot',
     })
   })
+
+  it('shifts priority toward lead generation when the best segment needs volume', () => {
+    const actions = buildCashActions({
+      prospects: [
+        {
+          id: 'p-send',
+          company_name: 'Ready Draft Co',
+          source: 'reddit',
+          band: 'hot',
+          score: 84,
+          pipeline_status: 'draft_created',
+          approval_status: 'approved_to_send',
+          outreach_approval_id: null,
+          next_followup_at: null,
+          last_outreach_kind: 'initial',
+        },
+        {
+          id: 'p-lead',
+          company_name: 'Volume Lead Co',
+          source: 'reddit',
+          band: 'hot',
+          score: 83,
+          pipeline_status: 'new',
+          approval_status: 'none',
+          outreach_approval_id: null,
+          next_followup_at: null,
+          last_outreach_kind: 'initial',
+        },
+      ],
+      revenueSnapshot: null,
+      segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 65, playbookHint: 'needs volume' },
+      nowIso: '2026-05-28T12:00:00.000Z',
+    })
+
+    expect(actions[0]).toMatchObject({
+      kind: 'lead',
+      label: 'Travailler Volume Lead Co',
+    })
+  })
+
+  it('shifts priority toward follow-up when the best segment is win-heavy', () => {
+    const actions = buildCashActions({
+      prospects: [
+        {
+          id: 'p-followup',
+          company_name: 'Win Follow-up Co',
+          source: 'reddit',
+          band: 'hot',
+          score: 78,
+          pipeline_status: 'follow_up_due',
+          approval_status: 'approved_to_send',
+          outreach_approval_id: null,
+          next_followup_at: '2026-05-28T11:00:00.000Z',
+          last_outreach_kind: 'follow_up_1',
+        },
+        {
+          id: 'p-send',
+          company_name: 'Win Draft Co',
+          source: 'reddit',
+          band: 'hot',
+          score: 92,
+          pipeline_status: 'draft_created',
+          approval_status: 'approved_to_send',
+          outreach_approval_id: null,
+          next_followup_at: null,
+          last_outreach_kind: 'initial',
+        },
+      ],
+      revenueSnapshot: null,
+      segmentFocus: { source: 'reddit', band: 'hot', qualityScore: 65, playbookHint: 'win-heavy' },
+      nowIso: '2026-05-28T12:00:00.000Z',
+    })
+
+    expect(actions[0]).toMatchObject({
+      kind: 'follow_up',
+      label: 'Relancer Win Follow-up Co',
+    })
+  })
 })

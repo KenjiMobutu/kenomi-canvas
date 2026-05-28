@@ -155,6 +155,7 @@ type CashOutcomeSnapshot = {
     source: string
     band: string
     qualityScore: number
+    playbookHint: string
   } | null
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
