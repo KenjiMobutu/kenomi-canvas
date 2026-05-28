@@ -7,6 +7,7 @@ import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { buildCashActions, type CashAction, type ProspectCashRow } from '@/lib/studio/cash-queue'
 import { buildProspectHref, buildRateDrilldownHref } from '@/lib/studio/prospect-filters'
+import { buildRevenueHref } from '@/lib/studio/revenue-links'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Venture {
@@ -2096,11 +2097,13 @@ function CashOutcomePanel({
       label: 'Cash 7j',
       value: formatEuro(outcomes?.last7d.cashEur ?? 0),
       delta: outcomes ? formatSignedEuro(outcomes.delta7d.cashEur) : formatEuro(0),
+      href: buildRevenueHref({ focus: 'cash_7d' }),
     },
     {
       label: 'Cash 30j',
       value: formatEuro(outcomes?.last30d.cashEur ?? 0),
       delta: outcomes ? formatSignedEuro(outcomes.delta30d.cashEur) : formatEuro(0),
+      href: buildRevenueHref({ focus: 'cash_30d' }),
     },
   ]
 
@@ -2186,13 +2189,34 @@ function CashOutcomePanel({
                 marginTop: 8,
                 color: muted2,
                 fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                letterSpacing: '.08em',
-                textTransform: 'uppercase',
-              }}
+              fontSize: 10,
+              letterSpacing: '.08em',
+              textTransform: 'uppercase',
+            }}
             >
               vs prev {card.delta}
             </div>
+            {card.href ? (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = card.href as string
+                }}
+                style={{
+                  marginTop: 10,
+                  borderRadius: 999,
+                  border: `1px solid ${accent}55`,
+                  background: `${accent}18`,
+                  color: accent,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Open Revenue
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
