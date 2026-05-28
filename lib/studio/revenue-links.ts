@@ -19,3 +19,10 @@ export function readRevenueFocusFromSearch(search: string): RevenueFocus | null 
   }
   return null
 }
+
+export function formatRevenueFocusLabel(focus: RevenueFocus): string {
+  if (focus === 'cash_7d') return 'Cash 7d'
+  if (focus === 'cash_30d') return 'Cash 30d'
+  if (focus === 'blocked') return 'Blocked revenue'
+  return 'Ready checkouts'
+}

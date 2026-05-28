@@ -23,7 +23,11 @@ import type {
   RevenueLoopSnapshot,
   RevenueLoopStageStatus,
 } from '@/lib/revenue-loop'
-import { readRevenueFocusFromSearch, type RevenueFocus } from '@/lib/studio/revenue-links'
+import {
+  formatRevenueFocusLabel,
+  readRevenueFocusFromSearch,
+  type RevenueFocus,
+} from '@/lib/studio/revenue-links'
 import { sortRevenueLoopsByFocus } from '@/lib/studio/revenue-focus'
 
 type RevenueAuditEvent = {
@@ -407,6 +411,44 @@ export default function RevenuePage() {
           <h1 style={{ fontSize: 34, lineHeight: 1.05, margin: 0, letterSpacing: 0 }}>
             Autonomie agents et revenu vérifiable
           </h1>
+          {focus ? (
+            <div
+              style={{
+                marginTop: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  borderRadius: 999,
+                  border: `1px solid ${C.accent}55`,
+                  background: `${C.accent}16`,
+                  color: C.accent,
+                  padding: '6px 10px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Focus active · {formatRevenueFocusLabel(focus)}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/studio/revenue'
+                }}
+                style={buttonStyle('secondary')}
+              >
+                <X size={15} />
+                Clear focus
+              </button>
+            </div>
+          ) : null}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button
