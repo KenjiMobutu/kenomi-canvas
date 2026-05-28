@@ -2791,6 +2791,7 @@ function CashActionQueue({
                     >
                       <span>{action.impactLabel}</span>
                       <span>{action.blockedLabel}</span>
+                      {action.boostLabel ? <span style={{ color: toneColor }}>{action.boostLabel}</span> : null}
                     </span>
                   </span>
                   <div

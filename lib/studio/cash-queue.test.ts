@@ -207,6 +207,7 @@ describe('buildCashActions', () => {
     expect(actions[0]).toMatchObject({
       kind: 'send',
       label: 'Envoyer Matched Lead',
+      boostLabel: 'top segment · reddit/hot',
     })
   })
 })

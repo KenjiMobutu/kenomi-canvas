@@ -45,6 +45,7 @@ export type CashAction = {
   detail: string
   impactLabel: string
   blockedLabel: string
+  boostLabel?: string | null
   href: string
   tone: 'amber' | 'accent' | 'emerald' | 'rose'
   badge: string
@@ -91,13 +92,29 @@ function formatBlockedLabel(hours: number) {
   return '24h+ blocked'
 }
 
-function segmentBonus(prospect: ProspectCashRow, segmentFocus: SegmentFocus) {
-  if (!segmentFocus) return 0
+function segmentAffinity(prospect: ProspectCashRow, segmentFocus: SegmentFocus) {
+  if (!segmentFocus) return { bonus: 0, label: null as string | null }
   const matchesSource = prospect.source === segmentFocus.source
   const matchesBand = prospect.band === segmentFocus.band
-  if (matchesSource && matchesBand) return Math.round(segmentFocus.qualityScore * 0.2)
-  if (matchesSource || matchesBand) return Math.round(segmentFocus.qualityScore * 0.08)
-  return 0
+  if (matchesSource && matchesBand) {
+    return {
+      bonus: Math.round(segmentFocus.qualityScore * 0.2),
+      label: `top segment · ${segmentFocus.source}/${segmentFocus.band}`,
+    }
+  }
+  if (matchesSource) {
+    return {
+      bonus: Math.round(segmentFocus.qualityScore * 0.08),
+      label: `top source · ${segmentFocus.source}`,
+    }
+  }
+  if (matchesBand) {
+    return {
+      bonus: Math.round(segmentFocus.qualityScore * 0.08),
+      label: `top band · ${segmentFocus.band}`,
+    }
+  }
+  return { bonus: 0, label: null as string | null }
 }
 
 export function buildCashActions(input: {
@@ -116,12 +133,16 @@ export function buildCashActions(input: {
     )
     .sort((left, right) => {
       const leftScore =
-        120 + bandBonus(left.band) + scoreBonus(left.score) + segmentBonus(left, input.segmentFocus ?? null)
+        120 + bandBonus(left.band) + scoreBonus(left.score) + segmentAffinity(left, input.segmentFocus ?? null).bonus
       const rightScore =
-        120 + bandBonus(right.band) + scoreBonus(right.score) + segmentBonus(right, input.segmentFocus ?? null)
+        120 +
+        bandBonus(right.band) +
+        scoreBonus(right.score) +
+        segmentAffinity(right, input.segmentFocus ?? null).bonus
       return rightScore - leftScore
     })[0]
   if (hotApproval && hotApproval.outreach_approval_id) {
+    const boost = segmentAffinity(hotApproval, input.segmentFocus ?? null)
     actions.push({
       id: `approval:${hotApproval.id}`,
       kind: 'approval',
@@ -129,6 +150,7 @@ export function buildCashActions(input: {
       detail: 'Draft prêt à valider pour débloquer l’envoi.',
       impactLabel: `${hotApproval.score}/100 lead`,
       blockedLabel: 'approval pending',
+      boostLabel: boost.label,
       href: '/studio/prospects?status=awaiting_approval',
       tone: 'amber',
       badge: 'approval',
@@ -142,29 +164,32 @@ export function buildCashActions(input: {
         120 +
         bandBonus(hotApproval.band) +
         scoreBonus(hotApproval.score) +
-        segmentBonus(hotApproval, input.segmentFocus ?? null),
+        boost.bonus,
     })
   }
 
   const followUpDue = input.prospects
     .filter((prospect) => prospect.pipeline_status === 'follow_up_due')
     .sort((left, right) => {
+      const leftBoost = segmentAffinity(left, input.segmentFocus ?? null)
+      const rightBoost = segmentAffinity(right, input.segmentFocus ?? null)
       const leftScore =
         112 +
         bandBonus(left.band) +
         scoreBonus(left.score) +
-        segmentBonus(left, input.segmentFocus ?? null) +
+        leftBoost.bonus +
         overdueHours(left.next_followup_at, nowIso)
       const rightScore =
         112 +
         bandBonus(right.band) +
         scoreBonus(right.score) +
-        segmentBonus(right, input.segmentFocus ?? null) +
+        rightBoost.bonus +
         overdueHours(right.next_followup_at, nowIso)
       return rightScore - leftScore
     })[0]
   if (followUpDue) {
     const blockedHours = overdueHours(followUpDue.next_followup_at, nowIso)
+    const boost = segmentAffinity(followUpDue, input.segmentFocus ?? null)
     actions.push({
       id: `followup:${followUpDue.id}`,
       kind: 'follow_up',
@@ -172,6 +197,7 @@ export function buildCashActions(input: {
       detail: 'Suivi dû: traite la relance avant d’ouvrir une nouvelle boucle.',
       impactLabel: `${followUpDue.score}/100 lead`,
       blockedLabel: formatBlockedLabel(blockedHours),
+      boostLabel: boost.label,
       href: '/studio/prospects?status=follow_up_due',
       tone: 'accent',
       badge: 'follow-up',
@@ -185,7 +211,7 @@ export function buildCashActions(input: {
         112 +
         bandBonus(followUpDue.band) +
         scoreBonus(followUpDue.score) +
-        segmentBonus(followUpDue, input.segmentFocus ?? null) +
+        boost.bonus +
         blockedHours,
     })
   }
@@ -194,12 +220,16 @@ export function buildCashActions(input: {
     .filter((prospect) => prospect.pipeline_status === 'draft_created')
     .sort((left, right) => {
       const leftScore =
-        98 + bandBonus(left.band) + scoreBonus(left.score) + segmentBonus(left, input.segmentFocus ?? null)
+        98 + bandBonus(left.band) + scoreBonus(left.score) + segmentAffinity(left, input.segmentFocus ?? null).bonus
       const rightScore =
-        98 + bandBonus(right.band) + scoreBonus(right.score) + segmentBonus(right, input.segmentFocus ?? null)
+        98 +
+        bandBonus(right.band) +
+        scoreBonus(right.score) +
+        segmentAffinity(right, input.segmentFocus ?? null).bonus
       return rightScore - leftScore
     })[0]
   if (draftCreated) {
+    const boost = segmentAffinity(draftCreated, input.segmentFocus ?? null)
     actions.push({
       id: `draft:${draftCreated.id}`,
       kind: 'send',
@@ -207,6 +237,7 @@ export function buildCashActions(input: {
       detail: 'Draft validé en attente d’envoi opérateur.',
       impactLabel: `${draftCreated.score}/100 lead`,
       blockedLabel: 'ready to send',
+      boostLabel: boost.label,
       href: '/studio/prospects?status=draft_created',
       tone: 'emerald',
       badge: 'send',
@@ -220,7 +251,7 @@ export function buildCashActions(input: {
         98 +
         bandBonus(draftCreated.band) +
         scoreBonus(draftCreated.score) +
-        segmentBonus(draftCreated, input.segmentFocus ?? null),
+        boost.bonus,
     })
   }
 
@@ -251,11 +282,12 @@ export function buildCashActions(input: {
         (prospect.pipeline_status === 'new' || prospect.pipeline_status === 'ready_to_contact')
     )
     .sort((left, right) => {
-      const leftScore = 84 + scoreBonus(left.score) + segmentBonus(left, input.segmentFocus ?? null)
-      const rightScore = 84 + scoreBonus(right.score) + segmentBonus(right, input.segmentFocus ?? null)
+      const leftScore = 84 + scoreBonus(left.score) + segmentAffinity(left, input.segmentFocus ?? null).bonus
+      const rightScore = 84 + scoreBonus(right.score) + segmentAffinity(right, input.segmentFocus ?? null).bonus
       return rightScore - leftScore
     })[0]
   if (hotLead) {
+    const boost = segmentAffinity(hotLead, input.segmentFocus ?? null)
     actions.push({
       id: `lead:${hotLead.id}`,
       kind: 'lead',
@@ -263,11 +295,12 @@ export function buildCashActions(input: {
       detail: 'Lead chaud encore non traité. Priorité avant les leads froids.',
       impactLabel: `${hotLead.score}/100 lead`,
       blockedLabel: 'new lead',
+      boostLabel: boost.label,
       href: '/studio/prospects',
       tone: 'rose',
       badge: 'lead',
       intent: null,
-      priority: 84 + scoreBonus(hotLead.score) + segmentBonus(hotLead, input.segmentFocus ?? null),
+      priority: 84 + scoreBonus(hotLead.score) + boost.bonus,
     })
   }
 
