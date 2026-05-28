@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildProspectHref, buildRateDrilldownHref, readProspectFiltersFromSearch } from './prospect-filters'
+import {
+  buildProspectHref,
+  buildRateDrilldownHref,
+  buildSegmentPushHref,
+  readProspectFiltersFromSearch,
+} from './prospect-filters'
 
 describe('readProspectFiltersFromSearch', () => {
   it('reads supported prospect filters from the URL query string', () => {
@@ -39,5 +44,11 @@ describe('readProspectFiltersFromSearch', () => {
   it('builds rate drilldown links for reply and win queues', () => {
     expect(buildRateDrilldownHref('reply')).toBe('/studio/prospects?status=follow_up_due')
     expect(buildRateDrilldownHref('win')).toBe('/studio/prospects?status=replied')
+  })
+
+  it('builds push links for the best source-band segment', () => {
+    expect(buildSegmentPushHref({ source: 'reddit', band: 'hot' })).toBe(
+      '/studio/prospects?source=reddit&band=hot'
+    )
   })
 })

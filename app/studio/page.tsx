@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '@/lib/studio-utils'
 import { toast } from 'sonner'
 import { buildCashActions, type CashAction, type ProspectCashRow } from '@/lib/studio/cash-queue'
-import { buildProspectHref, buildRateDrilldownHref } from '@/lib/studio/prospect-filters'
+import { buildProspectHref, buildRateDrilldownHref, buildSegmentPushHref } from '@/lib/studio/prospect-filters'
 import { buildRevenueHref } from '@/lib/studio/revenue-links'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -2586,25 +2586,48 @@ function CashOutcomePanel({
                   <span>{item.winRate}% win</span>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href = buildProspectHref({ source: item.source, band: item.band })
-                }}
-                style={{
-                  borderRadius: 999,
-                  border: `1px solid ${accent}55`,
-                  background: `${accent}18`,
-                  color: accent,
-                  padding: '6px 10px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Open
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                {index === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = buildSegmentPushHref({ source: item.source, band: item.band })
+                    }}
+                    style={{
+                      borderRadius: 999,
+                      border: `1px solid ${emerald}55`,
+                      background: `${emerald}18`,
+                      color: emerald,
+                      padding: '6px 10px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Push more
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = buildProspectHref({ source: item.source, band: item.band })
+                  }}
+                  style={{
+                    borderRadius: 999,
+                    border: `1px solid ${accent}55`,
+                    background: `${accent}18`,
+                    color: accent,
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Open
+                </button>
+              </div>
             </div>
           ))}
         </div>

@@ -30,6 +30,13 @@ export function buildProspectHref(input: {
   return query ? `/studio/prospects?${query}` : '/studio/prospects'
 }
 
+export function buildSegmentPushHref(input: { source?: string | null; band?: string | null }) {
+  return buildProspectHref({
+    source: input.source,
+    band: input.band,
+  })
+}
+
 export function buildRateDrilldownHref(metric: 'reply' | 'win') {
   return buildProspectHref({
     status: metric === 'reply' ? 'follow_up_due' : 'replied',
