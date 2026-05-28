@@ -11,9 +11,9 @@ const schedulerSchema = z.object({
   limit: z.number().int().min(1).max(20).optional(),
   user_id: z.string().uuid().optional(),
   schedule_keys: z
-    .array(z.enum(['scout', 'prospect', 'follow_ups', 'devops']))
+    .array(z.enum(['scout', 'prospect', 'follow_ups', 'devops', 'hermes_operator']))
     .min(1)
-    .max(4)
+    .max(5)
     .optional(),
 })
 

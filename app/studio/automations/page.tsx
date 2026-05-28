@@ -57,7 +57,7 @@ interface N8nWorkflow {
 
 interface BusinessSchedule {
   id: string
-  schedule_key: 'scout' | 'prospect' | 'follow_ups' | 'devops'
+  schedule_key: 'scout' | 'prospect' | 'follow_ups' | 'devops' | 'hermes_operator'
   label: string
   status: 'active' | 'paused'
   interval_minutes: number

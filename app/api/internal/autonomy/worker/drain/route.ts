@@ -7,6 +7,7 @@ import {
   type BusinessScheduleKey,
   type BusinessScheduleSupabase,
 } from '@/lib/autonomy/scheduler'
+import { runHermesOperatorTick } from '@/lib/hermes-operator/runner'
 import { processDueProspectFollowUps } from '@/lib/prospect/scheduled-follow-ups'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
@@ -38,7 +39,11 @@ export async function POST(request: NextRequest) {
     now: new Date(),
     limit: parsed.data.limit ?? 1,
     workerId: parsed.data.worker_id,
-    allowedJobKinds: parsed.data.allowed_job_kinds ?? ['run_agent', 'follow_up_scan'],
+    allowedJobKinds: parsed.data.allowed_job_kinds ?? [
+      'run_agent',
+      'follow_up_scan',
+      'hermes_operator_tick',
+    ],
     runAgentStep: (input) =>
       runAgentStep({
         supabase: input.supabase as RunAgentStepSupabase,
@@ -53,13 +58,22 @@ export async function POST(request: NextRequest) {
         userId,
         nowIso,
       }),
+    runHermesOperatorTick: ({ supabase, userId, mode, payload, now }) =>
+      runHermesOperatorTick({
+        supabase: supabase as Parameters<typeof runHermesOperatorTick>[0]['supabase'],
+        userId,
+        mode: mode === 'recommend' || mode === 'act' ? mode : 'observe',
+        payload,
+        now,
+      }),
     onJobCompleted: async ({ supabase, job, now }) => {
       const scheduleKey = job.payload?.scheduleKey
       if (
         scheduleKey === 'scout' ||
         scheduleKey === 'prospect' ||
         scheduleKey === 'follow_ups' ||
-        scheduleKey === 'devops'
+        scheduleKey === 'devops' ||
+        scheduleKey === 'hermes_operator'
       ) {
         await markBusinessScheduleCompleted({
           supabase: supabase as unknown as BusinessScheduleSupabase,

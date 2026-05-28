@@ -28,7 +28,7 @@ interface ScheduleJobRow {
 }
 
 const schedulePatchSchema = z.object({
-  scheduleKey: z.enum(['scout', 'prospect', 'follow_ups', 'devops']),
+  scheduleKey: z.enum(['scout', 'prospect', 'follow_ups', 'devops', 'hermes_operator']),
   status: z.enum(['active', 'paused']).optional(),
   runNow: z.boolean().optional(),
   intervalMinutes: z.number().int().min(5).max(1440).optional(),
@@ -36,15 +36,27 @@ const schedulePatchSchema = z.object({
 })
 
 function sortSchedules<T extends { schedule_key: BusinessScheduleKey }>(rows: T[]): T[] {
-  const order: BusinessScheduleKey[] = ['scout', 'prospect', 'follow_ups', 'devops']
+  const order: BusinessScheduleKey[] = [
+    'scout',
+    'prospect',
+    'follow_ups',
+    'devops',
+    'hermes_operator',
+  ]
   return [...rows].sort((a, b) => order.indexOf(a.schedule_key) - order.indexOf(b.schedule_key))
 }
 
 function getScheduleKeyFromJob(job: ScheduleJobRow): BusinessScheduleKey | null {
   const key = job.payload?.scheduleKey
-  return key === 'scout' || key === 'prospect' || key === 'follow_ups' || key === 'devops'
-    ? key
-    : null
+  return (
+    key === 'scout' ||
+    key === 'prospect' ||
+    key === 'follow_ups' ||
+    key === 'devops' ||
+    key === 'hermes_operator'
+      ? key
+      : null
+  )
 }
 
 function buildScheduleObservability(input: {

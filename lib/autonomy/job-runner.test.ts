@@ -269,6 +269,62 @@ describe('processQueuedAutonomyJobs', () => {
     })
     expect(completions).toEqual(['job-follow-ups'])
   })
+
+  it('exécute un hermes_operator_tick et persiste son output', async () => {
+    const supabase = createFakeSupabase([
+      {
+        ...baseJob,
+        id: 'job-hermes',
+        kind: 'hermes_operator_tick',
+        payload: {
+          mode: 'observe',
+          scheduleKey: 'hermes_operator',
+          scheduled: true,
+        },
+      },
+    ])
+
+    const processed = await processQueuedAutonomyJobs({
+      supabase,
+      now: new Date('2026-05-18T10:00:00.000Z'),
+      workerId: 'worker:test:hermes',
+      allowedJobKinds: ['hermes_operator_tick'],
+      runHermesOperatorTick: async () => ({
+        runId: 'hermes-run-1',
+        mode: 'observe',
+        status: 'completed',
+        summary: 'Follow the top segment.',
+        model: 'hermes3:8b',
+        recommendationsCount: 2,
+        alertsCount: 1,
+        fallbackTriggered: false,
+      }),
+    })
+
+    expect(processed).toHaveLength(1)
+    expect(processed[0]?.job.status).toBe('completed')
+    expect(processed[0]?.result).toMatchObject({
+      runId: 'hermes-run-1',
+      mode: 'observe',
+      recommendationsCount: 2,
+    })
+    expect(supabase.jobs[0]?.payload).toEqual({
+      mode: 'observe',
+      scheduleKey: 'hermes_operator',
+      scheduled: true,
+      output: {
+        runId: 'hermes-run-1',
+        mode: 'observe',
+        status: 'completed',
+        summary: 'Follow the top segment.',
+        model: 'hermes3:8b',
+        recommendationsCount: 2,
+        alertsCount: 1,
+        fallbackTriggered: false,
+        scheduleKey: 'hermes_operator',
+      },
+    })
+  })
 })
 
 describe('job state transitions', () => {

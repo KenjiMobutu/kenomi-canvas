@@ -75,6 +75,22 @@ export interface ProcessQueuedAutonomyJobsInput {
     userId: string
     nowIso: string
   }) => Promise<{ processed: number }>
+  runHermesOperatorTick?: (input: {
+    supabase: unknown
+    userId: string
+    mode?: string
+    payload?: Record<string, unknown>
+    now?: Date
+  }) => Promise<{
+    runId: string
+    mode: string
+    status: 'completed' | 'failed'
+    summary: string
+    model: string
+    recommendationsCount: number
+    alertsCount: number
+    fallbackTriggered: boolean
+  }>
   onJobCompleted?: (input: {
     supabase: AutonomyJobRunnerSupabase
     job: AutonomyJobRow
@@ -409,6 +425,29 @@ export async function processQueuedAutonomyJobs(
           scheduleKey: getScheduleKey(job),
         }
         result = followUpResult
+      } else if (job.kind === 'hermes_operator_tick') {
+        const hermesResult = await (input.runHermesOperatorTick ??
+          (async () => {
+            throw new Error('runHermesOperatorTick manquant')
+          }))({
+          supabase: input.supabase,
+          userId: job.user_id,
+          mode: typeof job.payload?.mode === 'string' ? job.payload.mode : undefined,
+          payload: job.payload,
+          now,
+        })
+        output = {
+          runId: hermesResult.runId,
+          mode: hermesResult.mode,
+          status: hermesResult.status,
+          summary: hermesResult.summary,
+          model: hermesResult.model,
+          recommendationsCount: hermesResult.recommendationsCount,
+          alertsCount: hermesResult.alertsCount,
+          fallbackTriggered: hermesResult.fallbackTriggered,
+          scheduleKey: getScheduleKey(job),
+        }
+        result = hermesResult
       } else {
         const runnerInput = await getQueuedJobRunnerInput(job)
         const agentResult = await (runAgentStep ??

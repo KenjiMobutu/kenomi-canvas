@@ -142,7 +142,7 @@ function createSchedule(overrides: Partial<BusinessScheduleRow>): BusinessSchedu
 }
 
 describe('ensureBusinessSchedulesForUser', () => {
-  it('bootstrap les quatre schedules par défaut', async () => {
+  it('bootstrap les cinq schedules par défaut', async () => {
     const supabase = createFakeSupabase()
     const schedules = await ensureBusinessSchedulesForUser({
       supabase,
@@ -155,8 +155,9 @@ describe('ensureBusinessSchedulesForUser', () => {
       'prospect',
       'follow_ups',
       'devops',
+      'hermes_operator',
     ])
-    expect(supabase.tables.business_schedules).toHaveLength(4)
+    expect(supabase.tables.business_schedules).toHaveLength(5)
   })
 })
 
@@ -226,6 +227,40 @@ describe('runBusinessScheduler', () => {
 
     expect(report).toHaveLength(0)
     expect(supabase.tables.autonomy_jobs).toHaveLength(0)
+  })
+
+  it('enqueue un hermes_operator_tick pour le schedule Hermes', async () => {
+    const supabase = createFakeSupabase([
+      createSchedule({
+        id: 'sched-hermes',
+        schedule_key: 'hermes_operator',
+        label: 'Hermes Operator',
+        interval_minutes: 60,
+        payload: { mode: 'observe' },
+      }),
+    ])
+
+    const report = await runBusinessScheduler({
+      supabase,
+      now: new Date('2026-05-27T09:00:00.000Z'),
+      limit: 10,
+    })
+
+    expect(report).toHaveLength(1)
+    expect(report[0]).toMatchObject({
+      scheduleKey: 'hermes_operator',
+      status: 'enqueued',
+    })
+    expect(supabase.tables.autonomy_jobs[0]).toMatchObject({
+      kind: 'hermes_operator_tick',
+      user_id: 'user-1',
+      payload: {
+        mode: 'observe',
+        scheduleId: 'sched-hermes',
+        scheduleKey: 'hermes_operator',
+        scheduled: true,
+      },
+    })
   })
 
   it('ignore les schedules quand le contrôle global utilisateur est en pause', async () => {

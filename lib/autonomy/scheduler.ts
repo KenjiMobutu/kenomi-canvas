@@ -5,7 +5,7 @@ import {
   type AutonomyControlSupabase,
 } from './controls'
 
-export type BusinessScheduleKey = 'scout' | 'prospect' | 'follow_ups' | 'devops'
+export type BusinessScheduleKey = 'scout' | 'prospect' | 'follow_ups' | 'devops' | 'hermes_operator'
 export type BusinessScheduleStatus = 'active' | 'paused'
 
 export interface BusinessScheduleRow {
@@ -77,6 +77,12 @@ const SCHEDULE_DEFAULTS: Array<{
     intervalMinutes: 30,
     payload: { agentId: 'devops' },
   },
+  {
+    key: 'hermes_operator',
+    label: 'Hermes Operator',
+    intervalMinutes: 60,
+    payload: { mode: 'observe' },
+  },
 ]
 
 function defaultPromptForSchedule(key: BusinessScheduleKey): string {
@@ -87,6 +93,8 @@ function defaultPromptForSchedule(key: BusinessScheduleKey): string {
       return 'Genere un prospect outbound qualifie a partir des signaux existants et du CRM local.'
     case 'devops':
       return 'Synthétise les diagnostics infra réels et les incidents récents sans proposer d action automatique.'
+    case 'hermes_operator':
+      return ''
     default:
       return ''
   }
@@ -205,6 +213,26 @@ function buildScheduleJob(input: {
       next_run_at: input.nowIso,
       payload: {
         ...payload,
+        scheduleId: input.schedule.id,
+        scheduleKey: input.schedule.schedule_key,
+        scheduled: true,
+      },
+      created_at: input.nowIso,
+      updated_at: input.nowIso,
+    }
+  }
+
+  if (input.schedule.schedule_key === 'hermes_operator') {
+    return {
+      user_id: input.schedule.user_id,
+      venture_id: null,
+      kind: 'hermes_operator_tick',
+      status: 'queued',
+      attempt_count: 0,
+      next_run_at: input.nowIso,
+      payload: {
+        ...payload,
+        mode: typeof payload.mode === 'string' ? payload.mode : 'observe',
         scheduleId: input.schedule.id,
         scheduleKey: input.schedule.schedule_key,
         scheduled: true,
