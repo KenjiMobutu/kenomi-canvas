@@ -31,6 +31,7 @@ export type ProspectActivityEvent = {
     | 'note_updated'
     | 'tags_updated'
     | 'next_action_updated'
+    | 'conversation_truth_recorded'
     | 'marked_sent'
     | 'marked_replied'
     | 'marked_won'

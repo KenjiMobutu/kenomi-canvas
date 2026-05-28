@@ -63,6 +63,10 @@ export interface ProspectRecordView extends ProspectRecordRow {
   offer_id?: string | null
   offer_variant?: string | null
   outreach_angle?: string | null
+  latest_conversation_event_type?: string | null
+  latest_conversation_event_value?: string | null
+  latest_conversation_notes?: string | null
+  latest_conversation_at?: string | null
   pipeline_status: ProspectPipelineStatus
   approval_status: ProspectApprovalStatus
   outreach_action_id: string | null

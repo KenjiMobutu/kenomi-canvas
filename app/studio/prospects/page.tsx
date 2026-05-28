@@ -22,6 +22,7 @@ import {
   rose,
 } from '@/lib/ck-vars'
 import type { ProspectApprovalStatus, ProspectOutreachKind } from '@/lib/prospect/types'
+import { conversationEventTypes } from '@/lib/revenue/objections'
 
 type ProspectRow = {
   id: string
@@ -52,6 +53,10 @@ type ProspectRow = {
   outreach_approval_id: string | null
   draft_provider: string | null
   draft_external_id: string | null
+  latest_conversation_event_type?: string | null
+  latest_conversation_event_value?: string | null
+  latest_conversation_notes?: string | null
+  latest_conversation_at?: string | null
   follow_up_count: number
   last_outreach_kind: ProspectOutreachKind
   last_follow_up_generated_at: string | null
@@ -99,6 +104,10 @@ type ProspectApiPayload = {
   prospects: ProspectRow[]
   settings: ProspectSettings | null
   summary: ProspectSummary
+  conversation?: {
+    totalEvents: number
+    blockers: Array<{ type: string; label: string; count: number }>
+  }
   errors?: { section: string; message: string }[]
 }
 
@@ -242,6 +251,10 @@ function fmtDate(value: string | null) {
   }).format(date)
 }
 
+function conversationLabel(value: string | null | undefined) {
+  return value ? value.replaceAll('_', ' ') : 'no truth'
+}
+
 export default function ProspectPage() {
   const { user } = useAuth()
   const isMobile = useIsMobile()
@@ -266,6 +279,16 @@ export default function ProspectPage() {
         offerId: string
         offerVariant: string
         outreachAngle: string
+      }
+    >
+  >({})
+  const [conversationDrafts, setConversationDrafts] = useState<
+    Record<
+      string,
+      {
+        eventType: string
+        eventValue: string
+        notes: string
       }
     >
   >({})
@@ -327,6 +350,27 @@ export default function ProspectPage() {
           ])
         )
       )
+      setConversationDrafts(
+        Object.fromEntries(
+          (prospectsJson.prospects ?? []).map((prospect) => [
+            prospect.id,
+            {
+              eventType:
+                typeof prospect.latest_conversation_event_type === 'string'
+                  ? prospect.latest_conversation_event_type
+                  : '',
+              eventValue:
+                typeof prospect.latest_conversation_event_value === 'string'
+                  ? prospect.latest_conversation_event_value
+                  : '',
+              notes:
+                typeof prospect.latest_conversation_notes === 'string'
+                  ? prospect.latest_conversation_notes
+                  : '',
+            },
+          ])
+        )
+      )
 
       if (!prospectsRes.ok) {
         nextError =
@@ -373,6 +417,10 @@ export default function ProspectPage() {
     won: 0,
     lost: 0,
     followUpDue: 0,
+  }
+  const conversation = payload?.conversation ?? {
+    totalEvents: 0,
+    blockers: [] as Array<{ type: string; label: string; count: number }>,
   }
 
   const topProspects = useMemo(() => prospects.slice(0, 8), [prospects])
@@ -434,10 +482,17 @@ export default function ProspectPage() {
     setApprovalPendingKey(key)
     setError(null)
     try {
+      const conversationDraft = conversationDrafts[prospectId]
       const res = await fetch('/api/studio/prospects', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: prospectId, status }),
+        body: JSON.stringify({
+          id: prospectId,
+          status,
+          conversation_event_type: conversationDraft?.eventType || undefined,
+          conversation_event_value: conversationDraft?.eventValue || null,
+          conversation_notes: conversationDraft?.notes || null,
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Prospect transition failed')
@@ -445,6 +500,40 @@ export default function ProspectPage() {
       await load()
     } catch (updateError) {
       const message = updateError instanceof Error ? updateError.message : String(updateError)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setApprovalPendingKey(null)
+    }
+  }
+
+  async function saveConversationTruth(prospectId: string) {
+    const draft = conversationDrafts[prospectId]
+    if (!draft?.eventType) {
+      toast.error('Select a conversation truth first')
+      return
+    }
+
+    const key = `${prospectId}:conversation`
+    setApprovalPendingKey(key)
+    setError(null)
+    try {
+      const res = await fetch('/api/studio/prospects/objections', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          prospect_id: prospectId,
+          event_type: draft.eventType,
+          event_value: draft.eventValue || null,
+          notes: draft.notes || null,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Conversation truth update failed')
+      toast.success('Conversation truth saved')
+      await load()
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : String(saveError)
       setError(message)
       toast.error(message)
     } finally {
@@ -545,6 +634,10 @@ export default function ProspectPage() {
       <Chip label={`${summary.followUpDue} due`} tone="warm" />
       <Chip label={`${summary.won} won`} tone="hot" />
       <Chip label={`${offers.length} offers`} tone="cold" />
+      <Chip label={`${conversation.totalEvents} truths`} tone="cold" />
+      {conversation.blockers.slice(0, 2).map((blocker) => (
+        <Chip key={blocker.type} label={`${blocker.label} ${blocker.count}`} tone="warm" />
+      ))}
       <button
         type="button"
         onClick={() => void load()}
@@ -1146,6 +1239,12 @@ export default function ProspectPage() {
                           tone="cold"
                         />
                       ) : null}
+                      {prospect.latest_conversation_event_type ? (
+                        <Chip
+                          label={`truth ${conversationLabel(prospect.latest_conversation_event_type)}`}
+                          tone="warm"
+                        />
+                      ) : null}
                       {prospect.tags?.map((tag) => (
                         <Chip key={`${prospect.id}:${tag}`} label={`tag ${tag}`} tone="cold" />
                       ))}
@@ -1354,6 +1453,89 @@ export default function ProspectPage() {
                           }
                         />
                       </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Conversation truth</span>
+                        <select
+                          className="ck-input"
+                          value={conversationDrafts[prospect.id]?.eventType ?? ''}
+                          onChange={(event) =>
+                            setConversationDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                eventType: event.target.value,
+                                eventValue:
+                                  current[prospect.id]?.eventValue ??
+                                  (typeof prospect.latest_conversation_event_value === 'string'
+                                    ? prospect.latest_conversation_event_value
+                                    : ''),
+                                notes:
+                                  current[prospect.id]?.notes ??
+                                  (typeof prospect.latest_conversation_notes === 'string'
+                                    ? prospect.latest_conversation_notes
+                                    : ''),
+                              },
+                            }))
+                          }
+                        >
+                          <option value="">No truth yet</option>
+                          {conversationEventTypes.map((type) => (
+                            <option key={type} value={type}>
+                              {conversationLabel(type)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Signal / reason</span>
+                        <input
+                          className="ck-input"
+                          value={conversationDrafts[prospect.id]?.eventValue ?? ''}
+                          onChange={(event) =>
+                            setConversationDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                eventType:
+                                  current[prospect.id]?.eventType ??
+                                  (typeof prospect.latest_conversation_event_type === 'string'
+                                    ? prospect.latest_conversation_event_type
+                                    : ''),
+                                eventValue: event.target.value,
+                                notes:
+                                  current[prospect.id]?.notes ??
+                                  (typeof prospect.latest_conversation_notes === 'string'
+                                    ? prospect.latest_conversation_notes
+                                    : ''),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: muted }}>Conversation notes</span>
+                        <textarea
+                          rows={2}
+                          className="ck-input"
+                          value={conversationDrafts[prospect.id]?.notes ?? ''}
+                          onChange={(event) =>
+                            setConversationDrafts((current) => ({
+                              ...current,
+                              [prospect.id]: {
+                                eventType:
+                                  current[prospect.id]?.eventType ??
+                                  (typeof prospect.latest_conversation_event_type === 'string'
+                                    ? prospect.latest_conversation_event_type
+                                    : ''),
+                                eventValue:
+                                  current[prospect.id]?.eventValue ??
+                                  (typeof prospect.latest_conversation_event_value === 'string'
+                                    ? prospect.latest_conversation_event_value
+                                    : ''),
+                                notes: event.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </label>
                       <div
                         style={{
                           display: 'flex',
@@ -1368,30 +1550,58 @@ export default function ProspectPage() {
                         >
                           Last activity {fmtDate(prospect.last_activity_at ?? null)}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void saveProspectCrm(prospect.id)}
-                          disabled={approvalPendingKey !== null}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            minHeight: 32,
-                            padding: '6px 11px',
-                            borderRadius: 8,
-                            border: `1px solid ${cyan}35`,
-                            background: `${cyan}14`,
-                            color: cyan,
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: 10,
-                            letterSpacing: '.12em',
-                            textTransform: 'uppercase',
-                            cursor: approvalPendingKey ? 'wait' : 'pointer',
-                          }}
-                        >
-                          <Clock3 size={13} />
-                          {approvalPendingKey === `${prospect.id}:crm` ? 'Saving...' : 'Save CRM'}
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => void saveConversationTruth(prospect.id)}
+                            disabled={approvalPendingKey !== null}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              minHeight: 32,
+                              padding: '6px 11px',
+                              borderRadius: 8,
+                              border: `1px solid ${amber}35`,
+                              background: `${amber}14`,
+                              color: amber,
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10,
+                              letterSpacing: '.12em',
+                              textTransform: 'uppercase',
+                              cursor: approvalPendingKey ? 'wait' : 'pointer',
+                            }}
+                          >
+                            <Mail size={13} />
+                            {approvalPendingKey === `${prospect.id}:conversation`
+                              ? 'Saving...'
+                              : 'Save truth'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void saveProspectCrm(prospect.id)}
+                            disabled={approvalPendingKey !== null}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              minHeight: 32,
+                              padding: '6px 11px',
+                              borderRadius: 8,
+                              border: `1px solid ${cyan}35`,
+                              background: `${cyan}14`,
+                              color: cyan,
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10,
+                              letterSpacing: '.12em',
+                              textTransform: 'uppercase',
+                              cursor: approvalPendingKey ? 'wait' : 'pointer',
+                            }}
+                          >
+                            <Clock3 size={13} />
+                            {approvalPendingKey === `${prospect.id}:crm` ? 'Saving...' : 'Save CRM'}
+                          </button>
+                        </div>
                       </div>
                     </div>
 

@@ -17,6 +17,12 @@ import {
   writeProspectMemoryBestEffort,
 } from '@/lib/prospect/scheduled-follow-ups'
 import {
+  buildConversationEventInsert,
+  conversationEventTypes,
+  summarizeConversationEvents,
+  type ProspectConversationEventRow,
+} from '@/lib/revenue/objections'
+import {
   buildProspectStageActivity,
   buildProspectStagePatch,
 } from '@/lib/prospect/stage-transition'
@@ -94,6 +100,9 @@ const prospectStageSchema = z.object({
   offer_id: z.string().uuid().nullable().optional(),
   offer_variant: z.string().max(200).nullable().optional(),
   outreach_angle: z.string().max(200).nullable().optional(),
+  conversation_event_type: z.enum(conversationEventTypes).optional(),
+  conversation_event_value: z.string().max(200).nullable().optional(),
+  conversation_notes: z.string().max(2000).nullable().optional(),
 })
 
 async function single<T>(query: SingleQueryBuilder): Promise<T | null> {
@@ -145,7 +154,7 @@ export async function GET(request: Request) {
   const tagFilter = url.searchParams.get('tag')?.trim().toLowerCase() ?? ''
   const search = url.searchParams.get('q')?.trim().toLowerCase() ?? ''
 
-  const [prospects, settings, actions, approvals, activities] = await Promise.all([
+  const [prospects, settings, actions, approvals, activities, conversationEvents] = await Promise.all([
     supabase
       .from('prospects')
       .select('*')
@@ -175,6 +184,12 @@ export async function GET(request: Request) {
       .eq('user_id', user!.id)
       .order('created_at', { ascending: false })
       .limit(500),
+    supabase
+      .from('prospect_conversation_events')
+      .select('id, prospect_id, user_id, event_type, event_value, notes, created_at')
+      .eq('user_id', user!.id)
+      .order('created_at', { ascending: false })
+      .limit(500),
   ])
 
   const errors = [
@@ -183,10 +198,16 @@ export async function GET(request: Request) {
     actions.error && { section: 'actions', message: actions.error.message },
     approvals.error && { section: 'approvals', message: approvals.error.message },
     activities.error && { section: 'activities', message: activities.error.message },
+    conversationEvents.error && {
+      section: 'conversation_events',
+      message: conversationEvents.error.message,
+    },
   ].filter(Boolean)
 
   const prospectRows = (prospects.data ?? []) as Array<Record<string, unknown>>
   const activityRows = (activities.data ?? []) as ProspectActivityRow[]
+  const conversationRows = (conversationEvents.data ?? []) as ProspectConversationEventRow[]
+  const conversationSummary = summarizeConversationEvents(conversationRows)
   const enrichedProspects = buildProspectViews({
     prospects: prospectRows as Array<{ id: string; [key: string]: unknown }>,
     actions: (actions.data ?? []) as Array<{
@@ -206,26 +227,37 @@ export async function GET(request: Request) {
     activitiesByProspectId: groupActivitiesByProspectId(activityRows),
     nowIso,
   })
-  const filteredProspects = enrichedProspects.filter((prospect) => {
-    if (statusFilter && prospect.pipeline_status !== statusFilter) return false
-    if (bandFilter && prospect.band !== bandFilter) return false
-    if (sourceFilter && prospect.source !== sourceFilter) return false
-    if (tagFilter && !prospect.tags.includes(tagFilter)) return false
-    if (search) {
-      const haystack = [
-        prospect.company_name,
-        asText(prospect.contact_name),
-        asText(prospect.summary),
-        prospect.operator_notes,
-        prospect.next_action,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      if (!haystack.includes(search)) return false
-    }
-    return true
-  })
+  const filteredProspects = enrichedProspects
+    .filter((prospect) => {
+      if (statusFilter && prospect.pipeline_status !== statusFilter) return false
+      if (bandFilter && prospect.band !== bandFilter) return false
+      if (sourceFilter && prospect.source !== sourceFilter) return false
+      if (tagFilter && !prospect.tags.includes(tagFilter)) return false
+      if (search) {
+        const haystack = [
+          prospect.company_name,
+          asText(prospect.contact_name),
+          asText(prospect.summary),
+          prospect.operator_notes,
+          prospect.next_action,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(search)) return false
+      }
+      return true
+    })
+    .map((prospect) => {
+      const latestConversation = conversationSummary.latestByProspectId[prospect.id]
+      return {
+        ...prospect,
+        latest_conversation_event_type: latestConversation?.eventType ?? null,
+        latest_conversation_event_value: latestConversation?.eventValue ?? null,
+        latest_conversation_notes: latestConversation?.notes ?? null,
+        latest_conversation_at: latestConversation?.createdAt ?? null,
+      }
+    })
   const summary = summarizeProspects(filteredProspects)
 
   return NextResponse.json(
@@ -236,6 +268,10 @@ export async function GET(request: Request) {
       summary: {
         total: filteredProspects.length,
         ...summary,
+      },
+      conversation: {
+        totalEvents: conversationSummary.totalEvents,
+        blockers: conversationSummary.blockers,
       },
       errors,
     },
@@ -350,6 +386,7 @@ export async function PATCH(request: Request) {
     detail: string
     metadata?: Record<string, unknown>
   }> = []
+  const conversationEventsToInsert: Array<ReturnType<typeof buildConversationEventInsert>> = []
 
   if (parsed.data.status) {
     const currentKind = asOutreachKind(current.last_outreach_kind)
@@ -443,6 +480,35 @@ export async function PATCH(request: Request) {
       type: 'next_action_updated',
       detail: 'Updated outreach angle',
       metadata: { outreach_angle: patch.outreach_angle ?? null },
+    })
+  }
+
+  const derivedConversationEventType =
+    parsed.data.conversation_event_type ??
+    (parsed.data.status === 'won'
+      ? 'closed_won'
+      : parsed.data.status === 'lost'
+        ? 'closed_lost'
+        : undefined)
+
+  if (derivedConversationEventType) {
+    conversationEventsToInsert.push(
+      buildConversationEventInsert({
+        prospectId: parsed.data.id,
+        userId: user!.id,
+        eventType: derivedConversationEventType,
+        eventValue: parsed.data.conversation_event_value ?? null,
+        notes: parsed.data.conversation_notes ?? null,
+        createdAt: nowIso,
+      })
+    )
+    activitiesToInsert.push({
+      type: 'conversation_truth_recorded',
+      detail: `Recorded ${derivedConversationEventType.replaceAll('_', ' ')}`,
+      metadata: {
+        event_type: derivedConversationEventType,
+        event_value: parsed.data.conversation_event_value?.trim() || null,
+      },
     })
   }
 
@@ -579,6 +645,15 @@ export async function PATCH(request: Request) {
     )
 
     const { error } = await supabase.from('prospect_activities').insert(insertRows)
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+  }
+
+  if (conversationEventsToInsert.length > 0) {
+    const { error } = await supabase
+      .from('prospect_conversation_events')
+      .insert(conversationEventsToInsert)
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
