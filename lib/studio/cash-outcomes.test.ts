@@ -22,11 +22,11 @@ describe('buildCashOutcomeSnapshot', () => {
         { status: 'pending', created_at: '2026-05-27T09:00:00.000Z', amount_eur: 999 },
       ],
       prospects: [
-        { source: 'linkedin', pipeline_status: 'awaiting_approval', approval_status: 'awaiting_approval' },
-        { source: 'linkedin', pipeline_status: 'replied', approval_status: 'no_approval' },
-        { source: 'reddit', pipeline_status: 'won', approval_status: 'no_approval' },
-        { source: 'reddit', pipeline_status: 'follow_up_due', approval_status: 'approved_to_send' },
-        { source: 'other', pipeline_status: 'draft_created', approval_status: 'approved_to_send' },
+        { source: 'linkedin', band: 'warm', pipeline_status: 'awaiting_approval', approval_status: 'awaiting_approval' },
+        { source: 'linkedin', band: 'warm', pipeline_status: 'replied', approval_status: 'no_approval' },
+        { source: 'reddit', band: 'hot', pipeline_status: 'won', approval_status: 'no_approval' },
+        { source: 'reddit', band: 'warm', pipeline_status: 'follow_up_due', approval_status: 'approved_to_send' },
+        { source: 'other', band: 'cold', pipeline_status: 'draft_created', approval_status: 'approved_to_send' },
       ],
     })
 
@@ -65,6 +65,12 @@ describe('buildCashOutcomeSnapshot', () => {
       { source: 'reddit', active: 1, replied: 0, won: 1, replyRate: 0, winRate: 100, qualityScore: 65 },
       { source: 'linkedin', active: 1, replied: 1, won: 0, replyRate: 100, winRate: 0, qualityScore: 35 },
       { source: 'other', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
+    ])
+    expect(snapshot.sourceBandBreakdown).toEqual([
+      { key: 'reddit:hot', source: 'reddit', band: 'hot', active: 0, replied: 0, won: 1, replyRate: 0, winRate: 100, qualityScore: 65 },
+      { key: 'linkedin:warm', source: 'linkedin', band: 'warm', active: 1, replied: 1, won: 0, replyRate: 100, winRate: 0, qualityScore: 35 },
+      { key: 'reddit:warm', source: 'reddit', band: 'warm', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
+      { key: 'other:cold', source: 'other', band: 'cold', active: 1, replied: 0, won: 0, replyRate: 0, winRate: 0, qualityScore: 0 },
     ])
     expect(snapshot.blockers).toEqual([
       { key: 'awaiting_approval', label: 'Awaiting approval', count: 1 },

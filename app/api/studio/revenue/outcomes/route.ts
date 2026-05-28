@@ -39,7 +39,7 @@ export async function GET() {
       readTable(
         supabase
           .from('prospects')
-          .select('source, pipeline_status, approval_status')
+          .select('source, band, pipeline_status, approval_status')
           .eq('user_id', userId)
           .order('updated_at', { ascending: false })
           .limit(400)

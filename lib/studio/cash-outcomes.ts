@@ -26,6 +26,17 @@ export type CashOutcomeSnapshot = {
     winRate: number
     qualityScore: number
   }>
+  sourceBandBreakdown: Array<{
+    key: string
+    source: string
+    band: string
+    active: number
+    replied: number
+    won: number
+    replyRate: number
+    winRate: number
+    qualityScore: number
+  }>
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
     label: string
@@ -55,6 +66,7 @@ type PaymentRow = {
 
 type ProspectRow = {
   source?: string | null
+  band?: string | null
   pipeline_status?: string | null
   approval_status?: string | null
 }
@@ -212,6 +224,20 @@ export function buildCashOutcomeSnapshot(input: {
       qualityScore: number
     }
   >()
+  const sourceBandMap = new Map<
+    string,
+    {
+      key: string
+      source: string
+      band: string
+      active: number
+      replied: number
+      won: number
+      replyRate: number
+      winRate: number
+      qualityScore: number
+    }
+  >()
   let awaitingApproval = 0
   let draftCreated = 0
   let followUpDue = 0
@@ -221,8 +247,21 @@ export function buildCashOutcomeSnapshot(input: {
 
   for (const prospect of input.prospects ?? []) {
     const source = prospect.source?.trim() || 'other'
+    const band = prospect.band?.trim() || 'unknown'
+    const sourceBandKey = `${source}:${band}`
     const entry = sourceMap.get(source) ?? {
       source,
+      active: 0,
+      replied: 0,
+      won: 0,
+      replyRate: 0,
+      winRate: 0,
+      qualityScore: 0,
+    }
+    const sourceBandEntry = sourceBandMap.get(sourceBandKey) ?? {
+      key: sourceBandKey,
+      source,
+      band,
       active: 0,
       replied: 0,
       won: 0,
@@ -242,10 +281,18 @@ export function buildCashOutcomeSnapshot(input: {
       pipeline === 'approved_to_send'
     ) {
       entry.active += 1
+      sourceBandEntry.active += 1
     }
-    if (pipeline === 'replied') entry.replied += 1
-    if (pipeline === 'won') entry.won += 1
+    if (pipeline === 'replied') {
+      entry.replied += 1
+      sourceBandEntry.replied += 1
+    }
+    if (pipeline === 'won') {
+      entry.won += 1
+      sourceBandEntry.won += 1
+    }
     sourceMap.set(source, entry)
+    sourceBandMap.set(sourceBandKey, sourceBandEntry)
 
     if (approvalStatus === 'awaiting_approval' || pipeline === 'awaiting_approval') {
       awaitingApproval += 1
@@ -284,8 +331,29 @@ export function buildCashOutcomeSnapshot(input: {
       .map((entry) => ({
         ...entry,
         replyRate: ratio(entry.replied, entry.active),
-        winRate: ratio(entry.won, entry.replied || entry.active),
-        qualityScore: Math.round(ratio(entry.replied, entry.active) * 0.35 + ratio(entry.won, entry.replied || entry.active) * 0.65),
+        winRate: ratio(entry.won, entry.replied || entry.active || entry.won),
+        qualityScore: Math.round(
+          ratio(entry.replied, entry.active) * 0.35 +
+            ratio(entry.won, entry.replied || entry.active || entry.won) * 0.65
+        ),
+      }))
+      .sort(
+        (left, right) =>
+          right.qualityScore - left.qualityScore ||
+          right.won - left.won ||
+          right.replied - left.replied ||
+          right.active - left.active
+      )
+      .slice(0, 4),
+    sourceBandBreakdown: Array.from(sourceBandMap.values())
+      .map((entry) => ({
+        ...entry,
+        replyRate: ratio(entry.replied, entry.active),
+        winRate: ratio(entry.won, entry.replied || entry.active || entry.won),
+        qualityScore: Math.round(
+          ratio(entry.replied, entry.active) * 0.35 +
+            ratio(entry.won, entry.replied || entry.active || entry.won) * 0.65
+        ),
       }))
       .sort(
         (left, right) =>

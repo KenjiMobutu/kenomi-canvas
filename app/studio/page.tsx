@@ -132,6 +132,17 @@ type CashOutcomeSnapshot = {
     winRate: number
     qualityScore: number
   }>
+  sourceBandBreakdown: Array<{
+    key: string
+    source: string
+    band: string
+    active: number
+    replied: number
+    won: number
+    replyRate: number
+    winRate: number
+    qualityScore: number
+  }>
   blockers: Array<{
     key: 'awaiting_approval' | 'draft_created' | 'follow_up_due'
     label: string
@@ -2471,6 +2482,108 @@ function CashOutcomePanel({
                 type="button"
                 onClick={() => {
                   window.location.href = buildProspectHref({ source: source.source })
+                }}
+                style={{
+                  borderRadius: 999,
+                  border: `1px solid ${accent}55`,
+                  background: `${accent}18`,
+                  color: accent,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Open
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div
+        style={{
+          borderRadius: 10,
+          border: `1px solid ${line}`,
+          background: surface2,
+          padding: '12px 12px',
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            letterSpacing: '.12em',
+            textTransform: 'uppercase',
+            color: muted,
+          }}
+        >
+          Source x band
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+            gap: 10,
+            marginTop: 10,
+          }}
+        >
+          {(outcomes?.sourceBandBreakdown ?? []).map((item, index) => (
+            <div
+              key={item.key}
+              style={{
+                borderRadius: 8,
+                border: `1px solid ${line}`,
+                padding: '10px 10px',
+                minWidth: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    color: text,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    letterSpacing: '.12em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {item.source} · {item.band}
+                </div>
+                <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {index === 0 ? (
+                    <span
+                      style={{
+                        borderRadius: 999,
+                        border: `1px solid ${accent}44`,
+                        background: `${accent}14`,
+                        color: accent,
+                        padding: '3px 7px',
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      Best segment
+                    </span>
+                  ) : null}
+                  <span style={{ color: muted2, fontSize: 11 }}>{item.qualityScore}/100 quality</span>
+                </div>
+                <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
+                  <span>{item.active} active</span>
+                  <span>{item.replied} replies</span>
+                  <span>{item.won} won</span>
+                  <span>{item.replyRate}% reply</span>
+                  <span>{item.winRate}% win</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = buildProspectHref({ source: item.source })
                 }}
                 style={{
                   borderRadius: 999,
