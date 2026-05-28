@@ -28,7 +28,7 @@ import {
   readRevenueFocusFromSearch,
   type RevenueFocus,
 } from '@/lib/studio/revenue-links'
-import { sortRevenueLoopsByFocus } from '@/lib/studio/revenue-focus'
+import { shouldEmphasizeRevenueLoopAction, sortRevenueLoopsByFocus } from '@/lib/studio/revenue-focus'
 
 type RevenueAuditEvent = {
   id: string
@@ -623,6 +623,7 @@ export default function RevenuePage() {
             loops.map((loop) => {
               const key = `${loop.id}:${loop.nextAction.type}`
               const isBusy = busy?.startsWith(loop.id)
+              const emphasizeAction = shouldEmphasizeRevenueLoopAction(loop, focus)
               return (
                 <article
                   key={loop.id}
@@ -635,6 +636,7 @@ export default function RevenuePage() {
                     padding: 16,
                     display: 'grid',
                     gap: 14,
+                    boxShadow: emphasizeAction ? `0 0 0 1px ${C.accent}22 inset` : 'none',
                   }}
                 >
                   <div
@@ -697,7 +699,7 @@ export default function RevenuePage() {
                         <Link
                           href={loop.publicLandingUrl}
                           target="_blank"
-                          style={linkButtonStyle()}
+                          style={emphasizeAction && focus === 'ready_checkouts' ? primaryLinkButtonStyle() : linkButtonStyle()}
                         >
                           <ExternalLink size={15} /> Landing
                         </Link>
@@ -755,7 +757,7 @@ export default function RevenuePage() {
                         <Link
                           href={loop.publicLandingUrl}
                           target="_blank"
-                          style={{ ...buttonStyle('primary'), textDecoration: 'none' }}
+                          style={emphasizeAction ? primaryLinkButtonStyle() : linkButtonStyle()}
                         >
                           <ExternalLink size={15} /> Ouvrir landing
                         </Link>
@@ -767,7 +769,7 @@ export default function RevenuePage() {
                         <button
                           onClick={() => callAction(loop)}
                           disabled={isBusy || busy === key}
-                          style={buttonStyle('primary')}
+                          style={emphasizeAction ? buttonStyle('primary') : buttonStyle('secondary')}
                         >
                           {loop.nextAction.type === 'create_checkout' ? (
                             <CreditCard size={15} />
@@ -1075,6 +1077,13 @@ function buttonStyle(tone: 'primary' | 'secondary'): CSSProperties {
 function linkButtonStyle(): CSSProperties {
   return {
     ...buttonStyle('secondary'),
+    textDecoration: 'none',
+  }
+}
+
+function primaryLinkButtonStyle(): CSSProperties {
+  return {
+    ...buttonStyle('primary'),
     textDecoration: 'none',
   }
 }

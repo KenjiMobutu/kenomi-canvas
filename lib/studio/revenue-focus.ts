@@ -1,6 +1,16 @@
 import type { RevenueLoopItem } from '@/lib/revenue-loop'
 import type { RevenueFocus } from './revenue-links'
 
+export function shouldEmphasizeRevenueLoopAction(
+  loop: RevenueLoopItem,
+  focus: RevenueFocus | null
+): boolean {
+  if (!focus) return false
+  if (focus === 'blocked') return loop.blockedRevenueEur > 0
+  if (focus === 'ready_checkouts') return loop.nextAction.type === 'create_checkout'
+  return loop.revenueEur > 0 || loop.paidPayments > 0
+}
+
 export function sortRevenueLoopsByFocus(
   loops: RevenueLoopItem[],
   focus: RevenueFocus | null

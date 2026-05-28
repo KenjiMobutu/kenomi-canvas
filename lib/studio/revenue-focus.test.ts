@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sortRevenueLoopsByFocus } from './revenue-focus'
+import { shouldEmphasizeRevenueLoopAction, sortRevenueLoopsByFocus } from './revenue-focus'
 import type { RevenueLoopItem } from '@/lib/revenue-loop'
 
 function makeLoop(input: Partial<RevenueLoopItem> & Pick<RevenueLoopItem, 'id' | 'ventureName'>): RevenueLoopItem {
@@ -86,5 +86,13 @@ describe('sortRevenueLoopsByFocus', () => {
       'loop-a',
       'loop-b',
     ])
+  })
+
+  it('marks the right loops as CTA priorities for each focus', () => {
+    expect(shouldEmphasizeRevenueLoopAction(loops[1], 'ready_checkouts')).toBe(true)
+    expect(shouldEmphasizeRevenueLoopAction(loops[0], 'ready_checkouts')).toBe(false)
+    expect(shouldEmphasizeRevenueLoopAction(loops[0], 'blocked')).toBe(true)
+    expect(shouldEmphasizeRevenueLoopAction(loops[2], 'cash_7d')).toBe(true)
+    expect(shouldEmphasizeRevenueLoopAction(loops[1], 'cash_7d')).toBe(true)
   })
 })
