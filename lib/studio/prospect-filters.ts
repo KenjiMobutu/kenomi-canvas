@@ -37,6 +37,12 @@ export function buildSegmentPushHref(input: { source?: string | null; band?: str
   })
 }
 
+export function buildSourceFocusHref(input: { source?: string | null }) {
+  return buildProspectHref({
+    source: input.source,
+  })
+}
+
 export function buildRateDrilldownHref(metric: 'reply' | 'win') {
   return buildProspectHref({
     status: metric === 'reply' ? 'follow_up_due' : 'replied',

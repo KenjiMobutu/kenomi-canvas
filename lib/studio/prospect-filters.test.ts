@@ -3,6 +3,7 @@ import {
   buildProspectHref,
   buildRateDrilldownHref,
   buildSegmentPushHref,
+  buildSourceFocusHref,
   readProspectFiltersFromSearch,
 } from './prospect-filters'
 
@@ -50,5 +51,9 @@ describe('readProspectFiltersFromSearch', () => {
     expect(buildSegmentPushHref({ source: 'reddit', band: 'hot' })).toBe(
       '/studio/prospects?source=reddit&band=hot'
     )
+  })
+
+  it('builds focus links for the best source', () => {
+    expect(buildSourceFocusHref({ source: 'linkedin' })).toBe('/studio/prospects?source=linkedin')
   })
 })
