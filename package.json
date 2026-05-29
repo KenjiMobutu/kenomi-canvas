@@ -14,6 +14,7 @@
     "smoke:prospect": "node scripts/smoke-prospect-outbound.mjs",
     "smoke:scout": "node scripts/smoke-scout-reddit.mjs",
     "smoke:devops": "node scripts/smoke-devops-diagnostics.mjs",
+    "smoke:hermes-operator": "node scripts/smoke-hermes-operator.mjs",
     "smoke:vision": "node scripts/smoke-vision-loop.mjs",
     "smoke:revenue-proof": "node scripts/smoke-revenue-proof.mjs",
     "smoke:revenue-truth": "node scripts/smoke-revenue-truth.mjs",

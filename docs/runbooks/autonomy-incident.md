@@ -88,6 +88,31 @@ curl -X POST "$APP_BASE_URL/api/internal/autonomy/worker/drain" \
 Expected behavior: queued jobs move to `running`, then `completed` or `failed`,
 and `autonomy_jobs.last_error` captures any failure reason.
 
+## Hermes Operator Incident
+
+If `Hermes Operator` stops producing runs or alerts:
+
+1. Open `/studio/automations`.
+2. Check the `Hermes Operator` panel:
+   - mode,
+   - last run status,
+   - last summary,
+   - top recommendation,
+   - top alert.
+3. Verify the `hermes_operator` schedule is `active`.
+4. Use `Run now` once in `observe` mode before changing modes.
+5. If runs are not appearing, trigger the Hermes-only drain:
+
+```bash
+curl -X POST "$APP_BASE_URL/api/internal/autonomy/worker/drain" \
+  -H "x-autonomy-worker-token: $AUTONOMY_WORKER_SECRET" \
+  -H "content-type: application/json" \
+  -d '{"worker_id":"incident:hermes","limit":2,"allowed_job_kinds":["hermes_operator_tick"]}'
+```
+
+Expected behavior: one `hermes_operator_tick` job reaches `completed`, writes one
+row in `hermes_operator_runs`, and updates `business_alerts` / `hermes_operator_recommendations`.
+
 ## Recovery Gate
 
 Before re-enabling autonomy:
