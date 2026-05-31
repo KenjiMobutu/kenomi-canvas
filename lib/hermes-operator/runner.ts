@@ -96,6 +96,8 @@ function isAutonomyRiskLevel(value: string): value is AutonomyRiskLevel {
   return ['low', 'medium', 'high', 'critical'].includes(value)
 }
 
+const SAFE_OPERATOR_AGENT_IDS = new Set(['prospect', 'devops'])
+
 async function insertRun(
   supabase: HermesOperatorRunnerSupabase,
   row: Record<string, unknown>
@@ -121,8 +123,35 @@ function buildJobFromRecommendation(input: {
   nowIso: string
 }): Record<string, unknown> | null {
   const payload = input.recommendation.payload
-  const agentId = readString(payload.agentId)
-  if (!agentId) return null
+  if (input.recommendation.kind === 'run_follow_up_scan') {
+    return {
+      user_id: input.userId,
+      venture_id: null,
+      kind: 'follow_up_scan',
+      status: 'queued',
+      attempt_count: 0,
+      next_run_at: input.nowIso,
+      payload: {
+        scheduleKey: readString(payload.scheduleKey) ?? 'follow_ups',
+        trigger: 'hermes_operator',
+        recommendationId: input.recommendation.id,
+        recommendationKind: input.recommendation.kind,
+        source: input.recommendation.source,
+      },
+      created_at: input.nowIso,
+      updated_at: input.nowIso,
+    }
+  }
+
+  const requestedAgentId = readString(payload.agentId)
+  const mappedAgentId =
+    input.recommendation.kind === 'run_prospect'
+      ? 'prospect'
+      : input.recommendation.kind === 'run_devops'
+        ? 'devops'
+        : requestedAgentId
+
+  if (!mappedAgentId || !SAFE_OPERATOR_AGENT_IDS.has(mappedAgentId)) return null
 
   const prompt =
     readString(payload.prompt) ??
@@ -140,7 +169,7 @@ function buildJobFromRecommendation(input: {
     attempt_count: 0,
     next_run_at: input.nowIso,
     payload: {
-      agentId,
+      agentId: mappedAgentId,
       prompt,
       input: {
         ...(readRecord(payload.input) ?? {}),

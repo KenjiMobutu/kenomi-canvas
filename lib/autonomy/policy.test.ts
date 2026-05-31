@@ -164,4 +164,21 @@ describe('canHermesAutoExecute', () => {
       })
     ).toBe(false)
   })
+
+  it('still gates on risk and mode even for mapped operator work like follow-up scans', () => {
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+      })
+    ).toBe(true)
+    expect(
+      canHermesAutoExecute({
+        mode: 'recommend',
+        actionType: 'run_agent',
+        riskLevel: 'medium',
+      })
+    ).toBe(false)
+  })
 })

@@ -298,6 +298,98 @@ describe('runHermesOperatorTick', () => {
     })
   })
 
+  it('maps Hermes follow-up and safe agent recommendation kinds to the right job kinds', async () => {
+    const supabase = createFakeSupabase()
+
+    await runHermesOperatorTick({
+      supabase: supabase as never,
+      userId: 'user-1',
+      mode: 'recommend',
+      now: new Date('2026-05-28T10:15:00.000Z'),
+      buildContext: async () => fakeContext,
+      runEngine: async () => ({
+        summary: 'Scan follow-ups and run DevOps.',
+        recommendations: [
+          {
+            kind: 'run_follow_up_scan',
+            priority: 90,
+            title: 'Scan due follow-ups',
+            detail: 'There are enough due follow-ups to justify a scan.',
+            actionType: 'run_agent',
+            riskLevel: 'low',
+            source: { source: 'reddit', band: 'hot' },
+            payload: { scheduleKey: 'follow_ups' },
+          },
+          {
+            kind: 'run_devops',
+            priority: 80,
+            title: 'Run DevOps diagnostics',
+            detail: 'Infra deserves one fresh diagnostic pass.',
+            actionType: 'run_agent',
+            riskLevel: 'low',
+            source: { source: 'infra' },
+            payload: { prompt: 'Check infra health for revenue blockers.' },
+          },
+          {
+            kind: 'run_agent',
+            priority: 70,
+            title: 'Do not run Scout automatically',
+            detail: 'Scout stays outside the safe Hermes lane.',
+            actionType: 'run_agent',
+            riskLevel: 'low',
+            source: { source: 'reddit' },
+            payload: { agentId: 'scout' },
+          },
+        ],
+        alerts: [],
+        provider: 'hermes',
+        model: 'hermes3:8b',
+        fallbackTriggered: false,
+      }),
+    })
+
+    expect(supabase.tables.autonomy_jobs).toHaveLength(2)
+    expect(supabase.tables.autonomy_jobs[0]).toMatchObject({
+      kind: 'follow_up_scan',
+      payload: {
+        scheduleKey: 'follow_ups',
+        trigger: 'hermes_operator',
+        recommendationKind: 'run_follow_up_scan',
+        source: { source: 'reddit', band: 'hot' },
+      },
+    })
+    expect(supabase.tables.autonomy_jobs[1]).toMatchObject({
+      kind: 'run_agent',
+      payload: {
+        agentId: 'devops',
+        prompt: 'Check infra health for revenue blockers.',
+        input: {
+          trigger: 'hermes_operator',
+          recommendationKind: 'run_devops',
+          source: { source: 'infra' },
+        },
+      },
+    })
+
+    const accepted = supabase.tables.hermes_operator_recommendations.filter(
+      (row) => row.status === 'accepted'
+    )
+    const stillOpen = supabase.tables.hermes_operator_recommendations.filter(
+      (row) => row.status === 'open'
+    )
+
+    expect(accepted).toHaveLength(2)
+    expect(stillOpen).toHaveLength(1)
+    expect(stillOpen[0]).toMatchObject({
+      kind: 'run_agent',
+      payload: { agentId: 'scout' },
+    })
+    expect(supabase.tables.hermes_operator_runs[0]).toMatchObject({
+      enqueued_jobs_count: 2,
+      executed_actions_count: 2,
+    })
+  })
+
   it('persists a failed run when Hermes execution crashes', async () => {
     const supabase = createFakeSupabase()
 
