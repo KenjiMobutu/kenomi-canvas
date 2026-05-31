@@ -1144,14 +1144,16 @@ function HermesOperatorPanel({
   onModeChange,
   onRunNow,
   onDismissRecommendation,
+  onAlertAction,
 }: {
   view: HermesOperatorView | null
   alerts: HermesOperatorAlertViewRow[]
   loading: boolean
-  busy: HermesOperatorMode | 'run_now' | `dismiss:${string}` | null
+  busy: HermesOperatorMode | 'run_now' | `dismiss:${string}` | `alert:${string}:${'resolve' | 'mute'}` | null
   onModeChange: (mode: HermesOperatorMode) => void
   onRunNow: () => void
   onDismissRecommendation: (recommendationId: string) => void
+  onAlertAction: (alertId: string, type: 'resolve' | 'mute') => void
 }) {
   const activeMode = view?.currentMode ?? 'observe'
   const modeColor =
@@ -1448,6 +1450,122 @@ function HermesOperatorPanel({
         ) : (
           <div style={{ fontSize: 12, color: muted }}>
             No open or accepted recommendation.
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Alerts backlog
+        </div>
+        {alerts.length ? (
+          <div
+            style={{
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            {alerts
+              .filter((alert) => alert.status === 'open' || alert.status === 'sent')
+              .slice(0, 5)
+              .map((alert) => {
+                const toneColor =
+                  alert.severity === 'critical' ? rose : alert.severity === 'warn' ? amber : cyan
+                const isResolving = busy === `alert:${alert.id}:resolve`
+                const isMuting = busy === `alert:${alert.id}:mute`
+                return (
+                  <div
+                    key={alert.id}
+                    style={{
+                      display: 'grid',
+                      gap: 6,
+                      padding: 10,
+                      borderRadius: 10,
+                      background: surface2,
+                      border: `1px solid ${line}`,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: text }}>
+                        {alert.headline}
+                      </div>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          padding: '3px 6px',
+                          borderRadius: 999,
+                          background: `${toneColor}1a`,
+                          color: toneColor,
+                        }}
+                      >
+                        {alert.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+                      {alert.detail}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2 }}>
+                        {alert.category} · {alert.severity}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => onAlertAction(alert.id, 'resolve')}
+                          disabled={loading || busy !== null}
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 8,
+                            border: `1px solid ${line2}`,
+                            background: surface,
+                            color: text,
+                            cursor: loading || busy !== null ? 'default' : 'pointer',
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {isResolving ? '...' : 'Resolve'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onAlertAction(alert.id, 'mute')}
+                          disabled={loading || busy !== null}
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 8,
+                            border: `1px solid ${line2}`,
+                            background: surface,
+                            color: text,
+                            cursor: loading || busy !== null ? 'default' : 'pointer',
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {isMuting ? '...' : 'Mute'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: muted }}>
+            No open or sent alert.
           </div>
         )}
       </div>
@@ -2094,7 +2212,9 @@ export default function AutomationsPage() {
   const [hermesView, setHermesView] = useState<HermesOperatorView | null>(null)
   const [hermesAlerts, setHermesAlerts] = useState<HermesOperatorAlertViewRow[]>([])
   const [hermesLoading, setHermesLoading] = useState(false)
-  const [hermesBusy, setHermesBusy] = useState<HermesOperatorMode | 'run_now' | `dismiss:${string}` | null>(null)
+  const [hermesBusy, setHermesBusy] = useState<
+    HermesOperatorMode | 'run_now' | `dismiss:${string}` | `alert:${string}:${'resolve' | 'mute'}` | null
+  >(null)
   const [autonomyLoading, setAutonomyLoading] = useState(false)
   const [autonomyBusy, setAutonomyBusy] = useState(false)
 
@@ -2442,6 +2562,31 @@ export default function AutomationsPage() {
     }
   }
 
+  async function patchHermesAlert(alertId: string, type: 'resolve' | 'mute') {
+    setHermesBusy(`alert:${alertId}:${type}`)
+    try {
+      const res = await fetch('/api/studio/hermes/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: type === 'resolve' ? 'resolve_alert' : 'mute_alert',
+          alertId,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error || 'Erreur action alert')
+        return
+      }
+      setHermesAlerts((json.alerts as HermesOperatorAlertViewRow[]) ?? [])
+      await loadHermesOperator()
+    } catch {
+      toast.error('Erreur réseau Hermes')
+    } finally {
+      setHermesBusy(null)
+    }
+  }
+
   async function toggleAutonomyControl() {
     if (!autonomyControl) return
     setAutonomyBusy(true)
@@ -2617,6 +2762,7 @@ export default function AutomationsPage() {
           busy={hermesBusy}
           onModeChange={patchHermesMode}
           onDismissRecommendation={dismissHermesRecommendation}
+          onAlertAction={patchHermesAlert}
           onRunNow={() => {
             setHermesBusy('run_now')
             patchSchedule({ scheduleKey: 'hermes_operator', runNow: true }, 'hermes_operator').finally(
