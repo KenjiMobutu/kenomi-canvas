@@ -31,6 +31,10 @@ import type {
   HermesOperatorAlertViewRow,
   HermesOperatorView,
 } from '@/lib/studio/hermes-operator-view'
+import {
+  buildHermesOperatorEffectHref,
+  buildHermesOperatorEffectLabel,
+} from '@/lib/studio/hermes-operator-links'
 
 interface DbWorkflow {
   id: string
@@ -1260,8 +1264,10 @@ function HermesOperatorPanel({
             {view?.lastRun?.summary ?? 'No Hermes operator run recorded yet.'}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <span
+            <Link
+              href={buildHermesOperatorEffectHref('follow_up_scan')}
               style={{
+                textDecoration: 'none',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 9,
                 padding: '3px 7px',
@@ -1270,10 +1276,12 @@ function HermesOperatorPanel({
                 color: cyan,
               }}
             >
-              FU {view?.lastRunEffects.followUpScans ?? 0}
-            </span>
-            <span
+              {buildHermesOperatorEffectLabel('follow_up_scan')} {view?.lastRunEffects.followUpScans ?? 0}
+            </Link>
+            <Link
+              href={buildHermesOperatorEffectHref('prospect')}
               style={{
+                textDecoration: 'none',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 9,
                 padding: '3px 7px',
@@ -1282,10 +1290,12 @@ function HermesOperatorPanel({
                 color: emerald,
               }}
             >
-              PRO {view?.lastRunEffects.prospectRuns ?? 0}
-            </span>
-            <span
+              {buildHermesOperatorEffectLabel('prospect')} {view?.lastRunEffects.prospectRuns ?? 0}
+            </Link>
+            <Link
+              href={buildHermesOperatorEffectHref('devops')}
               style={{
+                textDecoration: 'none',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 9,
                 padding: '3px 7px',
@@ -1294,8 +1304,8 @@ function HermesOperatorPanel({
                 color: amber,
               }}
             >
-              OPS {view?.lastRunEffects.devopsRuns ?? 0}
-            </span>
+              {buildHermesOperatorEffectLabel('devops')} {view?.lastRunEffects.devopsRuns ?? 0}
+            </Link>
           </div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2 }}>
             {view?.lastRun
