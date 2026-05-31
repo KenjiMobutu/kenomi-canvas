@@ -154,7 +154,9 @@ async function loadOperatorView(input: {
                   0
               ),
               paid: Number(
-                (row.input_snapshot as Record<string, any>)?.revenue?.conversions?.overview?.paid ?? 0
+                (row.input_snapshot as Record<string, any>)?.revenue?.conversions?.overview?.paidCount ??
+                  (row.input_snapshot as Record<string, any>)?.revenue?.conversions?.overview?.paid ??
+                  0
               ),
             }
           : null,

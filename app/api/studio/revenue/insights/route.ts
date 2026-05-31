@@ -33,6 +33,19 @@ type ConversationEventRow = {
   created_at?: string | null
 }
 
+type PaymentAttributionRow = {
+  prospect_id?: string | null
+  offer_id?: string | null
+  offer_variant?: string | null
+  outreach_angle?: string | null
+  source?: string | null
+  band?: string | null
+  amount_eur?: number | string | null
+  payment_status?: string | null
+  attributed_at?: string | null
+  created_at?: string | null
+}
+
 async function readTable<T>(
   query: PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 ): Promise<T[]> {
@@ -42,7 +55,7 @@ async function readTable<T>(
 }
 
 async function buildGeneratedReview(supabase: any, userId: string) {
-  const [offers, prospects, activities, conversationEvents] = await Promise.all([
+  const [offers, prospects, activities, conversationEvents, paymentAttributions] = await Promise.all([
     readTable<OfferRow>(
       supabase.from('offers').select('id, name').eq('user_id', userId).order('created_at', {
         ascending: false,
@@ -72,6 +85,16 @@ async function buildGeneratedReview(supabase: any, userId: string) {
         .order('created_at', { ascending: false })
         .limit(800)
     ),
+    readTable<PaymentAttributionRow>(
+      supabase
+        .from('payment_attributions')
+        .select(
+          'prospect_id, offer_id, offer_variant, outreach_angle, source, band, amount_eur, payment_status, attributed_at, created_at'
+        )
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(800)
+    ),
   ])
 
   return buildWeeklyRevenueReview({
@@ -80,6 +103,7 @@ async function buildGeneratedReview(supabase: any, userId: string) {
       prospects,
       activities,
       conversationEvents,
+      paymentAttributions,
     }),
   })
 }

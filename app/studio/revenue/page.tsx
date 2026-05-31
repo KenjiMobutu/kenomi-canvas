@@ -86,12 +86,16 @@ type ConversionBreakdownItem = {
   replyRate: number
   qualifiedRate: number
   closeRate: number
+  wonToPaidRate: number
+  replyToPaidRate: number
   contacted: number
   replied: number
   qualifiedReplies: number
   meetingsBooked: number
   checkoutsCreated: number
-  paid: number
+  wonCount: number
+  paidCount: number
+  paidCashEur: number
 }
 
 type RevenueConversionsSnapshot = {
@@ -134,11 +138,35 @@ type RevenueConversionsSnapshot = {
     offerName: string
     offerVariant: string | null
   }) | null
+  bestOfferToWin: (ConversionBreakdownItem & {
+    offerId: string | null
+    offerName: string
+    offerVariant: string | null
+  }) | null
+  bestOfferToCollectCash: (ConversionBreakdownItem & {
+    offerId: string | null
+    offerName: string
+    offerVariant: string | null
+  }) | null
   bestAngle: (ConversionBreakdownItem & {
     key: string
     offerId: string | null
     offerName: string
     angle: string
+  }) | null
+  bestSegmentToReply: (ConversionBreakdownItem & {
+    key: string
+    source: string
+    band: string
+    offerId: string | null
+    offerName: string
+  }) | null
+  bestSegmentToPay: (ConversionBreakdownItem & {
+    key: string
+    source: string
+    band: string
+    offerId: string | null
+    offerName: string
   }) | null
   segmentRepliesNoPay: (ConversionBreakdownItem & {
     key: string
@@ -147,7 +175,19 @@ type RevenueConversionsSnapshot = {
     offerId: string | null
     offerName: string
   }) | null
+  segmentWinsNoCash: (ConversionBreakdownItem & {
+    key: string
+    source: string
+    band: string
+    offerId: string | null
+    offerName: string
+  }) | null
   sourceClosesFastest: (ConversionBreakdownItem & {
+    source: string
+    leadToReplyHours: number
+    replyToCloseDays: number
+  }) | null
+  sourceCollectsFastest: (ConversionBreakdownItem & {
     source: string
     leadToReplyHours: number
     replyToCloseDays: number
@@ -958,11 +998,12 @@ export default function RevenuePage() {
               </div>
               <div style={{ color: C.muted, fontSize: 13 }}>
                 {conversions.overview.contacted} contacted · {conversions.overview.replied} replied ·{' '}
-                {conversions.overview.paid} closed won
+                {conversions.overview.wonCount} won · {conversions.overview.paidCount} paid ·{' '}
+                {euro(conversions.overview.paidCashEur)} collected
               </div>
             </div>
             <div style={{ color: C.muted, fontSize: 13 }}>
-              lead→reply {conversions.overview.leadToReplyHours}h · reply→close{' '}
+              lead→reply {conversions.overview.leadToReplyHours}h · reply→cash{' '}
               {conversions.overview.replyToCloseDays}d
             </div>
           </div>
@@ -975,17 +1016,27 @@ export default function RevenuePage() {
             }}
           >
             <TruthCard
-              label="Best offer"
-              title={conversions.bestOffer?.offerName ?? 'No offer truth yet'}
+              label="Best offer to collect"
+              title={conversions.bestOfferToCollectCash?.offerName ?? 'No paid offer truth yet'}
               detail={
-                conversions.bestOffer
-                  ? `${conversions.bestOffer.paid} won · ${conversions.bestOffer.closeRate}% close · ${conversions.bestOffer.replyRate}% reply`
-                  : 'Assign offers to prospects and record replies.'
+                conversions.bestOfferToCollectCash
+                  ? `${euro(conversions.bestOfferToCollectCash.paidCashEur)} collected · ${conversions.bestOfferToCollectCash.paidCount} paid · ${conversions.bestOfferToCollectCash.replyToPaidRate}% reply→paid`
+                  : 'Attach paid revenue to prospects to identify the best cash offer.'
               }
               tone={C.good}
             />
             <TruthCard
-              label="Best angle"
+              label="Best offer to win"
+              title={conversions.bestOfferToWin?.offerName ?? 'No won offer truth yet'}
+              detail={
+                conversions.bestOfferToWin
+                  ? `${conversions.bestOfferToWin.wonCount} won · ${conversions.bestOfferToWin.paidCount} paid`
+                  : 'Track won prospects even before payment lands.'
+              }
+              tone={C.blue}
+            />
+            <TruthCard
+              label="Best angle to collect"
               title={
                 conversions.bestAngle
                   ? `${conversions.bestAngle.offerName} · ${conversions.bestAngle.angle}`
@@ -993,13 +1044,41 @@ export default function RevenuePage() {
               }
               detail={
                 conversions.bestAngle
-                  ? `${conversions.bestAngle.paid} won · ${conversions.bestAngle.qualifiedReplies} qualified replies`
+                  ? `${conversions.bestAngle.paidCount} paid · ${euro(conversions.bestAngle.paidCashEur)} cash`
                   : 'Set outreach angles on prospects to compare positioning.'
               }
-              tone={C.blue}
+              tone={C.purple}
             />
             <TruthCard
-              label="Replies without close"
+              label="Best segment to reply"
+              title={
+                conversions.bestSegmentToReply
+                  ? `${conversions.bestSegmentToReply.source}/${conversions.bestSegmentToReply.band} · ${conversions.bestSegmentToReply.offerName}`
+                  : 'No reply segment truth yet'
+              }
+              detail={
+                conversions.bestSegmentToReply
+                  ? `${conversions.bestSegmentToReply.replyRate}% reply · ${conversions.bestSegmentToReply.replied} replies`
+                  : 'Segments will appear here once outreach is tagged.'
+              }
+              tone={C.warn}
+            />
+            <TruthCard
+              label="Best segment to pay"
+              title={
+                conversions.bestSegmentToPay
+                  ? `${conversions.bestSegmentToPay.source}/${conversions.bestSegmentToPay.band} · ${conversions.bestSegmentToPay.offerName}`
+                  : 'No paid segment truth yet'
+              }
+              detail={
+                conversions.bestSegmentToPay
+                  ? `${conversions.bestSegmentToPay.paidCount} paid · ${euro(conversions.bestSegmentToPay.paidCashEur)} cash`
+                  : 'Paid segment truth will appear once attributed payments land.'
+              }
+              tone={C.accent}
+            />
+            <TruthCard
+              label="Replies without cash"
               title={
                 conversions.segmentRepliesNoPay
                   ? `${conversions.segmentRepliesNoPay.source}/${conversions.segmentRepliesNoPay.band} · ${conversions.segmentRepliesNoPay.offerName}`
@@ -1007,22 +1086,36 @@ export default function RevenuePage() {
               }
               detail={
                 conversions.segmentRepliesNoPay
-                  ? `${conversions.segmentRepliesNoPay.replied} replies · ${conversions.segmentRepliesNoPay.paid} won`
-                  : 'When replies accumulate without wins, the segment will show here.'
+                  ? `${conversions.segmentRepliesNoPay.replied} replies · ${conversions.segmentRepliesNoPay.paidCount} paid`
+                  : 'When replies accumulate without cash, the segment will show here.'
               }
               tone={C.warn}
             />
             <TruthCard
-              label="Fastest close source"
+              label="Wins without cash"
               title={
-                conversions.sourceClosesFastest
-                  ? conversions.sourceClosesFastest.source
-                  : 'No close source yet'
+                conversions.segmentWinsNoCash
+                  ? `${conversions.segmentWinsNoCash.source}/${conversions.segmentWinsNoCash.band} · ${conversions.segmentWinsNoCash.offerName}`
+                  : 'No win without cash yet'
               }
               detail={
-                conversions.sourceClosesFastest
-                  ? `${conversions.sourceClosesFastest.replyToCloseDays}d reply→close · ${conversions.sourceClosesFastest.paid} won`
-                  : 'A source will appear here once at least one close is recorded.'
+                conversions.segmentWinsNoCash
+                  ? `${conversions.segmentWinsNoCash.wonCount} won · ${conversions.segmentWinsNoCash.paidCount} paid`
+                  : 'Won-but-unpaid segments will surface here.'
+              }
+              tone={C.bad}
+            />
+            <TruthCard
+              label="Fastest cash source"
+              title={
+                conversions.sourceCollectsFastest
+                  ? conversions.sourceCollectsFastest.source
+                  : 'No paid source yet'
+              }
+              detail={
+                conversions.sourceCollectsFastest
+                  ? `${conversions.sourceCollectsFastest.replyToCloseDays}d reply→cash · ${conversions.sourceCollectsFastest.paidCount} paid`
+                  : 'A source will appear here once at least one payment is attributed.'
               }
               tone={C.accent}
             />
@@ -1035,10 +1128,10 @@ export default function RevenuePage() {
               }
               detail={
                 conversions.bestModel
-                  ? `${conversions.bestModel.paid} won · ${conversions.bestModel.closeRate}% close · ${conversions.bestModel.replyRate}% reply`
+                  ? `${conversions.bestModel.paidCount} paid · ${euro(conversions.bestModel.paidCashEur)} cash · ${conversions.bestModel.replyRate}% reply`
                   : 'Prospect runs need model-tagged data before model truth appears.'
               }
-              tone={C.purple}
+              tone={C.blue}
             />
           </div>
 

@@ -32,6 +32,19 @@ type ConversationEventRow = {
   created_at?: string | null
 }
 
+type PaymentAttributionRow = {
+  prospect_id?: string | null
+  offer_id?: string | null
+  offer_variant?: string | null
+  outreach_angle?: string | null
+  source?: string | null
+  band?: string | null
+  amount_eur?: number | string | null
+  payment_status?: string | null
+  attributed_at?: string | null
+  created_at?: string | null
+}
+
 type ReasonSummary = {
   type: string
   count: number
@@ -43,13 +56,17 @@ type StageRollup = {
   qualifiedReplies: number
   meetingsBooked: number
   checkoutsCreated: number
-  paid: number
+  wonCount: number
+  paidCount: number
+  paidCashEur: number
 }
 
 type BreakdownBase = StageRollup & {
   replyRate: number
   qualifiedRate: number
   closeRate: number
+  wonToPaidRate: number
+  replyToPaidRate: number
 }
 
 export type ConversionTruthSnapshot = {
@@ -94,12 +111,44 @@ export type ConversionTruthSnapshot = {
         offerVariant: string | null
       })
     | null
+  bestOfferToWin:
+    | (BreakdownBase & {
+        offerId: string | null
+        offerName: string
+        offerVariant: string | null
+      })
+    | null
+  bestOfferToCollectCash:
+    | (BreakdownBase & {
+        offerId: string | null
+        offerName: string
+        offerVariant: string | null
+      })
+    | null
   bestAngle:
     | (BreakdownBase & {
         key: string
         offerId: string | null
         offerName: string
         angle: string
+      })
+    | null
+  bestSegmentToReply:
+    | (BreakdownBase & {
+        key: string
+        source: string
+        band: string
+        offerId: string | null
+        offerName: string
+      })
+    | null
+  bestSegmentToPay:
+    | (BreakdownBase & {
+        key: string
+        source: string
+        band: string
+        offerId: string | null
+        offerName: string
       })
     | null
   segmentRepliesNoPay:
@@ -111,7 +160,23 @@ export type ConversionTruthSnapshot = {
         offerName: string
       })
     | null
+  segmentWinsNoCash:
+    | (BreakdownBase & {
+        key: string
+        source: string
+        band: string
+        offerId: string | null
+        offerName: string
+      })
+    | null
   sourceClosesFastest:
+    | (BreakdownBase & {
+        source: string
+        leadToReplyHours: number
+        replyToCloseDays: number
+      })
+    | null
+  sourceCollectsFastest:
     | (BreakdownBase & {
         source: string
         leadToReplyHours: number
@@ -160,13 +225,17 @@ function addRates<T extends StageRollup>(entry: T): T & BreakdownBase {
     ...entry,
     replyRate: percentage(entry.replied, entry.contacted),
     qualifiedRate: percentage(entry.qualifiedReplies, entry.contacted),
-    closeRate: percentage(entry.paid, entry.contacted),
+    closeRate: percentage(entry.paidCount, entry.contacted),
+    wonToPaidRate: percentage(entry.paidCount, entry.wonCount),
+    replyToPaidRate: percentage(entry.paidCount, entry.replied),
   }
 }
 
 function sortByBusinessValue<T extends BreakdownBase>(left: T, right: T) {
   return (
-    right.paid - left.paid ||
+    right.paidCashEur - left.paidCashEur ||
+    right.paidCount - left.paidCount ||
+    right.wonCount - left.wonCount ||
     right.meetingsBooked - left.meetingsBooked ||
     right.qualifiedReplies - left.qualifiedReplies ||
     right.replyRate - left.replyRate ||
@@ -174,11 +243,39 @@ function sortByBusinessValue<T extends BreakdownBase>(left: T, right: T) {
   )
 }
 
+function sortByWinValue<T extends BreakdownBase>(left: T, right: T) {
+  return (
+    right.wonCount - left.wonCount ||
+    right.replyRate - left.replyRate ||
+    right.contacted - left.contacted
+  )
+}
+
+function sortByReplyValue<T extends BreakdownBase>(left: T, right: T) {
+  return (
+    right.replyRate - left.replyRate ||
+    right.replied - left.replied ||
+    right.qualifiedReplies - left.qualifiedReplies ||
+    right.contacted - left.contacted
+  )
+}
+
+function isPaidStatus(status: string | null | undefined) {
+  return ['paid', 'completed', 'succeeded', 'success'].includes(String(status ?? '').toLowerCase())
+}
+
+function toCurrency(value: unknown) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return 0
+  return Math.round(amount * 100) / 100
+}
+
 export function buildConversionTruthSnapshot(input: {
   offers: OfferRow[]
   prospects: ProspectRow[]
   activities: ProspectActivityRow[]
   conversationEvents: ConversationEventRow[]
+  paymentAttributions?: PaymentAttributionRow[]
 }): ConversionTruthSnapshot {
   const offerNames = new Map(
     input.offers.map((offer) => [offer.id, normalize(offer.name, 'Unassigned offer')])
@@ -187,6 +284,10 @@ export function buildConversionTruthSnapshot(input: {
   const firstSentAt = new Map<string, number>()
   const firstReplyAt = new Map<string, number>()
   const firstWonAt = new Map<string, number>()
+  const firstPaidAt = new Map<string, number>()
+  const paidCountByProspect = new Map<string, number>()
+  const paidCashByProspect = new Map<string, number>()
+  const attributionCountByProspect = new Map<string, number>()
 
   for (const activity of input.activities) {
     const prospectId = activity.prospect_id?.trim()
@@ -240,6 +341,27 @@ export function buildConversionTruthSnapshot(input: {
     }
   }
 
+  for (const row of input.paymentAttributions ?? []) {
+    const prospectId = row.prospect_id?.trim()
+    const createdAt = toTimestamp(row.attributed_at ?? row.created_at)
+    if (!prospectId) continue
+
+    attributionCountByProspect.set(prospectId, (attributionCountByProspect.get(prospectId) ?? 0) + 1)
+    if (!isPaidStatus(row.payment_status)) continue
+
+    paidCountByProspect.set(prospectId, (paidCountByProspect.get(prospectId) ?? 0) + 1)
+    paidCashByProspect.set(
+      prospectId,
+      toCurrency((paidCashByProspect.get(prospectId) ?? 0) + toCurrency(row.amount_eur))
+    )
+    if (Number.isFinite(createdAt)) {
+      firstPaidAt.set(
+        prospectId,
+        Math.min(createdAt, firstPaidAt.get(prospectId) ?? Number.POSITIVE_INFINITY)
+      )
+    }
+  }
+
   const offerMap = new Map<
     string,
     StageRollup & { offerId: string | null; offerName: string; offerVariant: string | null }
@@ -267,7 +389,9 @@ export function buildConversionTruthSnapshot(input: {
     qualifiedReplies: 0,
     meetingsBooked: 0,
     checkoutsCreated: 0,
-    paid: 0,
+    wonCount: 0,
+    paidCount: 0,
+    paidCashEur: 0,
   }
   const leadToReplyMs: number[] = []
   const replyToCloseMs: number[] = []
@@ -286,7 +410,10 @@ export function buildConversionTruthSnapshot(input: {
     const sentAt = firstSentAt.get(prospectId)
     const repliedAt = firstReplyAt.get(prospectId)
     const wonAt = firstWonAt.get(prospectId)
+    const paidAt = firstPaidAt.get(prospectId)
     const conversationType = latestConversationType.get(prospectId)
+    const paidCount = paidCountByProspect.get(prospectId) ?? 0
+    const paidCashEur = paidCashByProspect.get(prospectId) ?? 0
 
     const contacted = Number.isFinite(sentAt)
     const replied =
@@ -301,21 +428,23 @@ export function buildConversionTruthSnapshot(input: {
       conversationType === 'meeting_booked' ||
       conversationType === 'closed_won' ||
       pipelineStatus === 'won'
-    const paid = conversationType === 'closed_won' || pipelineStatus === 'won'
-    const checkoutsCreated = paid
+    const won = conversationType === 'closed_won' || pipelineStatus === 'won'
+    const checkoutsCreated = (attributionCountByProspect.get(prospectId) ?? 0) > 0 || won
 
     if (contacted) overview.contacted += 1
     if (replied) overview.replied += 1
     if (qualifiedReplies) overview.qualifiedReplies += 1
     if (meetingsBooked) overview.meetingsBooked += 1
     if (checkoutsCreated) overview.checkoutsCreated += 1
-    if (paid) overview.paid += 1
+    if (won) overview.wonCount += 1
+    overview.paidCount += paidCount
+    overview.paidCashEur = toCurrency(overview.paidCashEur + paidCashEur)
 
     if (Number.isFinite(repliedAt) && Number.isFinite(sentAt)) {
       leadToReplyMs.push(repliedAt! - sentAt!)
     }
-    if (Number.isFinite(wonAt) && Number.isFinite(repliedAt)) {
-      replyToCloseMs.push(wonAt! - repliedAt!)
+    if (Number.isFinite(repliedAt) && Number.isFinite((paidAt ?? wonAt) as number)) {
+      replyToCloseMs.push((paidAt ?? wonAt)! - repliedAt!)
     }
 
     const offerKey = offerId ?? 'unassigned'
@@ -333,7 +462,9 @@ export function buildConversionTruthSnapshot(input: {
         qualifiedReplies: 0,
         meetingsBooked: 0,
         checkoutsCreated: 0,
-        paid: 0,
+        wonCount: 0,
+        paidCount: 0,
+        paidCashEur: 0,
       })
     }
     if (!angleMap.has(angleKey)) {
@@ -347,7 +478,9 @@ export function buildConversionTruthSnapshot(input: {
         qualifiedReplies: 0,
         meetingsBooked: 0,
         checkoutsCreated: 0,
-        paid: 0,
+        wonCount: 0,
+        paidCount: 0,
+        paidCashEur: 0,
       })
     }
     if (!segmentOfferMap.has(segmentKey)) {
@@ -362,7 +495,9 @@ export function buildConversionTruthSnapshot(input: {
         qualifiedReplies: 0,
         meetingsBooked: 0,
         checkoutsCreated: 0,
-        paid: 0,
+        wonCount: 0,
+        paidCount: 0,
+        paidCashEur: 0,
       })
     }
     if (!modelMap.has(modelKey)) {
@@ -374,7 +509,9 @@ export function buildConversionTruthSnapshot(input: {
         qualifiedReplies: 0,
         meetingsBooked: 0,
         checkoutsCreated: 0,
-        paid: 0,
+        wonCount: 0,
+        paidCount: 0,
+        paidCashEur: 0,
       })
     }
     if (!sourceVelocityMap.has(source)) {
@@ -385,7 +522,9 @@ export function buildConversionTruthSnapshot(input: {
         qualifiedReplies: 0,
         meetingsBooked: 0,
         checkoutsCreated: 0,
-        paid: 0,
+        wonCount: 0,
+        paidCount: 0,
+        paidCashEur: 0,
         leadToReplyMs: [],
         replyToCloseMs: [],
       })
@@ -405,15 +544,17 @@ export function buildConversionTruthSnapshot(input: {
       if (qualifiedReplies) bucket.qualifiedReplies += 1
       if (meetingsBooked) bucket.meetingsBooked += 1
       if (checkoutsCreated) bucket.checkoutsCreated += 1
-      if (paid) bucket.paid += 1
+      if (won) bucket.wonCount += 1
+      bucket.paidCount += paidCount
+      bucket.paidCashEur = toCurrency(bucket.paidCashEur + paidCashEur)
     }
 
     const sourceBucket = sourceVelocityMap.get(source)!
     if (Number.isFinite(repliedAt) && Number.isFinite(sentAt)) {
       sourceBucket.leadToReplyMs.push(repliedAt! - sentAt!)
     }
-    if (Number.isFinite(wonAt) && Number.isFinite(repliedAt)) {
-      sourceBucket.replyToCloseMs.push(wonAt! - repliedAt!)
+    if (Number.isFinite(repliedAt) && Number.isFinite((paidAt ?? wonAt) as number)) {
+      sourceBucket.replyToCloseMs.push((paidAt ?? wonAt)! - repliedAt!)
     }
   }
 
@@ -430,12 +571,26 @@ export function buildConversionTruthSnapshot(input: {
       leadToReplyHours: averageHoursFromMs(entry.leadToReplyMs),
       replyToCloseDays: averageDaysFromMs(entry.replyToCloseMs),
     }))
-    .filter((entry) => entry.paid > 0)
+    .filter((entry) => entry.wonCount > 0)
     .sort(
       (left, right) =>
         left.replyToCloseDays - right.replyToCloseDays ||
-        right.paid - left.paid ||
+        right.wonCount - left.wonCount ||
         right.replyRate - left.replyRate
+    )[0] ?? null
+
+  const sourceCollectsFastest = Array.from(sourceVelocityMap.values())
+    .map((entry) => ({
+      ...addRates(entry),
+      leadToReplyHours: averageHoursFromMs(entry.leadToReplyMs),
+      replyToCloseDays: averageDaysFromMs(entry.replyToCloseMs),
+    }))
+    .filter((entry) => entry.paidCount > 0)
+    .sort(
+      (left, right) =>
+        left.replyToCloseDays - right.replyToCloseDays ||
+        right.paidCashEur - left.paidCashEur ||
+        right.paidCount - left.paidCount
     )[0] ?? null
 
   const commonObjections = Array.from(objectionCounts.entries())
@@ -451,7 +606,7 @@ export function buildConversionTruthSnapshot(input: {
   const repeatNext = angleBreakdown[0]
     ? {
         title: `${angleBreakdown[0].offerName} · ${angleBreakdown[0].angle}`,
-        detail: `${angleBreakdown[0].paid} won · ${angleBreakdown[0].closeRate}% close. Repeat this positioning next.`,
+        detail: `${angleBreakdown[0].paidCount} paid · ${angleBreakdown[0].closeRate}% paid conversion. Repeat this positioning next.`,
       }
     : null
 
@@ -459,7 +614,7 @@ export function buildConversionTruthSnapshot(input: {
     segmentOfferBreakdown
       .filter(
         (entry) =>
-          entry.paid === 0 &&
+          entry.paidCount === 0 &&
           (entry.replied > 0 || entry.qualifiedReplies > 0 || entry.contacted > 0)
       )
       .sort(
@@ -472,9 +627,20 @@ export function buildConversionTruthSnapshot(input: {
   const stopNext = stopCandidate
     ? {
         title: `${stopCandidate.source}/${stopCandidate.band} · ${stopCandidate.offerName}`,
-        detail: `${stopCandidate.replied} replies with ${stopCandidate.paid} close. Change offer, angle, or sequence before adding more volume.`,
+        detail: `${stopCandidate.replied} replies with ${stopCandidate.paidCount} paid. Change offer, angle, or sequence before adding more volume.`,
       }
     : null
+
+  const bestOffer = [...offerBreakdown].sort(sortByBusinessValue)[0] ?? null
+  const bestOfferToWin = [...offerBreakdown].sort(sortByWinValue)[0] ?? null
+  const bestOfferToCollectCash = [...offerBreakdown].sort(sortByBusinessValue)[0] ?? null
+  const bestSegmentToReply = [...segmentOfferBreakdown].sort(sortByReplyValue)[0] ?? null
+  const bestSegmentToPay = [...segmentOfferBreakdown].sort(sortByBusinessValue)[0] ?? null
+  const segmentWinsNoCash =
+    [...segmentOfferBreakdown]
+      .filter((entry) => entry.wonCount > 0 && entry.paidCount === 0)
+      .sort((left, right) => right.wonCount - left.wonCount || right.replied - left.replied)[0] ??
+    null
 
   return {
     overview: {
@@ -486,15 +652,21 @@ export function buildConversionTruthSnapshot(input: {
     angleBreakdown,
     segmentOfferBreakdown,
     modelBreakdown,
-    bestOffer: offerBreakdown[0] ?? null,
+    bestOffer,
+    bestOfferToWin,
+    bestOfferToCollectCash,
     bestAngle: angleBreakdown[0] ?? null,
+    bestSegmentToReply,
+    bestSegmentToPay,
     segmentRepliesNoPay:
       segmentOfferBreakdown
-        .filter((entry) => entry.replied > 0 && entry.paid === 0)
+        .filter((entry) => entry.replied > 0 && entry.paidCount === 0)
         .sort((left, right) => right.replied - left.replied || right.qualifiedReplies - left.qualifiedReplies)[0] ??
       segmentOfferBreakdown[0] ??
       null,
+    segmentWinsNoCash,
     sourceClosesFastest,
+    sourceCollectsFastest,
     bestModel: modelBreakdown[0] ?? null,
     commonObjections,
     lostReasons,

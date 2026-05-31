@@ -37,6 +37,18 @@ function makeSupabase() {
     prospect_conversation_events: [
       { prospect_id: 'p1', event_type: 'closed_won', created_at: '2026-05-24T13:00:00.000Z' },
     ],
+    payment_attributions: [
+      {
+        prospect_id: 'p1',
+        offer_id: 'offer-a',
+        outreach_angle: 'speed',
+        source: 'linkedin',
+        band: 'warm',
+        amount_eur: 1900,
+        payment_status: 'paid',
+        attribution_status: 'exact',
+      },
+    ],
   }
 
   function makeBuilder(table: string) {
@@ -75,10 +87,16 @@ describe('revenue conversions route', () => {
     expect(body.conversions.bestOffer).toMatchObject({
       offerId: 'offer-a',
       offerName: 'Outbound Sprint',
+      paidCashEur: 1900,
     })
     expect(body.conversions.bestModel).toMatchObject({
       model: 'hermes3:8b',
       modelFamily: 'hermes',
+    })
+    expect(body.conversions.overview).toMatchObject({
+      wonCount: 1,
+      paidCount: 1,
+      paidCashEur: 1900,
     })
     expect(body.conversions.offerBreakdown).toHaveLength(1)
   })

@@ -54,22 +54,22 @@ export function buildWeeklyRevenueReview(input: {
   weekEnd.setUTCDate(weekStart.getUTCDate() + 6)
 
   const bestSource =
-    input.conversions.sourceClosesFastest
+    input.conversions.sourceCollectsFastest
       ? {
-          title: input.conversions.sourceClosesFastest.source,
-          detail: `${input.conversions.sourceClosesFastest.paid} won · ${input.conversions.sourceClosesFastest.replyToCloseDays}d reply→close`,
-          source: input.conversions.sourceClosesFastest.source,
+          title: input.conversions.sourceCollectsFastest.source,
+          detail: `${input.conversions.sourceCollectsFastest.paidCount} paid · ${input.conversions.sourceCollectsFastest.replyToCloseDays}d reply→cash`,
+          source: input.conversions.sourceCollectsFastest.source,
         }
       : {
           title: 'No source truth yet',
-          detail: 'Record more replies and wins to identify the best source.',
+          detail: 'Record paid revenue to identify the best cash source.',
         }
 
   const bestSegment =
     input.conversions.segmentRepliesNoPay
       ? {
           title: `${input.conversions.segmentRepliesNoPay.source}/${input.conversions.segmentRepliesNoPay.band} · ${input.conversions.segmentRepliesNoPay.offerName}`,
-          detail: `${input.conversions.segmentRepliesNoPay.replied} replies · ${input.conversions.segmentRepliesNoPay.paid} won`,
+          detail: `${input.conversions.segmentRepliesNoPay.replied} replies · ${input.conversions.segmentRepliesNoPay.paidCount} paid`,
           source: input.conversions.segmentRepliesNoPay.source,
           band: input.conversions.segmentRepliesNoPay.band,
         }
@@ -79,10 +79,10 @@ export function buildWeeklyRevenueReview(input: {
         }
 
   const bestOffer =
-    input.conversions.bestOffer
+    input.conversions.bestOfferToCollectCash
       ? {
-          title: input.conversions.bestOffer.offerName,
-          detail: `${input.conversions.bestOffer.paid} won · ${input.conversions.bestOffer.closeRate}% close`,
+          title: input.conversions.bestOfferToCollectCash.offerName,
+          detail: `${input.conversions.bestOfferToCollectCash.paidCount} paid · ${input.conversions.bestOfferToCollectCash.paidCashEur}€ collected`,
         }
       : {
           title: 'No offer truth yet',
@@ -93,7 +93,7 @@ export function buildWeeklyRevenueReview(input: {
     input.conversions.bestAngle
       ? {
           title: `${input.conversions.bestAngle.offerName} · ${input.conversions.bestAngle.angle}`,
-          detail: `${input.conversions.bestAngle.paid} won · ${input.conversions.bestAngle.replyRate}% reply`,
+          detail: `${input.conversions.bestAngle.paidCount} paid · ${input.conversions.bestAngle.replyRate}% reply`,
         }
       : {
           title: 'No angle truth yet',
@@ -137,8 +137,8 @@ export function buildWeeklyRevenueReview(input: {
       stageKey: 'meeting_to_close' as const,
       title: 'Meeting → close',
       lost:
-        input.conversions.overview.meetingsBooked - input.conversions.overview.paid,
-      detail: `${input.conversions.overview.meetingsBooked} meetings · ${input.conversions.overview.paid} won`,
+        input.conversions.overview.meetingsBooked - input.conversions.overview.paidCount,
+      detail: `${input.conversions.overview.meetingsBooked} meetings · ${input.conversions.overview.paidCount} paid`,
     },
   ]
   const mainLeakCandidate =
@@ -172,7 +172,7 @@ export function buildWeeklyRevenueReview(input: {
   } else if (input.conversions.bestOffer) {
     nextExperiment = {
       focus: 'offer',
-      title: `Double down on ${input.conversions.bestOffer.offerName}`,
+      title: `Double down on ${input.conversions.bestOfferToCollectCash?.offerName ?? 'best offer'}`,
       detail: 'Use the best-closing offer as the default until another offer beats it.',
     }
   } else {

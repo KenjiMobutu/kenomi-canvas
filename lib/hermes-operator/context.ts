@@ -53,6 +53,19 @@ type ConversationEventRow = {
   created_at?: string | null
 }
 
+type PaymentAttributionRow = {
+  prospect_id?: string | null
+  offer_id?: string | null
+  offer_variant?: string | null
+  outreach_angle?: string | null
+  source?: string | null
+  band?: string | null
+  amount_eur?: number | string | null
+  payment_status?: string | null
+  attributed_at?: string | null
+  created_at?: string | null
+}
+
 type AutonomyControlRow = {
   status?: 'active' | 'paused'
   reason?: string | null
@@ -95,7 +108,7 @@ export async function buildHermesOperatorContext(input: {
   now?: Date
 }): Promise<HermesOperatorContextSnapshot> {
   const now = input.now ?? new Date()
-  const [offers, prospects, activities, conversationEvents, control, jobs, approvals, latestDevopsRun] =
+  const [offers, prospects, activities, conversationEvents, paymentAttributions, control, jobs, approvals, latestDevopsRun] =
     await Promise.all([
       readTable<OfferRow>(
         input.supabase
@@ -126,6 +139,16 @@ export async function buildHermesOperatorContext(input: {
         input.supabase
           .from('prospect_conversation_events')
           .select('prospect_id, event_type, created_at')
+          .eq('user_id', input.userId)
+          .order('created_at', { ascending: false })
+          .limit(800)
+      ),
+      readTable<PaymentAttributionRow>(
+        input.supabase
+          .from('payment_attributions')
+          .select(
+            'prospect_id, offer_id, offer_variant, outreach_angle, source, band, amount_eur, payment_status, attributed_at, created_at'
+          )
           .eq('user_id', input.userId)
           .order('created_at', { ascending: false })
           .limit(800)
@@ -166,6 +189,7 @@ export async function buildHermesOperatorContext(input: {
     prospects,
     activities,
     conversationEvents,
+    paymentAttributions,
   })
   const weeklyReview = buildWeeklyRevenueReview({
     conversions,
