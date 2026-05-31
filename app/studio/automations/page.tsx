@@ -1570,6 +1570,80 @@ function HermesOperatorPanel({
         )}
       </div>
 
+      <div
+        style={{
+          display: 'grid',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Recent runs
+        </div>
+        {view?.recentRuns?.length ? (
+          <div
+            style={{
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            {view.recentRuns.map((run) => {
+              const runColor =
+                run.status === 'completed' ? emerald : run.status === 'failed' ? rose : muted2
+              return (
+                <div
+                  key={run.id}
+                  style={{
+                    display: 'grid',
+                    gap: 6,
+                    padding: 10,
+                    borderRadius: 10,
+                    background: surface2,
+                    border: `1px solid ${line}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: text }}>
+                      {run.summary}
+                    </div>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        padding: '3px 6px',
+                        borderRadius: 999,
+                        background: `${runColor}1a`,
+                        color: runColor,
+                      }}
+                    >
+                      {run.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2 }}>
+                    <span>{run.mode}</span>
+                    <span>jobs {run.enqueuedJobsCount}</span>
+                    <span>alerts {run.alertsCount}</span>
+                    <span>{new Date(run.createdAt).toLocaleString('fr-FR')}</span>
+                  </div>
+                  {run.lastError ? (
+                    <div style={{ fontSize: 11, color: rose, lineHeight: 1.45 }}>{run.lastError}</div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: muted }}>No recent Hermes run.</div>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {(['observe', 'recommend', 'act'] as HermesOperatorMode[]).map((mode) => (
           <button

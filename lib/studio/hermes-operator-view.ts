@@ -44,6 +44,7 @@ export type HermesOperatorView = {
   currentMode: 'observe' | 'recommend' | 'act'
   notifyInStudio: boolean
   lastRun: HermesOperatorRunViewRow | null
+  recentRuns: HermesOperatorRunViewRow[]
   topRecommendation: HermesOperatorRecommendationViewRow | null
   topAlert: HermesOperatorAlertViewRow | null
   openRecommendationsCount: number
@@ -92,6 +93,7 @@ export function buildHermesOperatorView(input: {
     currentMode: input.settings.operatorMode,
     notifyInStudio: input.settings.notifyInStudio,
     lastRun: input.runs[0] ?? null,
+    recentRuns: input.runs.slice(0, 5),
     topRecommendation: openRecommendations[0] ?? null,
     topAlert: openAlerts[0] ?? null,
     openRecommendationsCount: openRecommendations.length,

@@ -21,6 +21,18 @@ describe('buildHermesOperatorView', () => {
           createdAt: '2026-05-28T10:00:00.000Z',
           lastError: null,
         },
+        {
+          id: 'run-0',
+          mode: 'recommend',
+          status: 'failed',
+          model: 'hermes3:8b',
+          summary: 'Older failed run.',
+          alertsCount: 2,
+          enqueuedJobsCount: 1,
+          executedActionsCount: 1,
+          createdAt: '2026-05-28T09:00:00.000Z',
+          lastError: 'network',
+        },
       ],
       recommendations: [
         {
@@ -88,6 +100,7 @@ describe('buildHermesOperatorView', () => {
 
     expect(view.currentMode).toBe('observe')
     expect(view.lastRun?.mode).toBe('observe')
+    expect(view.recentRuns).toHaveLength(2)
     expect(view.topRecommendation?.title).toBe('Run prospect')
     expect(view.openAlertsCount).toBe(1)
     expect(view.lastRunEffects).toEqual({
