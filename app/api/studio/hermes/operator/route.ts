@@ -20,13 +20,20 @@ type QueryBuilder<T = unknown> = PromiseLike<QueryResult<T[]>> & {
   eq(field: string, value: unknown): QueryBuilder<T>
   order(field: string, options?: { ascending?: boolean }): QueryBuilder<T>
   limit(count: number): QueryBuilder<T>
+  update?(row: Record<string, unknown>): QueryBuilder<T>
   maybeSingle(): Promise<QueryResult<T>>
   upsert?(row: Record<string, unknown>, options?: Record<string, unknown>): QueryBuilder<T>
 }
 
-const operatorPatchSchema = z.object({
-  mode: z.enum(['observe', 'recommend', 'act']),
-})
+const operatorPatchSchema = z.union([
+  z.object({
+    mode: z.enum(['observe', 'recommend', 'act']),
+  }),
+  z.object({
+    type: z.literal('dismiss_recommendation'),
+    recommendationId: z.string().uuid().or(z.string().min(1)),
+  }),
+])
 
 type HermesOperatorRouteSupabase = {
   from(table: string): QueryBuilder<any>
@@ -187,24 +194,40 @@ export async function PATCH(request: Request) {
   }
 
   const nowIso = new Date().toISOString()
-  const result = await (supabase as unknown as HermesOperatorRouteSupabase)
-    .from('user_operator_settings')
-    .upsert?.(
-      {
-        user_id: user!.id,
-        operator_mode: parsed.data.mode,
-        notify_in_studio: true,
-        notify_email: false,
-        notify_webhook: false,
-        notification_webhook_url: '',
-        quiet_hours: {},
-        updated_at: nowIso,
-      },
-      { onConflict: 'user_id' }
-    )
 
-  if (result?.error) {
-    return NextResponse.json({ error: result.error.message }, { status: 500 })
+  if ('type' in parsed.data) {
+    const result = await (supabase as unknown as HermesOperatorRouteSupabase)
+      .from('hermes_operator_recommendations')
+      .update?.({
+        status: 'dismissed',
+        updated_at: nowIso,
+      })
+      .eq('user_id', user!.id)
+      .eq('id', parsed.data.recommendationId)
+
+    if (result?.error) {
+      return NextResponse.json({ error: result.error.message }, { status: 500 })
+    }
+  } else {
+    const result = await (supabase as unknown as HermesOperatorRouteSupabase)
+      .from('user_operator_settings')
+      .upsert?.(
+        {
+          user_id: user!.id,
+          operator_mode: parsed.data.mode,
+          notify_in_studio: true,
+          notify_email: false,
+          notify_webhook: false,
+          notification_webhook_url: '',
+          quiet_hours: {},
+          updated_at: nowIso,
+        },
+        { onConflict: 'user_id' }
+      )
+
+    if (result?.error) {
+      return NextResponse.json({ error: result.error.message }, { status: 500 })
+    }
   }
 
   const view = await loadOperatorView({

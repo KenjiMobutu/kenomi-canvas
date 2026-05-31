@@ -1143,13 +1143,15 @@ function HermesOperatorPanel({
   busy,
   onModeChange,
   onRunNow,
+  onDismissRecommendation,
 }: {
   view: HermesOperatorView | null
   alerts: HermesOperatorAlertViewRow[]
   loading: boolean
-  busy: HermesOperatorMode | 'run_now' | null
+  busy: HermesOperatorMode | 'run_now' | `dismiss:${string}` | null
   onModeChange: (mode: HermesOperatorMode) => void
   onRunNow: () => void
+  onDismissRecommendation: (recommendationId: string) => void
 }) {
   const activeMode = view?.currentMode ?? 'observe'
   const modeColor =
@@ -1355,6 +1357,99 @@ function HermesOperatorPanel({
             {view?.topAlert?.detail ?? 'No business alert currently requires attention.'}
           </div>
         </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Recommendations backlog
+        </div>
+        {view?.recommendations?.length ? (
+          <div
+            style={{
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            {view.recommendations.slice(0, 5).map((recommendation) => {
+              const isDismissing = busy === `dismiss:${recommendation.id}`
+              const statusColor =
+                recommendation.status === 'accepted' ? emerald : recommendation.status === 'open' ? cyan : muted2
+              return (
+                <div
+                  key={recommendation.id}
+                  style={{
+                    display: 'grid',
+                    gap: 6,
+                    padding: 10,
+                    borderRadius: 10,
+                    background: surface2,
+                    border: `1px solid ${line}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: text }}>
+                      {recommendation.title}
+                    </div>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        padding: '3px 6px',
+                        borderRadius: 999,
+                        background: `${statusColor}1a`,
+                        color: statusColor,
+                      }}
+                    >
+                      {recommendation.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+                    {recommendation.detail}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2 }}>
+                      {recommendation.kind} · P{recommendation.priority}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onDismissRecommendation(recommendation.id)}
+                      disabled={loading || busy !== null}
+                      style={{
+                        padding: '6px 8px',
+                        borderRadius: 8,
+                        border: `1px solid ${line2}`,
+                        background: surface,
+                        color: text,
+                        cursor: loading || busy !== null ? 'default' : 'pointer',
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {isDismissing ? '...' : 'Dismiss'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: muted }}>
+            No open or accepted recommendation.
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1999,7 +2094,7 @@ export default function AutomationsPage() {
   const [hermesView, setHermesView] = useState<HermesOperatorView | null>(null)
   const [hermesAlerts, setHermesAlerts] = useState<HermesOperatorAlertViewRow[]>([])
   const [hermesLoading, setHermesLoading] = useState(false)
-  const [hermesBusy, setHermesBusy] = useState<HermesOperatorMode | 'run_now' | null>(null)
+  const [hermesBusy, setHermesBusy] = useState<HermesOperatorMode | 'run_now' | `dismiss:${string}` | null>(null)
   const [autonomyLoading, setAutonomyLoading] = useState(false)
   const [autonomyBusy, setAutonomyBusy] = useState(false)
 
@@ -2326,6 +2421,27 @@ export default function AutomationsPage() {
     }
   }
 
+  async function dismissHermesRecommendation(recommendationId: string) {
+    setHermesBusy(`dismiss:${recommendationId}`)
+    try {
+      const res = await fetch('/api/studio/hermes/operator', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'dismiss_recommendation', recommendationId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error || 'Erreur dismiss recommendation')
+        return
+      }
+      setHermesView((json.view as HermesOperatorView) ?? null)
+    } catch {
+      toast.error('Erreur réseau Hermes')
+    } finally {
+      setHermesBusy(null)
+    }
+  }
+
   async function toggleAutonomyControl() {
     if (!autonomyControl) return
     setAutonomyBusy(true)
@@ -2500,6 +2616,7 @@ export default function AutomationsPage() {
           loading={hermesLoading}
           busy={hermesBusy}
           onModeChange={patchHermesMode}
+          onDismissRecommendation={dismissHermesRecommendation}
           onRunNow={() => {
             setHermesBusy('run_now')
             patchSchedule({ scheduleKey: 'hermes_operator', runNow: true }, 'hermes_operator').finally(

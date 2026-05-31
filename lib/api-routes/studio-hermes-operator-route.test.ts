@@ -92,6 +92,10 @@ function makeSupabase() {
         state.filters.push({ field, value })
         return builder
       },
+      update: (payload: Record<string, unknown>) => {
+        resolveRows().forEach((row) => Object.assign(row, payload))
+        return builder
+      },
       order: (field: string, options?: { ascending?: boolean }) => {
         state.orderField = field
         state.ascending = options?.ascending ?? true
@@ -158,5 +162,19 @@ describe('studio hermes operator route', () => {
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.view.currentMode).toBe('recommend')
+  })
+
+  it('dismisses a recommendation and returns refreshed view', async () => {
+    const response = await PATCH(
+      new Request('http://localhost/api/studio/hermes/operator', {
+        method: 'PATCH',
+        body: JSON.stringify({ type: 'dismiss_recommendation', recommendationId: 'rec-1' }),
+      })
+    )
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.view.openRecommendationsCount).toBe(0)
+    expect(body.view.topRecommendation).toBeNull()
   })
 })
