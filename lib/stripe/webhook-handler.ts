@@ -3,6 +3,7 @@ import { insertAuditEvent } from '@/lib/audit-log'
 import { createN8nFulfillmentProvider } from '@/lib/fulfillment/n8n'
 import { triggerFulfillmentForPayment } from '@/lib/fulfillment/trigger'
 import type { FulfillmentProvider } from '@/lib/fulfillment/types'
+import { syncPaymentAttribution } from '@/lib/revenue/cash-attribution'
 import { buildVentureEventInsert } from '@/lib/venture-events'
 
 interface QueryBuilder {
@@ -152,6 +153,24 @@ export async function handleStripeWebhookEvent(input: {
     .eq('stripe_session_id', session.id)
 
   if (paymentUpdate.error) return { ok: false, error: paymentUpdate.error.message }
+
+  await syncPaymentAttribution({
+    supabase: input.supabase,
+    row: {
+      user_id: venture.user_id,
+      venture_id: venture.id,
+      payment_provider: 'stripe',
+      payment_reference: session.id,
+      checkout_session_id: session.id,
+      stripe_payment_intent_id: getStringId(session.payment_intent),
+      amount_eur: collectedAmountEur || expectedAmountEur,
+      currency: session.currency ?? 'eur',
+      payment_status: 'completed',
+      attribution_status: collectedAmountEur > 0 ? 'exact' : 'unknown',
+      confidence_score: collectedAmountEur > 0 ? 1 : 0,
+      attributed_at: nowIso,
+    },
+  })
 
   const eventInsert = await input.supabase.from('venture_events').insert(
     buildVentureEventInsert({

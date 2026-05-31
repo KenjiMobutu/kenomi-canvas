@@ -174,6 +174,53 @@ type RevenueConversionsSnapshot = {
   } | null
 }
 
+type RevenueAttributionSnapshot = {
+  overview: {
+    totalRows: number
+    paidRows: number
+    attributedCashEur: number
+    pendingCashEur: number
+    exactRows: number
+    inferredRows: number
+    unknownRows: number
+    confidenceRate: number
+  }
+  offerBreakdown: Array<{
+    offerId: string | null
+    offerVariant: string | null
+    paidCashEur: number
+    pendingCashEur: number
+    paidRows: number
+    totalRows: number
+  }>
+  segmentBreakdown: Array<{
+    key: string
+    source: string
+    band: string
+    paidCashEur: number
+    pendingCashEur: number
+    paidRows: number
+    totalRows: number
+  }>
+  bestOfferByCash: {
+    offerId: string | null
+    offerVariant: string | null
+    paidCashEur: number
+    pendingCashEur: number
+    paidRows: number
+    totalRows: number
+  } | null
+  bestSegmentByCash: {
+    key: string
+    source: string
+    band: string
+    paidCashEur: number
+    pendingCashEur: number
+    paidRows: number
+    totalRows: number
+  } | null
+}
+
 type WeeklyRevenueReviewInsight = {
   title: string
   detail: string
@@ -412,6 +459,7 @@ function formatTruthKey(value: string) {
 export default function RevenuePage() {
   const [snapshot, setSnapshot] = useState<RevenueLoopSnapshot | null>(null)
   const [conversions, setConversions] = useState<RevenueConversionsSnapshot | null>(null)
+  const [attribution, setAttribution] = useState<RevenueAttributionSnapshot | null>(null)
   const [operatorView, setOperatorView] = useState<HermesOperatorView | null>(null)
   const [weeklyReview, setWeeklyReview] = useState<WeeklyRevenueReviewSnapshot | null>(null)
   const [lastReview, setLastReview] = useState<WeeklyRevenueReviewRecord | null>(null)
@@ -443,14 +491,16 @@ export default function RevenuePage() {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const [loopRes, conversionsRes, insightsRes, operatorRes] = await Promise.all([
+    const [loopRes, conversionsRes, attributionRes, insightsRes, operatorRes] = await Promise.all([
       fetch('/api/studio/revenue/loop', { cache: 'no-store' }),
       fetch('/api/studio/revenue/conversions', { cache: 'no-store' }),
+      fetch('/api/studio/revenue/attribution', { cache: 'no-store' }),
       fetch('/api/studio/revenue/insights', { cache: 'no-store' }),
       fetch('/api/studio/hermes/operator', { cache: 'no-store' }),
     ])
     const loopJson = await loopRes.json().catch(() => null)
     const conversionsJson = await conversionsRes.json().catch(() => null)
+    const attributionJson = await attributionRes.json().catch(() => null)
     const insightsJson = await insightsRes.json().catch(() => null)
     const operatorJson = await operatorRes.json().catch(() => null)
     if (!loopRes.ok || !loopJson?.snapshot) {
@@ -460,6 +510,7 @@ export default function RevenuePage() {
     }
     setSnapshot(loopJson.snapshot)
     setConversions(conversionsRes.ok ? ((conversionsJson?.conversions as RevenueConversionsSnapshot) ?? null) : null)
+    setAttribution(attributionRes.ok ? ((attributionJson?.attribution as RevenueAttributionSnapshot) ?? null) : null)
     setOperatorView(operatorRes.ok ? ((operatorJson?.view as HermesOperatorView) ?? null) : null)
     setWeeklyReview(insightsRes.ok ? ((insightsJson?.insights as WeeklyRevenueReviewSnapshot) ?? null) : null)
     setLastReview(insightsRes.ok ? ((insightsJson?.lastReview as WeeklyRevenueReviewRecord | null) ?? null) : null)
@@ -1102,6 +1153,95 @@ export default function RevenuePage() {
                 </div>
               )}
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {attribution ? (
+        <section
+          style={{
+            marginBottom: 18,
+            display: 'grid',
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'baseline',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: C.accent,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  marginBottom: 6,
+                }}
+              >
+                Cash attribution
+              </div>
+              <div style={{ color: C.muted, fontSize: 13 }}>
+                {attribution.overview.paidRows} paid rows · {attribution.overview.totalRows} tracked rows
+              </div>
+            </div>
+            <div style={{ color: C.muted, fontSize: 13 }}>
+              confidence {attribution.overview.confidenceRate}% · pending {euro(attribution.overview.pendingCashEur)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 12,
+            }}
+          >
+            <TruthCard
+              label="Attributed cash"
+              title={euro(attribution.overview.attributedCashEur)}
+              detail={`${attribution.overview.exactRows} exact · ${attribution.overview.inferredRows} inferred · ${attribution.overview.unknownRows} unknown`}
+              tone={C.good}
+            />
+            <TruthCard
+              label="Best paid offer"
+              title={
+                attribution.bestOfferByCash
+                  ? `${attribution.bestOfferByCash.offerId ?? 'Unassigned'} · ${attribution.bestOfferByCash.offerVariant ?? 'default'}`
+                  : 'No paid offer yet'
+              }
+              detail={
+                attribution.bestOfferByCash
+                  ? `${euro(attribution.bestOfferByCash.paidCashEur)} paid · ${attribution.bestOfferByCash.paidRows} rows`
+                  : 'Paid attribution will surface here once cash is linked to offers.'
+              }
+              tone={C.blue}
+            />
+            <TruthCard
+              label="Best paid segment"
+              title={
+                attribution.bestSegmentByCash
+                  ? `${attribution.bestSegmentByCash.source}/${attribution.bestSegmentByCash.band}`
+                  : 'No paid segment yet'
+              }
+              detail={
+                attribution.bestSegmentByCash
+                  ? `${euro(attribution.bestSegmentByCash.paidCashEur)} paid · ${attribution.bestSegmentByCash.paidRows} rows`
+                  : 'Segment cash truth will appear here once payments are attributed.'
+              }
+              tone={C.accent}
+            />
+            <TruthCard
+              label="Cash still unattributed"
+              title={euro(attribution.overview.pendingCashEur)}
+              detail="Pending or weak-confidence cash that still needs cleaner attribution."
+              tone={attribution.overview.pendingCashEur > 0 ? C.warn : C.muted}
+            />
           </div>
         </section>
       ) : null}

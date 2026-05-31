@@ -1,5 +1,6 @@
 import type Stripe from 'stripe'
 import { buildCheckoutSessionParams, parsePaymentOutput } from './checkout-action'
+import { syncPaymentAttribution } from '@/lib/revenue/cash-attribution'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -173,6 +174,7 @@ export async function createPublicCheckoutSession(
 
   const expectedAmountEur = payment.price_amount / 100
   const insertPayment = await input.supabase.from('payments').insert({
+    user_id: venture.user_id,
     venture_id: venture.id,
     stripe_session_id: session.id,
     stripe_payment_intent_id: getPaymentIntentId(session.payment_intent),
@@ -191,6 +193,25 @@ export async function createPublicCheckoutSession(
     updated_at: nowIso,
   })
   if (insertPayment.error) throw new Error(insertPayment.error.message)
+
+  await syncPaymentAttribution({
+    supabase: input.supabase,
+    row: {
+      user_id: venture.user_id,
+      venture_id: venture.id,
+      payment_provider: 'stripe',
+      payment_reference: session.id,
+      checkout_session_id: session.id,
+      stripe_payment_intent_id: getPaymentIntentId(session.payment_intent),
+      amount_eur: expectedAmountEur,
+      currency: payment.price_currency.toLowerCase(),
+      payment_status: 'pending',
+      attribution_status: 'unknown',
+      confidence_score: 0,
+      source: attribution.utm_source ?? 'public_landing',
+      attributed_at: nowIso,
+    },
+  })
 
   const insertEvent = await input.supabase.from('venture_events').insert({
     user_id: venture.user_id,

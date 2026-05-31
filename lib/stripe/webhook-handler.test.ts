@@ -16,6 +16,19 @@ function createFakeSupabase(seed?: { paymentStatus?: string; revenue?: number })
         customer_email: null,
       },
     ],
+    payment_attributions: [
+      {
+        id: 'attr-1',
+        user_id: 'user-1',
+        venture_id: 'venture-1',
+        checkout_session_id: 'cs_test_123',
+        amount_eur: 29,
+        currency: 'eur',
+        payment_status: 'pending',
+        attribution_status: 'unknown',
+        confidence_score: 0,
+      },
+    ],
     ventures: [
       {
         id: 'venture-1',
@@ -133,6 +146,12 @@ describe('handleStripeWebhookEvent', () => {
       provider_status: 'completed',
       stripe_payment_intent_id: 'pi_test_123',
       customer_email: 'founder@example.com',
+    })
+    expect(supabase.tables.payment_attributions[0]).toMatchObject({
+      checkout_session_id: 'cs_test_123',
+      stripe_payment_intent_id: 'pi_test_123',
+      payment_status: 'completed',
+      amount_eur: 29,
     })
     expect(supabase.tables.venture_events[0]).toMatchObject({
       user_id: 'user-1',

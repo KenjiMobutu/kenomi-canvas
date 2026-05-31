@@ -65,6 +65,7 @@ describe('createPublicCheckoutSession', () => {
       ],
       user_settings: [{ user_id: 'user-1', stripe_secret_key: 'sk_test_settings' }],
       payments: [],
+      payment_attributions: [],
       venture_events: [],
     })
     const stripeCreate = vi.fn(async () => ({
@@ -122,6 +123,15 @@ describe('createPublicCheckoutSession', () => {
       trial_days: 7,
       provider_status: 'ready',
       customer_email: 'buyer@test.local',
+    })
+    expect(supabase.tables.payment_attributions[0]).toMatchObject({
+      user_id: 'user-1',
+      venture_id: 'venture-1',
+      checkout_session_id: 'cs_test_public',
+      amount_eur: 19.99,
+      payment_status: 'pending',
+      attribution_status: 'unknown',
+      source: 'linkedin',
     })
     expect(supabase.tables.venture_events[0]).toMatchObject({
       user_id: 'user-1',
