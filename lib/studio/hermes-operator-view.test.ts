@@ -25,14 +25,51 @@ describe('buildHermesOperatorView', () => {
       recommendations: [
         {
           id: 'rec-1',
+          runId: 'run-1',
           kind: 'run_follow_up_scan',
           priority: 90,
           title: 'Push follow-ups',
           detail: 'Replies exist but no wins.',
           actionType: 'run_agent',
           riskLevel: 'low',
-          status: 'open',
+          status: 'accepted',
           createdAt: '2026-05-28T10:00:00.000Z',
+        },
+        {
+          id: 'rec-2',
+          runId: 'run-1',
+          kind: 'run_prospect',
+          priority: 95,
+          title: 'Run prospect',
+          detail: 'Push one more prospect pass.',
+          actionType: 'run_agent',
+          riskLevel: 'low',
+          status: 'accepted',
+          createdAt: '2026-05-28T10:01:00.000Z',
+        },
+        {
+          id: 'rec-3',
+          runId: 'run-1',
+          kind: 'run_devops',
+          priority: 80,
+          title: 'Run devops',
+          detail: 'Check infra.',
+          actionType: 'run_agent',
+          riskLevel: 'low',
+          status: 'accepted',
+          createdAt: '2026-05-28T10:02:00.000Z',
+        },
+        {
+          id: 'rec-4',
+          runId: 'run-old',
+          kind: 'run_prospect',
+          priority: 60,
+          title: 'Older run prospect',
+          detail: 'Should not count in the last run.',
+          actionType: 'run_agent',
+          riskLevel: 'low',
+          status: 'accepted',
+          createdAt: '2026-05-28T09:00:00.000Z',
         },
       ],
       alerts: [
@@ -51,7 +88,12 @@ describe('buildHermesOperatorView', () => {
 
     expect(view.currentMode).toBe('observe')
     expect(view.lastRun?.mode).toBe('observe')
-    expect(view.topRecommendation?.title).toBe('Push follow-ups')
+    expect(view.topRecommendation?.title).toBe('Run prospect')
     expect(view.openAlertsCount).toBe(1)
+    expect(view.lastRunEffects).toEqual({
+      followUpScans: 1,
+      prospectRuns: 1,
+      devopsRuns: 1,
+    })
   })
 })

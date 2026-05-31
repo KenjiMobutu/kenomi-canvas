@@ -95,7 +95,7 @@ async function loadOperatorView(input: {
       .limit(10),
     input.supabase
       .from('hermes_operator_recommendations')
-      .select('id, kind, priority, title, detail, action_type, risk_level, status, created_at')
+      .select('id, run_id, kind, priority, title, detail, action_type, risk_level, status, created_at')
       .eq('user_id', input.userId)
       .order('priority', { ascending: false })
       .limit(10),
@@ -130,6 +130,7 @@ async function loadOperatorView(input: {
     (recommendationsResult.data ?? []) as Array<Record<string, unknown>>
   ).map((row) => ({
     id: String(row.id),
+    runId: String(row.run_id ?? ''),
     kind: String(row.kind ?? ''),
     priority: Number(row.priority ?? 0),
     title: String(row.title ?? ''),

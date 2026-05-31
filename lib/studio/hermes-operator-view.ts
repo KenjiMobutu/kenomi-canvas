@@ -13,6 +13,7 @@ export type HermesOperatorRunViewRow = {
 
 export type HermesOperatorRecommendationViewRow = {
   id: string
+  runId: string
   kind: string
   priority: number
   title: string
@@ -47,6 +48,11 @@ export type HermesOperatorView = {
   topAlert: HermesOperatorAlertViewRow | null
   openRecommendationsCount: number
   openAlertsCount: number
+  lastRunEffects: {
+    followUpScans: number
+    prospectRuns: number
+    devopsRuns: number
+  }
   recommendations: HermesOperatorRecommendationViewRow[]
   alerts: HermesOperatorAlertViewRow[]
 }
@@ -74,6 +80,14 @@ export function buildHermesOperatorView(input: {
         b.createdAt.localeCompare(a.createdAt)
     )
 
+  const lastRunId = input.runs[0]?.id ?? null
+  const lastRunAccepted = lastRunId
+    ? input.recommendations.filter(
+        (item) =>
+          item.runId === lastRunId && (item.status === 'accepted' || item.status === 'executed')
+      )
+    : []
+
   return {
     currentMode: input.settings.operatorMode,
     notifyInStudio: input.settings.notifyInStudio,
@@ -82,6 +96,11 @@ export function buildHermesOperatorView(input: {
     topAlert: openAlerts[0] ?? null,
     openRecommendationsCount: openRecommendations.length,
     openAlertsCount: openAlerts.length,
+    lastRunEffects: {
+      followUpScans: lastRunAccepted.filter((item) => item.kind === 'run_follow_up_scan').length,
+      prospectRuns: lastRunAccepted.filter((item) => item.kind === 'run_prospect').length,
+      devopsRuns: lastRunAccepted.filter((item) => item.kind === 'run_devops').length,
+    },
     recommendations: openRecommendations,
     alerts: openAlerts,
   }

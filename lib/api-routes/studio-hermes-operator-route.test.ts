@@ -36,6 +36,7 @@ function makeSupabase() {
     hermes_operator_recommendations: [
       {
         id: 'rec-1',
+        run_id: 'run-1',
         user_id: 'user-1',
         kind: 'run_follow_up_scan',
         priority: 90,

@@ -1259,6 +1259,44 @@ function HermesOperatorPanel({
           <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
             {view?.lastRun?.summary ?? 'No Hermes operator run recorded yet.'}
           </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                padding: '3px 7px',
+                borderRadius: 999,
+                background: `${cyan}1a`,
+                color: cyan,
+              }}
+            >
+              FU {view?.lastRunEffects.followUpScans ?? 0}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                padding: '3px 7px',
+                borderRadius: 999,
+                background: `${emerald}1a`,
+                color: emerald,
+              }}
+            >
+              PRO {view?.lastRunEffects.prospectRuns ?? 0}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                padding: '3px 7px',
+                borderRadius: 999,
+                background: `${amber}1a`,
+                color: amber,
+              }}
+            >
+              OPS {view?.lastRunEffects.devopsRuns ?? 0}
+            </span>
+          </div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: muted2 }}>
             {view?.lastRun
               ? `${view.lastRun.model} · ${new Date(view.lastRun.createdAt).toLocaleString('fr-FR')}`

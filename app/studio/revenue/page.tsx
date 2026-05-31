@@ -845,6 +845,18 @@ export default function RevenuePage() {
             }}
           >
             <TruthCard
+              label="Last operator effect"
+              title={`FU ${operatorView.lastRunEffects.followUpScans} · PRO ${operatorView.lastRunEffects.prospectRuns} · OPS ${operatorView.lastRunEffects.devopsRuns}`}
+              detail={
+                operatorView.lastRun
+                  ? 'Accepted side effects from the latest Hermes tick.'
+                  : 'No Hermes run has produced operator side effects yet.'
+              }
+              tone={C.accent}
+              href="/studio/automations"
+              ctaLabel="Inspect operator"
+            />
+            <TruthCard
               label="Top recommendation"
               title={operatorView.topRecommendation?.title ?? 'No open recommendation'}
               detail={operatorView.topRecommendation?.detail ?? 'Hermes has not produced an operator recommendation yet.'}
