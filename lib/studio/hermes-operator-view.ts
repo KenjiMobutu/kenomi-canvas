@@ -9,6 +9,15 @@ export type HermesOperatorRunViewRow = {
   executedActionsCount: number
   createdAt: string
   lastError: string | null
+  snapshot: {
+    prospectsTotal: number
+    pendingApprovals: number
+    followUpsDue: number
+    queuedJobs: number
+    failedJobs: number
+    replied: number
+    paid: number
+  } | null
 }
 
 export type HermesOperatorRecommendationViewRow = {
@@ -49,6 +58,14 @@ export type HermesOperatorView = {
   topAlert: HermesOperatorAlertViewRow | null
   openRecommendationsCount: number
   openAlertsCount: number
+  lastRunDelta: {
+    pendingApprovals: number
+    followUpsDue: number
+    queuedJobs: number
+    failedJobs: number
+    replied: number
+    paid: number
+  } | null
   lastRunEffects: {
     followUpScans: number
     prospectRuns: number
@@ -62,6 +79,10 @@ function severityScore(severity: HermesOperatorAlertViewRow['severity']) {
   if (severity === 'critical') return 3
   if (severity === 'warn') return 2
   return 1
+}
+
+function diffMetric(current: number, previous: number): number {
+  return current - previous
 }
 
 export function buildHermesOperatorView(input: {
@@ -82,6 +103,8 @@ export function buildHermesOperatorView(input: {
     )
 
   const lastRunId = input.runs[0]?.id ?? null
+  const currentRun = input.runs[0] ?? null
+  const previousRun = input.runs[1] ?? null
   const lastRunAccepted = lastRunId
     ? input.recommendations.filter(
         (item) =>
@@ -92,12 +115,29 @@ export function buildHermesOperatorView(input: {
   return {
     currentMode: input.settings.operatorMode,
     notifyInStudio: input.settings.notifyInStudio,
-    lastRun: input.runs[0] ?? null,
+    lastRun: currentRun,
     recentRuns: input.runs.slice(0, 5),
     topRecommendation: openRecommendations[0] ?? null,
     topAlert: openAlerts[0] ?? null,
     openRecommendationsCount: openRecommendations.length,
     openAlertsCount: openAlerts.length,
+    lastRunDelta:
+      currentRun?.snapshot && previousRun?.snapshot
+        ? {
+            pendingApprovals: diffMetric(
+              currentRun.snapshot.pendingApprovals,
+              previousRun.snapshot.pendingApprovals
+            ),
+            followUpsDue: diffMetric(
+              currentRun.snapshot.followUpsDue,
+              previousRun.snapshot.followUpsDue
+            ),
+            queuedJobs: diffMetric(currentRun.snapshot.queuedJobs, previousRun.snapshot.queuedJobs),
+            failedJobs: diffMetric(currentRun.snapshot.failedJobs, previousRun.snapshot.failedJobs),
+            replied: diffMetric(currentRun.snapshot.replied, previousRun.snapshot.replied),
+            paid: diffMetric(currentRun.snapshot.paid, previousRun.snapshot.paid),
+          }
+        : null,
     lastRunEffects: {
       followUpScans: lastRunAccepted.filter((item) => item.kind === 'run_follow_up_scan').length,
       prospectRuns: lastRunAccepted.filter((item) => item.kind === 'run_prospect').length,

@@ -95,7 +95,7 @@ async function loadOperatorView(input: {
     input.supabase
       .from('hermes_operator_runs')
       .select(
-        'id, mode, status, model, summary, alerts_count, enqueued_jobs_count, executed_actions_count, created_at, last_error'
+        'id, mode, status, model, summary, alerts_count, enqueued_jobs_count, executed_actions_count, created_at, last_error, input_snapshot'
       )
       .eq('user_id', input.userId)
       .order('created_at', { ascending: false })
@@ -131,6 +131,33 @@ async function loadOperatorView(input: {
       executedActionsCount: Number(row.executed_actions_count ?? 0),
       createdAt: String(row.created_at ?? ''),
       lastError: typeof row.last_error === 'string' ? row.last_error : null,
+      snapshot:
+        row.input_snapshot && typeof row.input_snapshot === 'object' && !Array.isArray(row.input_snapshot)
+          ? {
+              prospectsTotal: Number(
+                (row.input_snapshot as Record<string, any>)?.prospects?.total ?? 0
+              ),
+              pendingApprovals: Number(
+                (row.input_snapshot as Record<string, any>)?.prospects?.pendingApprovals ?? 0
+              ),
+              followUpsDue: Number(
+                (row.input_snapshot as Record<string, any>)?.prospects?.followUpsDue ?? 0
+              ),
+              queuedJobs: Number(
+                (row.input_snapshot as Record<string, any>)?.automation?.queuedJobs ?? 0
+              ),
+              failedJobs: Number(
+                (row.input_snapshot as Record<string, any>)?.automation?.failedJobs ?? 0
+              ),
+              replied: Number(
+                (row.input_snapshot as Record<string, any>)?.revenue?.conversions?.overview?.replied ??
+                  0
+              ),
+              paid: Number(
+                (row.input_snapshot as Record<string, any>)?.revenue?.conversions?.overview?.paid ?? 0
+              ),
+            }
+          : null,
     })
   )
   const recommendations: HermesOperatorRecommendationViewRow[] = (

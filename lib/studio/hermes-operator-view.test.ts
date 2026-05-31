@@ -20,6 +20,15 @@ describe('buildHermesOperatorView', () => {
           executedActionsCount: 0,
           createdAt: '2026-05-28T10:00:00.000Z',
           lastError: null,
+          snapshot: {
+            prospectsTotal: 10,
+            pendingApprovals: 2,
+            followUpsDue: 3,
+            queuedJobs: 4,
+            failedJobs: 1,
+            replied: 5,
+            paid: 1,
+          },
         },
         {
           id: 'run-0',
@@ -32,6 +41,15 @@ describe('buildHermesOperatorView', () => {
           executedActionsCount: 1,
           createdAt: '2026-05-28T09:00:00.000Z',
           lastError: 'network',
+          snapshot: {
+            prospectsTotal: 9,
+            pendingApprovals: 3,
+            followUpsDue: 5,
+            queuedJobs: 2,
+            failedJobs: 0,
+            replied: 3,
+            paid: 0,
+          },
         },
       ],
       recommendations: [
@@ -103,6 +121,14 @@ describe('buildHermesOperatorView', () => {
     expect(view.recentRuns).toHaveLength(2)
     expect(view.topRecommendation?.title).toBe('Run prospect')
     expect(view.openAlertsCount).toBe(1)
+    expect(view.lastRunDelta).toEqual({
+      pendingApprovals: -1,
+      followUpsDue: -2,
+      queuedJobs: 2,
+      failedJobs: 1,
+      replied: 2,
+      paid: 1,
+    })
     expect(view.lastRunEffects).toEqual({
       followUpScans: 1,
       prospectRuns: 1,

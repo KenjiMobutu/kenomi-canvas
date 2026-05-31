@@ -31,6 +31,29 @@ function makeSupabase() {
         executed_actions_count: 0,
         created_at: '2026-05-28T10:00:00.000Z',
         last_error: null,
+        input_snapshot: {
+          prospects: { total: 10, pendingApprovals: 2, followUpsDue: 3 },
+          automation: { queuedJobs: 4, failedJobs: 1 },
+          revenue: { conversions: { overview: { replied: 5, paid: 1 } } },
+        },
+      },
+      {
+        id: 'run-0',
+        user_id: 'user-1',
+        mode: 'observe',
+        status: 'completed',
+        model: 'hermes3:8b',
+        summary: 'Previous tick.',
+        alerts_count: 0,
+        enqueued_jobs_count: 0,
+        executed_actions_count: 0,
+        created_at: '2026-05-28T09:00:00.000Z',
+        last_error: null,
+        input_snapshot: {
+          prospects: { total: 9, pendingApprovals: 3, followUpsDue: 5 },
+          automation: { queuedJobs: 2, failedJobs: 0 },
+          revenue: { conversions: { overview: { replied: 3, paid: 0 } } },
+        },
       },
     ],
     hermes_operator_recommendations: [
@@ -149,6 +172,14 @@ describe('studio hermes operator route', () => {
     expect(body.view.currentMode).toBe('observe')
     expect(body.view.lastRun.summary).toContain('follow-ups')
     expect(body.view.openAlertsCount).toBe(1)
+    expect(body.view.lastRunDelta).toMatchObject({
+      pendingApprovals: -1,
+      followUpsDue: -2,
+      queuedJobs: 2,
+      failedJobs: 1,
+      replied: 2,
+      paid: 1,
+    })
   })
 
   it('updates operator mode and returns refreshed view', async () => {

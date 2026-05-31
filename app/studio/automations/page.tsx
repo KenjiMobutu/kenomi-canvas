@@ -1158,6 +1158,17 @@ function HermesOperatorPanel({
   const activeMode = view?.currentMode ?? 'observe'
   const modeColor =
     activeMode === 'act' ? rose : activeMode === 'recommend' ? amber : emerald
+  const lastRunDelta = view?.lastRunDelta
+
+  function formatDelta(value: number, positiveIsGood = true) {
+    if (value === 0) return { label: '0', color: muted2 }
+    const positive = value > 0
+    const color = positive === positiveIsGood ? emerald : amber
+    return {
+      label: `${positive ? '+' : ''}${value}`,
+      color,
+    }
+  }
 
   return (
     <div
@@ -1359,6 +1370,65 @@ function HermesOperatorPanel({
             {view?.topAlert?.detail ?? 'No business alert currently requires attention.'}
           </div>
         </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          What changed since last run
+        </div>
+        {lastRunDelta ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: 8,
+            }}
+          >
+            {[
+              { label: 'Replies', value: lastRunDelta.replied, positiveIsGood: true },
+              { label: 'Paid', value: lastRunDelta.paid, positiveIsGood: true },
+              { label: 'Follow-ups due', value: lastRunDelta.followUpsDue, positiveIsGood: false },
+              { label: 'Pending approvals', value: lastRunDelta.pendingApprovals, positiveIsGood: false },
+              { label: 'Queued jobs', value: lastRunDelta.queuedJobs, positiveIsGood: false },
+              { label: 'Failed jobs', value: lastRunDelta.failedJobs, positiveIsGood: false },
+            ].map((item) => {
+              const delta = formatDelta(item.value, item.positiveIsGood)
+              return (
+                <div
+                  key={item.label}
+                  style={{
+                    padding: 10,
+                    borderRadius: 10,
+                    background: surface2,
+                    border: `1px solid ${line}`,
+                    display: 'grid',
+                    gap: 4,
+                  }}
+                >
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2 }}>
+                    {item.label}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: delta.color }}>{delta.label}</div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: muted }}>Need at least two Hermes runs to compute a change set.</div>
+        )}
       </div>
 
       <div
