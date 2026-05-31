@@ -64,7 +64,7 @@ export function buildHermesOperatorView(input: {
   alerts: HermesOperatorAlertViewRow[]
 }): HermesOperatorView {
   const openRecommendations = input.recommendations
-    .filter((item) => item.status === 'open')
+    .filter((item) => item.status === 'open' || item.status === 'accepted')
     .sort((a, b) => b.priority - a.priority || b.createdAt.localeCompare(a.createdAt))
   const openAlerts = input.alerts
     .filter((item) => item.status === 'open' || item.status === 'sent')

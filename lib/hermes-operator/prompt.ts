@@ -15,13 +15,17 @@ export function buildHermesOperatorPrompt(input: {
       summary: 'short operator summary',
       recommendations: [
         {
-          kind: 'run_follow_up_scan',
+          kind: 'run_agent',
           priority: 90,
           title: 'short title',
           detail: 'short rationale',
           action_type: 'run_agent',
           risk_level: 'low',
-          payload: {},
+          payload: {
+            agentId: 'prospect',
+            prompt: 'short execution prompt',
+            input: { source: 'reddit', band: 'hot' },
+          },
         },
       ],
       alerts: [

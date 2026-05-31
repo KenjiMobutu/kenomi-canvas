@@ -11,13 +11,16 @@ import {
 } from '@/lib/hermes-operator/engine'
 import {
   persistOperatorRecommendations,
+  type PersistedOperatorRecommendation,
   type HermesRecommendationsSupabase,
 } from '@/lib/hermes-operator/recommendations'
+import { canHermesAutoExecute } from '@/lib/autonomy/policy'
 import {
   normalizeOperatorMode,
   type HermesOperatorContextSnapshot,
   type HermesOperatorMode,
 } from '@/lib/hermes-operator/types'
+import type { AutonomyActionType, AutonomyRiskLevel } from '@/lib/autonomy/types'
 
 interface QueryResult<T> {
   data: T | null
@@ -68,6 +71,31 @@ function readMode(value: unknown): HermesOperatorMode {
   return normalizeOperatorMode(typeof value === 'string' ? value : null)
 }
 
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function isAutonomyActionType(value: string): value is AutonomyActionType {
+  return [
+    'run_agent',
+    'create_landing',
+    'create_checkout',
+    'deploy',
+    'publish_campaign',
+    'scale_budget',
+    'stop_venture',
+  ].includes(value)
+}
+
+function isAutonomyRiskLevel(value: string): value is AutonomyRiskLevel {
+  return ['low', 'medium', 'high', 'critical'].includes(value)
+}
+
 async function insertRun(
   supabase: HermesOperatorRunnerSupabase,
   row: Record<string, unknown>
@@ -75,6 +103,118 @@ async function insertRun(
   const result = await supabase.from('hermes_operator_runs').insert(row)
   const resolved = await result
   if (resolved.error) throw new Error(resolved.error.message)
+}
+
+async function patchRun(
+  supabase: HermesOperatorRunnerSupabase,
+  runId: string,
+  patch: Record<string, unknown>
+): Promise<void> {
+  const result = await supabase.from('hermes_operator_runs').update(patch).eq('id', runId)
+  const resolved = await result
+  if (resolved.error) throw new Error(resolved.error.message)
+}
+
+function buildJobFromRecommendation(input: {
+  recommendation: PersistedOperatorRecommendation
+  userId: string
+  nowIso: string
+}): Record<string, unknown> | null {
+  const payload = input.recommendation.payload
+  const agentId = readString(payload.agentId)
+  if (!agentId) return null
+
+  const prompt =
+    readString(payload.prompt) ??
+    [
+      input.recommendation.title,
+      input.recommendation.detail,
+      'Execute this as a low-risk Hermes operator recommendation.',
+    ].join('\n')
+
+  return {
+    user_id: input.userId,
+    venture_id: readString(payload.ventureId),
+    kind: 'run_agent',
+    status: 'queued',
+    attempt_count: 0,
+    next_run_at: input.nowIso,
+    payload: {
+      agentId,
+      prompt,
+      input: {
+        ...(readRecord(payload.input) ?? {}),
+        trigger: 'hermes_operator',
+        recommendationId: input.recommendation.id,
+        recommendationKind: input.recommendation.kind,
+        source: input.recommendation.source,
+      },
+    },
+    created_at: input.nowIso,
+    updated_at: input.nowIso,
+  }
+}
+
+async function autoEnqueueRecommendations(input: {
+  supabase: HermesOperatorRunnerSupabase
+  userId: string
+  mode: HermesOperatorMode
+  recommendations: PersistedOperatorRecommendation[]
+  nowIso: string
+}): Promise<{ enqueuedJobsCount: number; executedRecommendationIds: string[] }> {
+  if (input.mode === 'observe') {
+    return { enqueuedJobsCount: 0, executedRecommendationIds: [] }
+  }
+
+  let enqueuedJobsCount = 0
+  const executedRecommendationIds: string[] = []
+
+  for (const recommendation of input.recommendations) {
+    if (
+      !recommendation.actionType ||
+      !recommendation.riskLevel ||
+      !isAutonomyActionType(recommendation.actionType) ||
+      !isAutonomyRiskLevel(recommendation.riskLevel)
+    ) {
+      continue
+    }
+
+    if (
+      !canHermesAutoExecute({
+        mode: input.mode,
+        actionType: recommendation.actionType,
+        riskLevel: recommendation.riskLevel,
+      })
+    ) {
+      continue
+    }
+
+    const row = buildJobFromRecommendation({
+      recommendation,
+      userId: input.userId,
+      nowIso: input.nowIso,
+    })
+    if (!row) continue
+
+    const insertResult = await input.supabase.from('autonomy_jobs').insert(row)
+    const resolved = await insertResult
+    if (resolved.error) throw new Error(resolved.error.message)
+
+    const updateResult = await input.supabase
+      .from('hermes_operator_recommendations')
+      .update({
+        status: 'accepted',
+        updated_at: input.nowIso,
+      })
+      .eq('id', recommendation.id)
+    const updated = await updateResult
+    if (updated.error) throw new Error(updated.error.message)
+
+    enqueuedJobsCount += 1
+    executedRecommendationIds.push(recommendation.id)
+  }
+
+  return { enqueuedJobsCount, executedRecommendationIds }
 }
 
 export async function runHermesOperatorTick(input: {
@@ -128,12 +268,25 @@ export async function runHermesOperatorTick(input: {
       created_at: nowIso,
     })
 
-    await persistOperatorRecommendations({
+    const recommendations = await persistOperatorRecommendations({
       supabase: input.supabase,
       userId: input.userId,
       runId,
       recommendations: engineResult.recommendations,
       now,
+    })
+
+    const enqueueResult = await autoEnqueueRecommendations({
+      supabase: input.supabase,
+      userId: input.userId,
+      mode,
+      recommendations,
+      nowIso,
+    })
+
+    await patchRun(input.supabase, runId, {
+      enqueued_jobs_count: enqueueResult.enqueuedJobsCount,
+      executed_actions_count: enqueueResult.executedRecommendationIds.length,
     })
 
     await persistOperatorAlerts({
