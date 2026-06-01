@@ -101,7 +101,8 @@ async function createFollowUpApproval(input: {
     .eq('user_id', input.userId)
     .eq('action_type', 'send_follow_up')
     .eq('status', 'blocked')
-    .maybeSingle()
+    .order('created_at', { ascending: false })
+    .limit(100)
 
   if (existingActionError) throw new Error(existingActionError.message)
   const actions = Array.isArray(existingActions) ? existingActions : existingActions ? [existingActions] : []
