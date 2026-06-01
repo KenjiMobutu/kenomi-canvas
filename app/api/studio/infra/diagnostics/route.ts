@@ -5,7 +5,16 @@ import {
   collectInfraDiagnostics,
   type InfraDiagnosticsSupabase,
 } from '@/lib/infra-diagnostics-runner'
-import { buildDevopsSummaryApiView, type DevopsDiagnosticRunRow } from '@/lib/devops/api-view'
+import {
+  buildDevopsSummaryApiView,
+  reconcileDevopsSummaryApiView,
+  type DevopsDiagnosticRunRow,
+} from '@/lib/devops/api-view'
+import {
+  buildDeploymentParity,
+  buildInfraOpsTimeline,
+  type InfraOpsEventRow,
+} from '@/lib/infra-ops-timeline'
 
 export async function GET() {
   const cookieStore = await cookies()
@@ -27,16 +36,36 @@ export async function GET() {
     .limit(1)
     .maybeSingle()
 
-  const devopsSummary = buildDevopsSummaryApiView({
-    row: (latestRun as DevopsDiagnosticRunRow | null) ?? null,
+  const { data: events } = await supabase
+    .from('agent_events')
+    .select('id,event_type,severity,metadata,created_at')
+    .eq('user_id', user!.id)
+    .order('created_at', { ascending: false })
+    .limit(40)
+
+  const timeline = buildInfraOpsTimeline({
+    events: (events ?? []) as InfraOpsEventRow[],
+    diagnostics,
+  })
+  const parity = buildDeploymentParity({
+    runtime: diagnostics.runtime,
+    expectedCommit: process.env.EXPECTED_SOURCE_COMMIT ?? process.env.GITHUB_SHA ?? null,
+  })
+  const devopsSummary = reconcileDevopsSummaryApiView({
+    diagnostics,
+    timeline,
+    parity,
+    view: buildDevopsSummaryApiView({
+      row: (latestRun as DevopsDiagnosticRunRow | null) ?? null,
+    }),
   })
 
   return NextResponse.json(
     {
       ...diagnostics,
       devopsSummary,
-      recentIncidents: devopsSummary?.incidents.slice(0, 6) ?? [],
-      deploymentParity: devopsSummary?.parity ?? null,
+      recentIncidents: devopsSummary.incidents.slice(0, 6),
+      deploymentParity: devopsSummary.parity ?? null,
     },
     { status: diagnostics.summary.ok ? 200 : 207 }
   )
