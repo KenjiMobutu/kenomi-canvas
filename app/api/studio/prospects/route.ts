@@ -106,6 +106,17 @@ const prospectStageSchema = z.object({
   conversation_notes: z.string().max(2000).nullable().optional(),
 })
 
+function normalizeProspectStagePayload(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input
+  const body = input as Record<string, unknown>
+  return {
+    ...body,
+    conversation_event_type: body.conversation_event_type ?? body.conversationEventType,
+    conversation_event_value: body.conversation_event_value ?? body.conversationEventValue,
+    conversation_notes: body.conversation_notes ?? body.conversationNotes,
+  }
+}
+
 async function single<T>(query: SingleQueryBuilder): Promise<T | null> {
   const { data, error } = await query.single()
   if (error) throw new Error(error.message)
@@ -363,7 +374,9 @@ export async function PATCH(request: Request) {
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
-  const parsed = prospectStageSchema.safeParse(await request.json().catch(() => null))
+  const parsed = prospectStageSchema.safeParse(
+    normalizeProspectStagePayload(await request.json().catch(() => null))
+  )
   if (!parsed.success) {
     return NextResponse.json({ error: 'Payload transition prospect invalide' }, { status: 400 })
   }
