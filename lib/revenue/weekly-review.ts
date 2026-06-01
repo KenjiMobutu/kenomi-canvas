@@ -16,9 +16,13 @@ export type WeeklyRevenueReview = {
   bestSource: WeeklyReviewInsight
   bestSegment: WeeklyReviewInsight
   bestOffer: WeeklyReviewInsight
+  bestOfferByCash: WeeklyReviewInsight
   bestAngle: WeeklyReviewInsight
+  bestAngleByCash: WeeklyReviewInsight
   bestMessageFamily: WeeklyReviewInsight
+  messageFamilyToStop: WeeklyReviewInsight
   topObjection: WeeklyReviewInsight
+  highestValueObjection: WeeklyReviewInsight
   mainLeak: WeeklyReviewInsight & {
     stageKey: 'contact_to_reply' | 'reply_to_qualified' | 'qualified_to_meeting' | 'meeting_to_close'
   }
@@ -90,6 +94,16 @@ export function buildWeeklyRevenueReview(input: {
           detail: 'Assign offers to prospects and record outcomes to compare offers.',
         }
 
+  const bestOfferByCash = input.conversions.bestOfferToCollectCash
+    ? {
+        title: input.conversions.bestOfferToCollectCash.offerName,
+        detail: `${input.conversions.bestOfferToCollectCash.paidCashEur}€ attributed cash · ${input.conversions.bestOfferToCollectCash.paidCount} paid`,
+      }
+    : {
+        title: 'No attributed offer cash yet',
+        detail: 'Collect paid rows on offers to compare real cash by offer.',
+      }
+
   const bestAngle =
     input.conversions.bestAngle
       ? {
@@ -100,6 +114,16 @@ export function buildWeeklyRevenueReview(input: {
           title: 'No angle truth yet',
           detail: 'Tag outreach angles to learn which message converts best.',
         }
+
+  const bestAngleByCash = input.conversions.bestAngle
+    ? {
+        title: `${input.conversions.bestAngle.offerName} · ${input.conversions.bestAngle.angle}`,
+        detail: `${input.conversions.bestAngle.paidCashEur}€ attributed cash · ${input.conversions.bestAngle.paidCount} paid`,
+      }
+    : {
+        title: 'No attributed angle cash yet',
+        detail: 'Tag outreach angles to compare cash collected by angle.',
+      }
 
   const topObjection =
     input.conversions.messageFamilyTopObjection
@@ -117,6 +141,13 @@ export function buildWeeklyRevenueReview(input: {
           detail: 'Classify replies to surface the main buying objection.',
         }
 
+  const highestValueObjection = input.conversions.messageFamilyTopObjection
+    ? {
+        title: formatReason(input.conversions.messageFamilyTopObjection.topObjection ?? undefined),
+        detail: `${input.conversions.messageFamilyTopObjection.messageFamily} blocks ${input.conversions.messageFamilyTopObjection.paidCashEur}€ cash path`,
+      }
+    : topObjection
+
   const bestMessageFamily =
     input.conversions.bestMessageFamily
       ? {
@@ -126,6 +157,23 @@ export function buildWeeklyRevenueReview(input: {
       : {
           title: 'No message truth yet',
           detail: 'Tag message families to compare what actually converts.',
+        }
+
+  const messageFamilyToStop =
+    input.conversions.messageFamilyWinsNoCash ?? input.conversions.messageFamilyRepliesNoCash
+      ? {
+          title:
+            input.conversions.messageFamilyWinsNoCash?.messageFamily ??
+            input.conversions.messageFamilyRepliesNoCash?.messageFamily ??
+            'No family to stop',
+          detail:
+            input.conversions.messageFamilyWinsNoCash
+              ? `${input.conversions.messageFamilyWinsNoCash.wonCount} wins but ${input.conversions.messageFamilyWinsNoCash.paidCount} paid`
+              : `${input.conversions.messageFamilyRepliesNoCash?.replied ?? 0} replies but ${input.conversions.messageFamilyRepliesNoCash?.paidCount ?? 0} paid`,
+        }
+      : {
+          title: 'No family to stop yet',
+          detail: 'Wait for clearer message-family cash underperformance before cutting one.',
         }
 
   const stageLeakCandidates = [
@@ -215,9 +263,13 @@ export function buildWeeklyRevenueReview(input: {
     bestSource,
     bestSegment,
     bestOffer,
+    bestOfferByCash,
     bestAngle,
+    bestAngleByCash,
     bestMessageFamily,
+    messageFamilyToStop,
     topObjection,
+    highestValueObjection,
     mainLeak,
     nextExperiment,
   }

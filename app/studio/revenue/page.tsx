@@ -347,9 +347,13 @@ type WeeklyRevenueReviewSnapshot = {
   bestSource: WeeklyRevenueReviewInsight
   bestSegment: WeeklyRevenueReviewInsight
   bestOffer: WeeklyRevenueReviewInsight
+  bestOfferByCash: WeeklyRevenueReviewInsight
   bestAngle: WeeklyRevenueReviewInsight
+  bestAngleByCash: WeeklyRevenueReviewInsight
   bestMessageFamily: WeeklyRevenueReviewInsight
+  messageFamilyToStop: WeeklyRevenueReviewInsight
   topObjection: WeeklyRevenueReviewInsight
+  highestValueObjection: WeeklyRevenueReviewInsight
   mainLeak: WeeklyRevenueReviewInsight & {
     stageKey: string
   }
@@ -360,13 +364,24 @@ type WeeklyRevenueReviewSnapshot = {
   }
 }
 
+type WeeklyRevenueOperatorDecision = {
+  doubleDown: string
+  stop: string
+  nextExperiment: string
+  note: string
+}
+
 type WeeklyRevenueReviewRecord = {
   id: string
   weekStart: string
   weekEnd: string
   status: string
   createdAt: string
-  summary: WeeklyRevenueReviewSnapshot
+  summary: {
+    recommendation: WeeklyRevenueReviewSnapshot
+    confirmedReview: WeeklyRevenueReviewSnapshot | null
+    operatorDecision: WeeklyRevenueOperatorDecision | null
+  }
 }
 
 const C = {
@@ -384,6 +399,17 @@ const C = {
   bad: '#ff5f6d',
   blue: '#6aa7ff',
   purple: '#a785ff',
+}
+
+const inputStyle: CSSProperties = {
+  minHeight: 38,
+  borderRadius: 8,
+  border: `1px solid ${C.line2}`,
+  background: C.panel2,
+  color: C.text,
+  padding: '0 10px',
+  fontSize: 13,
+  outline: 'none',
 }
 
 function euro(value: number) {
@@ -583,6 +609,12 @@ export default function RevenuePage() {
   const [autopilotBusy, setAutopilotBusy] = useState(false)
   const [proofBusy, setProofBusy] = useState<string | null>(null)
   const [saveReviewBusy, setSaveReviewBusy] = useState(false)
+  const [reviewDecision, setReviewDecision] = useState<WeeklyRevenueOperatorDecision>({
+    doubleDown: '',
+    stop: '',
+    nextExperiment: '',
+    note: '',
+  })
   const [error, setError] = useState<string | null>(null)
   const [cycleAudit, setCycleAudit] = useState<RevenueAuditEvent[]>([])
   const [proofAudit, setProofAudit] = useState<RevenueProofAudit | null>(null)
@@ -646,6 +678,21 @@ export default function RevenuePage() {
     load()
     loadAudit()
   }, [load, loadAudit])
+
+  useEffect(() => {
+    const savedDecision = lastReview?.summary.operatorDecision
+    if (savedDecision) {
+      setReviewDecision(savedDecision)
+      return
+    }
+    if (!weeklyReview) return
+    setReviewDecision({
+      doubleDown: weeklyReview.bestOfferByCash.title,
+      stop: weeklyReview.messageFamilyToStop.title,
+      nextExperiment: weeklyReview.nextExperiment.title,
+      note: '',
+    })
+  }, [lastReview, weeklyReview])
 
   const loops = useMemo(
     () => sortRevenueLoopsByFocus(snapshot?.loops ?? [], focus),
@@ -766,11 +813,15 @@ export default function RevenuePage() {
   async function saveWeeklyReview() {
     setSaveReviewBusy(true)
     try {
-      const res = await fetch('/api/studio/revenue/insights', { method: 'POST' })
+      const res = await fetch('/api/studio/revenue/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operatorDecision: reviewDecision }),
+      })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error ?? 'Weekly review impossible')
       setLastReview((json?.review as WeeklyRevenueReviewRecord) ?? null)
-      toast.success('Weekly commercial review saved')
+      toast.success('Weekly commercial review confirmed')
       await load()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Weekly review impossible')
@@ -1481,7 +1532,9 @@ export default function RevenuePage() {
               </div>
               <div style={{ color: C.muted, fontSize: 13 }}>
                 {weeklyReview.window.label}
-                {lastReview ? ` · last saved ${new Date(lastReview.createdAt).toLocaleString('fr-FR')}` : ' · not saved yet'}
+                {lastReview
+                  ? ` · last confirmed ${new Date(lastReview.createdAt).toLocaleString('fr-FR')}`
+                  : ' · not confirmed yet'}
               </div>
             </div>
             <button
@@ -1491,7 +1544,7 @@ export default function RevenuePage() {
               style={buttonStyle('secondary')}
             >
               <Check size={15} />
-              Save review
+              Confirm review
             </button>
           </div>
 
@@ -1532,10 +1585,26 @@ export default function RevenuePage() {
               ctaLabel="Open revenue"
             />
             <TruthCard
+              label="Best offer by cash"
+              title={weeklyReview.bestOfferByCash.title}
+              detail={weeklyReview.bestOfferByCash.detail}
+              tone={C.good}
+              href={buildWeeklyReviewHref('best_offer')}
+              ctaLabel="Open revenue"
+            />
+            <TruthCard
               label="Best angle"
               title={weeklyReview.bestAngle.title}
               detail={weeklyReview.bestAngle.detail}
               tone={C.good}
+              href={buildWeeklyReviewHref('best_angle')}
+              ctaLabel="Open revenue"
+            />
+            <TruthCard
+              label="Best angle by cash"
+              title={weeklyReview.bestAngleByCash.title}
+              detail={weeklyReview.bestAngleByCash.detail}
+              tone={C.accent}
               href={buildWeeklyReviewHref('best_angle')}
               ctaLabel="Open revenue"
             />
@@ -1546,9 +1615,23 @@ export default function RevenuePage() {
               tone={C.purple}
             />
             <TruthCard
+              label="Message family to stop"
+              title={weeklyReview.messageFamilyToStop.title}
+              detail={weeklyReview.messageFamilyToStop.detail}
+              tone={C.bad}
+            />
+            <TruthCard
               label="Top objection"
               title={weeklyReview.topObjection.title}
               detail={weeklyReview.topObjection.detail}
+              tone={C.warn}
+              href={buildWeeklyReviewHref('top_objection')}
+              ctaLabel="Inspect replies"
+            />
+            <TruthCard
+              label="Highest-value objection"
+              title={weeklyReview.highestValueObjection.title}
+              detail={weeklyReview.highestValueObjection.detail}
               tone={C.warn}
               href={buildWeeklyReviewHref('top_objection')}
               ctaLabel="Inspect replies"
@@ -1563,6 +1646,111 @@ export default function RevenuePage() {
               })}
               ctaLabel="Open leak"
             />
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                background: C.panel,
+                border: `1px solid ${C.line}`,
+                borderRadius: 8,
+                padding: 16,
+                display: 'grid',
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  color: C.accent,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Hermes recommendation
+              </div>
+              <div style={{ color: C.text, fontSize: 14, fontWeight: 700 }}>
+                Double down: {weeklyReview.bestOfferByCash.title}
+              </div>
+              <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>
+                Stop: {weeklyReview.messageFamilyToStop.title}
+              </div>
+              <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>
+                Next experiment: {weeklyReview.nextExperiment.title}
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: C.panel,
+                border: `1px solid ${C.line}`,
+                borderRadius: 8,
+                padding: 16,
+                display: 'grid',
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  color: C.good,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Operator-confirmed review
+              </div>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ color: C.muted, fontSize: 12 }}>Double down</span>
+                <input
+                  value={reviewDecision.doubleDown}
+                  onChange={(event) =>
+                    setReviewDecision((current) => ({ ...current, doubleDown: event.target.value }))
+                  }
+                  style={inputStyle}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ color: C.muted, fontSize: 12 }}>Stop</span>
+                <input
+                  value={reviewDecision.stop}
+                  onChange={(event) =>
+                    setReviewDecision((current) => ({ ...current, stop: event.target.value }))
+                  }
+                  style={inputStyle}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ color: C.muted, fontSize: 12 }}>Next experiment</span>
+                <input
+                  value={reviewDecision.nextExperiment}
+                  onChange={(event) =>
+                    setReviewDecision((current) => ({
+                      ...current,
+                      nextExperiment: event.target.value,
+                    }))
+                  }
+                  style={inputStyle}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ color: C.muted, fontSize: 12 }}>Operator note</span>
+                <textarea
+                  value={reviewDecision.note}
+                  onChange={(event) =>
+                    setReviewDecision((current) => ({ ...current, note: event.target.value }))
+                  }
+                  rows={3}
+                  style={{ ...inputStyle, resize: 'vertical', paddingTop: 10, paddingBottom: 10 }}
+                />
+              </label>
+            </div>
           </div>
 
           <div

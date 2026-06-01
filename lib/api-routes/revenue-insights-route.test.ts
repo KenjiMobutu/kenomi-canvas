@@ -113,14 +113,28 @@ describe('revenue insights route', () => {
     expect(body.ok).toBe(true)
     expect(body.insights.bestOffer.title).toBe('Outbound Sprint')
     expect(body.lastReview?.id).toBe('review-1')
+    expect(body.lastReview?.summary.recommendation.bestSource.title).toBe('linkedin')
   })
 
   it('persists the current weekly review snapshot', async () => {
-    const response = await POST(new Request('http://localhost/api/studio/revenue/insights', { method: 'POST' }) as never)
+    const response = await POST(
+      new Request('http://localhost/api/studio/revenue/insights', {
+        method: 'POST',
+        body: JSON.stringify({
+          operatorDecision: {
+            doubleDown: 'LinkedIn warm segment',
+            stop: 'Speed family on Reddit',
+            nextExperiment: 'Test a tighter close CTA',
+            note: 'Focus only on paid cash next week',
+          },
+        }),
+      }) as never
+    )
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.review.status).toBe('saved')
-    expect(body.review.summary.bestOffer.title).toBe('Outbound Sprint')
+    expect(body.review.summary.recommendation.bestOffer.title).toBe('Outbound Sprint')
+    expect(body.review.summary.operatorDecision.doubleDown).toBe('LinkedIn warm segment')
   })
 })

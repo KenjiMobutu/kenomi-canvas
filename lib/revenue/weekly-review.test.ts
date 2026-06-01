@@ -368,15 +368,23 @@ describe('buildWeeklyRevenueReview', () => {
     expect(review.bestOffer).toMatchObject({
       title: 'Outbound Sprint',
     })
+    expect(review.bestOfferByCash).toMatchObject({
+      title: 'Outbound Sprint',
+    })
     expect(review.bestAngle).toMatchObject({
       title: 'Outbound Sprint · speed',
     })
+    expect(review.bestAngleByCash.detail).toContain('1800')
     expect(review.bestMessageFamily).toMatchObject({
       title: 'speed',
+    })
+    expect(review.messageFamilyToStop).toMatchObject({
+      title: 'No family to stop yet',
     })
     expect(review.topObjection).toMatchObject({
       title: 'budget block',
     })
+    expect(review.highestValueObjection.detail).toContain('cash path')
     expect(review.mainLeak).toMatchObject({
       stageKey: 'contact_to_reply',
     })

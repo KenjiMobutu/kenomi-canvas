@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { apiError } from '@/lib/api-response'
 import { buildConversionTruthSnapshot } from '@/lib/revenue/conversion-truth'
-import { buildWeeklyRevenueReview } from '@/lib/revenue/weekly-review'
+import { buildWeeklyRevenueReview, type WeeklyRevenueReview } from '@/lib/revenue/weekly-review'
 
 type OfferRow = {
   id: string
@@ -44,6 +44,19 @@ type PaymentAttributionRow = {
   payment_status?: string | null
   attributed_at?: string | null
   created_at?: string | null
+}
+
+type OperatorDecision = {
+  doubleDown: string
+  stop: string
+  nextExperiment: string
+  note: string
+}
+
+type SavedWeeklyReviewSummary = {
+  recommendation: WeeklyRevenueReview
+  confirmedReview: WeeklyRevenueReview | null
+  operatorDecision: OperatorDecision | null
 }
 
 async function readTable<T>(
@@ -108,6 +121,35 @@ async function buildGeneratedReview(supabase: any, userId: string) {
   })
 }
 
+function normalizeSavedWeeklyReviewSummary(
+  input: unknown,
+  fallback: WeeklyRevenueReview
+): SavedWeeklyReviewSummary {
+  const raw = input as
+    | {
+        recommendation?: WeeklyRevenueReview
+        confirmedReview?: WeeklyRevenueReview | null
+        operatorDecision?: OperatorDecision | null
+      }
+    | WeeklyRevenueReview
+    | null
+    | undefined
+
+  if (raw && typeof raw === 'object' && 'recommendation' in raw) {
+    return {
+      recommendation: raw.recommendation ?? fallback,
+      confirmedReview: raw.confirmedReview ?? null,
+      operatorDecision: raw.operatorDecision ?? null,
+    }
+  }
+
+  return {
+    recommendation: (raw as WeeklyRevenueReview | null) ?? fallback,
+    confirmedReview: null,
+    operatorDecision: null,
+  }
+}
+
 export async function GET() {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
@@ -135,7 +177,7 @@ export async function GET() {
           weekEnd: lastReviewResult.data.week_end,
           status: lastReviewResult.data.status,
           createdAt: lastReviewResult.data.created_at,
-          summary: lastReviewResult.data.summary_json,
+          summary: normalizeSavedWeeklyReviewSummary(lastReviewResult.data.summary_json, insights),
         }
       : null
 
@@ -152,7 +194,7 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const cookieStore = await cookies()
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
@@ -160,6 +202,25 @@ export async function POST() {
   try {
     const userId = user!.id
     const summary = await buildGeneratedReview(supabase, userId)
+    const body = await request.json().catch(() => ({}))
+    const operatorDecision: OperatorDecision | null =
+      body &&
+      typeof body === 'object' &&
+      body.operatorDecision &&
+      typeof body.operatorDecision === 'object'
+        ? {
+            doubleDown: String((body.operatorDecision as Record<string, unknown>).doubleDown ?? '').trim(),
+            stop: String((body.operatorDecision as Record<string, unknown>).stop ?? '').trim(),
+            nextExperiment: String((body.operatorDecision as Record<string, unknown>).nextExperiment ?? '').trim(),
+            note: String((body.operatorDecision as Record<string, unknown>).note ?? '').trim(),
+          }
+        : null
+
+    const reviewSummary: SavedWeeklyReviewSummary = {
+      recommendation: summary,
+      confirmedReview: summary,
+      operatorDecision,
+    }
 
     const { data, error } = await supabase
       .from('weekly_revenue_reviews')
@@ -169,7 +230,7 @@ export async function POST() {
           week_start: summary.window.weekStart,
           week_end: summary.window.weekEnd,
           status: 'saved',
-          summary_json: summary,
+          summary_json: reviewSummary,
         },
         { onConflict: 'user_id,week_start,week_end' }
       )
@@ -186,7 +247,7 @@ export async function POST() {
         weekEnd: data.week_end,
         status: data.status,
         createdAt: data.created_at,
-        summary: data.summary_json,
+        summary: normalizeSavedWeeklyReviewSummary(data.summary_json, summary),
       },
     })
   } catch (error) {
