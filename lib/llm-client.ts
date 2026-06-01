@@ -290,6 +290,41 @@ export async function llmChat(
       model_family: modelFamily,
     })
 
+    if (useHermesAgent) {
+      try {
+        const ollamaResult = await callOllama(messages, {
+          ...config,
+          model: OLLAMA_DEFAULT_MODEL,
+        })
+        return {
+          content: ollamaResult.content,
+          provider: 'ollama',
+          model: OLLAMA_DEFAULT_MODEL,
+          fallback_triggered: true,
+          usage: ollamaResult.usage,
+        }
+      } catch (ollamaError) {
+        const ollamaReason = ollamaError instanceof Error ? ollamaError.message : String(ollamaError)
+
+        try {
+          const result = await callClaude(messages, config)
+          return {
+            content: result.content,
+            provider: 'claude',
+            model: CLAUDE_FALLBACK_MODEL,
+            fallback_triggered: true,
+            usage: result.usage,
+          }
+        } catch (claudeError) {
+          const claudeReason =
+            claudeError instanceof Error ? claudeError.message : String(claudeError)
+          throw new Error(
+            `LLM indisponible — Hermes: ${reason} | Ollama: ${ollamaReason} | Claude: ${claudeReason}`
+          )
+        }
+      }
+    }
+
     try {
       const result = await callClaude(messages, config)
       return {

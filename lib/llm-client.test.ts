@@ -148,17 +148,19 @@ describe('llmChat', () => {
     )
   })
 
-  it('falls back to Claude if Hermes Agent is unavailable', async () => {
+  it('falls back to Claude if Hermes Agent and local Ollama are unavailable', async () => {
     vi.stubEnv('HERMES_AGENT_URL', 'https://hermes-api.kenomi.eu')
     const { llmChat } = await loadLlmClient()
 
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 502,
-        text: async () => 'bad gateway',
-      })
+      vi.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 502,
+          text: async () => 'bad gateway',
+        })
+        .mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
     )
     anthropicCreateMock.mockResolvedValue({
       content: [{ type: 'text', text: 'Fallback Claude.' }],
@@ -177,5 +179,72 @@ describe('llmChat', () => {
       fallback_triggered: true,
       usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 },
     })
+  })
+
+  it('falls back from Hermes Agent to local Ollama before Claude', async () => {
+    vi.stubEnv('HERMES_AGENT_URL', 'https://hermes-api.kenomi.eu')
+    vi.stubEnv('OLLAMA_BASE_URL', 'http://192.168.0.14:11434')
+    const { llmChat } = await loadLlmClient()
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        text: async () => 'bad gateway',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: { content: 'Fallback Ollama.' },
+          prompt_eval_count: 9,
+          eval_count: 5,
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await llmChat([{ role: 'user', content: 'Continue.' }], {
+      model: 'hermes3:8b',
+      system: 'Tu es Hermes.',
+    })
+
+    expect(result).toMatchObject({
+      content: 'Fallback Ollama.',
+      provider: 'ollama',
+      model: 'qwen3:8b',
+      fallback_triggered: true,
+      usage: { prompt_tokens: 9, completion_tokens: 5, total_tokens: 14 },
+    })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://192.168.0.14:11434/api/chat',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('surfaces all three providers when Hermes, Ollama and Claude are unavailable', async () => {
+    vi.stubEnv('HERMES_AGENT_URL', 'https://hermes-api.kenomi.eu')
+    const { llmChat } = await loadLlmClient()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 504,
+          text: async () => 'timeout',
+        })
+        .mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
+    )
+    anthropicCreateMock.mockRejectedValueOnce(new Error('missing API key'))
+
+    await expect(
+      llmChat([{ role: 'user', content: 'Continue.' }], {
+        model: 'hermes3:8b',
+      })
+    ).rejects.toThrow(
+      'LLM indisponible — Hermes: Hermes Agent HTTP 504: timeout | Ollama: connect ECONNREFUSED | Claude: missing API key'
+    )
   })
 })
