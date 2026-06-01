@@ -15,6 +15,9 @@ describe('verifyHermesOperatorSmoke', () => {
       businessAlertCount: 0,
       briefCount: 0,
       blockedByPolicyCount: Number.NaN,
+      acceptedFollowUpScanCount: Number.NaN,
+      acceptedProspectCount: Number.NaN,
+      acceptedDevopsCount: Number.NaN,
     })
 
     expect(result.ok).toBe(false)
@@ -24,6 +27,9 @@ describe('verifyHermesOperatorSmoke', () => {
     expect(result.failures).toContain('operator_business_alert_missing')
     expect(result.failures).toContain('operator_brief_missing')
     expect(result.failures).toContain('operator_policy_accounting_missing')
+    expect(result.failures).toContain('operator_follow_up_acceptance_missing')
+    expect(result.failures).toContain('operator_prospect_acceptance_missing')
+    expect(result.failures).toContain('operator_devops_acceptance_missing')
   })
 
   it('passes when the Hermes operator loop has persisted data and protected routes', () => {
@@ -39,6 +45,9 @@ describe('verifyHermesOperatorSmoke', () => {
       businessAlertCount: 1,
       briefCount: 1,
       blockedByPolicyCount: 0,
+      acceptedFollowUpScanCount: 0,
+      acceptedProspectCount: 1,
+      acceptedDevopsCount: 0,
     })
 
     expect(result).toEqual({ ok: true, failures: [] })

@@ -86,9 +86,9 @@ async function queryHermesCounts() {
       .limit(1),
     supabase
       .from('hermes_operator_recommendations')
-      .select('id')
+      .select('id, status, kind, action_type, payload')
       .in('status', ['open', 'executed', 'accepted'])
-      .limit(1),
+      .limit(50),
     supabase.from('business_alerts').select('id').eq('channel', 'studio').limit(1),
     supabase
       .from('business_alerts')
@@ -112,6 +112,17 @@ async function queryHermesCounts() {
     businessAlertCount: (businessAlerts.data ?? []).length,
     briefCount: (briefs.data ?? []).length,
     blockedByPolicyCount: Number((runs.data ?? [])[0]?.blocked_by_policy_count ?? 0),
+    acceptedFollowUpScanCount: (recommendations.data ?? []).filter(
+      (row) => row.status === 'accepted' && row.kind === 'run_follow_up_scan'
+    ).length,
+    acceptedProspectCount: (recommendations.data ?? []).filter((row) => {
+      const agentId = typeof row.payload === 'object' && row.payload ? row.payload.agentId : null
+      return row.status === 'accepted' && row.action_type === 'run_agent' && agentId === 'prospect'
+    }).length,
+    acceptedDevopsCount: (recommendations.data ?? []).filter((row) => {
+      const agentId = typeof row.payload === 'object' && row.payload ? row.payload.agentId : null
+      return row.status === 'accepted' && row.action_type === 'run_agent' && agentId === 'devops'
+    }).length,
   }
 }
 

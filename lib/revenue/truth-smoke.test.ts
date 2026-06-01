@@ -11,6 +11,9 @@ describe('evalRevenueTruthGate', () => {
       offerTaggedProspects: 2,
       sourceTaggedProspects: 2,
       bandTaggedProspects: 2,
+      attributedPaidRows: 1,
+      attributedCashCents: 180000,
+      weeklyReviewsWithPaidTruth: 1,
       weeklyReviews: 1,
     })
 
@@ -26,6 +29,9 @@ describe('evalRevenueTruthGate', () => {
       offerTaggedProspects: 0,
       sourceTaggedProspects: 0,
       bandTaggedProspects: 0,
+      attributedPaidRows: 0,
+      attributedCashCents: 0,
+      weeklyReviewsWithPaidTruth: 0,
       weeklyReviews: 0,
     })
 
@@ -38,6 +44,9 @@ describe('evalRevenueTruthGate', () => {
       'offer_tagged_prospects_missing',
       'source_truth_missing',
       'segment_truth_missing',
+      'paid_truth_missing',
+      'attributed_cash_truth_missing',
+      'weekly_review_paid_truth_missing',
       'weekly_reviews_missing',
     ])
   })
