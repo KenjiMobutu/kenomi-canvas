@@ -884,6 +884,20 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           ? input.structuredInput.contactEmail.trim()
           : null
       const inputSource = normalizeProspectSource(input.structuredInput?.source, prospect.source)
+      const inputFocus =
+        typeof input.structuredInput?.focus === 'string' && input.structuredInput.focus.trim().length > 0
+          ? input.structuredInput.focus.trim()
+          : 'prospect'
+      const inputOfferVariant =
+        typeof input.structuredInput?.offerVariant === 'string' &&
+        input.structuredInput.offerVariant.trim().length > 0
+          ? input.structuredInput.offerVariant.trim()
+          : 'prospect_run'
+      const inputOutreachAngle =
+        typeof input.structuredInput?.outreachAngle === 'string' &&
+        input.structuredInput.outreachAngle.trim().length > 0
+          ? input.structuredInput.outreachAngle.trim()
+          : inputFocus
       const generatedDraft = buildProspectOutreach({
         companyName: inputCompanyName,
         contactName: inputContactName,
@@ -891,7 +905,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         score: prospect.score,
         band: prospect.band,
         painPoints: prospect.pain_points,
-        focus: 'prospect',
+        focus: inputFocus === 'crm' || inputFocus === 'reply' ? inputFocus : 'prospect',
       })
       const prospectInsert = await single<{ id?: string }>(
         supabase
@@ -917,6 +931,9 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
             crm_record_id: null,
             last_contacted_at: null,
             next_followup_at: prospectFollowUpAt(now(), prospect.band),
+            offer_id: null,
+            offer_variant: inputOfferVariant,
+            outreach_angle: inputOutreachAngle,
             metadata: {
               summary: prospect.summary,
               pain_points: prospect.pain_points,
