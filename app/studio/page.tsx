@@ -15,6 +15,7 @@ import {
 } from '@/lib/studio/prospect-filters'
 import { getStudioCommandPaletteItems, STUDIO_PRIMARY_NAV } from '@/lib/studio/studio-nav'
 import { buildRevenueHref } from '@/lib/studio/revenue-links'
+import type { HermesOperatorBriefRecord } from '@/lib/hermes-operator/brief'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Venture {
@@ -198,6 +199,10 @@ type ProspectCashPayload = {
     followUpDue: number
     won: number
   }
+}
+
+type HermesBriefPayload = HermesOperatorBriefRecord & {
+  id?: string
 }
 
 /* ─── Static design data ─────────────────────────────────────── */
@@ -2109,6 +2114,139 @@ function formatSignedEuro(value: number) {
   return formatEuro(0)
 }
 
+function DailyHermesBriefPanel({ brief }: { brief: HermesBriefPayload | null }) {
+  return (
+    <section
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.18em',
+              color: muted,
+              textTransform: 'uppercase',
+            }}
+          >
+            Daily brief
+          </div>
+          <h3
+            style={{
+              margin: '6px 0 0',
+              fontFamily: 'var(--font-display)',
+              fontSize: 18,
+              fontWeight: 800,
+              letterSpacing: '-.02em',
+              color: text,
+            }}
+          >
+            Ce que Hermes voit ce matin
+          </h3>
+        </div>
+        <a
+          href="/studio/automations"
+          style={{
+            color: accent,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Hermes operator
+        </a>
+      </div>
+
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 10,
+          border: `1px solid ${line}`,
+          background: surface2,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: brief ? emerald : muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            fontWeight: 800,
+          }}
+        >
+          {brief ? `Cash 7j ${brief.cashDelta7d >= 0 ? '+' : ''}${formatEuro(Math.abs(brief.cashDelta7d))}` : 'No brief yet'}
+        </div>
+        <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: text }}>
+          {brief?.summary ?? 'Run Hermes to persist a business brief.'}
+        </div>
+        <div style={{ marginTop: 4, fontSize: 12, color: muted, lineHeight: 1.5 }}>
+          {brief
+            ? `${brief.topOpportunity} · blocker: ${brief.topBlocker}`
+            : 'The brief should tell you what to repeat, what leaks, and what to do next.'}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+        {[
+          { label: 'Best offer', value: brief?.bestOffer ?? '—', href: '/studio/revenue' },
+          { label: 'Best segment', value: brief?.bestSegment ?? '—', href: '/studio/prospects' },
+          { label: 'Next action', value: brief?.nextBestAction ?? '—', href: '/studio/automations' },
+        ].map((card) => (
+          <a
+            key={card.label}
+            href={card.href}
+            style={{
+              textDecoration: 'none',
+              padding: '12px 12px 10px',
+              borderRadius: 10,
+              border: `1px solid ${line}`,
+              background: surface2,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                color: muted,
+                textTransform: 'uppercase',
+                letterSpacing: '.12em',
+              }}
+            >
+              {card.label}
+            </span>
+            <strong
+              style={{
+                color: text,
+                fontSize: 13,
+                lineHeight: 1.35,
+                fontWeight: 700,
+              }}
+            >
+              {card.value}
+            </strong>
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function CashOutcomePanel({
   outcomes,
   isMobile,
@@ -3833,6 +3971,7 @@ export default function CockpitPage() {
   const [cashOutcomes, setCashOutcomes] = useState<CashOutcomeSnapshot | null>(null)
   const [revenueConversions, setRevenueConversions] = useState<RevenueConversionsSnapshot | null>(null)
   const [prospectCash, setProspectCash] = useState<ProspectCashPayload | null>(null)
+  const [hermesBrief, setHermesBrief] = useState<HermesBriefPayload | null>(null)
   const [cashActionState, setCashActionState] = useState<
     Record<string, 'idle' | 'running' | 'done' | 'error'>
   >({})
@@ -3955,10 +4094,30 @@ export default function CockpitPage() {
     }
   }, [])
 
+  const loadHermesBrief = useCallback(() => {
+    let cancelled = false
+    fetch('/api/studio/hermes/brief', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.ok) setHermesBrief((data.brief as HermesBriefPayload) ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setHermesBrief(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
     if (!user) return
     return loadProspectCash()
   }, [user, loadProspectCash])
+
+  useEffect(() => {
+    if (!user) return
+    return loadHermesBrief()
+  }, [user, loadHermesBrief])
 
   const runCashAction = useCallback(
     async (action: CashAction) => {
@@ -4080,6 +4239,7 @@ export default function CockpitPage() {
         >
           {isMobile && <RevenueFirstStrip snapshot={revenueSnapshot} />}
           <CashFocusPanel snapshot={revenueSnapshot} />
+          <DailyHermesBriefPanel brief={hermesBrief} />
           <CashOutcomePanel outcomes={cashOutcomes} isMobile={isMobile} />
           <CashActionQueue
             actions={cashActions}

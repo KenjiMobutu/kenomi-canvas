@@ -20,6 +20,7 @@ import {
   type HermesOperatorContextSnapshot,
   type HermesOperatorMode,
 } from '@/lib/hermes-operator/types'
+import { buildHermesOperatorBrief, type HermesOperatorRunDelta } from '@/lib/hermes-operator/brief'
 import type { AutonomyActionType, AutonomyRiskLevel } from '@/lib/autonomy/types'
 
 interface QueryResult<T> {
@@ -96,6 +97,32 @@ function isAutonomyRiskLevel(value: string): value is AutonomyRiskLevel {
   return ['low', 'medium', 'high', 'critical'].includes(value)
 }
 
+function buildRunDelta(input: {
+  context: HermesOperatorContextSnapshot
+  previousRun: Record<string, unknown> | null
+}): HermesOperatorRunDelta | null {
+  const previousSnapshot =
+    input.previousRun?.input_snapshot &&
+    typeof input.previousRun.input_snapshot === 'object' &&
+    !Array.isArray(input.previousRun.input_snapshot)
+      ? (input.previousRun.input_snapshot as Record<string, any>)
+      : null
+  if (!previousSnapshot) return null
+
+  const currentProspects = input.context.prospects
+  const currentAutomation = input.context.automation
+  const currentConversions = input.context.revenue.conversions.overview
+
+  return {
+    replied: Number(currentConversions.replied ?? 0) - Number(previousSnapshot?.revenue?.conversions?.overview?.replied ?? 0),
+    paid: Number(currentConversions.paidCount ?? 0) - Number(previousSnapshot?.revenue?.conversions?.overview?.paidCount ?? previousSnapshot?.revenue?.conversions?.overview?.paid ?? 0),
+    followUpsDue: Number(currentProspects.followUpsDue ?? 0) - Number(previousSnapshot?.prospects?.followUpsDue ?? 0),
+    pendingApprovals: Number(currentProspects.pendingApprovals ?? 0) - Number(previousSnapshot?.prospects?.pendingApprovals ?? 0),
+    queuedJobs: Number(currentAutomation.queuedJobs ?? 0) - Number(previousSnapshot?.automation?.queuedJobs ?? 0),
+    failedJobs: Number(currentAutomation.failedJobs ?? 0) - Number(previousSnapshot?.automation?.failedJobs ?? 0),
+  }
+}
+
 const SAFE_OPERATOR_AGENT_IDS = new Set(['prospect', 'devops'])
 
 async function insertRun(
@@ -113,6 +140,30 @@ async function patchRun(
   patch: Record<string, unknown>
 ): Promise<void> {
   const result = await supabase.from('hermes_operator_runs').update(patch).eq('id', runId)
+  const resolved = await result
+  if (resolved.error) throw new Error(resolved.error.message)
+}
+
+async function loadPreviousRun(
+  supabase: HermesOperatorRunnerSupabase,
+  userId: string
+): Promise<Record<string, unknown> | null> {
+  const result = await supabase
+    .from('hermes_operator_runs')
+    .select('id, input_snapshot, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (result.error) throw new Error(result.error.message)
+  return (result.data as Record<string, unknown> | null) ?? null
+}
+
+async function insertBrief(
+  supabase: HermesOperatorRunnerSupabase,
+  row: Record<string, unknown>
+): Promise<void> {
+  const result = await supabase.from('hermes_operator_briefs').insert(row)
   const resolved = await result
   if (resolved.error) throw new Error(resolved.error.message)
 }
@@ -264,6 +315,7 @@ export async function runHermesOperatorTick(input: {
   let contextSnapshot: HermesOperatorContextSnapshot | null = null
 
   try {
+    const previousRun = await loadPreviousRun(input.supabase, input.userId)
     contextSnapshot = await buildContext({
       supabase: input.supabase,
       userId: input.userId,
@@ -331,6 +383,28 @@ export async function runHermesOperatorTick(input: {
       userId: input.userId,
       alerts: engineResult.alerts,
       now,
+    })
+
+    const brief = buildHermesOperatorBrief({
+      userId: input.userId,
+      runId,
+      context: contextSnapshot,
+      runDelta: buildRunDelta({ context: contextSnapshot, previousRun }),
+      now,
+    })
+    await insertBrief(input.supabase, {
+      user_id: brief.userId,
+      run_id: brief.runId,
+      summary: brief.summary,
+      cash_delta_7d: brief.cashDelta7d,
+      top_blocker: brief.topBlocker,
+      top_opportunity: brief.topOpportunity,
+      best_offer: brief.bestOffer,
+      best_segment: brief.bestSegment,
+      best_source: brief.bestSource,
+      main_leak: brief.mainLeak,
+      next_best_action: brief.nextBestAction,
+      created_at: brief.createdAt,
     })
 
     return {

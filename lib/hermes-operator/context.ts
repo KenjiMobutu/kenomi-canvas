@@ -1,6 +1,7 @@
 import { buildDevopsSummaryApiView, type DevopsDiagnosticRunRow } from '@/lib/devops/api-view'
 import { buildConversionTruthSnapshot, type ConversionTruthSnapshot } from '@/lib/revenue/conversion-truth'
 import { buildWeeklyRevenueReview } from '@/lib/revenue/weekly-review'
+import { buildCashOutcomeSnapshot } from '@/lib/studio/cash-outcomes'
 import type { HermesOperatorContextSnapshot } from '@/lib/hermes-operator/types'
 
 interface QueryResult<T> {
@@ -66,6 +67,13 @@ type PaymentAttributionRow = {
   created_at?: string | null
 }
 
+type PaymentRow = {
+  status?: string | null
+  created_at?: string | null
+  amount_eur?: number | string | null
+  collected_amount_eur?: number | string | null
+}
+
 type AutonomyControlRow = {
   status?: 'active' | 'paused'
   reason?: string | null
@@ -108,7 +116,7 @@ export async function buildHermesOperatorContext(input: {
   now?: Date
 }): Promise<HermesOperatorContextSnapshot> {
   const now = input.now ?? new Date()
-  const [offers, prospects, activities, conversationEvents, paymentAttributions, control, jobs, approvals, latestDevopsRun] =
+  const [offers, prospects, activities, conversationEvents, paymentAttributions, payments, control, jobs, approvals, latestDevopsRun] =
     await Promise.all([
       readTable<OfferRow>(
         input.supabase
@@ -149,6 +157,14 @@ export async function buildHermesOperatorContext(input: {
           .select(
             'prospect_id, offer_id, offer_variant, outreach_angle, source, band, amount_eur, payment_status, attributed_at, created_at'
           )
+          .eq('user_id', input.userId)
+          .order('created_at', { ascending: false })
+          .limit(800)
+      ),
+      readTable<PaymentRow>(
+        input.supabase
+          .from('payments')
+          .select('status, created_at, amount_eur, collected_amount_eur')
           .eq('user_id', input.userId)
           .order('created_at', { ascending: false })
           .limit(800)
@@ -195,6 +211,12 @@ export async function buildHermesOperatorContext(input: {
     conversions,
     nowIso: now.toISOString(),
   })
+  const outcomes = buildCashOutcomeSnapshot({
+    activities,
+    payments,
+    prospects,
+    nowIso: now.toISOString(),
+  })
   const devopsSummary = buildDevopsSummaryApiView({ row: latestDevopsRun })
 
   return {
@@ -202,6 +224,7 @@ export async function buildHermesOperatorContext(input: {
     revenue: {
       conversions,
       weeklyReview,
+      outcomes,
     },
     prospects: {
       total: prospects.length,

@@ -35,6 +35,7 @@ import {
   buildHermesOperatorEffectHref,
   buildHermesOperatorEffectLabel,
 } from '@/lib/studio/hermes-operator-links'
+import type { HermesOperatorBriefRecord } from '@/lib/hermes-operator/brief'
 
 interface DbWorkflow {
   id: string
@@ -124,6 +125,10 @@ interface AutonomyBacklog {
 }
 
 type HermesOperatorMode = 'observe' | 'recommend' | 'act'
+
+type HermesBriefView = HermesOperatorBriefRecord & {
+  id?: string
+}
 
 const TYPE_META: Record<string, { color: string; label: string }> = {
   trigger: { color: '#22d3ee', label: 'TRIG' },
@@ -1138,6 +1143,7 @@ function SchedulesPanel({
 
 function HermesOperatorPanel({
   view,
+  brief,
   alerts,
   loading,
   busy,
@@ -1147,6 +1153,7 @@ function HermesOperatorPanel({
   onAlertAction,
 }: {
   view: HermesOperatorView | null
+  brief: HermesBriefView | null
   alerts: HermesOperatorAlertViewRow[]
   loading: boolean
   busy: HermesOperatorMode | 'run_now' | `dismiss:${string}` | `alert:${string}:${'resolve' | 'mute'}` | null
@@ -1327,6 +1334,61 @@ function HermesOperatorPanel({
               ? `${view.lastRun.model} · ${new Date(view.lastRun.createdAt).toLocaleString('fr-FR')}`
               : 'Run Hermes once to create a baseline.'}
           </div>
+        </div>
+
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 10,
+            background: surface2,
+            border: `1px solid ${line}`,
+            display: 'grid',
+            gap: 8,
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+            Daily brief
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: text }}>
+            {brief?.summary ?? 'No Hermes daily brief yet.'}
+          </div>
+          <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+            {brief
+              ? `Cash 7j ${brief.cashDelta7d >= 0 ? '+' : ''}${brief.cashDelta7d}€ · ${brief.topOpportunity}`
+              : 'Run Hermes to persist one concise business brief.'}
+          </div>
+          {brief ? (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <Link
+                href="/studio/prospects"
+                style={{
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  padding: '3px 7px',
+                  borderRadius: 999,
+                  background: `${amber}1a`,
+                  color: amber,
+                }}
+              >
+                blocker
+              </Link>
+              <Link
+                href="/studio/revenue"
+                style={{
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  padding: '3px 7px',
+                  borderRadius: 999,
+                  background: `${emerald}1a`,
+                  color: emerald,
+                }}
+              >
+                opportunity
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <div
@@ -2354,6 +2416,7 @@ export default function AutomationsPage() {
     failed: 0,
   })
   const [hermesView, setHermesView] = useState<HermesOperatorView | null>(null)
+  const [hermesBrief, setHermesBrief] = useState<HermesBriefView | null>(null)
   const [hermesAlerts, setHermesAlerts] = useState<HermesOperatorAlertViewRow[]>([])
   const [hermesLoading, setHermesLoading] = useState(false)
   const [hermesBusy, setHermesBusy] = useState<
@@ -2450,22 +2513,27 @@ export default function AutomationsPage() {
   const loadHermesOperator = useCallback(async () => {
     setHermesLoading(true)
     try {
-      const [operatorRes, alertsRes] = await Promise.all([
+      const [operatorRes, alertsRes, briefRes] = await Promise.all([
         fetch('/api/studio/hermes/operator'),
         fetch('/api/studio/hermes/notifications'),
+        fetch('/api/studio/hermes/brief'),
       ])
       const operatorJson = await operatorRes.json().catch(() => ({}))
       const alertsJson = await alertsRes.json().catch(() => ({}))
+      const briefJson = await briefRes.json().catch(() => ({}))
       if (!operatorRes.ok) {
         setHermesView(null)
+        setHermesBrief(null)
         setHermesAlerts([])
         toast.error(operatorJson.error || 'Erreur chargement Hermes')
         return
       }
       setHermesView((operatorJson.view as HermesOperatorView) ?? null)
+      setHermesBrief(briefRes.ok ? ((briefJson.brief as HermesBriefView) ?? null) : null)
       setHermesAlerts((alertsJson.alerts as HermesOperatorAlertViewRow[]) ?? [])
     } catch {
       setHermesView(null)
+      setHermesBrief(null)
       setHermesAlerts([])
       toast.error('Erreur réseau Hermes')
     } finally {
@@ -2899,11 +2967,12 @@ export default function AutomationsPage() {
           onJobAction={runJobAction}
         />
 
-        <HermesOperatorPanel
-          view={hermesView}
-          alerts={hermesAlerts}
-          loading={hermesLoading}
-          busy={hermesBusy}
+          <HermesOperatorPanel
+            view={hermesView}
+            brief={hermesBrief}
+            alerts={hermesAlerts}
+            loading={hermesLoading}
+            busy={hermesBusy}
           onModeChange={patchHermesMode}
           onDismissRecommendation={dismissHermesRecommendation}
           onAlertAction={patchHermesAlert}

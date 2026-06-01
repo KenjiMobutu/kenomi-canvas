@@ -78,7 +78,7 @@ async function queryHermesCounts() {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const [runs, recommendations, alerts] = await Promise.all([
+  const [runs, recommendations, alerts, briefs] = await Promise.all([
     supabase.from('hermes_operator_runs').select('id').limit(1),
     supabase
       .from('hermes_operator_recommendations')
@@ -86,16 +86,19 @@ async function queryHermesCounts() {
       .in('status', ['open', 'executed', 'accepted'])
       .limit(1),
     supabase.from('business_alerts').select('id').eq('channel', 'studio').limit(1),
+    supabase.from('hermes_operator_briefs').select('id').limit(1),
   ])
 
   if (runs.error) throw new Error(runs.error.message)
   if (recommendations.error) throw new Error(recommendations.error.message)
   if (alerts.error) throw new Error(alerts.error.message)
+  if (briefs.error) throw new Error(briefs.error.message)
 
   return {
     runCount: (runs.data ?? []).length,
     recommendationCount: (recommendations.data ?? []).length,
     alertCount: (alerts.data ?? []).length,
+    briefCount: (briefs.data ?? []).length,
   }
 }
 
@@ -171,6 +174,22 @@ async function bootstrapHermesTruthIfMissing() {
     updated_at: nowIso,
   }
 
+  const briefPayload = {
+    id: randomUUID(),
+    user_id: userId,
+    run_id: runId,
+    summary: 'Smoke bootstrap Hermes daily brief.',
+    cash_delta_7d: 0,
+    top_blocker: 'smoke bootstrap blocker',
+    top_opportunity: 'smoke bootstrap opportunity',
+    best_offer: 'smoke bootstrap offer',
+    best_segment: 'smoke/bootstrap',
+    best_source: 'smoke',
+    main_leak: 'smoke bootstrap leak',
+    next_best_action: 'Review Hermes bootstrap.',
+    created_at: nowIso,
+  }
+
   const { error: runError } = await supabase.from('hermes_operator_runs').insert(runPayload)
   if (runError) throw new Error(runError.message)
 
@@ -182,7 +201,10 @@ async function bootstrapHermesTruthIfMissing() {
   const { error: alertError } = await supabase.from('business_alerts').insert(alertPayload)
   if (alertError) throw new Error(alertError.message)
 
-  write('ok hermes bootstrap inserted (run + recommendation + alert)')
+  const { error: briefError } = await supabase.from('hermes_operator_briefs').insert(briefPayload)
+  if (briefError) throw new Error(briefError.message)
+
+  write('ok hermes bootstrap inserted (run + recommendation + alert + brief)')
 }
 
 async function triggerHermesOperator() {
@@ -251,6 +273,11 @@ const notificationsProtected = [401, 403, 307].includes(notificationsStatus)
 if (!notificationsProtected) fail('hermes notifications auth guard', `expected 401/403/307 got ${notificationsStatus}`)
 else write(`ok hermes notifications auth guard (${notificationsStatus})`)
 
+const briefStatus = await status('/api/studio/hermes/brief')
+const briefProtected = [401, 403, 307].includes(briefStatus)
+if (!briefProtected) fail('hermes brief auth guard', `expected 401/403/307 got ${briefStatus}`)
+else write(`ok hermes brief auth guard (${briefStatus})`)
+
 try {
   await triggerHermesOperator()
 } catch (error) {
@@ -285,6 +312,7 @@ const result = verifyHermesOperatorSmoke({
   automationsProtected,
   operatorProtected,
   notificationsProtected,
+  briefProtected,
   ...counts,
 })
 

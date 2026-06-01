@@ -1,5 +1,6 @@
 import type { ConversionTruthSnapshot } from '@/lib/revenue/conversion-truth'
 import type { WeeklyRevenueReview } from '@/lib/revenue/weekly-review'
+import type { CashOutcomeSnapshot } from '@/lib/studio/cash-outcomes'
 
 export type HermesOperatorMode = 'observe' | 'recommend' | 'act'
 
@@ -38,6 +39,7 @@ export type HermesOperatorAutomationSnapshot = {
 export type HermesOperatorRevenueSnapshot = {
   conversions: ConversionTruthSnapshot
   weeklyReview: WeeklyRevenueReview
+  outcomes: CashOutcomeSnapshot
 }
 
 export type HermesOperatorContextSnapshot = {

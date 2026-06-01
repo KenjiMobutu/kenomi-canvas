@@ -5,6 +5,7 @@ import type { HermesOperatorContextSnapshot } from '@/lib/hermes-operator/types'
 function createFakeSupabase(seed?: Record<string, Record<string, unknown>[]>) {
   const tables: Record<string, Record<string, unknown>[]> = {
     hermes_operator_runs: seed?.hermes_operator_runs ?? [],
+    hermes_operator_briefs: seed?.hermes_operator_briefs ?? [],
     hermes_operator_recommendations: seed?.hermes_operator_recommendations ?? [],
     business_alerts: seed?.business_alerts ?? [],
     autonomy_jobs: seed?.autonomy_jobs ?? [],
@@ -18,10 +19,26 @@ function createFakeSupabase(seed?: Record<string, Record<string, unknown>[]>) {
         filters: [] as Array<{ field: string; value: unknown }>,
         insertRows: [] as Record<string, unknown>[],
         patch: null as Record<string, unknown> | null,
+        orderField: null as string | null,
+        ascending: true,
+        limitCount: null as number | null,
       }
 
       const matches = (row: Record<string, unknown>) =>
         state.filters.every((filter) => row[filter.field] === filter.value)
+
+      const resolveRows = () => {
+        let rows = tables[table].filter(matches)
+        if (state.orderField) {
+          rows = [...rows].sort((a, b) => {
+            const left = String(a[state.orderField!])
+            const right = String(b[state.orderField!])
+            return state.ascending ? left.localeCompare(right) : right.localeCompare(left)
+          })
+        }
+        if (state.limitCount !== null) rows = rows.slice(0, state.limitCount)
+        return rows
+      }
 
       const builder = {
         select() {
@@ -45,16 +62,25 @@ function createFakeSupabase(seed?: Record<string, Record<string, unknown>[]>) {
           state.patch = patch
           return builder
         },
+        order(field: string, options?: { ascending?: boolean }) {
+          state.orderField = field
+          state.ascending = options?.ascending ?? true
+          return builder
+        },
+        limit(count: number) {
+          state.limitCount = count
+          return builder
+        },
         maybeSingle: async () => ({
           data: (() => {
-            const row = tables[table].find(matches) ?? null
+            const row = resolveRows()[0] ?? null
             if (row && state.patch) Object.assign(row, state.patch)
             return row
           })(),
           error: null,
         }),
         then: (resolve: (value: { data: Record<string, unknown>[]; error: null }) => unknown) => {
-          const rows = tables[table].filter(matches)
+          const rows = resolveRows()
           if (state.patch) rows.forEach((row) => Object.assign(row, state.patch))
           return Promise.resolve(resolve({ data: rows, error: null }))
         },
@@ -110,6 +136,25 @@ const fakeContext: HermesOperatorContextSnapshot = {
         detail: 'Push more volume on the best source.',
         source: 'reddit',
       },
+    },
+    outcomes: {
+      last7d: { replies: 4, deals: 1, cashEur: 900 },
+      previous7d: { replies: 2, deals: 0, cashEur: 0 },
+      last30d: { replies: 6, deals: 1, cashEur: 900 },
+      previous30d: { replies: 3, deals: 0, cashEur: 0 },
+      delta7d: { replies: 2, deals: 1, cashEur: 900 },
+      delta30d: { replies: 3, deals: 1, cashEur: 900 },
+      rates: {
+        replyRate7d: 40,
+        winRate7d: 10,
+        replyRate30d: 35,
+        winRate30d: 8,
+      },
+      sourceBreakdown: [],
+      sourceBandBreakdown: [],
+      topSegment: null,
+      blockers: [],
+      blockerActions: [],
     },
   },
   prospects: {
@@ -196,6 +241,11 @@ describe('runHermesOperatorTick', () => {
     })
     expect(supabase.tables.hermes_operator_recommendations).toHaveLength(1)
     expect(supabase.tables.business_alerts).toHaveLength(1)
+    expect(supabase.tables.hermes_operator_briefs).toHaveLength(1)
+    expect(supabase.tables.hermes_operator_briefs[0]).toMatchObject({
+      user_id: 'user-1',
+      run_id: result.runId,
+    })
     expect(supabase.tables.autonomy_jobs).toHaveLength(0)
   })
 
