@@ -40,6 +40,20 @@ export type HermesOperatorRevenueSnapshot = {
   conversions: ConversionTruthSnapshot
   weeklyReview: WeeklyRevenueReview
   outcomes: CashOutcomeSnapshot
+  loop: {
+    activeLoops: number
+    readyCheckouts: number
+    pendingApprovals: number
+    revenueEur: number
+    blockedRevenueEur: number
+    recommendedAction: {
+      type: string
+      ventureName: string
+      reason: string
+      priorityScore: number
+      blockedRevenueEur: number
+    } | null
+  }
 }
 
 export type HermesOperatorContextSnapshot = {

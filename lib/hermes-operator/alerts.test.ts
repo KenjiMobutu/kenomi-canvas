@@ -37,15 +37,21 @@ function createFakeSupabase(seed?: Record<string, Record<string, unknown>[]>) {
         },
         update(patch: Record<string, unknown>) {
           state.patch = patch
-          tables[table].filter(matches).forEach((row) => Object.assign(row, patch))
           return builder
         },
         maybeSingle: async () => ({
-          data: tables[table].find(matches) ?? null,
+          data: (() => {
+            const row = tables[table].find(matches) ?? null
+            if (row && state.patch) Object.assign(row, state.patch)
+            return row
+          })(),
           error: null,
         }),
-        then: (resolve: (value: { data: Record<string, unknown>[]; error: null }) => unknown) =>
-          Promise.resolve(resolve({ data: tables[table].filter(matches), error: null })),
+        then: (resolve: (value: { data: Record<string, unknown>[]; error: null }) => unknown) => {
+          const rows = tables[table].filter(matches)
+          if (state.patch) rows.forEach((row) => Object.assign(row, state.patch))
+          return Promise.resolve(resolve({ data: rows, error: null }))
+        },
       }
 
       return builder
@@ -94,6 +100,61 @@ describe('persistOperatorAlerts', () => {
       user_id: 'user-1',
       dedupe_key: 'cash_blocker:reddit:hot',
       run_id: 'run-2',
+    })
+  })
+
+  it('reopens resolved alerts but preserves muted ones', async () => {
+    const supabase = createFakeSupabase({
+      business_alerts: [
+        {
+          id: 'alert-1',
+          user_id: 'user-1',
+          dedupe_key: 'business_paid_cash_drop',
+          status: 'resolved',
+        },
+        {
+          id: 'alert-2',
+          user_id: 'user-1',
+          dedupe_key: 'business_reply_rate_drop:reddit',
+          status: 'muted',
+          run_id: 'run-0',
+        },
+      ],
+    })
+
+    await persistOperatorAlerts({
+      supabase: supabase as never,
+      userId: 'user-1',
+      runId: 'run-2',
+      alerts: [
+        {
+          severity: 'critical',
+          category: 'business_paid_cash_drop',
+          dedupeKey: 'business_paid_cash_drop',
+          headline: 'Paid cash down',
+          detail: 'Cash 7d dropped.',
+          channel: 'studio',
+          payload: {},
+        },
+        {
+          severity: 'warn',
+          category: 'business_reply_rate_drop',
+          dedupeKey: 'business_reply_rate_drop:reddit',
+          headline: 'Reply rate down',
+          detail: 'Reddit reply rate dropped.',
+          channel: 'studio',
+          payload: {},
+        },
+      ],
+    })
+
+    expect(supabase.tables.business_alerts.find((row) => row.id === 'alert-1')).toMatchObject({
+      status: 'open',
+      run_id: 'run-2',
+    })
+    expect(supabase.tables.business_alerts.find((row) => row.id === 'alert-2')).toMatchObject({
+      status: 'muted',
+      run_id: 'run-0',
     })
   })
 })

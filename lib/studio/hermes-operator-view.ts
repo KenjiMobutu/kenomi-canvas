@@ -56,8 +56,12 @@ export type HermesOperatorView = {
   recentRuns: HermesOperatorRunViewRow[]
   topRecommendation: HermesOperatorRecommendationViewRow | null
   topAlert: HermesOperatorAlertViewRow | null
+  topBusinessAlert: HermesOperatorAlertViewRow | null
+  topExecutionAlert: HermesOperatorAlertViewRow | null
   openRecommendationsCount: number
   openAlertsCount: number
+  openBusinessAlertsCount: number
+  openExecutionAlertsCount: number
   lastRunDelta: {
     pendingApprovals: number
     followUpsDue: number
@@ -73,6 +77,8 @@ export type HermesOperatorView = {
   }
   recommendations: HermesOperatorRecommendationViewRow[]
   alerts: HermesOperatorAlertViewRow[]
+  businessAlerts: HermesOperatorAlertViewRow[]
+  executionAlerts: HermesOperatorAlertViewRow[]
 }
 
 function severityScore(severity: HermesOperatorAlertViewRow['severity']) {
@@ -83,6 +89,10 @@ function severityScore(severity: HermesOperatorAlertViewRow['severity']) {
 
 function diffMetric(current: number, previous: number): number {
   return current - previous
+}
+
+function isBusinessAlert(alert: HermesOperatorAlertViewRow): boolean {
+  return alert.category.startsWith('business_')
 }
 
 export function buildHermesOperatorView(input: {
@@ -101,6 +111,8 @@ export function buildHermesOperatorView(input: {
         severityScore(b.severity) - severityScore(a.severity) ||
         b.createdAt.localeCompare(a.createdAt)
     )
+  const businessAlerts = openAlerts.filter(isBusinessAlert)
+  const executionAlerts = openAlerts.filter((item) => !isBusinessAlert(item))
 
   const lastRunId = input.runs[0]?.id ?? null
   const currentRun = input.runs[0] ?? null
@@ -118,9 +130,13 @@ export function buildHermesOperatorView(input: {
     lastRun: currentRun,
     recentRuns: input.runs.slice(0, 5),
     topRecommendation: openRecommendations[0] ?? null,
-    topAlert: openAlerts[0] ?? null,
+    topAlert: businessAlerts[0] ?? executionAlerts[0] ?? null,
+    topBusinessAlert: businessAlerts[0] ?? null,
+    topExecutionAlert: executionAlerts[0] ?? null,
     openRecommendationsCount: openRecommendations.length,
     openAlertsCount: openAlerts.length,
+    openBusinessAlertsCount: businessAlerts.length,
+    openExecutionAlertsCount: executionAlerts.length,
     lastRunDelta:
       currentRun?.snapshot && previousRun?.snapshot
         ? {
@@ -145,5 +161,7 @@ export function buildHermesOperatorView(input: {
     },
     recommendations: openRecommendations,
     alerts: openAlerts,
+    businessAlerts,
+    executionAlerts,
   }
 }

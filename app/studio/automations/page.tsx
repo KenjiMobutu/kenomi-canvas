@@ -1166,6 +1166,8 @@ function HermesOperatorPanel({
   const modeColor =
     activeMode === 'act' ? rose : activeMode === 'recommend' ? amber : emerald
   const lastRunDelta = view?.lastRunDelta
+  const businessAlerts = view?.businessAlerts ?? []
+  const executionAlerts = view?.executionAlerts ?? []
 
   function formatDelta(value: number, positiveIsGood = true) {
     if (value === 0) return { label: '0', color: muted2 }
@@ -1254,7 +1256,7 @@ function HermesOperatorPanel({
               fontWeight: 800,
             }}
           >
-            ALT {view?.openAlertsCount ?? 0}
+            ALT {view?.openBusinessAlertsCount ?? 0}/{view?.openExecutionAlertsCount ?? 0}
           </span>
         </div>
       </div>
@@ -1426,10 +1428,12 @@ function HermesOperatorPanel({
             Top alert
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: rose }}>
-            {view?.topAlert?.headline ?? 'No active alert'}
+            {view?.topBusinessAlert?.headline ?? view?.topExecutionAlert?.headline ?? 'No active alert'}
           </div>
           <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
-            {view?.topAlert?.detail ?? 'No business alert currently requires attention.'}
+            {view?.topBusinessAlert?.detail ??
+              view?.topExecutionAlert?.detail ??
+              'No business alert currently requires attention.'}
           </div>
         </div>
       </div>
@@ -1601,19 +1605,16 @@ function HermesOperatorPanel({
             textTransform: 'uppercase',
           }}
         >
-          Alerts backlog
+          Business alerts
         </div>
-        {alerts.length ? (
+        {businessAlerts.length ? (
           <div
             style={{
               display: 'grid',
               gap: 8,
             }}
           >
-            {alerts
-              .filter((alert) => alert.status === 'open' || alert.status === 'sent')
-              .slice(0, 5)
-              .map((alert) => {
+            {businessAlerts.slice(0, 5).map((alert) => {
                 const toneColor =
                   alert.severity === 'critical' ? rose : alert.severity === 'warn' ? amber : cyan
                 const isResolving = busy === `alert:${alert.id}:resolve`
@@ -1697,7 +1698,120 @@ function HermesOperatorPanel({
           </div>
         ) : (
           <div style={{ fontSize: 12, color: muted }}>
-            No open or sent alert.
+            No open business alert.
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Execution alerts
+        </div>
+        {executionAlerts.length ? (
+          <div
+            style={{
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            {executionAlerts.slice(0, 5).map((alert) => {
+              const toneColor =
+                alert.severity === 'critical' ? rose : alert.severity === 'warn' ? amber : cyan
+              const isResolving = busy === `alert:${alert.id}:resolve`
+              const isMuting = busy === `alert:${alert.id}:mute`
+              return (
+                <div
+                  key={alert.id}
+                  style={{
+                    display: 'grid',
+                    gap: 6,
+                    padding: 10,
+                    borderRadius: 10,
+                    background: surface2,
+                    border: `1px solid ${line}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: text }}>
+                      {alert.headline}
+                    </div>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        padding: '3px 6px',
+                        borderRadius: 999,
+                        background: `${toneColor}1a`,
+                        color: toneColor,
+                      }}
+                    >
+                      {alert.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+                    {alert.detail}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2 }}>
+                      {alert.category} · {alert.severity}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => onAlertAction(alert.id, 'resolve')}
+                        disabled={loading || busy !== null}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: 8,
+                          border: `1px solid ${line2}`,
+                          background: surface,
+                          color: text,
+                          cursor: loading || busy !== null ? 'default' : 'pointer',
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {isResolving ? '...' : 'Resolve'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onAlertAction(alert.id, 'mute')}
+                        disabled={loading || busy !== null}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: 8,
+                          border: `1px solid ${line2}`,
+                          background: surface,
+                          color: text,
+                          cursor: loading || busy !== null ? 'default' : 'pointer',
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {isMuting ? '...' : 'Mute'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: muted }}>
+            No open execution alert.
           </div>
         )}
       </div>
@@ -1845,8 +1959,8 @@ function HermesOperatorPanel({
           gap: 10,
         }}
       >
-        {alerts.length > 0 ? (
-          alerts.slice(0, 3).map((alert) => (
+        {businessAlerts.length > 0 ? (
+          businessAlerts.slice(0, 3).map((alert) => (
             <div
               key={alert.id}
               style={{
@@ -1897,7 +2011,7 @@ function HermesOperatorPanel({
           ))
         ) : (
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>
-            No operator alerts yet.
+            No business alert currently active.
           </div>
         )}
       </div>

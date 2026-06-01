@@ -12,6 +12,7 @@ describe('verifyHermesOperatorSmoke', () => {
       runCount: 0,
       recommendationCount: 0,
       alertCount: 0,
+      businessAlertCount: 0,
       briefCount: 0,
     })
 
@@ -19,6 +20,7 @@ describe('verifyHermesOperatorSmoke', () => {
     expect(result.failures).toContain('operator_run_missing')
     expect(result.failures).toContain('operator_recommendation_missing')
     expect(result.failures).toContain('operator_alert_missing')
+    expect(result.failures).toContain('operator_business_alert_missing')
     expect(result.failures).toContain('operator_brief_missing')
   })
 
@@ -32,6 +34,7 @@ describe('verifyHermesOperatorSmoke', () => {
       runCount: 2,
       recommendationCount: 3,
       alertCount: 1,
+      businessAlertCount: 1,
       briefCount: 1,
     })
 

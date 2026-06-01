@@ -20,6 +20,7 @@ export interface HermesAlertsSupabase {
 type ExistingAlert = {
   id: string
   status?: string | null
+  updated_at?: string | null
 }
 
 async function readSingle<T>(query: QueryBuilder<T>): Promise<T | null> {
@@ -41,12 +42,15 @@ export async function persistOperatorAlerts(input: {
     const existing = await readSingle<ExistingAlert>(
       input.supabase
         .from('business_alerts')
-        .select('id, status')
+        .select('id, status, updated_at')
         .eq('user_id', input.userId)
         .eq('dedupe_key', alert.dedupeKey)
     )
 
     if (existing?.id) {
+      if (existing.status === 'muted') {
+        continue
+      }
       const result = await input.supabase
         .from('business_alerts')
         .update({
@@ -55,6 +59,7 @@ export async function persistOperatorAlerts(input: {
           category: alert.category,
           headline: alert.headline,
           detail: alert.detail,
+          status: existing.status === 'resolved' ? 'open' : existing.status ?? 'open',
           channel: alert.channel,
           payload: alert.payload,
           updated_at: nowIso,

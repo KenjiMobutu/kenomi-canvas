@@ -3,6 +3,7 @@ import {
   dispatchOperatorNotifications,
   type HermesNotificationSupabase,
 } from '@/lib/hermes-operator/notifications'
+import { buildHermesBusinessAlerts } from '@/lib/hermes-operator/business-alerts'
 import { persistOperatorAlerts, type HermesAlertsSupabase } from '@/lib/hermes-operator/alerts'
 import { buildHermesOperatorContext, type HermesOperatorContextSupabase } from '@/lib/hermes-operator/context'
 import {
@@ -121,6 +122,12 @@ function buildRunDelta(input: {
     queuedJobs: Number(currentAutomation.queuedJobs ?? 0) - Number(previousSnapshot?.automation?.queuedJobs ?? 0),
     failedJobs: Number(currentAutomation.failedJobs ?? 0) - Number(previousSnapshot?.automation?.failedJobs ?? 0),
   }
+}
+
+function readSnapshot(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
 }
 
 const SAFE_OPERATOR_AGENT_IDS = new Set(['prospect', 'devops'])
@@ -327,6 +334,16 @@ export async function runHermesOperatorTick(input: {
       mode,
     })
 
+    const previousSnapshot = readSnapshot(previousRun?.input_snapshot)
+    const generatedAlerts = buildHermesBusinessAlerts({
+      context: contextSnapshot,
+      previousSnapshot,
+      now,
+    })
+    const allAlerts = [...engineResult.alerts, ...generatedAlerts].filter(
+      (alert, index, list) => list.findIndex((item) => item.dedupeKey === alert.dedupeKey) === index
+    )
+
     await insertRun(input.supabase, {
       id: runId,
       user_id: input.userId,
@@ -337,14 +354,14 @@ export async function runHermesOperatorTick(input: {
       input_snapshot: contextSnapshot,
       output_snapshot: {
         recommendations: engineResult.recommendations,
-        alerts: engineResult.alerts,
+        alerts: allAlerts,
         provider: engineResult.provider,
         fallbackTriggered: engineResult.fallbackTriggered,
       },
       summary: engineResult.summary,
       executed_actions_count: 0,
       enqueued_jobs_count: 0,
-      alerts_count: engineResult.alerts.length,
+      alerts_count: allAlerts.length,
       last_error: null,
       created_at: nowIso,
     })
@@ -374,14 +391,14 @@ export async function runHermesOperatorTick(input: {
       supabase: input.supabase,
       userId: input.userId,
       runId,
-      alerts: engineResult.alerts,
+      alerts: allAlerts,
       now,
     })
 
     await dispatchOperatorNotifications({
       supabase: input.supabase,
       userId: input.userId,
-      alerts: engineResult.alerts,
+      alerts: allAlerts,
       now,
     })
 
@@ -414,7 +431,7 @@ export async function runHermesOperatorTick(input: {
       summary: engineResult.summary,
       model: engineResult.model,
       recommendationsCount: engineResult.recommendations.length,
-      alertsCount: engineResult.alerts.length,
+      alertsCount: allAlerts.length,
       fallbackTriggered: engineResult.fallbackTriggered,
     }
   } catch (error) {

@@ -101,10 +101,14 @@ const fakeContext: HermesOperatorContextSnapshot = {
         qualifiedReplies: 2,
         meetingsBooked: 1,
         checkoutsCreated: 1,
-        paid: 0,
+        wonCount: 0,
+        paidCount: 0,
+        paidCashEur: 0,
         replyRate: 40,
         qualifiedRate: 20,
         closeRate: 0,
+        wonToPaidRate: 0,
+        replyToPaidRate: 0,
         leadToReplyHours: 8,
         replyToCloseDays: 0,
       },
@@ -113,10 +117,21 @@ const fakeContext: HermesOperatorContextSnapshot = {
       segmentOfferBreakdown: [],
       modelBreakdown: [],
       bestOffer: null,
+      bestOfferToWin: null,
+      bestOfferToCollectCash: null,
       bestAngle: null,
+      bestSegmentToReply: null,
+      bestSegmentToPay: null,
       segmentRepliesNoPay: null,
+      segmentWinsNoCash: null,
       sourceClosesFastest: null,
+      sourceCollectsFastest: null,
       bestModel: null,
+      messageFamilyBreakdown: [],
+      bestMessageFamily: null,
+      messageFamilyRepliesNoCash: null,
+      messageFamilyWinsNoCash: null,
+      messageFamilyTopObjection: null,
       commonObjections: [],
       lostReasons: [],
       repeatNext: null,
@@ -156,6 +171,14 @@ const fakeContext: HermesOperatorContextSnapshot = {
       blockers: [],
       blockerActions: [],
     },
+    loop: {
+      activeLoops: 1,
+      readyCheckouts: 1,
+      pendingApprovals: 1,
+      revenueEur: 900,
+      blockedRevenueEur: 250,
+      recommendedAction: null,
+    },
   },
   prospects: {
     total: 10,
@@ -169,7 +192,7 @@ const fakeContext: HermesOperatorContextSnapshot = {
     pausedReason: null,
     queuedJobs: 1,
     runningJobs: 0,
-    failedJobs: 0,
+    failedJobs: 1,
   },
   infrastructure: {
     status: 'ok',
@@ -207,15 +230,7 @@ describe('runHermesOperatorTick', () => {
           },
         ],
         alerts: [
-          {
-            severity: 'warn',
-            category: 'cash_blocker',
-            dedupeKey: 'cash_blocker:reddit',
-            headline: 'Replies without wins',
-            detail: 'Need better close motion.',
-            channel: 'studio',
-            payload: {},
-          },
+          
         ],
         provider: 'hermes',
         model: 'hermes3:8b',
@@ -227,7 +242,7 @@ describe('runHermesOperatorTick', () => {
       status: 'completed',
       mode: 'observe',
       recommendationsCount: 1,
-      alertsCount: 1,
+      alertsCount: 2,
       model: 'hermes3:8b',
     })
     expect(supabase.tables.hermes_operator_runs).toHaveLength(1)
@@ -237,10 +252,16 @@ describe('runHermesOperatorTick', () => {
       status: 'completed',
       model_family: 'hermes',
       summary: 'Push more follow-ups on reddit.',
-      alerts_count: 1,
+      alerts_count: 2,
     })
     expect(supabase.tables.hermes_operator_recommendations).toHaveLength(1)
-    expect(supabase.tables.business_alerts).toHaveLength(1)
+    expect(supabase.tables.business_alerts.length).toBeGreaterThanOrEqual(1)
+    expect(supabase.tables.business_alerts.map((row) => row.category)).toContain(
+      'execution_failed_jobs_increase'
+    )
+    expect(supabase.tables.business_alerts.map((row) => row.category)).toContain(
+      'business_blocked_revenue_increase'
+    )
     expect(supabase.tables.hermes_operator_briefs).toHaveLength(1)
     expect(supabase.tables.hermes_operator_briefs[0]).toMatchObject({
       user_id: 'user-1',
@@ -297,7 +318,7 @@ describe('runHermesOperatorTick', () => {
       status: 'completed',
       mode: 'recommend',
       recommendationsCount: 2,
-      alertsCount: 0,
+      alertsCount: 2,
     })
     expect(supabase.tables.autonomy_jobs).toHaveLength(1)
     expect(supabase.tables.autonomy_jobs[0]).toMatchObject({

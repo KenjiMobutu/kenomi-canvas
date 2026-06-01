@@ -106,12 +106,22 @@ describe('buildHermesOperatorView', () => {
         {
           id: 'alert-1',
           severity: 'warn',
-          category: 'cash_blocker',
+          category: 'business_paid_cash_drop',
           headline: 'Replies without close',
           detail: 'reddit/hot is stalled.',
           status: 'open',
           channel: 'studio',
           createdAt: '2026-05-28T10:00:00.000Z',
+        },
+        {
+          id: 'alert-2',
+          severity: 'critical',
+          category: 'execution_failed_jobs_increase',
+          headline: 'Jobs are failing',
+          detail: 'Worker failures are up.',
+          status: 'open',
+          channel: 'studio',
+          createdAt: '2026-05-28T10:02:00.000Z',
         },
       ],
     })
@@ -120,7 +130,12 @@ describe('buildHermesOperatorView', () => {
     expect(view.lastRun?.mode).toBe('observe')
     expect(view.recentRuns).toHaveLength(2)
     expect(view.topRecommendation?.title).toBe('Run prospect')
-    expect(view.openAlertsCount).toBe(1)
+    expect(view.openAlertsCount).toBe(2)
+    expect(view.openBusinessAlertsCount).toBe(1)
+    expect(view.openExecutionAlertsCount).toBe(1)
+    expect(view.topAlert?.category).toBe('business_paid_cash_drop')
+    expect(view.topBusinessAlert?.category).toBe('business_paid_cash_drop')
+    expect(view.topExecutionAlert?.category).toBe('execution_failed_jobs_increase')
     expect(view.lastRunDelta).toEqual({
       pendingApprovals: -1,
       followUpsDue: -2,

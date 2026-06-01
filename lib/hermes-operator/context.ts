@@ -1,5 +1,16 @@
 import { buildDevopsSummaryApiView, type DevopsDiagnosticRunRow } from '@/lib/devops/api-view'
 import { buildConversionTruthSnapshot, type ConversionTruthSnapshot } from '@/lib/revenue/conversion-truth'
+import {
+  buildRevenueLoopSnapshot,
+  type RevenueApprovalRow,
+  type RevenueAutonomyActionRow,
+  type RevenueCampaignDraftRow,
+  type RevenueDecisionRow,
+  type RevenuePaymentRow,
+  type RevenuePipelineRow,
+  type RevenueVentureRow,
+} from '@/lib/revenue-loop'
+import type { CommerceLandingPageRow } from '@/lib/venture-commerce-readiness'
 import { buildWeeklyRevenueReview } from '@/lib/revenue/weekly-review'
 import { buildCashOutcomeSnapshot } from '@/lib/studio/cash-outcomes'
 import type { HermesOperatorContextSnapshot } from '@/lib/hermes-operator/types'
@@ -67,13 +78,6 @@ type PaymentAttributionRow = {
   created_at?: string | null
 }
 
-type PaymentRow = {
-  status?: string | null
-  created_at?: string | null
-  amount_eur?: number | string | null
-  collected_amount_eur?: number | string | null
-}
-
 type AutonomyControlRow = {
   status?: 'active' | 'paused'
   reason?: string | null
@@ -116,7 +120,25 @@ export async function buildHermesOperatorContext(input: {
   now?: Date
 }): Promise<HermesOperatorContextSnapshot> {
   const now = input.now ?? new Date()
-  const [offers, prospects, activities, conversationEvents, paymentAttributions, payments, control, jobs, approvals, latestDevopsRun] =
+  const [
+    offers,
+    prospects,
+    activities,
+    conversationEvents,
+    paymentAttributions,
+    payments,
+    pipelines,
+    ventures,
+    landingPages,
+    campaignDrafts,
+    autonomyActions,
+    revenueApprovals,
+    decisions,
+    control,
+    jobs,
+    approvals,
+    latestDevopsRun,
+  ] =
     await Promise.all([
       readTable<OfferRow>(
         input.supabase
@@ -161,13 +183,69 @@ export async function buildHermesOperatorContext(input: {
           .order('created_at', { ascending: false })
           .limit(800)
       ),
-      readTable<PaymentRow>(
+      readTable<RevenuePaymentRow>(
         input.supabase
           .from('payments')
-          .select('status, created_at, amount_eur, collected_amount_eur')
+          .select(
+            'id, venture_id, status, provider_status, amount_eur, expected_amount_eur, collected_amount_eur, trial_days, checkout_url, created_at, updated_at'
+          )
           .eq('user_id', input.userId)
           .order('created_at', { ascending: false })
           .limit(800)
+      ),
+      readTable<RevenuePipelineRow>(
+        input.supabase
+          .from('venture_pipeline')
+          .select('*')
+          .eq('user_id', input.userId)
+          .order('updated_at', { ascending: false })
+          .limit(100)
+      ),
+      readTable<RevenueVentureRow>(
+        input.supabase
+          .from('ventures')
+          .select('*')
+          .eq('user_id', input.userId)
+          .order('created_at', { ascending: false })
+          .limit(150)
+      ),
+      readTable<CommerceLandingPageRow>(
+        input.supabase
+          .from('landing_pages')
+          .select('venture_id, statut, health_status')
+          .order('created_at', { ascending: false })
+          .limit(200)
+      ),
+      readTable<RevenueCampaignDraftRow>(
+        input.supabase
+          .from('campaign_drafts')
+          .select('*')
+          .eq('user_id', input.userId)
+          .order('created_at', { ascending: false })
+          .limit(200)
+      ),
+      readTable<RevenueAutonomyActionRow>(
+        input.supabase
+          .from('autonomy_actions')
+          .select('*')
+          .eq('user_id', input.userId)
+          .order('created_at', { ascending: false })
+          .limit(200)
+      ),
+      readTable<RevenueApprovalRow>(
+        input.supabase
+          .from('human_approvals')
+          .select('*')
+          .eq('user_id', input.userId)
+          .order('created_at', { ascending: false })
+          .limit(200)
+      ),
+      readTable<RevenueDecisionRow>(
+        input.supabase
+          .from('decisions')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(200)
       ),
       readSingle<AutonomyControlRow>(
         input.supabase.from('autonomy_controls').select('status, reason').eq('user_id', input.userId)
@@ -217,6 +295,16 @@ export async function buildHermesOperatorContext(input: {
     prospects,
     nowIso: now.toISOString(),
   })
+  const loopSnapshot = buildRevenueLoopSnapshot({
+    pipelines,
+    ventures,
+    landingPages,
+    payments,
+    campaignDrafts,
+    autonomyActions,
+    approvals: revenueApprovals,
+    decisions,
+  })
   const devopsSummary = buildDevopsSummaryApiView({ row: latestDevopsRun })
 
   return {
@@ -225,6 +313,7 @@ export async function buildHermesOperatorContext(input: {
       conversions,
       weeklyReview,
       outcomes,
+      loop: loopSnapshot.summary,
     },
     prospects: {
       total: prospects.length,

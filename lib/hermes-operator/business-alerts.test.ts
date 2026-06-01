@@ -1,0 +1,222 @@
+import { describe, expect, it } from 'vitest'
+import { buildHermesBusinessAlerts } from '@/lib/hermes-operator/business-alerts'
+import type { HermesOperatorContextSnapshot } from '@/lib/hermes-operator/types'
+
+const baseContext: HermesOperatorContextSnapshot = {
+  generatedAt: '2026-06-01T10:00:00.000Z',
+  revenue: {
+    conversions: {
+      overview: {
+        contacted: 24,
+        replied: 8,
+        qualifiedReplies: 4,
+        meetingsBooked: 2,
+        checkoutsCreated: 2,
+        wonCount: 2,
+        paidCount: 1,
+        paidCashEur: 1200,
+        replyRate: 33.3,
+        qualifiedRate: 16.7,
+        closeRate: 4.2,
+        wonToPaidRate: 50,
+        replyToPaidRate: 12.5,
+        leadToReplyHours: 9,
+        replyToCloseDays: 4,
+      },
+      offerBreakdown: [],
+      angleBreakdown: [],
+      segmentOfferBreakdown: [],
+      modelBreakdown: [],
+      bestOffer: null,
+      bestOfferToWin: null,
+      bestOfferToCollectCash: null,
+      bestAngle: null,
+      bestSegmentToReply: null,
+      bestSegmentToPay: {
+        contacted: 10,
+        replied: 5,
+        qualifiedReplies: 3,
+        meetingsBooked: 2,
+        checkoutsCreated: 2,
+        wonCount: 1,
+        paidCount: 1,
+        paidCashEur: 1200,
+        replyRate: 50,
+        qualifiedRate: 30,
+        closeRate: 10,
+        wonToPaidRate: 100,
+        replyToPaidRate: 20,
+        key: 'reddit:warm:offer-a',
+        source: 'reddit',
+        band: 'warm',
+        offerId: 'offer-a',
+        offerName: 'Revenue Audit',
+      },
+      segmentRepliesNoPay: {
+        contacted: 9,
+        replied: 4,
+        qualifiedReplies: 2,
+        meetingsBooked: 1,
+        checkoutsCreated: 1,
+        wonCount: 0,
+        paidCount: 0,
+        paidCashEur: 0,
+        replyRate: 44.4,
+        qualifiedRate: 22.2,
+        closeRate: 0,
+        wonToPaidRate: 0,
+        replyToPaidRate: 0,
+        key: 'reddit:warm:offer-a',
+        source: 'reddit',
+        band: 'warm',
+        offerId: 'offer-a',
+        offerName: 'Revenue Audit',
+      },
+      segmentWinsNoCash: null,
+      sourceClosesFastest: null,
+      sourceCollectsFastest: {
+        contacted: 10,
+        replied: 5,
+        qualifiedReplies: 3,
+        meetingsBooked: 2,
+        checkoutsCreated: 2,
+        wonCount: 1,
+        paidCount: 1,
+        paidCashEur: 1200,
+        replyRate: 50,
+        qualifiedRate: 30,
+        closeRate: 10,
+        wonToPaidRate: 100,
+        replyToPaidRate: 20,
+        source: 'reddit',
+        leadToReplyHours: 9,
+        replyToCloseDays: 4,
+      },
+      bestModel: null,
+      messageFamilyBreakdown: [],
+      bestMessageFamily: null,
+      messageFamilyRepliesNoCash: null,
+      messageFamilyWinsNoCash: null,
+      messageFamilyTopObjection: null,
+      commonObjections: [],
+      lostReasons: [],
+      repeatNext: null,
+      stopNext: null,
+    },
+    weeklyReview: {
+      window: { weekStart: '2026-05-26', weekEnd: '2026-06-01', label: '2026-05-26 → 2026-06-01' },
+      bestSource: { title: 'reddit', detail: '1 paid · 4d reply→cash', source: 'reddit' },
+      bestSegment: { title: 'reddit/warm · Revenue Audit', detail: '4 replies · 0 paid', source: 'reddit', band: 'warm' },
+      bestOffer: { title: 'Revenue Audit', detail: '1 paid · 1200€ collected' },
+      bestAngle: { title: 'Revenue Audit · roi-first', detail: '1 paid · 50% reply' },
+      bestMessageFamily: { title: 'roi-first', detail: '1 paid · 50% reply' },
+      topObjection: { title: 'budget', detail: '3 occurrences' },
+      mainLeak: { stageKey: 'meeting_to_close', title: 'Meeting → close', detail: '1 lost between meeting and cash' },
+      nextExperiment: { focus: 'segment', title: 'Tighten reddit/warm close', detail: 'Replies exist but cash is stalled.', source: 'reddit', band: 'warm' },
+    },
+    outcomes: {
+      last7d: { replies: 5, deals: 1, cashEur: 200 },
+      previous7d: { replies: 6, deals: 2, cashEur: 1400 },
+      last30d: { replies: 12, deals: 3, cashEur: 1600 },
+      previous30d: { replies: 8, deals: 1, cashEur: 400 },
+      delta7d: { replies: -1, deals: -1, cashEur: -1200 },
+      delta30d: { replies: 4, deals: 2, cashEur: 1200 },
+      rates: { replyRate7d: 33.3, winRate7d: 6.7, replyRate30d: 40, winRate30d: 10 },
+      sourceBreakdown: [
+        {
+          source: 'reddit',
+          active: 10,
+          replied: 3,
+          won: 0,
+          replyRate: 30,
+          winRate: 0,
+          qualityScore: 20,
+          playbookHint: 'needs replies',
+        },
+      ],
+      sourceBandBreakdown: [],
+      topSegment: { key: 'reddit:warm', source: 'reddit', band: 'warm', qualityScore: 25, playbookHint: 'needs replies' },
+      blockers: [],
+      blockerActions: [],
+    },
+    loop: {
+      activeLoops: 2,
+      readyCheckouts: 1,
+      pendingApprovals: 2,
+      revenueEur: 1800,
+      blockedRevenueEur: 1500,
+      recommendedAction: null,
+    },
+  },
+  prospects: {
+    total: 24,
+    awaitingApproval: 2,
+    pendingApprovals: 2,
+    followUpsDue: 9,
+    hotLeads: 4,
+  },
+  automation: {
+    autonomyStatus: 'active',
+    pausedReason: null,
+    queuedJobs: 2,
+    runningJobs: 0,
+    failedJobs: 3,
+  },
+  infrastructure: {
+    status: 'ok',
+    headline: 'Stable',
+    summary: 'No infra issue.',
+    operatorNextStep: 'Keep watching.',
+    checkedAt: '2026-06-01T09:55:00.000Z',
+    runtimeCommit: 'abc123',
+    servicesCount: 4,
+    openIncidents: 0,
+  },
+}
+
+const previousSnapshot = {
+  revenue: {
+    outcomes: {
+      last7d: { cashEur: 1200 },
+      sourceBreakdown: [{ source: 'reddit', replyRate: 52 }],
+    },
+    loop: {
+      blockedRevenueEur: 300,
+    },
+    conversions: {
+      bestSegmentToPay: {
+        source: 'reddit',
+        band: 'warm',
+      },
+    },
+  },
+  prospects: {
+    followUpsDue: 3,
+  },
+  automation: {
+    failedJobs: 0,
+  },
+}
+
+describe('buildHermesBusinessAlerts', () => {
+  it('emits cash-relevant business and execution alerts from drift', () => {
+    const alerts = buildHermesBusinessAlerts({
+      context: baseContext,
+      previousSnapshot,
+      now: new Date('2026-06-01T10:00:00.000Z'),
+    })
+
+    expect(alerts.map((alert) => alert.category)).toEqual(
+      expect.arrayContaining([
+        'business_followups_due_spike',
+        'business_reply_rate_drop',
+        'business_paid_cash_drop',
+        'business_blocked_revenue_increase',
+        'business_best_segment_stall',
+        'execution_failed_jobs_increase',
+      ])
+    )
+    expect(alerts.find((alert) => alert.category === 'business_paid_cash_drop')?.severity).toBe('critical')
+    expect(alerts.find((alert) => alert.category === 'business_best_segment_stall')?.headline).toContain('reddit')
+  })
+})

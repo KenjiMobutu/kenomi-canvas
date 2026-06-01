@@ -78,7 +78,7 @@ async function queryHermesCounts() {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const [runs, recommendations, alerts, briefs] = await Promise.all([
+  const [runs, recommendations, alerts, businessAlerts, briefs] = await Promise.all([
     supabase.from('hermes_operator_runs').select('id').limit(1),
     supabase
       .from('hermes_operator_recommendations')
@@ -86,18 +86,26 @@ async function queryHermesCounts() {
       .in('status', ['open', 'executed', 'accepted'])
       .limit(1),
     supabase.from('business_alerts').select('id').eq('channel', 'studio').limit(1),
+    supabase
+      .from('business_alerts')
+      .select('id')
+      .eq('channel', 'studio')
+      .like('category', 'business_%')
+      .limit(1),
     supabase.from('hermes_operator_briefs').select('id').limit(1),
   ])
 
   if (runs.error) throw new Error(runs.error.message)
   if (recommendations.error) throw new Error(recommendations.error.message)
   if (alerts.error) throw new Error(alerts.error.message)
+  if (businessAlerts.error) throw new Error(businessAlerts.error.message)
   if (briefs.error) throw new Error(briefs.error.message)
 
   return {
     runCount: (runs.data ?? []).length,
     recommendationCount: (recommendations.data ?? []).length,
     alertCount: (alerts.data ?? []).length,
+    businessAlertCount: (businessAlerts.data ?? []).length,
     briefCount: (briefs.data ?? []).length,
   }
 }
@@ -163,8 +171,8 @@ async function bootstrapHermesTruthIfMissing() {
     user_id: userId,
     run_id: runId,
     severity: 'info',
-    category: 'smoke_bootstrap',
-    dedupe_key: `smoke_bootstrap:${new Date().toISOString().slice(0, 10)}`,
+    category: 'business_smoke_bootstrap',
+    dedupe_key: `business_smoke_bootstrap:${new Date().toISOString().slice(0, 10)}`,
     headline: 'Hermes operator bootstrap created',
     detail: 'A minimal Hermes operator run was inserted for smoke coverage.',
     status: 'open',
@@ -298,6 +306,7 @@ if (
   counts.runCount === 0 ||
   counts.recommendationCount === 0 ||
   counts.alertCount === 0 ||
+  counts.businessAlertCount === 0 ||
   counts.briefCount === 0
 ) {
   try {
