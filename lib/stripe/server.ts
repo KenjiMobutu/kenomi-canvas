@@ -21,13 +21,13 @@ export function createStripeClientFromSecretKey(secretKey: string): Stripe {
   }
 
   return new Stripe(secretKey, {
-    apiVersion: '2026-04-22.dahlia',
+    apiVersion: '2026-05-27.dahlia',
   })
 }
 
 export function createStripeWebhookVerifierClient(): Stripe {
   return new Stripe('sk_webhook_verifier', {
-    apiVersion: '2026-04-22.dahlia',
+    apiVersion: '2026-05-27.dahlia',
   })
 }
 

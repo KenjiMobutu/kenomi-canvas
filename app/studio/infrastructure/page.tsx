@@ -22,6 +22,11 @@ import {
   INFRA_FALLBACK_SERVICES,
   INFRA_TOPOLOGY_POSITIONS,
 } from '@/lib/studio/infrastructure-fallback'
+import {
+  buildInfrastructureDeployEntries,
+  buildInfrastructureLogEntries,
+  infrastructureStatusColor,
+} from '@/lib/studio/infrastructure-panels'
 
 // Services de l'infra — statuts alimentés par /api/studio/services/health
 type InfraService = {
@@ -1001,7 +1006,19 @@ function ServiceInspector({
   )
 }
 
-function EventLog() {
+function EventLog({
+  history,
+  diagnostics,
+}: {
+  history: InfraOpsHistory | null
+  diagnostics: InfraDiagnosticsResponse | null
+}) {
+  const entries = buildInfrastructureLogEntries({
+    events: history?.events,
+    incidents: history?.incidents,
+    devopsSummary: diagnostics?.devopsSummary ?? null,
+  })
+
   return (
     <div
       style={{
@@ -1037,38 +1054,108 @@ function EventLog() {
               marginTop: 2,
             }}
           >
-            journalctl · follow
+            live ops activity
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['ALL', 'INFO', 'WARN', 'ERROR'].map((f, i) => (
-            <span
-              key={f}
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9,
-                padding: '3px 7px',
-                borderRadius: 3,
-                letterSpacing: '.14em',
-                background: i === 0 ? surface2 : 'transparent',
-                color: i === 0 ? text : muted2,
-                border: `1px solid ${line}`,
-                textTransform: 'uppercase',
-              }}
-            >
-              {f}
-            </span>
-          ))}
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            padding: '3px 7px',
+            borderRadius: 3,
+            letterSpacing: '.14em',
+            background: surface2,
+            color: text,
+            border: `1px solid ${line}`,
+            textTransform: 'uppercase',
+          }}
+        >
+          {entries.length} events
+        </span>
+      </div>
+      {entries.length === 0 ? (
+        <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: muted2 }}>Aucun événement système disponible</p>
         </div>
-      </div>
-      <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-        <p style={{ fontSize: 12, color: muted2 }}>Aucun événement · configurez votre monitoring</p>
-      </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {entries.map((entry) => {
+            const accent =
+              infrastructureStatusColor(entry.severity) === 'rose'
+                ? rose
+                : infrastructureStatusColor(entry.severity) === 'amber'
+                  ? amber
+                  : emerald
+            return (
+              <div
+                key={entry.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '78px 1fr auto',
+                  gap: 8,
+                  alignItems: 'center',
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  background: bg,
+                  border: `1px solid ${line}`,
+                }}
+              >
+                <span
+                  style={{
+                    color: accent,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    letterSpacing: '.1em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {entry.label}
+                </span>
+                <span
+                  style={{
+                    color: muted,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={entry.message}
+                >
+                  {entry.message}
+                </span>
+                <span
+                  style={{
+                    color: muted2,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    letterSpacing: '.08em',
+                  }}
+                >
+                  {minutesAgo(entry.createdAt)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-function DeploysPanel() {
+function DeploysPanel({
+  history,
+  diagnostics,
+}: {
+  history: InfraOpsHistory | null
+  diagnostics: InfraDiagnosticsResponse | null
+}) {
+  const entries = buildInfrastructureDeployEntries({
+    parity: history?.parity ?? diagnostics?.deploymentParity ?? null,
+    devopsSummary: diagnostics?.devopsSummary ?? null,
+    checkedAt: diagnostics?.checkedAt ?? null,
+  })
+
   return (
     <div
       style={{
@@ -1104,15 +1191,101 @@ function DeploysPanel() {
               marginTop: 2,
             }}
           >
-            coolify · last 24h
+            runtime · parity · expected
           </div>
         </div>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            padding: '3px 7px',
+            borderRadius: 3,
+            letterSpacing: '.14em',
+            background: surface2,
+            color: text,
+            border: `1px solid ${line}`,
+            textTransform: 'uppercase',
+          }}
+        >
+          {entries.length} items
+        </span>
       </div>
-      <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-        <p style={{ fontSize: 12, color: muted2 }}>
-          Configurez <b style={{ color: text }}>COOLIFY_API_TOKEN</b> pour voir les déploiements
-        </p>
-      </div>
+      {entries.length === 0 ? (
+        <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: muted2 }}>Aucune donnée de déploiement disponible</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {entries.map((entry) => {
+            const accent =
+              entry.status === 'ok' ? emerald : entry.status === 'mismatch' ? rose : amber
+            return (
+              <div
+                key={entry.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '84px 1fr auto',
+                  gap: 8,
+                  alignItems: 'center',
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  background: bg,
+                  border: `1px solid ${line}`,
+                }}
+              >
+                <span
+                  style={{
+                    color: accent,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    letterSpacing: '.1em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {entry.label}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      color: text,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={entry.commit}
+                  >
+                    {entry.commit}
+                  </div>
+                  <div
+                    style={{
+                      color: muted2,
+                      fontSize: 9.5,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={entry.detail}
+                  >
+                    {entry.detail}
+                  </div>
+                </div>
+                <span
+                  style={{
+                    color: muted2,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    letterSpacing: '.08em',
+                  }}
+                >
+                  {minutesAgo(entry.createdAt)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -1985,7 +2158,7 @@ export default function InfrastructurePage() {
   const [healthLoading, setHealthLoading] = useState(true)
   const [proxmox, setProxmox] = useState<ProxmoxData | null>(null)
   const [proxmoxError, setProxmoxError] = useState<string | null>(null)
-  const [diagnostics, setDiagnostics] = useState<InfraDiagnostics | null>(null)
+  const [diagnostics, setDiagnostics] = useState<InfraDiagnosticsResponse | null>(null)
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null)
   const [diagnosticActionPending, setDiagnosticActionPending] = useState<string | null>(null)
   const [diagnosticActionResult, setDiagnosticActionResult] =
@@ -2505,8 +2678,11 @@ export default function InfrastructurePage() {
         <div
           style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.4fr 1fr', gap: 14 }}
         >
-          <EventLog />
-          <DeploysPanel />
+          <EventLog history={opsHistory} diagnostics={diagnostics} />
+          <DeploysPanel
+            history={opsHistory}
+            diagnostics={diagnostics}
+          />
         </div>
       </div>
     </CkShell>
