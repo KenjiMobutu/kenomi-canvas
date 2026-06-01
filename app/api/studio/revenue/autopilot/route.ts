@@ -27,6 +27,7 @@ import { insertAuditEvent } from '@/lib/audit-log'
 import { getCheckoutEnvironment, parsePaymentOutput } from '@/lib/stripe/checkout-action'
 import { buildAcquisitionRoi, type AcquisitionEventRow } from '@/lib/metrics/acquisition-roi'
 import { buildRevenueDailyCycleAudit } from '@/lib/revenue-daily-cycle'
+import { filterRowsByVentureIds } from '@/lib/revenue/ownership'
 import {
   buildRevenueVentureDecisionPatch,
   deriveRevenueRoiDecision,
@@ -81,11 +82,9 @@ async function loadRevenueContext(input: {
   const [
     pipelines,
     ventures,
-    payments,
     campaignDrafts,
     autonomyActions,
     approvals,
-    decisions,
     ventureEvents,
   ] = await Promise.all([
     readTable<RevenuePipelineRow>(
@@ -103,13 +102,6 @@ async function loadRevenueContext(input: {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100)
-    ),
-    readTable<RevenuePaymentRow>(
-      input.supabase
-        .from('payments')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200)
     ),
     readTable<RevenueCampaignDraftRow>(
       input.supabase
@@ -135,13 +127,6 @@ async function loadRevenueContext(input: {
         .order('created_at', { ascending: false })
         .limit(200)
     ),
-    readTable<RevenueDecisionRow>(
-      input.supabase
-        .from('decisions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200)
-    ),
     readTable<AcquisitionEventRow>(
       input.supabase
         .from('venture_events')
@@ -151,20 +136,37 @@ async function loadRevenueContext(input: {
         .limit(500)
     ),
   ])
+  const ventureIds = ventures.map((venture) => venture.id)
+  const [payments, decisions] = await Promise.all([
+    readTable<RevenuePaymentRow>(
+      input.supabase
+        .from('payments')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200)
+    ),
+    readTable<RevenueDecisionRow>(
+      input.supabase
+        .from('decisions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200)
+    ),
+  ])
 
   return {
     snapshot: buildRevenueLoopSnapshot({
       pipelines,
       ventures,
-      payments,
+      payments: filterRowsByVentureIds(payments, ventureIds),
       campaignDrafts,
       autonomyActions,
       approvals,
-      decisions,
+      decisions: filterRowsByVentureIds(decisions, ventureIds),
     }),
     autonomyActions,
     approvals,
-    decisions,
+    decisions: filterRowsByVentureIds(decisions, ventureIds),
     ventureEvents,
   }
 }

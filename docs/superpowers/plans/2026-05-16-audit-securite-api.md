@@ -411,7 +411,7 @@ echo "Secret généré : $SECRET"
 
 # L'ajouter dans Coolify
 curl -s -X POST "http://192.168.0.19:8000/api/v1/applications/yup6hpmw0fcowrkkf2o3bzl1/envs" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2" \
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"key\": \"DASHBOARD_TOKEN_SECRET\", \"value\": \"$SECRET\"}"
 ```
@@ -475,7 +475,7 @@ git commit -m "fix(security): encodeURIComponent(slug) dans la redirection waitl
 ```bash
 git push origin main
 curl -s -X GET "http://192.168.0.19:8000/api/v1/deploy?uuid=yup6hpmw0fcowrkkf2o3bzl1" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2"
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN"
 ```
 
 **Après déploiement — déclencher un redéploiement Coolify pour appliquer `DASHBOARD_TOKEN_SECRET` :**

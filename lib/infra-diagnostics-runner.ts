@@ -12,6 +12,7 @@ import {
   type ProxmoxClientSettings,
 } from '@/lib/proxmox-client'
 import { unwrapOptionalInfraSettings } from '@/lib/user-settings-normalization'
+import { isAllowedInfraServiceUrl } from '@/lib/security'
 
 type QueryResponse<T = unknown> = {
   data: T | null
@@ -36,8 +37,19 @@ type ServiceStatus = {
 
 const REACHABLE_CODES = new Set([200, 201, 204, 301, 302, 401, 403, 404, 405])
 
-async function pingDiagnosticUrl(url: string, timeoutMs = 5000): Promise<ServiceStatus> {
+async function pingDiagnosticUrl(
+  serviceId: string,
+  url: string,
+  timeoutMs = 5000
+): Promise<ServiceStatus> {
   const start = Date.now()
+  if (!isAllowedInfraServiceUrl(serviceId, url)) {
+    return {
+      ok: false,
+      latencyMs: 0,
+      error: 'blocked by url policy',
+    }
+  }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -76,11 +88,11 @@ export async function collectInfraDiagnostics(input: {
   const checkedAt = new Date().toISOString()
 
   const [hermesAgent, ollama, n8n, supabaseStatus, coolify] = await Promise.all([
-    pingDiagnosticUrl(urls.hermesAgent),
-    pingDiagnosticUrl(urls.ollama),
-    pingDiagnosticUrl(urls.n8n),
-    pingDiagnosticUrl(urls.supabase),
-    pingDiagnosticUrl(urls.coolify),
+    pingDiagnosticUrl('hermesAgent', urls.hermesAgent),
+    pingDiagnosticUrl('ollama', urls.ollama),
+    pingDiagnosticUrl('n8n', urls.n8n),
+    pingDiagnosticUrl('supabase', urls.supabase),
+    pingDiagnosticUrl('coolify', urls.coolify),
   ])
 
   const proxmoxConfig = resolveProxmoxConfig(settings as ProxmoxClientSettings | null)

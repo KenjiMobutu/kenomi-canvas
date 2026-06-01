@@ -4,6 +4,7 @@ import { requireAllowedUser } from '@/lib/auth-server'
 import { buildRevenueCadenceStatus } from '@/lib/revenue-cadence'
 import { buildAcquisitionRoi, type AcquisitionEventRow } from '@/lib/metrics/acquisition-roi'
 import { buildRevenueProofAudit } from '@/lib/revenue-proof'
+import { filterRowsByVentureIds } from '@/lib/revenue/ownership'
 
 async function readTable<T>(
   query: PromiseLike<{ data: T[] | null; error: { message: string } | null }>
@@ -19,7 +20,7 @@ export async function GET() {
 
   try {
     const userId = user!.id
-    const [events, ventureEvents, payments, campaignDrafts, actions, approvals, decisions] =
+    const [events, ventureEvents, ventures, campaignDrafts, actions, approvals] =
       await Promise.all([
         readTable(
           supabase
@@ -40,10 +41,11 @@ export async function GET() {
         ),
         readTable(
           supabase
-            .from('payments')
-            .select('status, provider_status, checkout_url')
+            .from('ventures')
+            .select('id')
+            .eq('user_id', userId)
             .order('created_at', { ascending: false })
-            .limit(200)
+            .limit(100)
         ),
         readTable(
           supabase
@@ -69,15 +71,27 @@ export async function GET() {
             .order('created_at', { ascending: false })
             .limit(200)
         ),
-        readTable(
-          supabase
-            .from('decisions')
-            .select('decision, created_at')
-            .order('created_at', { ascending: false })
-            .limit(1)
-        ),
       ])
+    const ventureIds = ventures.map((venture) => venture.id)
+    const [payments, decisions] = await Promise.all([
+      readTable(
+        supabase
+          .from('payments')
+          .select('venture_id, status, provider_status, checkout_url')
+          .order('created_at', { ascending: false })
+          .limit(200)
+      ),
+      readTable(
+        supabase
+          .from('decisions')
+          .select('venture_id, decision, created_at')
+          .order('created_at', { ascending: false })
+          .limit(200)
+      ),
+    ])
     const acquisition = buildAcquisitionRoi(ventureEvents)
+    const scopedPayments = filterRowsByVentureIds(payments, ventureIds)
+    const scopedDecisions = filterRowsByVentureIds(decisions, ventureIds)
 
     return NextResponse.json({
       ok: true,
@@ -85,13 +99,13 @@ export async function GET() {
       cadence: buildRevenueCadenceStatus({ events }),
       acquisition,
       proof: buildRevenueProofAudit({
-        payments,
+        payments: scopedPayments,
         campaignDrafts,
         events: ventureEvents,
         actions,
         approvals,
         acquisition,
-        latestDecision: decisions[0] ?? null,
+        latestDecision: scopedDecisions[0] ?? null,
       }),
     })
   } catch (error) {

@@ -406,5 +406,5 @@ git commit -m "feat(settings): champs n8n_base_url + n8n_api_key — fix model d
 ```bash
 git push origin main
 curl -s -X GET "http://192.168.0.19:8000/api/v1/deploy?uuid=yup6hpmw0fcowrkkf2o3bzl1" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2"
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN"
 ```

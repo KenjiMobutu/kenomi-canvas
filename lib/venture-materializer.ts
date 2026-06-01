@@ -112,7 +112,7 @@ export function buildVentureInsertFromPipeline(input: PipelineVentureInput) {
     nom: input.ideaTitle,
     slug: input.slug,
     type_produit: 'micro-saas',
-    statut: 'draft',
+    statut: 'actif',
     lifecycle_status: 'draft',
     current_decision: 'continue',
     stage: 'Validation',

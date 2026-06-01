@@ -3,6 +3,7 @@ import {
   isAllowedWebhookUrl,
   isAllowedOllamaUrl,
   isAllowedHermesAgentUrl,
+  isAllowedInfraServiceUrl,
   isValidEmail,
 } from './security'
 
@@ -61,6 +62,25 @@ describe('isAllowedHermesAgentUrl', () => {
   it('accepte un host privé explicitement autorisé pour Hermes Agent', () => {
     process.env.TRUSTED_PRIVATE_HOSTS = 'hermes.tailnet.local'
     expect(isAllowedHermesAgentUrl('https://hermes.tailnet.local/v1/health')).toBe(true)
+  })
+})
+
+describe('isAllowedInfraServiceUrl', () => {
+  it('rejects private infra URLs without explicit allowlist', () => {
+    expect(isAllowedInfraServiceUrl('coolify', 'http://192.168.0.19:8000/api/v1/version')).toBe(
+      false
+    )
+    expect(
+      isAllowedInfraServiceUrl('supabase', 'http://192.168.0.10:8000/internal-rest-probe')
+    ).toBe(false)
+  })
+
+  it('accepts trusted private infra URLs', () => {
+    process.env.TRUSTED_PRIVATE_HOSTS = '192.168.0.19,192.168.0.10'
+    expect(isAllowedInfraServiceUrl('coolify', 'http://192.168.0.19:8000/api/v1/version')).toBe(
+      true
+    )
+    expect(isAllowedInfraServiceUrl('supabase', 'http://192.168.0.10:54321/rest/v1')).toBe(true)
   })
 })
 

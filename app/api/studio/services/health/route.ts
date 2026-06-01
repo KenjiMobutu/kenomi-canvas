@@ -9,7 +9,11 @@ import { cookies } from 'next/headers'
 import { checkOllamaHealth } from '@/lib/llm-client'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { resolveHealthServiceUrls, type UserInfraSettings } from '@/lib/infra-config'
-import { isAllowedHermesAgentUrl, isAllowedOllamaUrl } from '@/lib/security'
+import {
+  isAllowedHermesAgentUrl,
+  isAllowedInfraServiceUrl,
+  isAllowedOllamaUrl,
+} from '@/lib/security'
 import { unwrapOptionalInfraSettings } from '@/lib/user-settings-normalization'
 
 type ServiceStatus = {
@@ -57,15 +61,19 @@ export async function GET() {
 
   const hermesAllowed = isAllowedHermesAgentUrl(urls.hermesAgent)
   const ollamaAllowed = isAllowedOllamaUrl(urls.ollama.replace(/\/api\/tags$/, ''))
+  const n8nAllowed = isAllowedInfraServiceUrl('n8n', urls.n8n)
+  const supabaseAllowed = isAllowedInfraServiceUrl('supabase', urls.supabase)
+  const coolifyAllowed = isAllowedInfraServiceUrl('coolify', urls.coolify)
   const hermesDenied: ServiceStatus = { status: 'down', detail: 'URL Hermes invalide' }
   const ollamaDenied: ServiceStatus = { status: 'down', detail: 'URL Ollama invalide' }
+  const infraDenied: ServiceStatus = { status: 'down', detail: 'URL infra invalide' }
 
   const [hermesAgent, ollama, n8n, supabaseHealth, coolify] = await Promise.all([
     hermesAllowed ? pingService(urls.hermesAgent) : Promise.resolve(hermesDenied),
     ollamaAllowed ? pingService(urls.ollama) : Promise.resolve(ollamaDenied),
-    pingService(urls.n8n),
-    pingService(urls.supabase),
-    pingService(urls.coolify),
+    n8nAllowed ? pingService(urls.n8n) : Promise.resolve(infraDenied),
+    supabaseAllowed ? pingService(urls.supabase) : Promise.resolve(infraDenied),
+    coolifyAllowed ? pingService(urls.coolify) : Promise.resolve(infraDenied),
   ])
 
   const ollamaHealthy = ollamaAllowed && (await checkOllamaHealth(urls.ollama))

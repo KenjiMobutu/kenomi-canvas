@@ -139,7 +139,7 @@ COMMENT ON TABLE public.ideas IS
 - [ ] **Step 2 : Appliquer la migration en base**
 
 ```bash
-SERVICE_KEY="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3ODY2NDYwMCwiZXhwIjo0OTM0MzM4MjAwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.XEGcK-cecUeGfwI9Tvo9Cwt31QXrI954nU6tI5gKiCc"
+SERVICE_KEY="$SUPABASE_SERVICE_ROLE_KEY"
 
 # Étape 1 : ajouter la colonne
 curl -s -X POST "https://supabase.kenomi.eu/pg/query" \
@@ -187,7 +187,7 @@ Expected : toutes les lignes se terminent par "OK"
 - [ ] **Step 3 : Vérifier en base**
 
 ```bash
-SERVICE_KEY="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3ODY2NDYwMCwiZXhwIjo0OTM0MzM4MjAwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.XEGcK-cecUeGfwI9Tvo9Cwt31QXrI954nU6tI5gKiCc"
+SERVICE_KEY="$SUPABASE_SERVICE_ROLE_KEY"
 
 curl -s -X POST "https://supabase.kenomi.eu/pg/query" \
   -H "apikey: $SERVICE_KEY" \
@@ -220,14 +220,14 @@ git commit -m "fix(database): ideas — ajout user_id + policy RLS utilisateur (
 ```bash
 # Récupérer d'abord les envs actuels pour voir l'UUID exact de la variable si elle existe
 curl -s "http://192.168.0.19:8000/api/v1/applications/yup6hpmw0fcowrkkf2o3bzl1/envs" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2" | python3 -c "import json,sys; envs=json.load(sys.stdin); [print(e['key'], e['uuid']) for e in envs if 'DASHBOARD' in e['key']]" 2>/dev/null
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN" | python3 -c "import json,sys; envs=json.load(sys.stdin); [print(e['key'], e['uuid']) for e in envs if 'DASHBOARD' in e['key']]" 2>/dev/null
 ```
 
 Si `DASHBOARD_TOKEN_SECRET` n'apparaît pas, la créer :
 
 ```bash
 curl -s -X POST "http://192.168.0.19:8000/api/v1/applications/yup6hpmw0fcowrkkf2o3bzl1/envs" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2" \
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"key": "DASHBOARD_TOKEN_SECRET", "value": "kenomi2025-dashboard-secret-change-me", "is_preview": false}'
 ```
@@ -261,7 +261,7 @@ ALLOWED_EMAIL=you@example.com
 
 ```bash
 curl -s -X GET "http://192.168.0.19:8000/api/v1/deploy?uuid=yup6hpmw0fcowrkkf2o3bzl1" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2"
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN"
 ```
 
 Expected : `{"deployments":[{"message":"Application kenomi-canvas deployment queued."...}]}`
@@ -280,5 +280,5 @@ git commit -m "fix(config): .env.example — retirer les vraies clés + ajouter 
 ```bash
 git push origin main
 curl -s -X GET "http://192.168.0.19:8000/api/v1/deploy?uuid=yup6hpmw0fcowrkkf2o3bzl1" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2"
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN"
 ```

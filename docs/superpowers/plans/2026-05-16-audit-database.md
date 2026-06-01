@@ -262,8 +262,8 @@ git commit -m "fix(database): RLS tables legacy + ventures NOT NULL + waitlist W
 
 ```bash
 curl -s -X POST "https://supabase.kenomi.eu/rest/v1/rpc/exec_sql" \
-  -H "apikey: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3ODY2NDYwMCwiZXhwIjo0OTM0MzM4MjAwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.XEGcK-cecUeGfwI9Tvo9Cwt31QXrI954nU6tI5gKiCc" \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3ODY2NDYwMCwiZXhwIjo0OTM0MzM4MjAwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.XEGcK-cecUeGfwI9Tvo9Cwt31QXrI954nU6tI5gKiCc" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
   -H "Content-Type: application/json" \
   -d '{"query": "SELECT COUNT(*) FROM public.ventures WHERE user_id IS NULL"}'
 ```
@@ -391,5 +391,5 @@ Cependant, si des routes API lisent maintenant des données qui n'existaient pas
 ```bash
 git push origin main
 curl -s -X GET "http://192.168.0.19:8000/api/v1/deploy?uuid=yup6hpmw0fcowrkkf2o3bzl1" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2"
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN"
 ```

@@ -404,5 +404,5 @@ git commit -m "feat(ops): /api/health — vérification DB, Supabase, env vars"
 ```bash
 git push origin main
 curl -s -X GET "http://192.168.0.19:8000/api/v1/deploy?uuid=yup6hpmw0fcowrkkf2o3bzl1" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2"
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN"
 ```

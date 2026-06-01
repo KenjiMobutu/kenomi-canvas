@@ -1034,7 +1034,7 @@ git push origin main
 
 ```bash
 curl -s "http://192.168.0.19:8000/api/v1/deploy?uuid=yup6hpmw0fcowrkkf2o3bzl1&force=false" \
-  -H "Authorization: Bearer gk4aKTkRPkJgU2CHvW59mQHrCXtZ56bLoTBUTGJG5d63d0d2"
+  -H "Authorization: Bearer $COOLIFY_API_TOKEN"
 ```
 
 Expected: `{"deployments":[{"message":"Application kenomi-canvas deployment queued.",...}]}`

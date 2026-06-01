@@ -18,6 +18,10 @@ import {
   fuchsia,
 } from '@/lib/ck-vars'
 import { sparkPath, useIsMobile } from '@/lib/studio-utils'
+import {
+  INFRA_FALLBACK_SERVICES,
+  INFRA_TOPOLOGY_POSITIONS,
+} from '@/lib/studio/infrastructure-fallback'
 
 // Services de l'infra — statuts alimentés par /api/studio/services/health
 type InfraService = {
@@ -34,86 +38,8 @@ type InfraService = {
   repairHref?: string
 }
 
-const FALLBACK_SERVICES: InfraService[] = [
-  {
-    id: 'proxmox',
-    vmid: null,
-    label: 'Proxmox VE',
-    short: 'PROX',
-    color: '#34d399',
-    role: 'Compute cluster',
-    endpointLabel: 'private',
-    healthKey: null,
-    kind: 'host',
-  },
-  {
-    id: 'coolify',
-    vmid: 102,
-    label: 'Coolify',
-    short: 'COOL',
-    color: '#34d399',
-    role: 'Deployments',
-    endpointLabel: 'private',
-    healthKey: 'coolify',
-    kind: 'service',
-  },
-  {
-    id: 'hermesAgent',
-    vmid: 102,
-    label: 'Hermes Agent',
-    short: 'HRM',
-    color: '#f97316',
-    role: 'Hermes API',
-    endpointLabel: 'hermes-api.kenomi.eu',
-    healthKey: 'hermesAgent',
-    kind: 'service',
-  },
-  {
-    id: 'n8n',
-    vmid: null,
-    label: 'n8n',
-    short: 'N8N',
-    color: '#e879f9',
-    role: 'Automation',
-    endpointLabel: 'private',
-    healthKey: 'n8n',
-    kind: 'service',
-  },
-  {
-    id: 'supabase',
-    vmid: null,
-    label: 'Supabase',
-    short: 'SUP',
-    color: '#34d399',
-    role: 'Auth and database',
-    endpointLabel: 'supabase',
-    healthKey: 'supabase',
-    kind: 'external',
-  },
-  {
-    id: 'ollama',
-    vmid: null,
-    label: 'Ollama',
-    short: 'OLL',
-    color: '#fb923c',
-    role: 'Local inference',
-    endpointLabel: 'private',
-    healthKey: 'ollama',
-    kind: 'external',
-  },
-]
-
-const POSITIONS: Record<string, { x: number; y: number; kind: string }> = {
-  proxmox: { x: 200, y: 240, kind: 'host' },
-  coolify: { x: 380, y: 100, kind: 'service' },
-  hermesAgent: { x: 560, y: 100, kind: 'service' },
-  nginx: { x: 580, y: 80, kind: 'edge' },
-  uptime: { x: 580, y: 200, kind: 'service' },
-  vault: { x: 380, y: 240, kind: 'service' },
-  n8n: { x: 380, y: 380, kind: 'service' },
-  supabase: { x: 720, y: 320, kind: 'external' },
-  ollama: { x: 720, y: 160, kind: 'external' },
-}
+const FALLBACK_SERVICES: InfraService[] = INFRA_FALLBACK_SERVICES
+const POSITIONS = INFRA_TOPOLOGY_POSITIONS
 
 const TOPO_EDGES: [string, string][] = [
   ['proxmox', 'coolify'],

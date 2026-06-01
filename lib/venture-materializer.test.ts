@@ -33,7 +33,7 @@ describe('buildVentureInsertFromPipeline', () => {
       nom: 'Inbox Pulse',
       slug: 'inbox-pulse',
       type_produit: 'micro-saas',
-      statut: 'draft',
+      statut: 'actif',
       lifecycle_status: 'draft',
       current_decision: 'continue',
       stage: 'Validation',

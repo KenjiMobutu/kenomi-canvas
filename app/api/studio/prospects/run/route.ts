@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { isRateLimited } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api-response'
+import { completeJob, failJob, type AutonomyJobSupabase } from '@/lib/autonomy/job-runner'
+import { runAgentStep, type RunAgentStepSupabase } from '@/lib/autonomy/run-agent-step'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -22,6 +24,12 @@ interface QueryBuilder {
 
 interface SingleQueryBuilder {
   single(): PromiseLike<{ data: unknown; error: { message: string } | null }>
+}
+
+async function maybeSingle<T>(query: SingleQueryBuilder): Promise<T | null> {
+  const { data, error } = await query.single()
+  if (error) throw new Error(error.message)
+  return data as T | null
 }
 
 const sourceValues = ['linkedin', 'malt', 'upwork', 'indeed', 'reddit', 'other'] as const
@@ -97,6 +105,57 @@ export async function POST(request: Request) {
 
   if (!job?.id) {
     return apiError("Impossible de créer le job Prospect", 500)
+  }
+
+  const locked = await maybeSingle<{ id?: string }>(
+    supabase
+      .from('autonomy_jobs')
+      .update({
+        status: 'running',
+        locked_at: nowIso,
+        locked_by: `manual:${user!.id}`,
+        runner_type: 'manual_inline',
+        attempt_count: 1,
+        updated_at: nowIso,
+      })
+      .eq('id', job.id)
+      .eq('status', 'queued')
+      .select('id')
+  )
+
+  if (locked?.id) {
+    try {
+      const result = await runAgentStep({
+        supabase: supabase as unknown as RunAgentStepSupabase,
+        userId: user!.id,
+        agentId: 'prospect',
+        prompt,
+      })
+
+      await completeJob(
+        supabase as unknown as AutonomyJobSupabase,
+        job.id,
+        {
+          agentRunId: result.agentRunId,
+          content: result.content,
+          durationMs: result.durationMs,
+          model: result.model,
+          parsedOutput: result.parsedOutput,
+        },
+        new Date()
+      )
+
+      return NextResponse.json({
+        ok: true,
+        jobId: job.id,
+        jobStatus: 'completed',
+        message: 'Prospect exécuté immédiatement',
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Run Prospect échoué'
+      await failJob(supabase as unknown as AutonomyJobSupabase, job.id, message, new Date())
+      return apiError(message, 500)
+    }
   }
 
   return NextResponse.json(
