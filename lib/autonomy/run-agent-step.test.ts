@@ -309,6 +309,7 @@ describe('runAgentStep', () => {
   it('defaults Prospect reasoning to Hermes when no model override is configured', async () => {
     const supabase = createFakeSupabase()
     let capturedModel = ''
+    let capturedTimeout = 0
 
     await runAgentStep({
       supabase,
@@ -316,6 +317,7 @@ describe('runAgentStep', () => {
       agentId: 'prospect',
       llm: async (_messages, config) => {
         capturedModel = config.model
+        capturedTimeout = config.timeout_ms ?? 0
         return {
           content: JSON.stringify({
             company_name: 'Acme Studio',
@@ -338,6 +340,7 @@ describe('runAgentStep', () => {
     })
 
     expect(capturedModel).toBe('hermes3:8b')
+    expect(capturedTimeout).toBe(90_000)
   })
 
   it('runs the DevOps agent from grounded diagnostics context and persists a snapshot', async () => {

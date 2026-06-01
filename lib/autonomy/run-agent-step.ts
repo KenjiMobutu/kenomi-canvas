@@ -263,6 +263,12 @@ function getDefaultAgentModel(agentId: string): string {
   return 'qwen3:8b'
 }
 
+function getAgentLlmTimeoutMs(agentId: string): number {
+  if (agentId === 'prospect') return 90_000
+  if (agentId === 'decision' || agentId === 'scout') return 60_000
+  return 30_000
+}
+
 function buildDevopsRepairPrompt(content: string): string {
   return [
     'Repair the following malformed DevOps JSON.',
@@ -719,6 +725,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       system: systemPrompt,
       temperature: cfg?.temperature ?? 0.7,
       max_tokens: cfg?.max_tokens ?? 512,
+      timeout_ms: getAgentLlmTimeoutMs(agentId),
     })
 
     let content = llmResult.content
@@ -737,6 +744,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           system: 'Return strict JSON only.',
           temperature: 0,
           max_tokens: cfg?.max_tokens ?? 512,
+          timeout_ms: getAgentLlmTimeoutMs(agentId),
         })
         const repairedParsed = parseOutputSafely(agentId, repairedResult.content)
         if (repairedParsed) {
