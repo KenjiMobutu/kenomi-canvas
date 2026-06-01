@@ -9,6 +9,9 @@ describe('verifyHermesOperatorSmoke', () => {
       operatorProtected: true,
       notificationsProtected: true,
       briefProtected: true,
+      triggerAttempted: false,
+      triggerOk: false,
+      runAdvanced: false,
       runCount: 0,
       recommendationCount: 0,
       alertCount: 0,
@@ -21,6 +24,9 @@ describe('verifyHermesOperatorSmoke', () => {
     })
 
     expect(result.ok).toBe(false)
+    expect(result.failures).toContain('operator_trigger_not_attempted')
+    expect(result.failures).toContain('operator_trigger_failed')
+    expect(result.failures).toContain('operator_run_not_advanced')
     expect(result.failures).toContain('operator_run_missing')
     expect(result.failures).toContain('operator_recommendation_missing')
     expect(result.failures).toContain('operator_alert_missing')
@@ -39,6 +45,9 @@ describe('verifyHermesOperatorSmoke', () => {
       operatorProtected: true,
       notificationsProtected: true,
       briefProtected: true,
+      triggerAttempted: true,
+      triggerOk: true,
+      runAdvanced: true,
       runCount: 2,
       recommendationCount: 3,
       alertCount: 1,

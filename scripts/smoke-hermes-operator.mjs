@@ -49,6 +49,14 @@ function sh(command) {
   }).trim()
 }
 
+function shOptional(command) {
+  try {
+    return sh(command)
+  } catch {
+    return ''
+  }
+}
+
 function shQuote(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`
 }
@@ -66,7 +74,7 @@ function resolveAppContainer() {
 }
 
 function readContainerEnv(container, key) {
-  return sh(`docker exec ${container} printenv ${key}`).trim()
+  return shOptional(`docker exec ${container} sh -lc ${shQuote(`printenv ${key} || true`)}`).trim()
 }
 
 async function queryHermesCounts() {
@@ -106,6 +114,8 @@ async function queryHermesCounts() {
   if (briefs.error) throw new Error(briefs.error.message)
 
   return {
+    latestRunId: (runs.data ?? [])[0]?.id ?? null,
+    latestRunCreatedAt: (runs.data ?? [])[0]?.created_at ?? null,
     runCount: (runs.data ?? []).length,
     recommendationCount: (recommendations.data ?? []).length,
     alertCount: (alerts.data ?? []).length,
@@ -124,113 +134,6 @@ async function queryHermesCounts() {
       return row.status === 'accepted' && row.action_type === 'run_agent' && agentId === 'devops'
     }).length,
   }
-}
-
-async function bootstrapHermesTruthIfMissing() {
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error('supabase_service_role_missing')
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-
-  const { data: scheduleRows, error: scheduleError } = await supabase
-    .from('business_schedules')
-    .select('user_id')
-    .limit(1)
-  if (scheduleError) throw new Error(scheduleError.message)
-  const userId = scheduleRows?.[0]?.user_id
-  if (!userId) throw new Error('hermes_user_missing')
-
-  const nowIso = new Date().toISOString()
-  const runId = randomUUID()
-
-  const runPayload = {
-    id: runId,
-    user_id: userId,
-    mode: 'observe',
-    status: 'completed',
-    model: 'smoke-bootstrap',
-    model_family: 'hermes',
-    input_snapshot: { source: 'smoke-hermes-operator' },
-    output_snapshot: {
-      source: 'smoke-hermes-operator',
-      bootstrap: true,
-    },
-    summary: 'Smoke bootstrap Hermes operator summary.',
-    executed_actions_count: 0,
-    enqueued_jobs_count: 0,
-    blocked_by_policy_count: 0,
-    blocked_by_policy_reason_counts: {},
-    alerts_count: 1,
-    created_at: nowIso,
-  }
-
-  const recommendationPayload = {
-    id: randomUUID(),
-    run_id: runId,
-    user_id: userId,
-    kind: 'smoke_bootstrap',
-    priority: 10,
-    title: 'Review Hermes operator rollout',
-    detail: 'Smoke bootstrap inserted because no Hermes operator run existed yet.',
-    action_type: 'run_agent',
-    risk_level: 'low',
-    status: 'open',
-    source: { source: 'smoke-hermes-operator' },
-    payload: { bootstrap: true },
-    created_at: nowIso,
-    updated_at: nowIso,
-  }
-
-  const alertPayload = {
-    id: randomUUID(),
-    user_id: userId,
-    run_id: runId,
-    severity: 'info',
-    category: 'business_smoke_bootstrap',
-    dedupe_key: `business_smoke_bootstrap:${new Date().toISOString().slice(0, 10)}`,
-    headline: 'Hermes operator bootstrap created',
-    detail: 'A minimal Hermes operator run was inserted for smoke coverage.',
-    status: 'open',
-    channel: 'studio',
-    payload: { bootstrap: true },
-    created_at: nowIso,
-    updated_at: nowIso,
-  }
-
-  const briefPayload = {
-    id: randomUUID(),
-    user_id: userId,
-    run_id: runId,
-    summary: 'Smoke bootstrap Hermes daily brief.',
-    cash_delta_7d: 0,
-    top_blocker: 'smoke bootstrap blocker',
-    top_opportunity: 'smoke bootstrap opportunity',
-    best_offer: 'smoke bootstrap offer',
-    best_segment: 'smoke/bootstrap',
-    best_source: 'smoke',
-    main_leak: 'smoke bootstrap leak',
-    next_best_action: 'Review Hermes bootstrap.',
-    created_at: nowIso,
-  }
-
-  const { error: runError } = await supabase.from('hermes_operator_runs').insert(runPayload)
-  if (runError) throw new Error(runError.message)
-
-  const { error: recommendationError } = await supabase
-    .from('hermes_operator_recommendations')
-    .insert(recommendationPayload)
-  if (recommendationError) throw new Error(recommendationError.message)
-
-  const { error: alertError } = await supabase.from('business_alerts').insert(alertPayload)
-  if (alertError) throw new Error(alertError.message)
-
-  const { error: briefError } = await supabase.from('hermes_operator_briefs').insert(briefPayload)
-  if (briefError) throw new Error(briefError.message)
-
-  write('ok hermes bootstrap inserted (run + recommendation + alert + brief)')
 }
 
 async function triggerHermesOperator() {
@@ -304,36 +207,37 @@ const briefProtected = [401, 403, 307].includes(briefStatus)
 if (!briefProtected) fail('hermes brief auth guard', `expected 401/403/307 got ${briefStatus}`)
 else write(`ok hermes brief auth guard (${briefStatus})`)
 
+let beforeCounts
 try {
-  await triggerHermesOperator()
+  beforeCounts = await queryHermesCounts()
 } catch (error) {
-  warn('hermes trigger skipped', error instanceof Error ? error.message : String(error))
+  fail('hermes baseline query', error instanceof Error ? error.message : String(error))
+  process.exit()
+}
+
+let triggerAttempted = false
+let triggerOk = false
+try {
+  triggerAttempted = true
+  await triggerHermesOperator()
+  triggerOk = true
+} catch (error) {
+  fail('hermes trigger', error instanceof Error ? error.message : String(error))
+  process.exit()
 }
 
 let counts
 try {
-  counts = queryHermesCounts()
+  counts = await queryHermesCounts()
 } catch (error) {
   fail('hermes counts query', error instanceof Error ? error.message : String(error))
   process.exit()
 }
 
-counts = await counts
-
-if (
-  counts.runCount === 0 ||
-  counts.recommendationCount === 0 ||
-  counts.alertCount === 0 ||
-  counts.businessAlertCount === 0 ||
-  counts.briefCount === 0
-) {
-  try {
-    await bootstrapHermesTruthIfMissing()
-    counts = await queryHermesCounts()
-  } catch (error) {
-    fail('hermes bootstrap', error instanceof Error ? error.message : String(error))
-  }
-}
+const runAdvanced =
+  counts.latestRunId !== beforeCounts.latestRunId ||
+  counts.latestRunCreatedAt !== beforeCounts.latestRunCreatedAt ||
+  counts.runCount > beforeCounts.runCount
 
 for (const [key, value] of Object.entries(counts)) {
   write(`truth ${key}=${value}`)
@@ -345,6 +249,9 @@ const result = verifyHermesOperatorSmoke({
   operatorProtected,
   notificationsProtected,
   briefProtected,
+  triggerAttempted,
+  triggerOk,
+  runAdvanced,
   ...counts,
 })
 

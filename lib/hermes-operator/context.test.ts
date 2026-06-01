@@ -155,6 +155,50 @@ describe('buildHermesOperatorContext', () => {
           },
         },
       ],
+      ventures: [
+        {
+          id: 'venture-1',
+          user_id: 'user-1',
+          name: 'Outbound Sprint Venture',
+          created_at: '2026-05-28T08:00:00.000Z',
+        },
+      ],
+      landing_pages: [
+        { venture_id: 'venture-1', statut: 'published', health_status: 'healthy' },
+        { venture_id: 'venture-x', statut: 'published', health_status: 'healthy' },
+      ],
+      payments: [
+        {
+          id: 'payment-1',
+          venture_id: 'venture-1',
+          status: 'completed',
+          amount_eur: 1200,
+          collected_amount_eur: 1200,
+          created_at: '2026-05-28T10:20:00.000Z',
+          updated_at: '2026-05-28T10:20:00.000Z',
+        },
+        {
+          id: 'payment-x',
+          venture_id: 'venture-x',
+          status: 'completed',
+          amount_eur: 999,
+          collected_amount_eur: 999,
+          created_at: '2026-05-28T10:25:00.000Z',
+          updated_at: '2026-05-28T10:25:00.000Z',
+        },
+      ],
+      decisions: [
+        {
+          id: 'decision-1',
+          venture_id: 'venture-1',
+          created_at: '2026-05-28T10:00:00.000Z',
+        },
+        {
+          id: 'decision-x',
+          venture_id: 'venture-x',
+          created_at: '2026-05-28T10:05:00.000Z',
+        },
+      ],
     })
 
     const snapshot = await buildHermesOperatorContext({
@@ -172,5 +216,7 @@ describe('buildHermesOperatorContext', () => {
     expect(snapshot.infrastructure.status).toBe('degraded')
     expect(snapshot.infrastructure.runtimeCommit).toBe('abc1234')
     expect(snapshot.revenue.weeklyReview.bestOffer.title).toBe('Outbound Sprint')
+    expect(snapshot.revenue.outcomes.last7d.cashEur).toBe(1200)
+    expect(snapshot.revenue.loop.revenueEur).toBe(1200)
   })
 })

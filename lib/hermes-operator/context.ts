@@ -14,6 +14,7 @@ import type { CommerceLandingPageRow } from '@/lib/venture-commerce-readiness'
 import { buildWeeklyRevenueReview } from '@/lib/revenue/weekly-review'
 import { buildCashOutcomeSnapshot } from '@/lib/studio/cash-outcomes'
 import type { HermesOperatorContextSnapshot } from '@/lib/hermes-operator/types'
+import { filterRowsByVentureIds } from '@/lib/revenue/ownership'
 
 interface QueryResult<T> {
   data: T | null
@@ -120,6 +121,15 @@ export async function buildHermesOperatorContext(input: {
   now?: Date
 }): Promise<HermesOperatorContextSnapshot> {
   const now = input.now ?? new Date()
+  const ventures = await readTable<RevenueVentureRow>(
+    input.supabase
+      .from('ventures')
+      .select('*')
+      .eq('user_id', input.userId)
+      .order('created_at', { ascending: false })
+      .limit(150)
+  )
+  const ventureIds = ventures.map((venture) => venture.id)
   const [
     offers,
     prospects,
@@ -128,7 +138,6 @@ export async function buildHermesOperatorContext(input: {
     paymentAttributions,
     payments,
     pipelines,
-    ventures,
     landingPages,
     campaignDrafts,
     autonomyActions,
@@ -189,7 +198,6 @@ export async function buildHermesOperatorContext(input: {
           .select(
             'id, venture_id, status, provider_status, amount_eur, expected_amount_eur, collected_amount_eur, trial_days, checkout_url, created_at, updated_at'
           )
-          .eq('user_id', input.userId)
           .order('created_at', { ascending: false })
           .limit(800)
       ),
@@ -200,14 +208,6 @@ export async function buildHermesOperatorContext(input: {
           .eq('user_id', input.userId)
           .order('updated_at', { ascending: false })
           .limit(100)
-      ),
-      readTable<RevenueVentureRow>(
-        input.supabase
-          .from('ventures')
-          .select('*')
-          .eq('user_id', input.userId)
-          .order('created_at', { ascending: false })
-          .limit(150)
       ),
       readTable<CommerceLandingPageRow>(
         input.supabase
@@ -285,25 +285,28 @@ export async function buildHermesOperatorContext(input: {
     conversationEvents,
     paymentAttributions,
   })
+  const ownedPayments = filterRowsByVentureIds(payments, ventureIds)
+  const ownedLandingPages = filterRowsByVentureIds(landingPages, ventureIds)
+  const ownedDecisions = filterRowsByVentureIds(decisions, ventureIds)
   const weeklyReview = buildWeeklyRevenueReview({
     conversions,
     nowIso: now.toISOString(),
   })
   const outcomes = buildCashOutcomeSnapshot({
     activities,
-    payments,
+    payments: ownedPayments,
     prospects,
     nowIso: now.toISOString(),
   })
   const loopSnapshot = buildRevenueLoopSnapshot({
     pipelines,
     ventures,
-    landingPages,
-    payments,
+    landingPages: ownedLandingPages,
+    payments: ownedPayments,
     campaignDrafts,
     autonomyActions,
     approvals: revenueApprovals,
-    decisions,
+    decisions: ownedDecisions,
   })
   const devopsSummary = buildDevopsSummaryApiView({ row: latestDevopsRun })
 
