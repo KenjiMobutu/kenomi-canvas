@@ -1,4 +1,5 @@
 import { averageDaysFromMs, averageHoursFromMs, percentage } from '@/lib/revenue/funnel-metrics'
+import { buildMessageTruthSnapshot, type MessageTruthRow } from '@/lib/revenue/message-truth'
 
 type OfferRow = {
   id: string
@@ -14,10 +15,7 @@ type ProspectRow = {
   outreach_angle?: string | null
   pipeline_status?: string | null
   created_at?: string | null
-  metadata?: {
-    model?: string | null
-    model_family?: string | null
-  } | null
+  metadata?: Record<string, unknown> | null
 }
 
 type ProspectActivityRow = {
@@ -189,6 +187,11 @@ export type ConversionTruthSnapshot = {
         modelFamily: string
       })
     | null
+  messageFamilyBreakdown: MessageTruthRow[]
+  bestMessageFamily: MessageTruthRow | null
+  messageFamilyRepliesNoCash: MessageTruthRow | null
+  messageFamilyWinsNoCash: MessageTruthRow | null
+  messageFamilyTopObjection: MessageTruthRow | null
   commonObjections: ReasonSummary[]
   lostReasons: ReasonSummary[]
   repeatNext: {
@@ -631,6 +634,18 @@ export function buildConversionTruthSnapshot(input: {
       }
     : null
 
+  const messageTruth = buildMessageTruthSnapshot({
+    prospects: input.prospects.map((prospect) => ({
+      id: prospect.id,
+      source: prospect.source,
+      outreach_angle: prospect.outreach_angle,
+      last_outreach_kind: (prospect.metadata?.last_outreach_kind as string | undefined) ?? null,
+      metadata: prospect.metadata as Record<string, unknown> | null | undefined,
+    })),
+    conversationEvents: input.conversationEvents,
+    paymentAttributions: input.paymentAttributions ?? [],
+  })
+
   const bestOffer = [...offerBreakdown].sort(sortByBusinessValue)[0] ?? null
   const bestOfferToWin = [...offerBreakdown].sort(sortByWinValue)[0] ?? null
   const bestOfferToCollectCash = [...offerBreakdown].sort(sortByBusinessValue)[0] ?? null
@@ -668,6 +683,11 @@ export function buildConversionTruthSnapshot(input: {
     sourceClosesFastest,
     sourceCollectsFastest,
     bestModel: modelBreakdown[0] ?? null,
+    messageFamilyBreakdown: messageTruth.breakdown,
+    bestMessageFamily: messageTruth.bestFamily,
+    messageFamilyRepliesNoCash: messageTruth.familyRepliesNoCash,
+    messageFamilyWinsNoCash: messageTruth.familyWinsNoCash,
+    messageFamilyTopObjection: messageTruth.topObjectionFamily,
     commonObjections,
     lostReasons,
     repeatNext,

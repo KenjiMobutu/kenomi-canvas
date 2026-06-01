@@ -17,12 +17,13 @@ export type WeeklyRevenueReview = {
   bestSegment: WeeklyReviewInsight
   bestOffer: WeeklyReviewInsight
   bestAngle: WeeklyReviewInsight
+  bestMessageFamily: WeeklyReviewInsight
   topObjection: WeeklyReviewInsight
   mainLeak: WeeklyReviewInsight & {
     stageKey: 'contact_to_reply' | 'reply_to_qualified' | 'qualified_to_meeting' | 'meeting_to_close'
   }
   nextExperiment: WeeklyReviewInsight & {
-    focus: 'source' | 'segment' | 'offer' | 'angle'
+    focus: 'source' | 'segment' | 'offer' | 'angle' | 'message_family'
   }
 }
 
@@ -101,7 +102,12 @@ export function buildWeeklyRevenueReview(input: {
         }
 
   const topObjection =
-    input.conversions.commonObjections[0]
+    input.conversions.messageFamilyTopObjection
+      ? {
+          title: formatReason(input.conversions.messageFamilyTopObjection.topObjection ?? undefined),
+          detail: `${input.conversions.messageFamilyTopObjection.messageFamily} · ${input.conversions.messageFamilyTopObjection.objectionCount} occurrences this week`,
+        }
+      : input.conversions.commonObjections[0]
       ? {
           title: formatReason(input.conversions.commonObjections[0].type),
           detail: `${input.conversions.commonObjections[0].count} occurrences this week`,
@@ -109,6 +115,17 @@ export function buildWeeklyRevenueReview(input: {
       : {
           title: 'No objection truth yet',
           detail: 'Classify replies to surface the main buying objection.',
+        }
+
+  const bestMessageFamily =
+    input.conversions.bestMessageFamily
+      ? {
+          title: input.conversions.bestMessageFamily.messageFamily,
+          detail: `${input.conversions.bestMessageFamily.paidCount} paid · ${input.conversions.bestMessageFamily.replyRate}% reply`,
+        }
+      : {
+          title: 'No message truth yet',
+          detail: 'Tag message families to compare what actually converts.',
         }
 
   const stageLeakCandidates = [
@@ -163,6 +180,12 @@ export function buildWeeklyRevenueReview(input: {
       source: input.conversions.segmentRepliesNoPay.source,
       band: input.conversions.segmentRepliesNoPay.band,
     }
+  } else if (input.conversions.messageFamilyRepliesNoCash) {
+    nextExperiment = {
+      focus: 'message_family',
+      title: `Tighten family ${input.conversions.messageFamilyRepliesNoCash.messageFamily}`,
+      detail: `This family replies but does not convert to paid cash yet.`,
+    }
   } else if (input.conversions.bestAngle) {
     nextExperiment = {
       focus: 'angle',
@@ -193,6 +216,7 @@ export function buildWeeklyRevenueReview(input: {
     bestSegment,
     bestOffer,
     bestAngle,
+    bestMessageFamily,
     topObjection,
     mainLeak,
     nextExperiment,

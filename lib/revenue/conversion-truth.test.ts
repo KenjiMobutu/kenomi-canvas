@@ -160,5 +160,15 @@ describe('conversion truth snapshot', () => {
       model: 'hermes3:8b',
       modelFamily: 'hermes',
     })
+    expect(snapshot.bestMessageFamily).toMatchObject({
+      messageFamily: 'speed',
+      paidCount: 1,
+      paidCashEur: 2400,
+    })
+    expect(snapshot.messageFamilyBreakdown[0]).toMatchObject({
+      messageFamily: 'speed',
+      replyRate: 100,
+      paidRate: 50,
+    })
   })
 })

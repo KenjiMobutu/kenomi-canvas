@@ -235,6 +235,52 @@ function makeSnapshot(): ConversionTruthSnapshot {
       leadToReplyHours: 12,
       replyToCloseDays: 3,
     },
+    messageFamilyBreakdown: [
+      {
+        messageFamily: 'speed',
+        messageKey: 'speed:initial:linkedin',
+        contacted: 4,
+        replied: 3,
+        wonCount: 1,
+        paidCount: 1,
+        paidCashEur: 1800,
+        replyRate: 75,
+        winRate: 25,
+        paidRate: 25,
+        topObjection: 'budget_block',
+        objectionCount: 1,
+      },
+    ],
+    bestMessageFamily: {
+      messageFamily: 'speed',
+      messageKey: 'speed:initial:linkedin',
+      contacted: 4,
+      replied: 3,
+      wonCount: 1,
+      paidCount: 1,
+      paidCashEur: 1800,
+      replyRate: 75,
+      winRate: 25,
+      paidRate: 25,
+      topObjection: 'budget_block',
+      objectionCount: 1,
+    },
+    messageFamilyRepliesNoCash: null,
+    messageFamilyWinsNoCash: null,
+    messageFamilyTopObjection: {
+      messageFamily: 'speed',
+      messageKey: 'speed:initial:linkedin',
+      contacted: 4,
+      replied: 3,
+      wonCount: 1,
+      paidCount: 1,
+      paidCashEur: 1800,
+      replyRate: 75,
+      winRate: 25,
+      paidRate: 25,
+      topObjection: 'budget_block',
+      objectionCount: 1,
+    },
     bestOfferToCollectCash: {
       offerId: 'offer-a',
       offerName: 'Outbound Sprint',
@@ -324,6 +370,9 @@ describe('buildWeeklyRevenueReview', () => {
     })
     expect(review.bestAngle).toMatchObject({
       title: 'Outbound Sprint · speed',
+    })
+    expect(review.bestMessageFamily).toMatchObject({
+      title: 'speed',
     })
     expect(review.topObjection).toMatchObject({
       title: 'budget block',

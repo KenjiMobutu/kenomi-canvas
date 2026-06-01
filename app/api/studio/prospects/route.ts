@@ -22,6 +22,7 @@ import {
   summarizeConversationEvents,
   type ProspectConversationEventRow,
 } from '@/lib/revenue/objections'
+import { deriveMessageMetadata } from '@/lib/revenue/message-truth'
 import {
   buildProspectStageActivity,
   buildProspectStagePatch,
@@ -138,6 +139,26 @@ function asOutreachKind(value: unknown): ProspectOutreachKind {
       return value
     default:
       return 'initial'
+  }
+}
+
+function buildProspectMessageMetadata(input: {
+  metadata?: Record<string, unknown>
+  outreachAngle?: string | null
+  lastOutreachKind?: string | null
+  source?: string | null
+}) {
+  const message = deriveMessageMetadata({
+    outreach_angle: input.outreachAngle ?? null,
+    last_outreach_kind: input.lastOutreachKind ?? 'initial',
+    source: input.source ?? 'other',
+    metadata: input.metadata ?? {},
+  })
+  return {
+    ...(input.metadata ?? {}),
+    message_family: message.messageFamily,
+    message_key: message.messageKey,
+    last_outreach_kind: input.lastOutreachKind ?? 'initial',
   }
 }
 
@@ -309,7 +330,12 @@ export async function POST(request: Request) {
     outreach_angle: parsed.data.outreach_angle?.trim() || null,
     last_contacted_at: parsed.data.last_contacted_at ?? null,
     next_followup_at: parsed.data.next_followup_at ?? null,
-    metadata: parsed.data.metadata ?? {},
+    metadata: buildProspectMessageMetadata({
+      metadata: parsed.data.metadata ?? {},
+      outreachAngle: parsed.data.outreach_angle?.trim() || null,
+      lastOutreachKind: 'initial',
+      source: parsed.data.source,
+    }),
     created_at: parsed.data.created_at ?? nowIso,
     updated_at: nowIso,
   }
@@ -358,6 +384,7 @@ export async function PATCH(request: Request) {
     band?: string | null
     contact_name?: string | null
     contact_email?: string | null
+    outreach_angle?: string | null
     outreach_subject?: string | null
     outreach_body?: string | null
   }>(
@@ -365,7 +392,7 @@ export async function PATCH(request: Request) {
       supabase
         .from('prospects')
         .select(
-          'metadata, pipeline_status, status, operator_notes, next_action, tags, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, company_name, contact_name, contact_email, outreach_subject, outreach_body' +
+          'metadata, pipeline_status, status, operator_notes, next_action, tags, next_followup_at, follow_up_count, follow_up_version, last_outreach_kind, company_name, contact_name, contact_email, outreach_angle, outreach_subject, outreach_body' +
             ', source, band'
         )
         .eq('id', parsed.data.id)
@@ -381,6 +408,10 @@ export async function PATCH(request: Request) {
   const patch: Record<string, unknown> = {
     updated_at: nowIso,
   }
+  const currentMetadata =
+    current.metadata && typeof current.metadata === 'object'
+      ? (current.metadata as Record<string, unknown>)
+      : {}
   const activitiesToInsert: Array<{
     type: ProspectActivityType
     detail: string
@@ -394,7 +425,7 @@ export async function PATCH(request: Request) {
     Object.assign(
       patch,
       buildProspectStagePatch({
-        currentMetadata: current.metadata ?? {},
+        currentMetadata: currentMetadata,
         nextStatus: parsed.data.status,
         nowIso,
         currentOutreachKind: current.last_outreach_kind,
@@ -564,10 +595,6 @@ export async function PATCH(request: Request) {
           { status: 409 }
         )
       }
-      const metadata =
-        current.metadata && typeof current.metadata === 'object'
-          ? (current.metadata as Record<string, unknown>)
-          : {}
       const nextVersion = getNextFollowUpVersion({
         currentKind,
         currentVersion: current.follow_up_version,
@@ -576,9 +603,9 @@ export async function PATCH(request: Request) {
       const regenerated = buildProspectFollowUpDraft({
         companyName: current.company_name ?? 'Unknown company',
         contactName: current.contact_name ?? null,
-        summary: typeof metadata.summary === 'string' ? metadata.summary : null,
-        painPoints: Array.isArray(metadata.pain_points)
-          ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
+        summary: typeof currentMetadata.summary === 'string' ? currentMetadata.summary : null,
+        painPoints: Array.isArray(currentMetadata.pain_points)
+          ? currentMetadata.pain_points.filter((value): value is string => typeof value === 'string')
           : [],
         previousSubject: current.outreach_subject ?? null,
         operatorNotes: current.operator_notes ?? null,
@@ -621,6 +648,25 @@ export async function PATCH(request: Request) {
     }
   }
 
+  const nextOutreachKind =
+    parsed.data.action === 'regenerate_follow_up' || parsed.data.action === 'mark_follow_up_sent'
+      ? asOutreachKind(current.last_outreach_kind)
+      : parsed.data.status === 'sent'
+        ? asOutreachKind(current.last_outreach_kind)
+        : asOutreachKind(current.last_outreach_kind)
+  patch.metadata = buildProspectMessageMetadata({
+    metadata: {
+      ...currentMetadata,
+      ...(typeof patch.metadata === 'object' && patch.metadata ? (patch.metadata as Record<string, unknown>) : {}),
+    },
+    outreachAngle:
+      typeof patch.outreach_angle === 'string'
+        ? patch.outreach_angle
+        : (current.outreach_angle ?? null),
+    lastOutreachKind: nextOutreachKind,
+    source: current.source ?? 'other',
+  })
+
   const prospect = await single<{ id?: string }>(
     asSingleQueryBuilder(
       supabase
@@ -659,10 +705,6 @@ export async function PATCH(request: Request) {
     }
   }
 
-  const metadata =
-    current.metadata && typeof current.metadata === 'object'
-      ? (current.metadata as Record<string, unknown>)
-      : {}
   if (parsed.data.operator_notes !== undefined && parsed.data.operator_notes.trim().length > 0) {
     await writeProspectMemoryBestEffort({
       userId: user!.id,
@@ -676,10 +718,10 @@ export async function PATCH(request: Request) {
       band: current.band ?? 'warm',
       source: current.source ?? 'other',
       createdAt: nowIso,
-      summary: typeof metadata.summary === 'string' ? metadata.summary : null,
-      painPoints: Array.isArray(metadata.pain_points)
-        ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
-        : [],
+      summary: typeof currentMetadata.summary === 'string' ? currentMetadata.summary : null,
+      painPoints: Array.isArray(currentMetadata.pain_points)
+        ? currentMetadata.pain_points.filter((value): value is string => typeof value === 'string')
+          : [],
       tags: Array.isArray(current.tags)
         ? current.tags.filter((value): value is string => typeof value === 'string')
         : [],
@@ -706,10 +748,10 @@ export async function PATCH(request: Request) {
       band: current.band ?? 'warm',
       source: current.source ?? 'other',
       createdAt: nowIso,
-      summary: typeof metadata.summary === 'string' ? metadata.summary : null,
-      painPoints: Array.isArray(metadata.pain_points)
-        ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
-        : [],
+      summary: typeof currentMetadata.summary === 'string' ? currentMetadata.summary : null,
+      painPoints: Array.isArray(currentMetadata.pain_points)
+        ? currentMetadata.pain_points.filter((value): value is string => typeof value === 'string')
+          : [],
       tags: Array.isArray(current.tags)
         ? current.tags.filter((value): value is string => typeof value === 'string')
         : [],

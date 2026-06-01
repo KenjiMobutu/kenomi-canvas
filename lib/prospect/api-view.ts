@@ -1,5 +1,6 @@
 import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
 import { asProspectPipelineStatus, derivePipelineStatus, normalizeProspectTags } from '@/lib/prospect/crm-fields'
+import { deriveMessageMetadata } from '@/lib/revenue/message-truth'
 import type {
   ProspectActivityEvent,
   ProspectActivityRow,
@@ -85,6 +86,8 @@ export interface ProspectRecordView extends ProspectRecordRow {
   last_outreach_kind: ProspectOutreachKind
   last_follow_up_generated_at: string | null
   follow_up_version: number
+  message_family: string
+  message_key: string
 }
 
 function pickActionForProspect(
@@ -169,6 +172,12 @@ export function buildProspectViews(input: {
     ) {
       pipelineStatus = 'approved_to_send'
     }
+    const message = deriveMessageMetadata({
+      outreach_angle: typeof row.outreach_angle === 'string' ? row.outreach_angle : null,
+      last_outreach_kind: lastOutreachKind,
+      source: typeof row.source === 'string' ? row.source : null,
+      metadata,
+    })
 
     return {
       ...row,
@@ -191,6 +200,8 @@ export function buildProspectViews(input: {
       last_follow_up_generated_at:
         typeof row.last_follow_up_generated_at === 'string' ? row.last_follow_up_generated_at : null,
       follow_up_version: followUpVersion,
+      message_family: message.messageFamily,
+      message_key: message.messageKey,
     }
   })
 }

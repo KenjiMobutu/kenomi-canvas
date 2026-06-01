@@ -44,6 +44,8 @@ type ProspectRow = {
   offer_id?: string | null
   offer_variant?: string | null
   outreach_angle?: string | null
+  message_family?: string
+  message_key?: string
   last_contacted_at: string | null
   next_followup_at: string | null
   metadata: Record<string, unknown> | null
@@ -1238,6 +1240,9 @@ export default function ProspectPage() {
                           label={`offer ${offers.find((offer) => offer.id === prospect.offer_id)?.name ?? 'assigned'}`}
                           tone="cold"
                         />
+                      ) : null}
+                      {prospect.message_family ? (
+                        <Chip label={`message ${prospect.message_family}`} tone="cold" />
                       ) : null}
                       {prospect.latest_conversation_event_type ? (
                         <Chip

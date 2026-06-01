@@ -196,6 +196,76 @@ type RevenueConversionsSnapshot = {
     model: string
     modelFamily: string
   }) | null
+  messageFamilyBreakdown: Array<{
+    messageFamily: string
+    messageKey: string
+    contacted: number
+    replied: number
+    wonCount: number
+    paidCount: number
+    paidCashEur: number
+    replyRate: number
+    winRate: number
+    paidRate: number
+    topObjection: string | null
+    objectionCount: number
+  }>
+  bestMessageFamily: {
+    messageFamily: string
+    messageKey: string
+    contacted: number
+    replied: number
+    wonCount: number
+    paidCount: number
+    paidCashEur: number
+    replyRate: number
+    winRate: number
+    paidRate: number
+    topObjection: string | null
+    objectionCount: number
+  } | null
+  messageFamilyRepliesNoCash: {
+    messageFamily: string
+    messageKey: string
+    contacted: number
+    replied: number
+    wonCount: number
+    paidCount: number
+    paidCashEur: number
+    replyRate: number
+    winRate: number
+    paidRate: number
+    topObjection: string | null
+    objectionCount: number
+  } | null
+  messageFamilyWinsNoCash: {
+    messageFamily: string
+    messageKey: string
+    contacted: number
+    replied: number
+    wonCount: number
+    paidCount: number
+    paidCashEur: number
+    replyRate: number
+    winRate: number
+    paidRate: number
+    topObjection: string | null
+    objectionCount: number
+  } | null
+  messageFamilyTopObjection: {
+    messageFamily: string
+    messageKey: string
+    contacted: number
+    replied: number
+    wonCount: number
+    paidCount: number
+    paidCashEur: number
+    replyRate: number
+    winRate: number
+    paidRate: number
+    topObjection: string | null
+    objectionCount: number
+  } | null
   commonObjections: Array<{
     type: string
     count: number
@@ -278,6 +348,7 @@ type WeeklyRevenueReviewSnapshot = {
   bestSegment: WeeklyRevenueReviewInsight
   bestOffer: WeeklyRevenueReviewInsight
   bestAngle: WeeklyRevenueReviewInsight
+  bestMessageFamily: WeeklyRevenueReviewInsight
   topObjection: WeeklyRevenueReviewInsight
   mainLeak: WeeklyRevenueReviewInsight & {
     stageKey: string
@@ -321,6 +392,10 @@ function euro(value: number) {
     currency: 'EUR',
     maximumFractionDigits: value % 1 === 0 ? 0 : 2,
   }).format(value)
+}
+
+function conversationLabel(value: string | null | undefined) {
+  return value ? value.replaceAll('_', ' ') : 'no truth'
 }
 
 function statusColor(status: RevenueLoopStageStatus) {
@@ -1133,6 +1208,42 @@ export default function RevenuePage() {
               }
               tone={C.blue}
             />
+            <TruthCard
+              label="Best message family"
+              title={conversions.bestMessageFamily?.messageFamily ?? 'No message truth yet'}
+              detail={
+                conversions.bestMessageFamily
+                  ? `${conversions.bestMessageFamily.paidCount} paid · ${euro(conversions.bestMessageFamily.paidCashEur)} cash`
+                  : 'Message families will appear once outbound metadata is tagged.'
+              }
+              tone={C.purple}
+            />
+            <TruthCard
+              label="Replies without cash (message)"
+              title={
+                conversions.messageFamilyRepliesNoCash?.messageFamily ?? 'No stalled family yet'
+              }
+              detail={
+                conversions.messageFamilyRepliesNoCash
+                  ? `${conversions.messageFamilyRepliesNoCash.replied} replies · ${conversions.messageFamilyRepliesNoCash.paidCount} paid`
+                  : 'Families that attract replies without cash will surface here.'
+              }
+              tone={C.warn}
+            />
+            <TruthCard
+              label="Top objection family"
+              title={
+                conversions.messageFamilyTopObjection
+                  ? `${conversions.messageFamilyTopObjection.messageFamily} · ${conversationLabel(conversions.messageFamilyTopObjection.topObjection)}`
+                  : 'No message objection truth yet'
+              }
+              detail={
+                conversions.messageFamilyTopObjection
+                  ? `${conversions.messageFamilyTopObjection.objectionCount} occurrences`
+                  : 'Classified objections will be tied back to message families here.'
+              }
+              tone={C.bad}
+            />
           </div>
 
           <div
@@ -1427,6 +1538,12 @@ export default function RevenuePage() {
               tone={C.good}
               href={buildWeeklyReviewHref('best_angle')}
               ctaLabel="Open revenue"
+            />
+            <TruthCard
+              label="Best message family"
+              title={weeklyReview.bestMessageFamily.title}
+              detail={weeklyReview.bestMessageFamily.detail}
+              tone={C.purple}
             />
             <TruthCard
               label="Top objection"
