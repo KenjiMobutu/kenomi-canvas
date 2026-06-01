@@ -294,7 +294,12 @@ try {
 
 counts = await counts
 
-if (counts.runCount === 0 || counts.recommendationCount === 0 || counts.alertCount === 0) {
+if (
+  counts.runCount === 0 ||
+  counts.recommendationCount === 0 ||
+  counts.alertCount === 0 ||
+  counts.briefCount === 0
+) {
   try {
     await bootstrapHermesTruthIfMissing()
     counts = await queryHermesCounts()
