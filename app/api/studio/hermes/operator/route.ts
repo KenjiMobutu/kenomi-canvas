@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAllowedUser } from '@/lib/auth-server'
 import {
+  buildHermesOperatorSettingsUpsert,
+  mapHermesOperatorSettingsRecord,
+} from '@/lib/hermes-operator/settings'
+import {
   buildHermesOperatorView,
   type HermesOperatorAlertViewRow,
   type HermesOperatorRecommendationViewRow,
@@ -30,6 +34,15 @@ const operatorPatchSchema = z.union([
     mode: z.enum(['observe', 'recommend', 'act']),
   }),
   z.object({
+    settings: z.object({
+      maxAutoActionsPerDay: z.number().int().positive(),
+      maxAutoProspectRunsPerDay: z.number().int().positive(),
+      maxAutoFollowUpScansPerDay: z.number().int().positive(),
+      maxAutoDevopsRunsPerDay: z.number().int().positive(),
+      notificationMode: z.enum(['studio_only', 'email', 'webhook']),
+    }),
+  }),
+  z.object({
     type: z.literal('dismiss_recommendation'),
     recommendationId: z.string().uuid().or(z.string().min(1)),
   }),
@@ -46,30 +59,23 @@ async function ensureOperatorSettings(input: {
 }): Promise<HermesOperatorSettingsViewRow> {
   const existing = await input.supabase
     .from('user_operator_settings')
-    .select('operator_mode, notify_in_studio')
+    .select(
+      'operator_mode, notify_in_studio, notification_mode, max_auto_actions_per_day, max_auto_prospect_runs_per_day, max_auto_follow_up_scans_per_day, max_auto_devops_runs_per_day'
+    )
     .eq('user_id', input.userId)
     .maybeSingle()
   if (existing.error) throw new Error(existing.error.message)
   if (existing.data) {
-    return {
-      operatorMode: existing.data.operator_mode === 'recommend' || existing.data.operator_mode === 'act'
-        ? existing.data.operator_mode
-        : 'observe',
-      notifyInStudio: existing.data.notify_in_studio !== false,
-    }
+    return mapHermesOperatorSettingsRecord(existing.data as Record<string, unknown>)
   }
 
   const nowIso = (input.now ?? new Date()).toISOString()
   const payload = {
-    user_id: input.userId,
-    operator_mode: 'observe',
-    notify_in_studio: true,
-    notify_email: false,
-    notify_webhook: false,
-    notification_webhook_url: '',
-    quiet_hours: {},
+    ...buildHermesOperatorSettingsUpsert({
+      userId: input.userId,
+      nowIso,
+    }),
     created_at: nowIso,
-    updated_at: nowIso,
   }
 
   if (typeof input.supabase.from('user_operator_settings').upsert === 'function') {
@@ -79,10 +85,7 @@ async function ensureOperatorSettings(input: {
     if (insertResult?.error) throw new Error(insertResult.error.message)
   }
 
-  return {
-    operatorMode: 'observe',
-    notifyInStudio: true,
-  }
+  return mapHermesOperatorSettingsRecord(payload)
 }
 
 async function loadOperatorView(input: {
@@ -102,7 +105,9 @@ async function loadOperatorView(input: {
       .limit(10),
     input.supabase
       .from('hermes_operator_recommendations')
-      .select('id, run_id, kind, priority, title, detail, action_type, risk_level, status, created_at')
+      .select(
+        'id, run_id, kind, priority, title, detail, action_type, risk_level, status, policy_block_reason, created_at'
+      )
       .eq('user_id', input.userId)
       .order('priority', { ascending: false })
       .limit(10),
@@ -174,6 +179,8 @@ async function loadOperatorView(input: {
     actionType: typeof row.action_type === 'string' ? row.action_type : null,
     riskLevel: typeof row.risk_level === 'string' ? row.risk_level : null,
     status: String(row.status ?? 'open'),
+    policyBlockReason:
+      typeof row.policy_block_reason === 'string' ? row.policy_block_reason : null,
     createdAt: String(row.created_at ?? ''),
   }))
   const alerts: HermesOperatorAlertViewRow[] = ((alertsResult.data ?? []) as Array<Record<string, unknown>>).map(
@@ -237,20 +244,43 @@ export async function PATCH(request: Request) {
     if (result?.error) {
       return NextResponse.json({ error: result.error.message }, { status: 500 })
     }
-  } else {
+  } else if ('settings' in parsed.data) {
+    const currentSettings = await ensureOperatorSettings({
+      supabase: supabase as unknown as HermesOperatorRouteSupabase,
+      userId: user!.id,
+      now: new Date(),
+    })
     const result = await (supabase as unknown as HermesOperatorRouteSupabase)
       .from('user_operator_settings')
       .upsert?.(
-        {
-          user_id: user!.id,
-          operator_mode: parsed.data.mode,
-          notify_in_studio: true,
-          notify_email: false,
-          notify_webhook: false,
-          notification_webhook_url: '',
-          quiet_hours: {},
-          updated_at: nowIso,
-        },
+        buildHermesOperatorSettingsUpsert({
+          userId: user!.id,
+          nowIso,
+          settings: {
+            ...currentSettings,
+            ...parsed.data.settings,
+          },
+        }),
+        { onConflict: 'user_id' }
+      )
+
+    if (result?.error) {
+      return NextResponse.json({ error: result.error.message }, { status: 500 })
+    }
+  } else {
+    const currentSettings = await ensureOperatorSettings({
+      supabase: supabase as unknown as HermesOperatorRouteSupabase,
+      userId: user!.id,
+      now: new Date(),
+    })
+    const result = await (supabase as unknown as HermesOperatorRouteSupabase)
+      .from('user_operator_settings')
+      .upsert?.(
+        buildHermesOperatorSettingsUpsert({
+          userId: user!.id,
+          nowIso,
+          settings: { ...currentSettings, operatorMode: parsed.data.mode },
+        }),
         { onConflict: 'user_id' }
       )
 

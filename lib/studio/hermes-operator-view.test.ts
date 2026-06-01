@@ -7,6 +7,11 @@ describe('buildHermesOperatorView', () => {
       settings: {
         operatorMode: 'observe',
         notifyInStudio: true,
+        notificationMode: 'studio_only',
+        maxAutoActionsPerDay: 4,
+        maxAutoProspectRunsPerDay: 2,
+        maxAutoFollowUpScansPerDay: 3,
+        maxAutoDevopsRunsPerDay: 1,
       },
       runs: [
         {
@@ -63,6 +68,7 @@ describe('buildHermesOperatorView', () => {
           actionType: 'run_agent',
           riskLevel: 'low',
           status: 'accepted',
+          policyBlockReason: null,
           createdAt: '2026-05-28T10:00:00.000Z',
         },
         {
@@ -75,6 +81,7 @@ describe('buildHermesOperatorView', () => {
           actionType: 'run_agent',
           riskLevel: 'low',
           status: 'accepted',
+          policyBlockReason: null,
           createdAt: '2026-05-28T10:01:00.000Z',
         },
         {
@@ -87,6 +94,7 @@ describe('buildHermesOperatorView', () => {
           actionType: 'run_agent',
           riskLevel: 'low',
           status: 'accepted',
+          policyBlockReason: null,
           createdAt: '2026-05-28T10:02:00.000Z',
         },
         {
@@ -99,7 +107,21 @@ describe('buildHermesOperatorView', () => {
           actionType: 'run_agent',
           riskLevel: 'low',
           status: 'accepted',
+          policyBlockReason: null,
           createdAt: '2026-05-28T09:00:00.000Z',
+        },
+        {
+          id: 'rec-5',
+          runId: 'run-1',
+          kind: 'run_prospect',
+          priority: 88,
+          title: 'Blocked by cap',
+          detail: 'Daily cap reached.',
+          actionType: 'run_agent',
+          riskLevel: 'low',
+          status: 'open',
+          policyBlockReason: 'daily_cap_reached',
+          createdAt: '2026-05-28T10:03:00.000Z',
         },
       ],
       alerts: [
@@ -127,6 +149,7 @@ describe('buildHermesOperatorView', () => {
     })
 
     expect(view.currentMode).toBe('observe')
+    expect(view.notificationMode).toBe('studio_only')
     expect(view.lastRun?.mode).toBe('observe')
     expect(view.recentRuns).toHaveLength(2)
     expect(view.topRecommendation?.title).toBe('Run prospect')
@@ -136,6 +159,8 @@ describe('buildHermesOperatorView', () => {
     expect(view.topAlert?.category).toBe('business_paid_cash_drop')
     expect(view.topBusinessAlert?.category).toBe('business_paid_cash_drop')
     expect(view.topExecutionAlert?.category).toBe('execution_failed_jobs_increase')
+    expect(view.blockedByPolicyCount).toBe(1)
+    expect(view.topBlockedReason).toBe('daily_cap_reached')
     expect(view.lastRunDelta).toEqual({
       pendingApprovals: -1,
       followUpsDue: -2,

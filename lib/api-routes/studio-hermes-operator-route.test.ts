@@ -68,6 +68,7 @@ function makeSupabase() {
         action_type: 'run_agent',
         risk_level: 'low',
         status: 'open',
+        policy_block_reason: null,
         created_at: '2026-05-28T10:00:00.000Z',
       },
     ],
@@ -170,8 +171,10 @@ describe('studio hermes operator route', () => {
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.view.currentMode).toBe('observe')
+    expect(body.view.notificationMode).toBe('studio_only')
     expect(body.view.lastRun.summary).toContain('follow-ups')
     expect(body.view.openAlertsCount).toBe(1)
+    expect(body.view.blockedByPolicyCount).toBe(0)
     expect(body.view.lastRunDelta).toMatchObject({
       pendingApprovals: -1,
       followUpsDue: -2,
@@ -193,6 +196,30 @@ describe('studio hermes operator route', () => {
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.view.currentMode).toBe('recommend')
+  })
+
+  it('updates operator caps and returns refreshed view', async () => {
+    const response = await PATCH(
+      new Request('http://localhost/api/studio/hermes/operator', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          settings: {
+            maxAutoActionsPerDay: 7,
+            maxAutoProspectRunsPerDay: 3,
+            maxAutoFollowUpScansPerDay: 4,
+            maxAutoDevopsRunsPerDay: 2,
+            notificationMode: 'studio_only',
+          },
+        }),
+      })
+    )
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.view.maxAutoActionsPerDay).toBe(7)
+    expect(body.view.maxAutoProspectRunsPerDay).toBe(3)
+    expect(body.view.maxAutoFollowUpScansPerDay).toBe(4)
+    expect(body.view.maxAutoDevopsRunsPerDay).toBe(2)
   })
 
   it('dismisses a recommendation and returns refreshed view', async () => {

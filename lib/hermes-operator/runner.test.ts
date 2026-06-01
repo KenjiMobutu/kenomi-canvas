@@ -9,6 +9,7 @@ function createFakeSupabase(seed?: Record<string, Record<string, unknown>[]>) {
     hermes_operator_recommendations: seed?.hermes_operator_recommendations ?? [],
     business_alerts: seed?.business_alerts ?? [],
     autonomy_jobs: seed?.autonomy_jobs ?? [],
+    user_operator_settings: seed?.user_operator_settings ?? [],
   }
 
   return {
@@ -80,7 +81,10 @@ function createFakeSupabase(seed?: Record<string, Record<string, unknown>[]>) {
           error: null,
         }),
         then: (resolve: (value: { data: Record<string, unknown>[]; error: null }) => unknown) => {
-          const rows = resolveRows()
+          const rows =
+            state.insertRows.length > 0
+              ? tables[table].slice(-state.insertRows.length)
+              : resolveRows()
           if (state.patch) rows.forEach((row) => Object.assign(row, state.patch))
           return Promise.resolve(resolve({ data: rows, error: null }))
         },
@@ -458,6 +462,90 @@ describe('runHermesOperatorTick', () => {
     expect(supabase.tables.hermes_operator_runs[0]).toMatchObject({
       enqueued_jobs_count: 2,
       executed_actions_count: 2,
+    })
+  })
+
+  it('records blocked-by-policy recommendations and rejection reasons when caps are reached', async () => {
+    const supabase = createFakeSupabase({
+      user_operator_settings: [
+        {
+          user_id: 'user-1',
+          operator_mode: 'recommend',
+          notify_in_studio: true,
+          max_auto_actions_per_day: 1,
+          max_auto_prospect_runs_per_day: 1,
+          max_auto_follow_up_scans_per_day: 1,
+          max_auto_devops_runs_per_day: 1,
+        },
+      ],
+      hermes_operator_recommendations: [
+        {
+          id: 'old-rec-1',
+          run_id: 'old-run',
+          user_id: 'user-1',
+          kind: 'run_prospect',
+          priority: 80,
+          title: 'Earlier prospect run',
+          detail: 'Counts toward daily caps.',
+          action_type: 'run_agent',
+          risk_level: 'low',
+          status: 'accepted',
+          created_at: '2026-05-28T08:00:00.000Z',
+          updated_at: '2026-05-28T08:00:00.000Z',
+        },
+      ],
+    })
+
+    const result = await runHermesOperatorTick({
+      supabase: supabase as never,
+      userId: 'user-1',
+      mode: 'recommend',
+      now: new Date('2026-05-28T10:15:00.000Z'),
+      buildContext: async () => fakeContext,
+      runEngine: async () => ({
+        summary: 'Try another prospect run.',
+        recommendations: [
+          {
+            kind: 'run_prospect',
+            priority: 95,
+            title: 'Run Prospect again',
+            detail: 'Another hot segment pass.',
+            actionType: 'run_agent',
+            riskLevel: 'low',
+            source: { source: 'reddit', band: 'hot' },
+            payload: {
+              agentId: 'prospect',
+              prompt: 'Generate one more prospect.',
+            },
+          },
+        ],
+        alerts: [],
+        provider: 'hermes',
+        model: 'hermes3:8b',
+        fallbackTriggered: false,
+      }),
+    })
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      mode: 'recommend',
+      recommendationsCount: 1,
+      alertsCount: 2,
+    })
+    expect(supabase.tables.autonomy_jobs).toHaveLength(0)
+    const blockedRecommendation = supabase.tables.hermes_operator_recommendations.find(
+      (row) => row.title === 'Run Prospect again'
+    )
+    expect(blockedRecommendation).toMatchObject({
+      status: 'open',
+      policy_block_reason: 'daily_cap_reached',
+      auto_execution_eligible: true,
+    })
+    expect(supabase.tables.hermes_operator_runs.at(-1)).toMatchObject({
+      blocked_by_policy_count: 1,
+      blocked_by_policy_reason_counts: {
+        daily_cap_reached: 1,
+      },
     })
   })
 

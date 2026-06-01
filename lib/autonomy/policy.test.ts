@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { canHermesAutoExecute, checkBudgetPolicy, requiresApproval } from './policy'
+import {
+  canHermesAutoExecute,
+  checkBudgetPolicy,
+  evaluateHermesAutoExecution,
+  requiresApproval,
+} from './policy'
 import type { AutonomyAction } from './types'
 
 function action(overrides: Partial<AutonomyAction>): AutonomyAction {
@@ -134,19 +139,37 @@ describe('checkBudgetPolicy', () => {
 })
 
 describe('canHermesAutoExecute', () => {
-  it('allows Hermes Operator to auto-enqueue low-risk agent work in recommend mode only', () => {
+  it('allows only allowlisted low-risk Hermes work in recommend/act mode', () => {
     expect(
       canHermesAutoExecute({
         mode: 'recommend',
         actionType: 'run_agent',
         riskLevel: 'low',
+        agentId: 'prospect',
       })
     ).toBe(true)
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        agentId: 'devops',
+      })
+    ).toBe(true)
+    expect(
+      canHermesAutoExecute({
+        mode: 'recommend',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        agentId: 'decision',
+      })
+    ).toBe(false)
     expect(
       canHermesAutoExecute({
         mode: 'observe',
         actionType: 'run_agent',
         riskLevel: 'low',
+        agentId: 'prospect',
       })
     ).toBe(false)
     expect(
@@ -159,8 +182,9 @@ describe('canHermesAutoExecute', () => {
     expect(
       canHermesAutoExecute({
         mode: 'act',
-        actionType: 'create_checkout',
+        actionType: 'run_agent',
         riskLevel: 'low',
+        agentId: 'scout',
       })
     ).toBe(false)
   })
@@ -171,6 +195,7 @@ describe('canHermesAutoExecute', () => {
         mode: 'act',
         actionType: 'run_agent',
         riskLevel: 'low',
+        recommendationKind: 'run_follow_up_scan',
       })
     ).toBe(true)
     expect(
@@ -178,7 +203,104 @@ describe('canHermesAutoExecute', () => {
         mode: 'recommend',
         actionType: 'run_agent',
         riskLevel: 'medium',
+        recommendationKind: 'run_follow_up_scan',
       })
     ).toBe(false)
+  })
+})
+
+describe('evaluateHermesAutoExecution', () => {
+  const caps = {
+    maxAutoActionsPerDay: 4,
+    maxAutoProspectRunsPerDay: 2,
+    maxAutoFollowUpScansPerDay: 3,
+    maxAutoDevopsRunsPerDay: 1,
+  }
+
+  it('blocks when action is not allowlisted', () => {
+    expect(
+      evaluateHermesAutoExecution({
+        mode: 'recommend',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        agentId: 'decision',
+        caps,
+        usage: {
+          totalAutoActionsToday: 0,
+          prospectRunsToday: 0,
+          followUpScansToday: 0,
+          devopsRunsToday: 0,
+        },
+      })
+    ).toMatchObject({ ok: false, reason: 'action_not_allowlisted' })
+  })
+
+  it('blocks on daily global cap before action-specific caps', () => {
+    expect(
+      evaluateHermesAutoExecution({
+        mode: 'recommend',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        agentId: 'prospect',
+        caps,
+        usage: {
+          totalAutoActionsToday: 4,
+          prospectRunsToday: 0,
+          followUpScansToday: 0,
+          devopsRunsToday: 0,
+        },
+      })
+    ).toMatchObject({ ok: false, reason: 'daily_cap_reached' })
+  })
+
+  it('blocks on action-specific caps', () => {
+    expect(
+      evaluateHermesAutoExecution({
+        mode: 'recommend',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        agentId: 'prospect',
+        caps,
+        usage: {
+          totalAutoActionsToday: 1,
+          prospectRunsToday: 2,
+          followUpScansToday: 0,
+          devopsRunsToday: 0,
+        },
+      })
+    ).toMatchObject({ ok: false, reason: 'action_cap_reached' })
+    expect(
+      evaluateHermesAutoExecution({
+        mode: 'act',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        recommendationKind: 'run_follow_up_scan',
+        caps,
+        usage: {
+          totalAutoActionsToday: 1,
+          prospectRunsToday: 0,
+          followUpScansToday: 3,
+          devopsRunsToday: 0,
+        },
+      })
+    ).toMatchObject({ ok: false, reason: 'action_cap_reached' })
+  })
+
+  it('returns allow when allowlist and caps both pass', () => {
+    expect(
+      evaluateHermesAutoExecution({
+        mode: 'recommend',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        agentId: 'devops',
+        caps,
+        usage: {
+          totalAutoActionsToday: 1,
+          prospectRunsToday: 0,
+          followUpScansToday: 1,
+          devopsRunsToday: 0,
+        },
+      })
+    ).toEqual({ ok: true })
   })
 })

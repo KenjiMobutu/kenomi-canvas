@@ -1512,6 +1512,83 @@ function HermesOperatorPanel({
             textTransform: 'uppercase',
           }}
         >
+          Safe execution policy
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: 8,
+          }}
+        >
+          {[
+            { label: 'mode', value: view?.currentMode ?? 'observe', color: modeColor },
+            {
+              label: 'auto/day',
+              value: String(view?.maxAutoActionsPerDay ?? 0),
+              color: cyan,
+            },
+            {
+              label: 'prospect/day',
+              value: String(view?.maxAutoProspectRunsPerDay ?? 0),
+              color: emerald,
+            },
+            {
+              label: 'follow-up/day',
+              value: String(view?.maxAutoFollowUpScansPerDay ?? 0),
+              color: amber,
+            },
+            {
+              label: 'devops/day',
+              value: String(view?.maxAutoDevopsRunsPerDay ?? 0),
+              color: violet,
+            },
+            {
+              label: 'blocked',
+              value: String(view?.blockedByPolicyCount ?? 0),
+              color: rose,
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              style={{
+                padding: 10,
+                borderRadius: 10,
+                background: surface2,
+                border: `1px solid ${line}`,
+                display: 'grid',
+                gap: 4,
+              }}
+            >
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: muted2 }}>
+                {item.label}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: item.color }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 12, color: muted }}>
+          {view?.topBlockedReason
+            ? `Top policy block: ${view.topBlockedReason}.`
+            : 'No recent recommendation blocked by policy.'}
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: muted2,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+          }}
+        >
           Recommendations backlog
         </div>
         {view?.recommendations?.length ? (
@@ -1560,6 +1637,9 @@ function HermesOperatorPanel({
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: muted2 }}>
                       {recommendation.kind} · P{recommendation.priority}
+                      {recommendation.policyBlockReason
+                        ? ` · blocked:${recommendation.policyBlockReason}`
+                        : ''}
                     </div>
                     <button
                       type="button"

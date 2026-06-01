@@ -15,14 +15,22 @@ import {
   type PersistedOperatorRecommendation,
   type HermesRecommendationsSupabase,
 } from '@/lib/hermes-operator/recommendations'
-import { canHermesAutoExecute } from '@/lib/autonomy/policy'
+import { evaluateHermesAutoExecution } from '@/lib/autonomy/policy'
+import {
+  mapHermesOperatorSettingsRecord,
+  type HermesOperatorSettings,
+} from '@/lib/hermes-operator/settings'
 import {
   normalizeOperatorMode,
   type HermesOperatorContextSnapshot,
   type HermesOperatorMode,
 } from '@/lib/hermes-operator/types'
 import { buildHermesOperatorBrief, type HermesOperatorRunDelta } from '@/lib/hermes-operator/brief'
-import type { AutonomyActionType, AutonomyRiskLevel } from '@/lib/autonomy/types'
+import type {
+  AutonomyActionType,
+  AutonomyRiskLevel,
+  HermesPolicyBlockReason,
+} from '@/lib/autonomy/types'
 
 interface QueryResult<T> {
   data: T | null
@@ -132,6 +140,27 @@ function readSnapshot(value: unknown): Record<string, unknown> | null {
 
 const SAFE_OPERATOR_AGENT_IDS = new Set(['prospect', 'devops'])
 
+type OperatorUsageSnapshot = {
+  totalAutoActionsToday: number
+  prospectRunsToday: number
+  followUpScansToday: number
+  devopsRunsToday: number
+}
+
+function recommendationExecutionBucket(input: {
+  kind: string
+  payload?: Record<string, unknown>
+}): 'follow_up_scan' | 'prospect' | 'devops' | null {
+  if (input.kind === 'run_follow_up_scan') return 'follow_up_scan'
+  if (input.kind === 'run_prospect') return 'prospect'
+  if (input.kind === 'run_devops') return 'devops'
+  const agentId =
+    input.payload && typeof input.payload === 'object' ? readString(input.payload.agentId) : null
+  if (agentId === 'prospect') return 'prospect'
+  if (agentId === 'devops') return 'devops'
+  return null
+}
+
 async function insertRun(
   supabase: HermesOperatorRunnerSupabase,
   row: Record<string, unknown>
@@ -173,6 +202,70 @@ async function insertBrief(
   const result = await supabase.from('hermes_operator_briefs').insert(row)
   const resolved = await result
   if (resolved.error) throw new Error(resolved.error.message)
+}
+
+async function loadOperatorSettings(
+  supabase: HermesOperatorRunnerSupabase,
+  userId: string
+): Promise<HermesOperatorSettings> {
+  const result = await supabase
+    .from('user_operator_settings')
+    .select(
+      'operator_mode, notify_in_studio, notification_mode, max_auto_actions_per_day, max_auto_prospect_runs_per_day, max_auto_follow_up_scans_per_day, max_auto_devops_runs_per_day'
+    )
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (result.error) throw new Error(result.error.message)
+  return mapHermesOperatorSettingsRecord((result.data as Record<string, unknown> | null) ?? null)
+}
+
+async function loadAutoExecutionUsage(
+  supabase: HermesOperatorRunnerSupabase,
+  userId: string,
+  now: Date
+): Promise<OperatorUsageSnapshot> {
+  const result = await supabase
+    .from('hermes_operator_recommendations')
+    .select('kind, status, created_at, payload')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(200)
+  const resolved = await result
+  if (resolved.error) throw new Error(resolved.error.message)
+
+  const dayPrefix = now.toISOString().slice(0, 10)
+  const acceptedToday = (resolved.data ?? []).filter((row) => {
+    const createdAt = String(row.created_at ?? '')
+    const status = String(row.status ?? '')
+    return createdAt.startsWith(dayPrefix) && (status === 'accepted' || status === 'executed')
+  })
+
+  return {
+    totalAutoActionsToday: acceptedToday.length,
+    prospectRunsToday: acceptedToday.filter(
+      (row) =>
+        recommendationExecutionBucket({
+          kind: String(row.kind ?? ''),
+          payload:
+            row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+              ? (row.payload as Record<string, unknown>)
+              : undefined,
+        }) === 'prospect'
+    ).length,
+    followUpScansToday: acceptedToday.filter(
+      (row) => recommendationExecutionBucket({ kind: String(row.kind ?? '') }) === 'follow_up_scan'
+    ).length,
+    devopsRunsToday: acceptedToday.filter(
+      (row) =>
+        recommendationExecutionBucket({
+          kind: String(row.kind ?? ''),
+          payload:
+            row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+              ? (row.payload as Record<string, unknown>)
+              : undefined,
+        }) === 'devops'
+    ).length,
+  }
 }
 
 function buildJobFromRecommendation(input: {
@@ -248,13 +341,28 @@ async function autoEnqueueRecommendations(input: {
   mode: HermesOperatorMode
   recommendations: PersistedOperatorRecommendation[]
   nowIso: string
-}): Promise<{ enqueuedJobsCount: number; executedRecommendationIds: string[] }> {
+  now: Date
+  settings: HermesOperatorSettings
+}): Promise<{
+  enqueuedJobsCount: number
+  executedRecommendationIds: string[]
+  blockedByPolicyCount: number
+  blockedByPolicyReasonCounts: Partial<Record<HermesPolicyBlockReason, number>>
+}> {
   if (input.mode === 'observe') {
-    return { enqueuedJobsCount: 0, executedRecommendationIds: [] }
+    return {
+      enqueuedJobsCount: 0,
+      executedRecommendationIds: [],
+      blockedByPolicyCount: 0,
+      blockedByPolicyReasonCounts: {},
+    }
   }
 
   let enqueuedJobsCount = 0
   const executedRecommendationIds: string[] = []
+  let usage = await loadAutoExecutionUsage(input.supabase, input.userId, input.now)
+  let blockedByPolicyCount = 0
+  const blockedByPolicyReasonCounts: Partial<Record<HermesPolicyBlockReason, number>> = {}
 
   for (const recommendation of input.recommendations) {
     if (
@@ -266,13 +374,36 @@ async function autoEnqueueRecommendations(input: {
       continue
     }
 
-    if (
-      !canHermesAutoExecute({
+    const evaluation = evaluateHermesAutoExecution({
         mode: input.mode,
         actionType: recommendation.actionType,
         riskLevel: recommendation.riskLevel,
+        recommendationKind: recommendation.kind,
+        agentId: readString(recommendation.payload.agentId),
+        caps: {
+          maxAutoActionsPerDay: input.settings.maxAutoActionsPerDay,
+          maxAutoProspectRunsPerDay: input.settings.maxAutoProspectRunsPerDay,
+          maxAutoFollowUpScansPerDay: input.settings.maxAutoFollowUpScansPerDay,
+          maxAutoDevopsRunsPerDay: input.settings.maxAutoDevopsRunsPerDay,
+        },
+        usage,
       })
-    ) {
+    if (!evaluation.ok) {
+      const blockedUpdateResult = await input.supabase
+        .from('hermes_operator_recommendations')
+        .update({
+          policy_block_reason: evaluation.reason,
+          auto_execution_eligible: true,
+          auto_execution_attempted_at: input.nowIso,
+          auto_execution_blocked_at: input.nowIso,
+          updated_at: input.nowIso,
+        })
+        .eq('id', recommendation.id)
+      const blockedUpdated = await blockedUpdateResult
+      if (blockedUpdated.error) throw new Error(blockedUpdated.error.message)
+      blockedByPolicyCount += 1
+      blockedByPolicyReasonCounts[evaluation.reason] =
+        (blockedByPolicyReasonCounts[evaluation.reason] ?? 0) + 1
       continue
     }
 
@@ -291,6 +422,9 @@ async function autoEnqueueRecommendations(input: {
       .from('hermes_operator_recommendations')
       .update({
         status: 'accepted',
+        policy_block_reason: null,
+        auto_execution_eligible: true,
+        auto_execution_attempted_at: input.nowIso,
         updated_at: input.nowIso,
       })
       .eq('id', recommendation.id)
@@ -299,9 +433,37 @@ async function autoEnqueueRecommendations(input: {
 
     enqueuedJobsCount += 1
     executedRecommendationIds.push(recommendation.id)
+    const bucket = recommendationExecutionBucket({
+      kind: recommendation.kind,
+      payload: recommendation.payload,
+    })
+    if (bucket === 'follow_up_scan') {
+      usage = {
+        ...usage,
+        totalAutoActionsToday: usage.totalAutoActionsToday + 1,
+        followUpScansToday: usage.followUpScansToday + 1,
+      }
+    } else if (bucket === 'devops') {
+      usage = {
+        ...usage,
+        totalAutoActionsToday: usage.totalAutoActionsToday + 1,
+        devopsRunsToday: usage.devopsRunsToday + 1,
+      }
+    } else if (bucket === 'prospect') {
+      usage = {
+        ...usage,
+        totalAutoActionsToday: usage.totalAutoActionsToday + 1,
+        prospectRunsToday: usage.prospectRunsToday + 1,
+      }
+    }
   }
 
-  return { enqueuedJobsCount, executedRecommendationIds }
+  return {
+    enqueuedJobsCount,
+    executedRecommendationIds,
+    blockedByPolicyCount,
+    blockedByPolicyReasonCounts,
+  }
 }
 
 export async function runHermesOperatorTick(input: {
@@ -323,6 +485,7 @@ export async function runHermesOperatorTick(input: {
 
   try {
     const previousRun = await loadPreviousRun(input.supabase, input.userId)
+    const operatorSettings = await loadOperatorSettings(input.supabase, input.userId)
     contextSnapshot = await buildContext({
       supabase: input.supabase,
       userId: input.userId,
@@ -361,6 +524,8 @@ export async function runHermesOperatorTick(input: {
       summary: engineResult.summary,
       executed_actions_count: 0,
       enqueued_jobs_count: 0,
+      blocked_by_policy_count: 0,
+      blocked_by_policy_reason_counts: {},
       alerts_count: allAlerts.length,
       last_error: null,
       created_at: nowIso,
@@ -380,11 +545,15 @@ export async function runHermesOperatorTick(input: {
       mode,
       recommendations,
       nowIso,
+      now,
+      settings: operatorSettings,
     })
 
     await patchRun(input.supabase, runId, {
       enqueued_jobs_count: enqueueResult.enqueuedJobsCount,
       executed_actions_count: enqueueResult.executedRecommendationIds.length,
+      blocked_by_policy_count: enqueueResult.blockedByPolicyCount,
+      blocked_by_policy_reason_counts: enqueueResult.blockedByPolicyReasonCounts,
     })
 
     await persistOperatorAlerts({
@@ -449,6 +618,8 @@ export async function runHermesOperatorTick(input: {
       summary: 'Hermes Operator run failed.',
       executed_actions_count: 0,
       enqueued_jobs_count: 0,
+      blocked_by_policy_count: 0,
+      blocked_by_policy_reason_counts: {},
       alerts_count: 0,
       last_error: message,
       created_at: nowIso,

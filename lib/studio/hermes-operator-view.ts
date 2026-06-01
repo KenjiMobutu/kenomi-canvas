@@ -30,6 +30,7 @@ export type HermesOperatorRecommendationViewRow = {
   actionType: string | null
   riskLevel: string | null
   status: string
+  policyBlockReason: string | null
   createdAt: string
 }
 
@@ -47,11 +48,21 @@ export type HermesOperatorAlertViewRow = {
 export type HermesOperatorSettingsViewRow = {
   operatorMode: 'observe' | 'recommend' | 'act'
   notifyInStudio: boolean
+  notificationMode: 'studio_only' | 'email' | 'webhook'
+  maxAutoActionsPerDay: number
+  maxAutoProspectRunsPerDay: number
+  maxAutoFollowUpScansPerDay: number
+  maxAutoDevopsRunsPerDay: number
 }
 
 export type HermesOperatorView = {
   currentMode: 'observe' | 'recommend' | 'act'
   notifyInStudio: boolean
+  notificationMode: 'studio_only' | 'email' | 'webhook'
+  maxAutoActionsPerDay: number
+  maxAutoProspectRunsPerDay: number
+  maxAutoFollowUpScansPerDay: number
+  maxAutoDevopsRunsPerDay: number
   lastRun: HermesOperatorRunViewRow | null
   recentRuns: HermesOperatorRunViewRow[]
   topRecommendation: HermesOperatorRecommendationViewRow | null
@@ -59,6 +70,8 @@ export type HermesOperatorView = {
   topBusinessAlert: HermesOperatorAlertViewRow | null
   topExecutionAlert: HermesOperatorAlertViewRow | null
   openRecommendationsCount: number
+  blockedByPolicyCount: number
+  topBlockedReason: string | null
   openAlertsCount: number
   openBusinessAlertsCount: number
   openExecutionAlertsCount: number
@@ -127,6 +140,11 @@ export function buildHermesOperatorView(input: {
   return {
     currentMode: input.settings.operatorMode,
     notifyInStudio: input.settings.notifyInStudio,
+    notificationMode: input.settings.notificationMode,
+    maxAutoActionsPerDay: input.settings.maxAutoActionsPerDay,
+    maxAutoProspectRunsPerDay: input.settings.maxAutoProspectRunsPerDay,
+    maxAutoFollowUpScansPerDay: input.settings.maxAutoFollowUpScansPerDay,
+    maxAutoDevopsRunsPerDay: input.settings.maxAutoDevopsRunsPerDay,
     lastRun: currentRun,
     recentRuns: input.runs.slice(0, 5),
     topRecommendation: openRecommendations[0] ?? null,
@@ -134,6 +152,9 @@ export function buildHermesOperatorView(input: {
     topBusinessAlert: businessAlerts[0] ?? null,
     topExecutionAlert: executionAlerts[0] ?? null,
     openRecommendationsCount: openRecommendations.length,
+    blockedByPolicyCount: input.recommendations.filter((item) => item.policyBlockReason).length,
+    topBlockedReason:
+      input.recommendations.find((item) => item.policyBlockReason)?.policyBlockReason ?? null,
     openAlertsCount: openAlerts.length,
     openBusinessAlertsCount: businessAlerts.length,
     openExecutionAlertsCount: executionAlerts.length,

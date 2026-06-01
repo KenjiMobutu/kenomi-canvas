@@ -79,7 +79,11 @@ async function queryHermesCounts() {
   })
 
   const [runs, recommendations, alerts, businessAlerts, briefs] = await Promise.all([
-    supabase.from('hermes_operator_runs').select('id').limit(1),
+    supabase
+      .from('hermes_operator_runs')
+      .select('id, blocked_by_policy_count')
+      .order('created_at', { ascending: false })
+      .limit(1),
     supabase
       .from('hermes_operator_recommendations')
       .select('id')
@@ -107,6 +111,7 @@ async function queryHermesCounts() {
     alertCount: (alerts.data ?? []).length,
     businessAlertCount: (businessAlerts.data ?? []).length,
     briefCount: (briefs.data ?? []).length,
+    blockedByPolicyCount: Number((runs.data ?? [])[0]?.blocked_by_policy_count ?? 0),
   }
 }
 
@@ -145,6 +150,8 @@ async function bootstrapHermesTruthIfMissing() {
     summary: 'Smoke bootstrap Hermes operator summary.',
     executed_actions_count: 0,
     enqueued_jobs_count: 0,
+    blocked_by_policy_count: 0,
+    blocked_by_policy_reason_counts: {},
     alerts_count: 1,
     created_at: nowIso,
   }
