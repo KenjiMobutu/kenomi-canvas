@@ -186,10 +186,14 @@ const run = await request('/api/studio/prospects/run', {
   }),
 })
 
-assert(run.response.status === 202, `prospect run failed: ${run.response.status} ${run.text}`)
+assert(
+  run.response.status === 200 || run.response.status === 202,
+  `prospect run failed: ${run.response.status} ${run.text}`
+)
 const jobId = run.json?.jobId
 assert(typeof jobId === 'string' && jobId.length > 0, `missing job id in run response: ${run.text}`)
-process.stdout.write(`ok queued prospect run (${jobId})\n`)
+const initialJobStatus = typeof run.json?.jobStatus === 'string' ? run.json.jobStatus : 'queued'
+process.stdout.write(`ok prospect run accepted (${jobId}, ${initialJobStatus})\n`)
 
 const jobs = await request('/api/studio/autonomy/jobs?agent_id=prospect')
 assert(jobs.response.status === 200, `jobs fetch failed: ${jobs.response.status} ${jobs.text}`)
@@ -204,7 +208,10 @@ if (workerSecret) {
   )
 }
 
-const completedJob = await waitForJob(jobId, 'prospect job')
+const completedJob =
+  initialJobStatus === 'completed'
+    ? { id: jobId, status: 'completed', last_error: null }
+    : await waitForJob(jobId, 'prospect job')
 assert(
   completedJob.status === 'completed',
   `prospect job did not complete successfully: ${completedJob.status} ${completedJob.last_error ?? ''}`

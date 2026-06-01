@@ -26,6 +26,7 @@ import {
   writeProspectMemory,
 } from '@/lib/memory/prospect-memory'
 import { buildProspectOutreach } from '@/lib/prospect/build-outreach'
+import type { ProspectSource } from '@/lib/prospect/types'
 import type { ProspectOutput } from '@/lib/agent-output-schemas'
 import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
 import { getModelFamily } from '@/lib/model-families'
@@ -78,6 +79,7 @@ export interface RunAgentStepInput {
   agentId: string
   ventureId?: string
   prompt?: string
+  structuredInput?: Record<string, unknown>
   llm?: (
     messages: LLMMessage[],
     config: {
@@ -107,6 +109,14 @@ export interface RunAgentStepResult {
   agentRunId: string | null
   parsedOutput: AgentOutput | null
   pipeline?: Record<string, unknown>
+}
+
+const PROSPECT_SOURCES: ProspectSource[] = ['linkedin', 'malt', 'upwork', 'indeed', 'reddit', 'other']
+
+function normalizeProspectSource(value: unknown, fallback: ProspectSource): ProspectSource {
+  return typeof value === 'string' && PROSPECT_SOURCES.includes(value as ProspectSource)
+    ? (value as ProspectSource)
+    : fallback
 }
 
 async function getRecentInfraEvents(
@@ -853,10 +863,31 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
 
     if (agentId === 'prospect' && parsedOutput && 'company_name' in parsedOutput) {
       const prospect = parsedOutput as ProspectOutput
+      const inputCompanyName =
+        typeof input.structuredInput?.companyName === 'string' &&
+        input.structuredInput.companyName.trim().length > 0
+          ? input.structuredInput.companyName.trim()
+          : prospect.company_name
+      const inputContactName =
+        typeof input.structuredInput?.contactName === 'string' &&
+        input.structuredInput.contactName.trim().length > 0
+          ? input.structuredInput.contactName.trim()
+          : (prospect.contact_name ?? null)
+      const inputContactRole =
+        typeof input.structuredInput?.contactRole === 'string' &&
+        input.structuredInput.contactRole.trim().length > 0
+          ? input.structuredInput.contactRole.trim()
+          : null
+      const inputContactEmail =
+        typeof input.structuredInput?.contactEmail === 'string' &&
+        input.structuredInput.contactEmail.trim().length > 0
+          ? input.structuredInput.contactEmail.trim()
+          : null
+      const inputSource = normalizeProspectSource(input.structuredInput?.source, prospect.source)
       const generatedDraft = buildProspectOutreach({
-        companyName: prospect.company_name,
-        contactName: prospect.contact_name ?? null,
-        source: prospect.source,
+        companyName: inputCompanyName,
+        contactName: inputContactName,
+        source: inputSource,
         score: prospect.score,
         band: prospect.band,
         painPoints: prospect.pain_points,
@@ -867,12 +898,12 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           .from('prospects')
           .insert({
             user_id: userId,
-            source: prospect.source,
+            source: inputSource,
             source_url: null,
-            company_name: prospect.company_name,
-            contact_name: prospect.contact_name ?? null,
-            contact_email: null,
-            contact_role: null,
+            company_name: inputCompanyName,
+            contact_name: inputContactName,
+            contact_email: inputContactEmail,
+            contact_role: inputContactRole,
             score: prospect.score,
             status:
               prospect.band === 'hot'
@@ -899,15 +930,15 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
               generated_draft: generatedDraft,
               memory_record: buildProspectMemoryRecord({
                 id: 'pending',
-                companyName: prospect.company_name,
-                source: prospect.source,
+                companyName: inputCompanyName,
+                source: inputSource,
                 score: prospect.score,
                 band: prospect.band,
                 summary: prospect.summary,
                 tags: prospect.pain_points,
-                contactName: prospect.contact_name ?? null,
-                contactRole: null,
-                contactEmail: null,
+                contactName: inputContactName,
+                contactRole: inputContactRole,
+                contactEmail: inputContactEmail,
               }),
             },
             created_at: now().toISOString(),
@@ -933,15 +964,15 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
               generated_draft: generatedDraft,
               memory_record: buildProspectMemoryRecord({
                 id: prospectInsert.id,
-                companyName: prospect.company_name,
-                source: prospect.source,
+                companyName: inputCompanyName,
+                source: inputSource,
                 score: prospect.score,
                 band: prospect.band,
                 summary: prospect.summary,
                 tags: prospect.pain_points,
-                contactName: prospect.contact_name ?? null,
-                contactRole: null,
-                contactEmail: null,
+                contactName: inputContactName,
+                contactRole: inputContactRole,
+                contactEmail: inputContactEmail,
               }),
             },
           })
@@ -959,7 +990,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           await (input.writeProspectMemory ?? writeProspectMemory)({
             userId,
             prospectId: prospectInsert.id,
-            companyName: prospect.company_name,
+            companyName: inputCompanyName,
             memoryKind: 'prospect_created',
             pipelineStatus:
               prospect.band === 'hot'
@@ -968,7 +999,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
                   ? 'follow_up'
                   : 'nurture',
             band: prospect.band,
-            source: prospect.source,
+            source: inputSource,
             createdAt: now().toISOString(),
             summary: prospect.summary,
             painPoints: prospect.pain_points,

@@ -62,6 +62,7 @@ export interface ProcessQueuedAutonomyJobsInput {
     agentId: string
     ventureId?: string
     prompt?: string
+    structuredInput?: Record<string, unknown>
   }) => Promise<{
     ok: true
     content: string
@@ -365,6 +366,7 @@ async function getQueuedJobRunnerInput(job: AutonomyJobRow): Promise<{
   agentId: string
   prompt: string
   ventureId?: string
+  structuredInput?: Record<string, unknown>
 }> {
   const payload = job.payload as AutonomyJobPayload
   const agentId = typeof payload.agentId === 'string' ? payload.agentId.trim() : ''
@@ -377,6 +379,8 @@ async function getQueuedJobRunnerInput(job: AutonomyJobRow): Promise<{
     agentId,
     prompt,
     ventureId: typeof payload.ventureId === 'string' ? payload.ventureId : undefined,
+    structuredInput:
+      payload.input && typeof payload.input === 'object' ? (payload.input as Record<string, unknown>) : undefined,
   }
 }
 
@@ -459,6 +463,7 @@ export async function processQueuedAutonomyJobs(
           agentId: runnerInput.agentId,
           ventureId: runnerInput.ventureId,
           prompt: runnerInput.prompt,
+          structuredInput: runnerInput.structuredInput,
         })
         output = {
           agentRunId: agentResult.agentRunId,

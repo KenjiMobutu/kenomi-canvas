@@ -130,6 +130,7 @@ export async function POST(request: Request) {
         userId: user!.id,
         agentId: 'prospect',
         prompt,
+        structuredInput: parsed.data,
       })
 
       await completeJob(
