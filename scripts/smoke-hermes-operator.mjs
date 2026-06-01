@@ -89,7 +89,7 @@ async function queryHermesCounts() {
   const [runs, recommendations, alerts, businessAlerts, briefs] = await Promise.all([
     supabase
       .from('hermes_operator_runs')
-      .select('id, blocked_by_policy_count')
+      .select('id, created_at, blocked_by_policy_count')
       .order('created_at', { ascending: false })
       .limit(1),
     supabase
@@ -134,6 +134,41 @@ async function queryHermesCounts() {
       return row.status === 'accepted' && row.action_type === 'run_agent' && agentId === 'devops'
     }).length,
   }
+}
+
+async function primeHermesScheduleForSmoke() {
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error('supabase_service_role_missing')
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  const { data: scheduleRows, error: scheduleError } = await supabase
+    .from('business_schedules')
+    .select('id, user_id, status, next_run_at')
+    .eq('schedule_key', 'hermes_operator')
+    .order('created_at', { ascending: true })
+    .limit(1)
+
+  if (scheduleError) throw new Error(scheduleError.message)
+
+  const schedule = scheduleRows?.[0]
+  if (!schedule?.id) throw new Error('hermes_schedule_missing')
+
+  const nowIso = new Date(Date.now() - 60_000).toISOString()
+  const { error: updateError } = await supabase
+    .from('business_schedules')
+    .update({
+      status: 'active',
+      next_run_at: nowIso,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', schedule.id)
+
+  if (updateError) throw new Error(updateError.message)
+  write(`ok hermes schedule primed (${schedule.id})`)
 }
 
 async function triggerHermesOperator() {
@@ -218,6 +253,7 @@ try {
 let triggerAttempted = false
 let triggerOk = false
 try {
+  await primeHermesScheduleForSmoke()
   triggerAttempted = true
   await triggerHermesOperator()
   triggerOk = true
