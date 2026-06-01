@@ -68,6 +68,7 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://192.168.0.14:1143
 const OLLAMA_DEFAULT_MODEL = process.env.OLLAMA_DEFAULT_MODEL ?? 'qwen3:8b'
 const HERMES_AGENT_BASE_URL = (process.env.HERMES_AGENT_URL ?? '').replace(/\/+$/, '')
 const HERMES_AGENT_API_KEY = process.env.HERMES_AGENT_API_KEY ?? ''
+const HERMES_DEFAULT_MODEL = process.env.HERMES_DEFAULT_MODEL ?? 'hermes3:8b'
 const CLAUDE_FALLBACK_MODEL = process.env.CLAUDE_FALLBACK_MODEL ?? 'claude-sonnet-4-5'
 const OLLAMA_TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '30000', 10)
 
@@ -281,7 +282,7 @@ export async function llmChat(
   } catch (primaryError) {
     const reason = primaryError instanceof Error ? primaryError.message : String(primaryError)
 
-    logWarn('llm.fallback', 'Ollama unavailable, falling back to Claude', {
+    logWarn('llm.fallback', 'Primary LLM unavailable, trying fallback chain', {
       event: 'llm_fallback_triggered',
       reason,
       primary_provider: useHermesAgent ? 'hermes' : 'ollama',
@@ -320,6 +321,38 @@ export async function llmChat(
             claudeError instanceof Error ? claudeError.message : String(claudeError)
           throw new Error(
             `LLM indisponible — Hermes: ${reason} | Ollama: ${ollamaReason} | Claude: ${claudeReason}`
+          )
+        }
+      }
+    }
+
+    if (!useHermesAgent && HERMES_AGENT_BASE_URL) {
+      try {
+        const hermesResult = await callHermesAgent(messages, config)
+        return {
+          content: hermesResult.content,
+          provider: 'hermes',
+          model: HERMES_DEFAULT_MODEL,
+          fallback_triggered: true,
+          usage: hermesResult.usage,
+        }
+      } catch (hermesError) {
+        const hermesReason = hermesError instanceof Error ? hermesError.message : String(hermesError)
+
+        try {
+          const result = await callClaude(messages, config)
+          return {
+            content: result.content,
+            provider: 'claude',
+            model: CLAUDE_FALLBACK_MODEL,
+            fallback_triggered: true,
+            usage: result.usage,
+          }
+        } catch (claudeError) {
+          const claudeReason =
+            claudeError instanceof Error ? claudeError.message : String(claudeError)
+          throw new Error(
+            `LLM indisponible — Ollama: ${reason} | Hermes: ${hermesReason} | Claude: ${claudeReason}`
           )
         }
       }

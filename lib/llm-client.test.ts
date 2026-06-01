@@ -247,4 +247,40 @@ describe('llmChat', () => {
       'LLM indisponible — Hermes: Hermes Agent HTTP 504: timeout | Ollama: connect ECONNREFUSED | Claude: missing API key'
     )
   })
+
+  it('falls back from Ollama to Hermes before Claude when a qwen model times out', async () => {
+    vi.stubEnv('HERMES_AGENT_URL', 'https://hermes-api.kenomi.eu')
+    vi.stubEnv('HERMES_DEFAULT_MODEL', 'hermes3:8b')
+    const { llmChat } = await loadLlmClient()
+
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('This operation was aborted'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Hermes rescued the run.' } }],
+          usage: { prompt_tokens: 33, completion_tokens: 12, total_tokens: 45 },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await llmChat([{ role: 'user', content: 'Find a prospect.' }], {
+      model: 'qwen3:8b',
+    })
+
+    expect(result).toMatchObject({
+      content: 'Hermes rescued the run.',
+      provider: 'hermes',
+      model: 'hermes3:8b',
+      fallback_triggered: true,
+      usage: { prompt_tokens: 33, completion_tokens: 12, total_tokens: 45 },
+    })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://hermes-api.kenomi.eu/v1/chat/completions',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
 })
