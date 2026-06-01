@@ -2114,7 +2114,72 @@ function formatSignedEuro(value: number) {
   return formatEuro(0)
 }
 
+function parseSourceBand(value: string | null | undefined) {
+  if (typeof value !== 'string') return null
+  const [source, band] = value
+    .split('/')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  if (!source || !band) return null
+  return { source, band }
+}
+
+function buildLeakHref(brief: HermesBriefPayload | null) {
+  const leak = `${brief?.mainLeak ?? ''} ${brief?.topBlocker ?? ''}`.toLowerCase()
+  if (leak.includes('follow')) return buildProspectHref({ status: 'follow_up_due' })
+  if (leak.includes('approval')) return buildProspectHref({ status: 'awaiting_approval' })
+  if (leak.includes('reply')) return buildProspectHref({ status: 'replied' })
+  if (leak.includes('cash') || leak.includes('checkout') || leak.includes('blocked')) {
+    return buildRevenueHref({ focus: 'blocked' })
+  }
+  return '/studio/revenue'
+}
+
+function buildNextActionHref(brief: HermesBriefPayload | null) {
+  const nextAction = brief?.nextBestAction?.toLowerCase() ?? ''
+  if (nextAction.includes('follow')) return buildProspectHref({ status: 'follow_up_due' })
+  if (nextAction.includes('approval') || nextAction.includes('draft')) {
+    return buildProspectHref({ status: 'awaiting_approval' })
+  }
+  if (
+    nextAction.includes('prospect') ||
+    nextAction.includes('lead') ||
+    nextAction.includes('segment')
+  ) {
+    return '/studio/prospects'
+  }
+  if (nextAction.includes('devops') || nextAction.includes('infra')) return '/studio/infrastructure'
+  if (
+    nextAction.includes('checkout') ||
+    nextAction.includes('cash') ||
+    nextAction.includes('revenue')
+  ) {
+    return buildRevenueHref({ focus: 'blocked' })
+  }
+  return '/studio/automations'
+}
+
 function DailyHermesBriefPanel({ brief }: { brief: HermesBriefPayload | null }) {
+  const bestSegmentParts = parseSourceBand(brief?.bestSegment)
+  const bestSegmentHref = bestSegmentParts
+    ? buildSegmentPushHref(bestSegmentParts)
+    : '/studio/prospects'
+  const bestSourceHref = brief?.bestSource
+    ? buildSourceFocusHref({ source: brief.bestSource })
+    : '/studio/prospects'
+  const mainLeakHref = buildLeakHref(brief)
+  const nextActionHref = buildNextActionHref(brief)
+  const cards = [
+    {
+      label: 'Best offer',
+      value: brief?.bestOffer ?? '—',
+      href: buildRevenueHref({ focus: 'cash_30d' }),
+    },
+    { label: 'Best segment', value: brief?.bestSegment ?? '—', href: bestSegmentHref },
+    { label: 'Best source', value: brief?.bestSource ?? '—', href: bestSourceHref },
+    { label: 'Main leak', value: brief?.mainLeak ?? '—', href: mainLeakHref },
+  ]
+
   return (
     <section
       style={{
@@ -2127,7 +2192,14 @@ function DailyHermesBriefPanel({ brief }: { brief: HermesBriefPayload | null }) 
         gap: 12,
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 12,
+          alignItems: 'baseline',
+        }}
+      >
         <div>
           <div
             style={{
@@ -2187,7 +2259,9 @@ function DailyHermesBriefPanel({ brief }: { brief: HermesBriefPayload | null }) 
             fontWeight: 800,
           }}
         >
-          {brief ? `Cash 7j ${brief.cashDelta7d >= 0 ? '+' : ''}${formatEuro(Math.abs(brief.cashDelta7d))}` : 'No brief yet'}
+          {brief
+            ? `Cash 7j ${brief.cashDelta7d >= 0 ? '+' : ''}${formatEuro(Math.abs(brief.cashDelta7d))}`
+            : 'No brief yet'}
         </div>
         <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: text }}>
           {brief?.summary ?? 'Run Hermes to persist a business brief.'}
@@ -2199,12 +2273,8 @@ function DailyHermesBriefPanel({ brief }: { brief: HermesBriefPayload | null }) 
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-        {[
-          { label: 'Best offer', value: brief?.bestOffer ?? '—', href: '/studio/revenue' },
-          { label: 'Best segment', value: brief?.bestSegment ?? '—', href: '/studio/prospects' },
-          { label: 'Next action', value: brief?.nextBestAction ?? '—', href: '/studio/automations' },
-        ].map((card) => (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+        {cards.map((card) => (
           <a
             key={card.label}
             href={card.href}
@@ -2240,6 +2310,195 @@ function DailyHermesBriefPanel({ brief }: { brief: HermesBriefPayload | null }) 
             >
               {card.value}
             </strong>
+          </a>
+        ))}
+      </div>
+
+      <a
+        href={nextActionHref}
+        style={{
+          textDecoration: 'none',
+          padding: '10px 12px',
+          borderRadius: 10,
+          border: `1px solid ${accent}44`,
+          background: `${accent}12`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: accent,
+            textTransform: 'uppercase',
+            letterSpacing: '.12em',
+          }}
+        >
+          Next action
+        </span>
+        <strong style={{ color: text, fontSize: 13, lineHeight: 1.35, fontWeight: 700 }}>
+          {brief?.nextBestAction ?? 'Run Hermes and persist a business brief.'}
+        </strong>
+      </a>
+    </section>
+  )
+}
+
+function CashMovementPanel({
+  outcomes,
+  snapshot,
+  brief,
+}: {
+  outcomes: CashOutcomeSnapshot | null
+  snapshot: RevenueLoopSnapshotPayload | null
+  brief: HermesBriefPayload | null
+}) {
+  const bestSegmentParts = parseSourceBand(brief?.bestSegment)
+  const bestSegmentHref = bestSegmentParts
+    ? buildSegmentPushHref(bestSegmentParts)
+    : buildSegmentPushHref({
+        source: outcomes?.topSegment?.source ?? null,
+        band: outcomes?.topSegment?.band ?? null,
+      })
+
+  const cards = [
+    {
+      label: 'Attributed cash 7d',
+      value: formatEuro(outcomes?.last7d.cashEur ?? 0),
+      detail: `vs prev ${outcomes ? formatSignedEuro(outcomes.delta7d.cashEur) : formatEuro(0)}`,
+      href: buildRevenueHref({ focus: 'cash_7d' }),
+      tone: emerald,
+    },
+    {
+      label: 'Blocked cash',
+      value: formatEuro(snapshot?.summary.blockedRevenueEur ?? 0),
+      detail: `${snapshot?.summary.readyCheckouts ?? 0} ready checkouts`,
+      href: buildRevenueHref({ focus: 'blocked' }),
+      tone: amber,
+    },
+    {
+      label: 'Main leak',
+      value: brief?.mainLeak ?? brief?.topBlocker ?? 'No main leak yet',
+      detail: brief?.topBlocker ?? 'Run Hermes to classify the biggest leak.',
+      href: buildLeakHref(brief),
+      tone: accent,
+    },
+    {
+      label: 'Push this segment',
+      value:
+        brief?.bestSegment ||
+        (outcomes?.topSegment
+          ? `${outcomes.topSegment.source}/${outcomes.topSegment.band}`
+          : 'No segment yet'),
+      detail: brief?.topOpportunity ?? 'Drive the segment that is most likely to collect cash.',
+      href: bestSegmentHref,
+      tone: accent,
+    },
+  ]
+
+  return (
+    <section
+      style={{
+        background: surface,
+        border: `1px solid ${line}`,
+        borderRadius: 14,
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 12,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.18em',
+              color: muted,
+              textTransform: 'uppercase',
+            }}
+          >
+            Cash movement
+          </div>
+          <h3
+            style={{
+              margin: '6px 0 0',
+              fontFamily: 'var(--font-display)',
+              fontSize: 18,
+              fontWeight: 800,
+              letterSpacing: '-.02em',
+              color: text,
+            }}
+          >
+            Ce qui monte, fuit ou se bloque
+          </h3>
+        </div>
+        <a
+          href={buildRevenueHref({ focus: 'blocked' })}
+          style={{
+            color: accent,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '.14em',
+            textTransform: 'uppercase',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Open Revenue
+        </a>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+        {cards.map((card) => (
+          <a
+            key={card.label}
+            href={card.href}
+            style={{
+              textDecoration: 'none',
+              padding: '12px 12px 10px',
+              borderRadius: 10,
+              border: `1px solid ${line}`,
+              background: surface2,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                color: muted,
+                textTransform: 'uppercase',
+                letterSpacing: '.12em',
+              }}
+            >
+              {card.label}
+            </span>
+            <strong
+              style={{
+                color: card.tone,
+                fontSize:
+                  card.label === 'Main leak' || card.label === 'Push this segment' ? 13 : 21,
+                lineHeight: 1.25,
+                fontWeight: 800,
+              }}
+            >
+              {card.value}
+            </strong>
+            <span style={{ color: muted2, fontSize: 11.5, lineHeight: 1.45 }}>{card.detail}</span>
           </a>
         ))}
       </div>
@@ -2361,10 +2620,10 @@ function CashOutcomePanel({
                 marginTop: 8,
                 color: muted2,
                 fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              letterSpacing: '.08em',
-              textTransform: 'uppercase',
-            }}
+                fontSize: 10,
+                letterSpacing: '.08em',
+                textTransform: 'uppercase',
+              }}
             >
               vs prev {card.delta}
             </div>
@@ -2462,7 +2721,9 @@ function CashOutcomePanel({
               >
                 <div>
                   <div style={{ color: muted2, fontSize: 11 }}>{item.label}</div>
-                  <div style={{ marginTop: 4, color: text, fontSize: 18, fontWeight: 700 }}>{item.value}</div>
+                  <div style={{ marginTop: 4, color: text, fontSize: 18, fontWeight: 700 }}>
+                    {item.value}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -2526,7 +2787,9 @@ function CashOutcomePanel({
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ color: text, fontSize: 12, fontWeight: 700 }}>{blocker.label}</div>
+                    <div style={{ color: text, fontSize: 12, fontWeight: 700 }}>
+                      {blocker.label}
+                    </div>
                     <div style={{ color: muted2, fontSize: 11, marginTop: 4 }}>
                       {blocker.count} blocked · {blocker.source}
                     </div>
@@ -2626,12 +2889,25 @@ function CashOutcomePanel({
                       Top source
                     </span>
                   ) : null}
-                  <span style={{ color: muted2, fontSize: 11 }}>{source.qualityScore}/100 quality</span>
+                  <span style={{ color: muted2, fontSize: 11 }}>
+                    {source.qualityScore}/100 quality
+                  </span>
                   {index === 0 ? (
-                    <span style={{ color: emerald, fontSize: 11, fontWeight: 700 }}>{source.playbookHint}</span>
+                    <span style={{ color: emerald, fontSize: 11, fontWeight: 700 }}>
+                      {source.playbookHint}
+                    </span>
                   ) : null}
                 </div>
-                <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: 'flex',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                    color: muted2,
+                    fontSize: 11,
+                  }}
+                >
                   <span>{source.active} active</span>
                   <span>{source.replied} replies</span>
                   <span>{source.won} won</span>
@@ -2639,7 +2915,9 @@ function CashOutcomePanel({
                   <span>{source.winRate}% win</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}
+              >
                 {index === 0 ? (
                   <button
                     type="button"
@@ -2754,12 +3032,25 @@ function CashOutcomePanel({
                       Best segment
                     </span>
                   ) : null}
-                  <span style={{ color: muted2, fontSize: 11 }}>{item.qualityScore}/100 quality</span>
+                  <span style={{ color: muted2, fontSize: 11 }}>
+                    {item.qualityScore}/100 quality
+                  </span>
                   {index === 0 ? (
-                    <span style={{ color: emerald, fontSize: 11, fontWeight: 700 }}>{item.playbookHint}</span>
+                    <span style={{ color: emerald, fontSize: 11, fontWeight: 700 }}>
+                      {item.playbookHint}
+                    </span>
                   ) : null}
                 </div>
-                <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', color: muted2, fontSize: 11 }}>
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: 'flex',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                    color: muted2,
+                    fontSize: 11,
+                  }}
+                >
                   <span>{item.active} active</span>
                   <span>{item.replied} replies</span>
                   <span>{item.won} won</span>
@@ -2767,12 +3058,17 @@ function CashOutcomePanel({
                   <span>{item.winRate}% win</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}
+              >
                 {index === 0 ? (
                   <button
                     type="button"
                     onClick={() => {
-                      window.location.href = buildSegmentPushHref({ source: item.source, band: item.band })
+                      window.location.href = buildSegmentPushHref({
+                        source: item.source,
+                        band: item.band,
+                      })
                     }}
                     style={{
                       borderRadius: 999,
@@ -2792,7 +3088,10 @@ function CashOutcomePanel({
                 <button
                   type="button"
                   onClick={() => {
-                    window.location.href = buildProspectHref({ source: item.source, band: item.band })
+                    window.location.href = buildProspectHref({
+                      source: item.source,
+                      band: item.band,
+                    })
                   }}
                   style={{
                     borderRadius: 999,
@@ -2933,13 +3232,13 @@ function CashActionQueue({
                   : action.ctaLabel
                     ? action.ctaLabel
                     : action.kind === 'approval'
-                    ? 'Approve'
-                    : action.kind === 'follow_up'
-                      ? 'Mark sent'
-                      : action.kind === 'send'
+                      ? 'Approve'
+                      : action.kind === 'follow_up'
                         ? 'Mark sent'
-                        : 'Run'
-                : action.ctaLabel ?? 'Open'
+                        : action.kind === 'send'
+                          ? 'Mark sent'
+                          : 'Run'
+                : (action.ctaLabel ?? 'Open')
               return (
                 <>
                   <span
@@ -2996,11 +3295,19 @@ function CashActionQueue({
                       }}
                     >
                       <span>{action.impactLabel}</span>
-                      {action.expectedCashLabel ? <span style={{ color: accent }}>{action.expectedCashLabel}</span> : null}
+                      {action.expectedCashLabel ? (
+                        <span style={{ color: accent }}>{action.expectedCashLabel}</span>
+                      ) : null}
                       <span>{action.blockedLabel}</span>
-                      {action.reasonLabel ? <span style={{ color: amber }}>{action.reasonLabel}</span> : null}
-                      {action.playbookLabel ? <span style={{ color: emerald }}>{action.playbookLabel}</span> : null}
-                      {action.boostLabel ? <span style={{ color: toneColor }}>{action.boostLabel}</span> : null}
+                      {action.reasonLabel ? (
+                        <span style={{ color: amber }}>{action.reasonLabel}</span>
+                      ) : null}
+                      {action.playbookLabel ? (
+                        <span style={{ color: emerald }}>{action.playbookLabel}</span>
+                      ) : null}
+                      {action.boostLabel ? (
+                        <span style={{ color: toneColor }}>{action.boostLabel}</span>
+                      ) : null}
                     </span>
                   </span>
                   <div
@@ -3969,7 +4276,9 @@ export default function CockpitPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [revenueSnapshot, setRevenueSnapshot] = useState<RevenueLoopSnapshotPayload | null>(null)
   const [cashOutcomes, setCashOutcomes] = useState<CashOutcomeSnapshot | null>(null)
-  const [revenueConversions, setRevenueConversions] = useState<RevenueConversionsSnapshot | null>(null)
+  const [revenueConversions, setRevenueConversions] = useState<RevenueConversionsSnapshot | null>(
+    null
+  )
   const [prospectCash, setProspectCash] = useState<ProspectCashPayload | null>(null)
   const [hermesBrief, setHermesBrief] = useState<HermesBriefPayload | null>(null)
   const [cashActionState, setCashActionState] = useState<
@@ -4054,7 +4363,8 @@ export default function CockpitPage() {
     fetch('/api/studio/revenue/conversions', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled && data?.ok) setRevenueConversions(data.conversions as RevenueConversionsSnapshot)
+        if (!cancelled && data?.ok)
+          setRevenueConversions(data.conversions as RevenueConversionsSnapshot)
       })
       .catch(() => {
         if (!cancelled) setRevenueConversions(null)
@@ -4238,9 +4548,12 @@ export default function CockpitPage() {
           style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, minHeight: 0 }}
         >
           {isMobile && <RevenueFirstStrip snapshot={revenueSnapshot} />}
-          <CashFocusPanel snapshot={revenueSnapshot} />
           <DailyHermesBriefPanel brief={hermesBrief} />
-          <CashOutcomePanel outcomes={cashOutcomes} isMobile={isMobile} />
+          <CashMovementPanel
+            outcomes={cashOutcomes}
+            snapshot={revenueSnapshot}
+            brief={hermesBrief}
+          />
           <CashActionQueue
             actions={cashActions}
             actionState={cashActionState}
@@ -4287,9 +4600,7 @@ export default function CockpitPage() {
             {STUDIO_HOME_RIGHT_SECTIONS.includes('revenue_strip') && (
               <RevenueFirstStrip snapshot={revenueSnapshot} />
             )}
-            {STUDIO_HOME_RIGHT_SECTIONS.includes('today_rhythm') && <TodayRhythm />}
             {STUDIO_HOME_RIGHT_SECTIONS.includes('kpi_grid') && <KpiGrid kpi={kpi} />}
-            {STUDIO_HOME_RIGHT_SECTIONS.includes('mission_feed') && <MissionFeedCompact />}
           </div>
         )}
       </main>
