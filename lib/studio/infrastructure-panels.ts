@@ -47,48 +47,52 @@ type DevopsSummary = {
   runtimeCommit: string | null
 }
 
+function mapPanelSeverity(value: string): InfrastructurePanelLogEntry['severity'] {
+  return value === 'error' ? 'error' : value === 'warn' ? 'warn' : 'info'
+}
+
 export function buildInfrastructureLogEntries(input: {
   events?: InfraEvent[] | null
   incidents?: InfraIncident[] | null
   devopsSummary?: DevopsSummary | null
 }): InfrastructurePanelLogEntry[] {
+  const entries: InfrastructurePanelLogEntry[] = []
+
   const events = input.events ?? []
-  if (events.length > 0) {
-    return events.slice(0, 6).map((event) => ({
+  entries.push(
+    ...events.map((event) => ({
       id: event.id,
-      severity:
-        event.severity === 'error' ? 'error' : event.severity === 'warn' ? 'warn' : 'info',
+      severity: mapPanelSeverity(event.severity),
       label: event.type,
       message: event.message,
       createdAt: event.createdAt,
     }))
-  }
+  )
 
   const incidents = input.incidents ?? []
-  if (incidents.length > 0) {
-    return incidents.slice(0, 6).map((incident) => ({
+  entries.push(
+    ...incidents.map((incident) => ({
       id: incident.id,
-      severity:
-        incident.severity === 'error' ? 'error' : incident.severity === 'warn' ? 'warn' : 'info',
+      severity: mapPanelSeverity(incident.severity),
       label: incident.targetLabel,
       message: incident.lastError,
       createdAt: incident.createdAt,
     }))
-  }
+  )
 
   if (input.devopsSummary) {
-    return [
-      {
-        id: 'devops-summary',
-        severity: 'info',
-        label: input.devopsSummary.headline,
-        message: input.devopsSummary.summary,
-        createdAt: input.devopsSummary.checkedAt,
-      },
-    ]
+    entries.push({
+      id: 'devops-summary',
+      severity: 'info',
+      label: input.devopsSummary.headline,
+      message: input.devopsSummary.summary,
+      createdAt: input.devopsSummary.checkedAt,
+    })
   }
 
-  return []
+  return entries
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 6)
 }
 
 export function buildInfrastructureDeployEntries(input: {
@@ -108,6 +112,17 @@ export function buildInfrastructureDeployEntries(input: {
       commit: input.parity.runtimeCommit || '—',
       createdAt: timestamp,
     })
+
+    if (input.parity.runtimeCommit) {
+      entries.push({
+        id: 'runtime-commit',
+        status: input.parity.status === 'ok' ? 'ok' : 'unknown',
+        label: 'Live runtime',
+        detail: 'Current live runtime commit',
+        commit: input.parity.runtimeCommit,
+        createdAt: timestamp,
+      })
+    }
 
     if (input.parity.expectedCommit && input.parity.expectedCommit !== 'non configuré') {
       entries.push({
@@ -130,7 +145,9 @@ export function buildInfrastructureDeployEntries(input: {
     })
   }
 
-  return entries.slice(0, 6)
+  return entries
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 6)
 }
 
 export function infrastructureStatusColor(

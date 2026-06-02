@@ -138,6 +138,43 @@ function readSnapshot(value: unknown): Record<string, unknown> | null {
     : null
 }
 
+function buildHermesFallbackEngineResult(input: {
+  context: HermesOperatorContextSnapshot
+  error: string
+}): HermesOperatorEngineResult {
+  const approvals = input.context.prospects.pendingApprovals
+  const followUps = input.context.prospects.followUpsDue
+  const paidCash = input.context.revenue.conversions.overview.paidCashEur
+  const topOffer =
+    input.context.revenue.conversions.bestOfferToCollectCash?.offerName ??
+    input.context.revenue.weeklyReview.bestOfferByCash.title
+  const nextAction = input.context.revenue.weeklyReview.nextExperiment.title
+
+  return {
+    summary: `Hermes fallback mode. ${approvals} approvals pending, ${followUps} follow-ups due, ${paidCash}€ collected. Next move: ${nextAction}.`,
+    recommendations: [],
+    alerts: [
+      {
+        severity: 'warn',
+        category: 'execution_hermes_fallback',
+        dedupeKey: `execution_hermes_fallback:${input.error}`,
+        headline: 'Hermes reasoning fallback active',
+        detail: `${topOffer ? `Cash signal remains on ${topOffer}. ` : ''}Primary Hermes reasoning was unavailable, so the operator persisted a heuristic brief instead.`,
+        channel: 'studio',
+        payload: {
+          error: input.error,
+          paidCashEur: paidCash,
+          pendingApprovals: approvals,
+          followUpsDue: followUps,
+        },
+      },
+    ],
+    provider: 'hermes',
+    model: process.env.HERMES_DEFAULT_MODEL ?? 'hermes3:8b',
+    fallbackTriggered: true,
+  }
+}
+
 const SAFE_OPERATOR_AGENT_IDS = new Set(['prospect', 'devops'])
 
 type OperatorUsageSnapshot = {
@@ -492,10 +529,20 @@ export async function runHermesOperatorTick(input: {
       now,
     })
 
-    const engineResult = await runEngine({
-      context: contextSnapshot,
-      mode,
-    })
+    let engineResult: HermesOperatorEngineResult
+    try {
+      engineResult = await runEngine({
+        context: contextSnapshot,
+        mode,
+      })
+    } catch (engineError) {
+      const engineMessage =
+        engineError instanceof Error ? engineError.message : String(engineError)
+      engineResult = buildHermesFallbackEngineResult({
+        context: contextSnapshot,
+        error: engineMessage,
+      })
+    }
 
     const previousSnapshot = readSnapshot(previousRun?.input_snapshot)
     const generatedAlerts = buildHermesBusinessAlerts({

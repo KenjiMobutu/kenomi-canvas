@@ -114,6 +114,7 @@ export async function runHermesOperatorEngine(input: {
       system: 'Return strict JSON only.',
       temperature: 0.1,
       max_tokens: 1200,
+      timeout_ms: parseInt(process.env.HERMES_OPERATOR_TIMEOUT_MS ?? '90000', 10),
     }
   )
 

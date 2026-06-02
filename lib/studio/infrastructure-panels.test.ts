@@ -5,7 +5,7 @@ import {
 } from '@/lib/studio/infrastructure-panels'
 
 describe('buildInfrastructureLogEntries', () => {
-  it('prefers ops events when available', () => {
+  it('merges ops events, incidents, and summary in reverse chronological order', () => {
     const result = buildInfrastructureLogEntries({
       events: [
         {
@@ -25,6 +25,12 @@ describe('buildInfrastructureLogEntries', () => {
           createdAt: '2026-06-01T11:00:00.000Z',
         },
       ],
+      devopsSummary: {
+        headline: '1 open infra incident',
+        summary: 'Ollama is degraded.',
+        checkedAt: '2026-06-01T10:00:00.000Z',
+        runtimeCommit: '390137b',
+      },
     })
 
     expect(result).toEqual([
@@ -35,29 +41,26 @@ describe('buildInfrastructureLogEntries', () => {
         message: 'Coolify · degraded · timeout',
         createdAt: '2026-06-01T12:00:00.000Z',
       },
-    ])
-  })
-
-  it('falls back to devops summary when no events exist', () => {
-    const result = buildInfrastructureLogEntries({
-      devopsSummary: {
-        headline: '1 open infra incident',
-        summary: 'Ollama is degraded.',
-        checkedAt: '2026-06-01T12:00:00.000Z',
-        runtimeCommit: '390137b',
+      {
+        id: 'incident-1',
+        severity: 'error',
+        label: 'Coolify',
+        message: 'timeout',
+        createdAt: '2026-06-01T11:00:00.000Z',
       },
-    })
-
-    expect(result[0]).toMatchObject({
-      id: 'devops-summary',
-      label: '1 open infra incident',
-      message: 'Ollama is degraded.',
-    })
+      {
+        id: 'devops-summary',
+        severity: 'info',
+        label: '1 open infra incident',
+        message: 'Ollama is degraded.',
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    ])
   })
 })
 
 describe('buildInfrastructureDeployEntries', () => {
-  it('builds runtime and expected commit entries from parity', () => {
+  it('builds parity, live runtime, and expected commit entries from parity', () => {
     const result = buildInfrastructureDeployEntries({
       checkedAt: '2026-06-01T12:00:00.000Z',
       parity: {
@@ -74,6 +77,14 @@ describe('buildInfrastructureDeployEntries', () => {
         status: 'mismatch',
         label: 'Runtime parity',
         detail: 'Runtime different from expected commit',
+        commit: '390137b',
+        createdAt: '2026-06-01T12:00:00.000Z',
+      },
+      {
+        id: 'runtime-commit',
+        status: 'unknown',
+        label: 'Live runtime',
+        detail: 'Current live runtime commit',
         commit: '390137b',
         createdAt: '2026-06-01T12:00:00.000Z',
       },

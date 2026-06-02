@@ -554,29 +554,35 @@ describe('runHermesOperatorTick', () => {
     })
   })
 
-  it('persists a failed run when Hermes execution crashes', async () => {
+  it('falls back to a heuristic run when Hermes execution crashes', async () => {
     const supabase = createFakeSupabase()
 
-    await expect(
-      runHermesOperatorTick({
-        supabase: supabase as never,
-        userId: 'user-1',
-        buildContext: async () => fakeContext,
-        runEngine: async () => {
-          throw new Error('Hermes unavailable')
-        },
-      })
-    ).rejects.toThrow('Hermes unavailable')
+    const result = await runHermesOperatorTick({
+      supabase: supabase as never,
+      userId: 'user-1',
+      buildContext: async () => fakeContext,
+      runEngine: async () => {
+        throw new Error('Hermes unavailable')
+      },
+    })
 
     expect(supabase.tables.hermes_operator_runs).toHaveLength(1)
+    expect(result).toMatchObject({
+      status: 'completed',
+      alertsCount: 3,
+      fallbackTriggered: true,
+    })
     expect(supabase.tables.hermes_operator_runs[0]).toMatchObject({
       user_id: 'user-1',
       mode: 'observe',
-      status: 'failed',
+      status: 'completed',
       model_family: 'hermes',
-      last_error: 'Hermes unavailable',
+      summary: expect.stringContaining('Hermes fallback mode.'),
+      last_error: null,
     })
     expect(supabase.tables.hermes_operator_recommendations).toHaveLength(0)
-    expect(supabase.tables.business_alerts).toHaveLength(0)
+    expect(supabase.tables.business_alerts.map((row) => row.category)).toContain(
+      'execution_hermes_fallback'
+    )
   })
 })
