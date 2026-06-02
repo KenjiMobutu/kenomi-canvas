@@ -33,6 +33,10 @@ function write(line) {
   process.stdout.write(`${line}\n`)
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function fail(message, detail) {
   process.stderr.write(`not ok ${message}${detail ? `: ${detail}` : ''}\n`)
   process.exitCode = 1
@@ -213,9 +217,31 @@ async function triggerHermesOperator() {
   })
   const workerJson = await workerRes.json().catch(() => ({}))
   if (!workerRes.ok) {
+    if (workerRes.status === 504) {
+      warn('hermes worker drain timeout', 'job may still complete asynchronously')
+      return { workerDrainTimedOut: true }
+    }
     throw new Error(`worker_drain_failed:${workerRes.status}:${workerJson.error ?? 'unknown'}`)
   }
   write(`ok hermes worker drain (${Array.isArray(workerJson.processed) ? workerJson.processed.length : 0} processed)`)
+  return { workerDrainTimedOut: false }
+}
+
+async function waitForHermesAdvance(beforeCounts, timeoutMs = 180_000) {
+  const deadline = Date.now() + timeoutMs
+  let lastCounts = beforeCounts
+
+  while (Date.now() < deadline) {
+    lastCounts = await queryHermesCounts()
+    const runAdvanced =
+      lastCounts.latestRunId !== beforeCounts.latestRunId ||
+      lastCounts.latestRunCreatedAt !== beforeCounts.latestRunCreatedAt ||
+      lastCounts.runCount > beforeCounts.runCount
+    if (runAdvanced) return { counts: lastCounts, runAdvanced }
+    await sleep(5000)
+  }
+
+  return { counts: lastCounts, runAdvanced: false }
 }
 
 const healthStatus = await status('/api/health')
@@ -252,10 +278,12 @@ try {
 
 let triggerAttempted = false
 let triggerOk = false
+let workerDrainTimedOut = false
 try {
   await primeHermesScheduleForSmoke()
   triggerAttempted = true
-  await triggerHermesOperator()
+  const triggerResult = await triggerHermesOperator()
+  workerDrainTimedOut = Boolean(triggerResult?.workerDrainTimedOut)
   triggerOk = true
 } catch (error) {
   fail('hermes trigger', error instanceof Error ? error.message : String(error))
@@ -263,17 +291,19 @@ try {
 }
 
 let counts
+let runAdvanced = false
 try {
-  counts = await queryHermesCounts()
+  const waited = await waitForHermesAdvance(beforeCounts)
+  counts = waited.counts
+  runAdvanced = waited.runAdvanced
 } catch (error) {
   fail('hermes counts query', error instanceof Error ? error.message : String(error))
   process.exit()
 }
 
-const runAdvanced =
-  counts.latestRunId !== beforeCounts.latestRunId ||
-  counts.latestRunCreatedAt !== beforeCounts.latestRunCreatedAt ||
-  counts.runCount > beforeCounts.runCount
+if (workerDrainTimedOut && runAdvanced) {
+  write('ok hermes run advanced after async drain timeout')
+}
 
 for (const [key, value] of Object.entries(counts)) {
   write(`truth ${key}=${value}`)
