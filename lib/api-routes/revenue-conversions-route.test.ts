@@ -80,7 +80,7 @@ describe('revenue conversions route', () => {
   })
 
   it('returns conversion truth payload', async () => {
-    const response = await GET(new Request('http://localhost/api/studio/revenue/conversions') as never)
+    const response = await GET()
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.ok).toBe(true)

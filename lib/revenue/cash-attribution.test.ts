@@ -56,8 +56,16 @@ function createFakeSupabase(seed?: { payment_attributions?: Record<string, unkno
           state.updateRow = row
           return builder
         },
-        then: (onfulfilled: (value: Awaited<ReturnType<typeof execute>>) => unknown) =>
-          execute().then(onfulfilled),
+        then<TResult1 = Awaited<ReturnType<typeof execute>>, TResult2 = never>(
+          onfulfilled?:
+            | ((value: Awaited<ReturnType<typeof execute>>) => TResult1 | PromiseLike<TResult1>)
+            | null,
+          _onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+        ): PromiseLike<TResult1 | TResult2> {
+          return execute().then((value) =>
+            onfulfilled ? onfulfilled(value) : (value as TResult1)
+          )
+        },
       }
 
       return builder

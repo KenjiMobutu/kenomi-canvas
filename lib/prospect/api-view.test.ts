@@ -112,6 +112,8 @@ describe('summarizeProspects', () => {
           last_outreach_kind: 'initial',
           last_follow_up_generated_at: null,
           follow_up_version: 0,
+          message_family: 'linkedin_initial',
+          message_key: 'linkedin_initial_default',
         },
         {
           id: 'prospect-2',
@@ -136,6 +138,8 @@ describe('summarizeProspects', () => {
           last_outreach_kind: 'initial',
           last_follow_up_generated_at: null,
           follow_up_version: 0,
+          message_family: 'unknown_initial',
+          message_key: 'unknown_initial_default',
         },
       ],
       new Date('2026-05-25T10:00:00.000Z').getTime()
@@ -230,6 +234,8 @@ describe('summarizeProspects', () => {
           last_outreach_kind: 'follow_up_1',
           last_follow_up_generated_at: null,
           follow_up_version: 1,
+          message_family: 'unknown_follow_up',
+          message_key: 'unknown_follow_up_default',
         },
         {
           id: 'prospect-2',
@@ -253,6 +259,8 @@ describe('summarizeProspects', () => {
           last_outreach_kind: 'initial',
           last_follow_up_generated_at: null,
           follow_up_version: 0,
+          message_family: 'unknown_initial',
+          message_key: 'unknown_initial_default',
         },
       ],
       new Date('2026-05-26T10:00:00.000Z').getTime()

@@ -62,6 +62,7 @@ function makeSnapshot(): ConversionTruthSnapshot {
         closeRate: 16.7,
       },
     ],
+    modelBreakdown: [],
     segmentOfferBreakdown: [
       {
         key: 'reddit:hot:offer-a',
@@ -235,6 +236,7 @@ function makeSnapshot(): ConversionTruthSnapshot {
       leadToReplyHours: 12,
       replyToCloseDays: 3,
     },
+    bestModel: null,
     messageFamilyBreakdown: [
       {
         messageFamily: 'speed',

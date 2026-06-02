@@ -69,11 +69,14 @@ function createFakeSupabase(
           const matches = resolveRows()
           return { data: matches[0] ?? null, error: null }
         },
-        then: async (
-          onfulfilled?: ((value: { data: TableRow[] | null; error: null }) => unknown) | null
-        ) => {
+        then<TResult1 = { data: TableRow[] | null; error: null }, TResult2 = never>(
+          onfulfilled?:
+            | ((value: { data: TableRow[] | null; error: null }) => TResult1 | PromiseLike<TResult1>)
+            | null,
+          _onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+        ): PromiseLike<TResult1 | TResult2> {
           const value = { data: resolveRows(), error: null }
-          return onfulfilled ? onfulfilled(value) : value
+          return Promise.resolve(onfulfilled ? onfulfilled(value) : (value as TResult1))
         },
       }
 

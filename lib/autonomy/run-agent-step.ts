@@ -87,6 +87,7 @@ export interface RunAgentStepInput {
       system: string
       temperature: number
       max_tokens: number
+      timeout_ms?: number
     }
   ) => Promise<LLMResponse>
   scoutSourceCollector?: (input: {

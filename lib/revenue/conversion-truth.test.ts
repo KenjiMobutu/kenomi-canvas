@@ -66,7 +66,6 @@ describe('conversion truth snapshot', () => {
           band: 'warm',
           amount_eur: 2400,
           payment_status: 'paid',
-          attribution_status: 'exact',
         },
         {
           prospect_id: 'p3',
@@ -76,7 +75,6 @@ describe('conversion truth snapshot', () => {
           band: 'hot',
           amount_eur: 500,
           payment_status: 'pending',
-          attribution_status: 'inferred',
         },
       ],
     })

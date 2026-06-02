@@ -96,6 +96,8 @@ describe('studio prospects read/write split', () => {
         tags: [],
         pipeline_status: 'new',
         approval_status: 'none',
+        message_family: 'linkedin_initial',
+        message_key: 'linkedin_initial_default',
       },
     ])
     mockedSummarizeProspects.mockReturnValue({
@@ -131,11 +133,7 @@ describe('studio prospects read/write split', () => {
   it('POST /api/studio/prospects/refresh triggers follow-up processing explicitly', async () => {
     mockedProcessDueProspectFollowUps.mockResolvedValue(3)
 
-    const response = await POST_PROSPECTS_REFRESH(
-      new Request('http://localhost/api/studio/prospects/refresh', {
-        method: 'POST',
-      }) as never
-    )
+    const response = await POST_PROSPECTS_REFRESH()
 
     expect(response.status).toBe(200)
     expect(mockedProcessDueProspectFollowUps).toHaveBeenCalledOnce()

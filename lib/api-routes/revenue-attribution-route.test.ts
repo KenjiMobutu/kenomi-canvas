@@ -62,7 +62,7 @@ describe('revenue attribution route', () => {
   })
 
   it('returns attribution truth payload', async () => {
-    const response = await GET(new Request('http://localhost/api/studio/revenue/attribution') as never)
+    const response = await GET()
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.ok).toBe(true)
