@@ -46,6 +46,7 @@ import {
   buildJobList,
   type AutonomyJobView,
 } from '@/lib/autonomy/action-view-model'
+import { formatActionLabel } from '@/lib/autonomy/action-labels'
 import {
   getAgentCommandRefreshPlan,
   type AgentCommandRefreshTrigger,
@@ -676,16 +677,6 @@ function PipelineValidationCard({
   )
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  scale_budget: 'Scale budget',
-  stop_venture: 'Stop venture',
-  publish_campaign: 'Publish campaign',
-  create_checkout: 'Create checkout',
-  deploy: 'Deploy',
-  run_agent: 'Run agent',
-  create_landing: 'Create landing',
-}
-
 const APPROVAL_COLORS: Record<string, string> = {
   pending: amber,
   approved: emerald,
@@ -694,8 +685,7 @@ const APPROVAL_COLORS: Record<string, string> = {
 }
 
 function getActionLabel(actionType?: string): string {
-  if (!actionType) return 'Action inconnue'
-  return ACTION_LABELS[actionType] ?? actionType.replaceAll('_', ' ')
+  return formatActionLabel(actionType)
 }
 
 function compactDate(isoDate?: string | null): string {

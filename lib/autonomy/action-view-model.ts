@@ -1,4 +1,5 @@
 import type { AutonomyActionView } from './approval-view-model'
+import { formatActionLabel } from './action-labels'
 
 export interface AutonomyJobView {
   id: string
@@ -61,7 +62,7 @@ export function buildActionList(actions: AutonomyActionView[]): ActionListItem[]
   return actions
     .map((action) => ({
       id: action.id,
-      label: titleize(action.action_type),
+      label: formatActionLabel(action.action_type),
       status: action.status,
       riskLevel: action.risk_level,
       provider: readString(action.output, 'provider') ?? readString(action.input, 'provider'),

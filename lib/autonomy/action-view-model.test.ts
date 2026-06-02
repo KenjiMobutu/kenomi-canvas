@@ -26,7 +26,7 @@ describe('buildActionList', () => {
 
     expect(items.map((item) => item.id)).toEqual(['a-new', 'a-old'])
     expect(items[0]).toMatchObject({
-      label: 'run agent',
+      label: 'Run agent',
       model: 'qwen3:8b',
       lastError: 'timeout',
     })
