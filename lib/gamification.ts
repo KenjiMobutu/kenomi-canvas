@@ -9,9 +9,14 @@ export type GamifVenture = {
   stage: string
   created_at: string
 }
-export type GamifSnapshot = { mrr?: string | null; cac?: string | null; created_at: string }
+export type GamifSnapshot = {
+  revenue?: string | null
+  cac?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
 export type GamifWorkflow = { id: string; enabled: boolean; created_at: string }
-export type GamifLanding = { id: string; status: string; created_at: string }
+export type GamifLanding = { id: string; statut: string; created_at: string }
 export type GamifPayment = {
   id: string
   amount_eur: number
@@ -19,7 +24,7 @@ export type GamifPayment = {
   venture_id?: string
   created_at: string
 }
-export type GamifMetric = { views: number }
+export type GamifMetric = { views?: number | null; visiteurs?: number | null }
 export type GamifDecision = { venture_id: string; decision: string; created_at: string }
 export type GamifAgentRun = {
   id?: string
@@ -273,20 +278,22 @@ function computeUnlocks(
     input
 
   const latestSnap = [...snapshots].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    (a, b) =>
+      new Date(b.updated_at ?? b.created_at ?? 0).getTime() -
+      new Date(a.updated_at ?? a.created_at ?? 0).getTime()
   )[0]
 
   const eventRevenueEur = revenueEurFromEvents(ventureEvents)
   const eventSpendEur = spendEurFromEvents(ventureEvents)
-  const mrr = Math.max(parseNum(latestSnap?.mrr), eventRevenueEur)
+  const mrr = Math.max(parseNum(latestSnap?.revenue), eventRevenueEur)
   const cac = parseNum(latestSnap?.cac) || (eventRevenueEur > 0 ? eventSpendEur : 0)
   const totalViews =
-    metrics.reduce((s, m) => s + (m.views || 0), 0) + viewsFromEvents(ventureEvents)
+    metrics.reduce((s, m) => s + Number(m.views ?? m.visiteurs ?? 0), 0) + viewsFromEvents(ventureEvents)
 
   const ms30d = 30 * 24 * 60 * 60 * 1000
   const now = Date.now()
   const deployed30d = landings.filter(
-    (l) => l.status === 'deployed' && now - new Date(l.created_at).getTime() < ms30d
+    (l) => l.statut === 'deployed' && now - new Date(l.created_at).getTime() < ms30d
   )
   const enabledWf = workflows.filter((w) => w.enabled)
   const maxScore = ventures.length ? Math.max(...ventures.map((v) => v.score)) : 0

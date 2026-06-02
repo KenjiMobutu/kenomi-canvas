@@ -388,6 +388,45 @@ interface KpiSnapshot {
   runway_delta: string
 }
 
+type StoredKpiSnapshot = Pick<
+  KpiSnapshot,
+  | 'revenue'
+  | 'revenue_delta'
+  | 'ctr'
+  | 'ctr_delta'
+  | 'conversion'
+  | 'conversion_delta'
+  | 'retention'
+  | 'retention_delta'
+> & {
+  user_id?: string
+  period?: string
+  updated_at?: string
+}
+
+function parseMoneySeriesValue(value: string | number | null | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (!value) return 0
+  const normalized = String(value).replace(/[^\d.,-]/g, '').replace(',', '.')
+  const parsed = Number.parseFloat(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function normalizeKpiSnapshot(data: Partial<StoredKpiSnapshot> | null | undefined): KpiSnapshot | null {
+  if (!data) return null
+  return {
+    ...DEFAULT_KPI,
+    revenue: data.revenue ?? DEFAULT_KPI.revenue,
+    revenue_delta: data.revenue_delta ?? DEFAULT_KPI.revenue_delta,
+    ctr: data.ctr ?? DEFAULT_KPI.ctr,
+    ctr_delta: data.ctr_delta ?? DEFAULT_KPI.ctr_delta,
+    conversion: data.conversion ?? DEFAULT_KPI.conversion,
+    conversion_delta: data.conversion_delta ?? DEFAULT_KPI.conversion_delta,
+    retention: data.retention ?? DEFAULT_KPI.retention,
+    retention_delta: data.retention_delta ?? DEFAULT_KPI.retention_delta,
+  }
+}
+
 interface FunnelStep {
   id: string
   position: number
@@ -500,8 +539,6 @@ function KpiEditPanel({
     { label: 'CTR', key: 'ctr', delta: 'ctr_delta' },
     { label: 'Conversion', key: 'conversion', delta: 'conversion_delta' },
     { label: 'Retention', key: 'retention', delta: 'retention_delta' },
-    { label: 'Churn', key: 'churn', delta: 'churn_delta' },
-    { label: 'Runway', key: 'runway', delta: 'runway_delta' },
   ]
 
   return (
@@ -733,17 +770,13 @@ export default function AnalyticsPage() {
     const supabase = createSupabaseBrowser()
     supabase
       .from('kpi_snapshots')
-      .select('mrr, created_at')
+      .select('revenue, updated_at')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
+      .order('updated_at', { ascending: true })
       .limit(30)
       .then(({ data }) => {
         if (data && data.length > 0) {
-          setMrrSparkSeries(
-            data.map((d) =>
-              typeof d.mrr === 'number' ? d.mrr : parseFloat(String(d.mrr ?? '0')) || 0
-            )
-          )
+          setMrrSparkSeries(data.map((d) => parseMoneySeriesValue(d.revenue)))
         }
       })
   }, [user])
@@ -757,7 +790,7 @@ export default function AnalyticsPage() {
       .eq('user_id', user.id)
       .eq('period', 'current')
       .maybeSingle()
-      .then(({ data }) => setKpi(data as KpiSnapshot | null))
+      .then(({ data }) => setKpi(normalizeKpiSnapshot(data as StoredKpiSnapshot | null)))
     supabase
       .from('funnel_steps')
       .select('*')
@@ -785,11 +818,21 @@ export default function AnalyticsPage() {
   async function saveKpi(updated: KpiSnapshot) {
     if (!user) return
     const supabase = createSupabaseBrowser()
+    const payload: StoredKpiSnapshot = {
+      revenue: updated.revenue,
+      revenue_delta: updated.revenue_delta,
+      ctr: updated.ctr,
+      ctr_delta: updated.ctr_delta,
+      conversion: updated.conversion,
+      conversion_delta: updated.conversion_delta,
+      retention: updated.retention,
+      retention_delta: updated.retention_delta,
+    }
     const { error } = await supabase.from('kpi_snapshots').upsert(
       {
         user_id: user.id,
         period: 'current',
-        ...updated,
+        ...payload,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id,period' }

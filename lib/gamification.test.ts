@@ -26,7 +26,7 @@ describe('computeGamification', () => {
   it('first-mrr : unlocked quand mrr >= 1000', () => {
     const input: GamificationInput = {
       ...EMPTY_INPUT,
-      snapshots: [{ mrr: '1200', cac: null, created_at: new Date().toISOString() }],
+      snapshots: [{ revenue: '€1200', cac: null, updated_at: new Date().toISOString() }],
     }
     const r = computeGamification(input)
     const a = r.achievements.find((a) => a.id === 'first-mrr')!
@@ -37,7 +37,7 @@ describe('computeGamification', () => {
   it('first-mrr : pct proportionnel avant seuil', () => {
     const input: GamificationInput = {
       ...EMPTY_INPUT,
-      snapshots: [{ mrr: '500', cac: null, created_at: new Date().toISOString() }],
+      snapshots: [{ revenue: '€500', cac: null, updated_at: new Date().toISOString() }],
     }
     const r = computeGamification(input)
     const a = r.achievements.find((a) => a.id === 'first-mrr')!
@@ -122,7 +122,7 @@ describe('computeGamification', () => {
   it('cac-under-20 : unlocked quand cac > 0 et cac <= 20 avec mrr > 0', () => {
     const input: GamificationInput = {
       ...EMPTY_INPUT,
-      snapshots: [{ mrr: '500', cac: '15', created_at: new Date().toISOString() }],
+      snapshots: [{ revenue: '€500', cac: '15', updated_at: new Date().toISOString() }],
     }
     const r = computeGamification(input)
     const a = r.achievements.find((a) => a.id === 'cac-under-20')!
@@ -133,7 +133,7 @@ describe('computeGamification', () => {
   it('cac-under-20 : non unlocked si pas de données cac (cac=0)', () => {
     const input: GamificationInput = {
       ...EMPTY_INPUT,
-      snapshots: [{ mrr: '500', cac: null, created_at: new Date().toISOString() }],
+      snapshots: [{ revenue: '€500', cac: null, updated_at: new Date().toISOString() }],
     }
     const r = computeGamification(input)
     const a = r.achievements.find((a) => a.id === 'cac-under-20')!
@@ -144,7 +144,7 @@ describe('computeGamification', () => {
   it('parseNum : retourne 0 pour une string invalide avec k', () => {
     const input: GamificationInput = {
       ...EMPTY_INPUT,
-      snapshots: [{ mrr: 'unknownk', cac: null, created_at: new Date().toISOString() }],
+      snapshots: [{ revenue: 'unknownk', cac: null, updated_at: new Date().toISOString() }],
     }
     const r = computeGamification(input)
     expect(r.achievements.every((a) => !isNaN(a.pct))).toBe(true)
@@ -238,6 +238,22 @@ describe('computeGamification', () => {
     expect(r.achievements.find((a) => a.id === '100k-imp')?.unlocked).toBe(true)
     expect(r.agentLevels.find((a) => a.id === 'payment')?.level).toBeGreaterThan(0)
     expect(r.agentLevels.find((a) => a.id === 'marketing')?.level).toBeGreaterThan(0)
+  })
+
+  it('utilise visiteurs et statut legacy sans casser les unlocks', () => {
+    const now = new Date().toISOString()
+    const r = computeGamification({
+      ...EMPTY_INPUT,
+      landings: Array.from({ length: 7 }, (_, i) => ({
+        id: `landing-${i}`,
+        statut: 'deployed',
+        created_at: now,
+      })),
+      metrics: [{ visiteurs: 100_000 }],
+    })
+
+    expect(r.achievements.find((a) => a.id === 'ship-7')?.unlocked).toBe(true)
+    expect(r.achievements.find((a) => a.id === '100k-imp')?.unlocked).toBe(true)
   })
 
   it('season-podium : toujours locked, pct = 0', () => {

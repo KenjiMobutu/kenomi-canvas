@@ -65,7 +65,10 @@ export function useGamification(): GamificationResult & {
         { data: agentRuns },
         { data: claims },
       ] = await Promise.all([
-        supabase.from('kpi_snapshots').select('mrr, cac, created_at').eq('user_id', userId),
+        supabase
+          .from('kpi_snapshots')
+          .select('revenue, updated_at')
+          .eq('user_id', userId),
         supabase
           .from('automation_workflows')
           .select('id, enabled, created_at')
@@ -73,7 +76,7 @@ export function useGamification(): GamificationResult & {
         ventureIds.length
           ? supabase
               .from('landing_pages')
-              .select('id, status, created_at')
+              .select('id, statut, created_at')
               .in('venture_id', ventureIds)
           : Promise.resolve({ data: [] }),
         ventureIds.length
@@ -83,7 +86,7 @@ export function useGamification(): GamificationResult & {
               .in('venture_id', ventureIds)
           : Promise.resolve({ data: [] }),
         ventureIds.length
-          ? supabase.from('metrics').select('views').in('venture_id', ventureIds)
+          ? supabase.from('metrics').select('visiteurs').in('venture_id', ventureIds)
           : Promise.resolve({ data: [] }),
         ventureIds.length
           ? supabase
