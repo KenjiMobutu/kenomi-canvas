@@ -32,5 +32,5 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/lib/generated ./lib/generated
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/api/health > /dev/null 2>&1 || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/api/ready > /dev/null 2>&1 || exit 1
 CMD ["node", "server.js"]
