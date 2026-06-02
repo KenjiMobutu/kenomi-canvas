@@ -23,6 +23,21 @@ export async function GET() {
   const startOfDay = new Date(now)
   startOfDay.setUTCHours(0, 0, 0, 0)
   const startOfDayIso = startOfDay.toISOString()
+  const { data: ventures, error: venturesError } = await supabase
+    .from('ventures')
+    .select('id')
+    .eq('user_id', user!.id)
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  if (venturesError) {
+    logError('ops-health.ventures', venturesError.message)
+    return NextResponse.json({ error: venturesError.message }, { status: 500 })
+  }
+
+  const ventureIds = (ventures ?? [])
+    .map((venture) => venture.id)
+    .filter((value): value is string => typeof value === 'string')
 
   // 1. autonomy_jobs.status = 'failed' updated_at > now - 24h
   const jobsFailedPromise = supabase
@@ -70,12 +85,15 @@ export async function GET() {
   })()
 
   // 4. payments completed today
-  const paymentsTodayPromise = supabase
-    .from('payments')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user!.id)
-    .eq('status', 'completed')
-    .gte('updated_at', startOfDayIso)
+  const paymentsTodayPromise =
+    ventureIds.length > 0
+      ? supabase
+          .from('payments')
+          .select('id', { count: 'exact', head: true })
+          .in('venture_id', ventureIds)
+          .eq('status', 'completed')
+          .gte('updated_at', startOfDayIso)
+      : Promise.resolve({ data: null, error: null, count: 0 })
 
   // 5. venture_events today
   const eventsTodayPromise = supabase

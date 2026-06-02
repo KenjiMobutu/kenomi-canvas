@@ -19,6 +19,11 @@ export async function GET() {
 
   try {
     const userId = user!.id
+    const ventures = await readTable(
+      supabase.from('ventures').select('id').eq('user_id', userId).order('created_at', { ascending: false }).limit(100)
+    )
+    const ventureIds = ventures.map((venture) => venture.id).filter((value): value is string => typeof value === 'string')
+
     const [activities, payments, prospects] = await Promise.all([
       readTable(
         supabase
@@ -28,18 +33,20 @@ export async function GET() {
           .order('created_at', { ascending: false })
           .limit(400)
       ),
-      readTable(
-        supabase
-          .from('payments')
-          .select('status, created_at, amount_eur, collected_amount_eur')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(400)
-      ),
+      ventureIds.length > 0
+        ? readTable(
+            supabase
+              .from('payments')
+              .select('status, created_at, amount_eur, collected_amount_eur, venture_id')
+              .in('venture_id', ventureIds)
+              .order('created_at', { ascending: false })
+              .limit(400)
+          )
+        : Promise.resolve([]),
       readTable(
         supabase
           .from('prospects')
-          .select('source, band, pipeline_status, approval_status')
+          .select('source, band, pipeline_status')
           .eq('user_id', userId)
           .order('updated_at', { ascending: false })
           .limit(400)
