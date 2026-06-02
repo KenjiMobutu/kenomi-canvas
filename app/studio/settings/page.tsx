@@ -107,6 +107,18 @@ type ScoutSourceStatusReport = {
   }[]
 }
 
+type SecretStatusPayload = {
+  has_claude_key: boolean
+  has_openai_key: boolean
+  has_stripe_secret: boolean
+  has_stripe_webhook: boolean
+  email_delivery: {
+    configured: boolean
+    provider: string | null
+    fromAddress: string | null
+  }
+}
+
 function SectionCard({
   title,
   icon,
@@ -681,6 +693,7 @@ export default function SettingsPage() {
   const [scoutSources, setScoutSources] = useState<ScoutSourceStatusReport | null>(null)
   const [scoutSourcesLoading, setScoutSourcesLoading] = useState(false)
   const [scoutSourcesError, setScoutSourcesError] = useState<string | null>(null)
+  const [secretStatus, setSecretStatus] = useState<SecretStatusPayload | null>(null)
 
   function patch(partial: Partial<UserSettings>) {
     setCfg((prev) => ({ ...prev, ...partial }))
@@ -698,6 +711,19 @@ export default function SettingsPage() {
       .then(({ data }) => {
         if (data) setCfg(normalizeUserSettings(data))
       })
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    fetch('/api/studio/settings/secrets', { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) return null
+        return (await res.json()) as SecretStatusPayload
+      })
+      .then((data) => {
+        if (data) setSecretStatus(data)
+      })
+      .catch(() => {})
   }, [user])
 
   async function exportData() {
@@ -1109,6 +1135,39 @@ export default function SettingsPage() {
                   style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
                 />
               </Field>
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: surface2,
+                  border: `1px solid ${line}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                    color: secretStatus?.email_delivery.configured ? emerald : amber,
+                  }}
+                >
+                  Email delivery
+                </div>
+                <div style={{ color: text, fontSize: 12 }}>
+                  {secretStatus?.email_delivery.configured
+                    ? `Configured via ${secretStatus.email_delivery.provider}`
+                    : 'No server-side email provider configured'}
+                </div>
+                <div style={{ color: muted2, fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>
+                  {secretStatus?.email_delivery.configured
+                    ? `From: ${secretStatus.email_delivery.fromAddress ?? cfg.prospect_outreach_email ?? 'not specified'}`
+                    : 'The address above is only an identity until Resend, SMTP, SendGrid, Postmark, or Mailgun is configured.'}
+                </div>
+              </div>
               <Field
                 label="CRM provider"
                 hint="Backend de suivi CRM utilisé par Prospect."

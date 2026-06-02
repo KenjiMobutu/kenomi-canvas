@@ -3,6 +3,54 @@ import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 import { requireAllowedUser } from '@/lib/auth-server'
 
+function resolveEmailDeliveryStatus(env: NodeJS.ProcessEnv = process.env) {
+  if (env.RESEND_API_KEY) {
+    return {
+      configured: true,
+      provider: 'resend',
+      fromAddress: env.EMAIL_FROM ?? null,
+    }
+  }
+
+  if (env.SMTP_HOST && env.SMTP_PORT && env.SMTP_USER && env.SMTP_PASS) {
+    return {
+      configured: true,
+      provider: 'smtp',
+      fromAddress: env.SMTP_FROM ?? null,
+    }
+  }
+
+  if (env.SENDGRID_API_KEY) {
+    return {
+      configured: true,
+      provider: 'sendgrid',
+      fromAddress: env.EMAIL_FROM ?? null,
+    }
+  }
+
+  if (env.POSTMARK_SERVER_TOKEN) {
+    return {
+      configured: true,
+      provider: 'postmark',
+      fromAddress: env.EMAIL_FROM ?? null,
+    }
+  }
+
+  if (env.MAILGUN_API_KEY) {
+    return {
+      configured: true,
+      provider: 'mailgun',
+      fromAddress: env.EMAIL_FROM ?? null,
+    }
+  }
+
+  return {
+    configured: false,
+    provider: null,
+    fromAddress: null,
+  }
+}
+
 export async function GET() {
   const cookieStore = await cookies()
   const { user, response } = await requireAllowedUser(cookieStore)
@@ -26,5 +74,6 @@ export async function GET() {
     has_openai_key: !!data?.openai_api_key,
     has_stripe_secret: !!data?.stripe_secret_key,
     has_stripe_webhook: !!data?.stripe_webhook_secret,
+    email_delivery: resolveEmailDeliveryStatus(),
   })
 }

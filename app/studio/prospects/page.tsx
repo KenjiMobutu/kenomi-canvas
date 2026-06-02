@@ -128,6 +128,14 @@ type OffersApiPayload = {
   offers: OfferSnapshot[]
 }
 
+type SecretStatusPayload = {
+  email_delivery: {
+    configured: boolean
+    provider: string | null
+    fromAddress: string | null
+  }
+}
+
 type JobsPayload = {
   ok: boolean
   jobs: Array<{
@@ -295,6 +303,7 @@ export default function ProspectPage() {
     >
   >({})
   const [offers, setOffers] = useState<OfferSnapshot[]>([])
+  const [secretStatus, setSecretStatus] = useState<SecretStatusPayload | null>(null)
   const [prompt, setPrompt] = useState(
     'Trouve un prospect qualifié sur les sources configurées et rédige un message de prospection prêt à envoyer.'
   )
@@ -320,7 +329,7 @@ export default function ProspectPage() {
       if (tagFilter.trim()) prospectsUrl.searchParams.set('tag', tagFilter.trim().toLowerCase())
       if (searchFilter.trim()) prospectsUrl.searchParams.set('q', searchFilter.trim())
 
-      const [refreshRes, prospectsRes, jobsRes, offersRes] = await Promise.all([
+      const [refreshRes, prospectsRes, jobsRes, offersRes, secretsRes] = await Promise.all([
         fetch('/api/studio/prospects/refresh', {
           method: 'POST',
           cache: 'no-store',
@@ -328,15 +337,18 @@ export default function ProspectPage() {
         fetch(prospectsUrl.toString(), { cache: 'no-store' }),
         fetch('/api/studio/autonomy/jobs?agent_id=prospect', { cache: 'no-store' }),
         fetch('/api/studio/revenue/offers', { cache: 'no-store' }),
+        fetch('/api/studio/settings/secrets', { cache: 'no-store' }),
       ])
 
       const prospectsJson = (await prospectsRes.json()) as ProspectApiPayload
       const jobsJson = (await jobsRes.json()) as JobsPayload
       const offersJson = (await offersRes.json()) as OffersApiPayload
+      const secretsJson = secretsRes.ok ? ((await secretsRes.json()) as SecretStatusPayload) : null
 
       setPayload(prospectsJson)
       setJobsPayload(jobsJson)
       setOffers(Array.isArray(offersJson.offers) ? offersJson.offers : [])
+      setSecretStatus(secretsJson)
       setCrmDrafts(
         Object.fromEntries(
           (prospectsJson.prospects ?? []).map((prospect) => [
@@ -387,6 +399,9 @@ export default function ProspectPage() {
       }
       if (!offersRes.ok && !nextError) {
         nextError = 'Impossible de charger les offers revenue'
+      }
+      if (!secretsRes.ok && !nextError) {
+        nextError = 'Impossible de charger le statut des secrets runtime'
       }
     } catch (loadError) {
       nextError = loadError instanceof Error ? loadError.message : String(loadError)
@@ -875,6 +890,19 @@ export default function ProspectPage() {
                     </div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: muted }}>
                       {settings?.prospect_outreach_email || 'No outreach email configured'}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        color: secretStatus?.email_delivery.configured ? emerald : amber,
+                        letterSpacing: '.08em',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {secretStatus?.email_delivery.configured
+                        ? `delivery ready · ${secretStatus.email_delivery.provider}`
+                        : 'identity only · no server-side delivery provider'}
                     </div>
                     <div
                       style={{
