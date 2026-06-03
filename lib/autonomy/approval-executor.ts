@@ -18,6 +18,11 @@ import { buildGmailDraftPayload } from '@/lib/prospect/gmail-draft'
 import { appendProspectActivity } from '@/lib/prospect/activity'
 import { buildProspectActivityInsert } from '@/lib/prospect/activity-log'
 import { getFollowUpRank, scheduleNextFollowUpAt } from '@/lib/prospect/follow-up'
+import {
+  resolveEmailDeliveryStatus,
+  sendProspectEmail,
+  type ProspectEmailSendResult,
+} from '@/lib/prospect/email-delivery'
 import type { ProspectOutreachKind } from '@/lib/prospect/types'
 import { writeProspectMemory } from '@/lib/memory/prospect-memory'
 
@@ -138,6 +143,9 @@ export interface ResolveHumanApprovalInput {
   stripeClient?: CheckoutStripeClient
   stripeClientFactory?: StripeClientFactory
   marketingPublisher?: MarketingPublisher
+  prospectEmailSender?: (
+    input: { from: string; to: string; subject: string; text: string }
+  ) => Promise<ProspectEmailSendResult>
   writeProspectMemory?: typeof writeProspectMemory
   now?: () => Date
   config?: AutonomyConfig
@@ -471,6 +479,22 @@ async function getUserStripeSecretKey(input: {
 
   const key = (data as { stripe_secret_key?: unknown } | null)?.stripe_secret_key
   return typeof key === 'string' && key.trim().length > 0 ? key.trim() : null
+}
+
+async function getUserProspectOutreachEmail(input: {
+  supabase: ApprovalExecutorSupabase
+  userId: string
+}): Promise<string | null> {
+  const { data, error } = await input.supabase
+    .from('user_settings')
+    .select('prospect_outreach_email')
+    .eq('user_id', input.userId)
+    .maybeSingle()
+
+  if (error) throw new ApprovalExecutionError(error.message, 500)
+
+  const value = (data as { prospect_outreach_email?: unknown } | null)?.prospect_outreach_email
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
 async function resolveCheckoutStripeClient(input: {
@@ -841,6 +865,35 @@ export async function resolveHumanApproval(
       followUpVersion,
     })
 
+    const providerStatus = resolveEmailDeliveryStatus()
+    const fromAddress =
+      providerStatus.fromAddress ?? (await getUserProspectOutreachEmail({
+        supabase: input.supabase,
+        userId: input.userId,
+      }))
+    const canSendLive =
+      (providerStatus.configured || Boolean(input.prospectEmailSender)) &&
+      typeof prospect.contact_email === 'string' &&
+      prospect.contact_email.trim().length > 0 &&
+      typeof fromAddress === 'string' &&
+      fromAddress.trim().length > 0
+
+    let liveDelivery: ProspectEmailSendResult | null = null
+    let liveDeliveryError: string | null = null
+
+    if (canSendLive) {
+      try {
+        liveDelivery = await (input.prospectEmailSender ?? ((message) => sendProspectEmail(message)))({
+          from: fromAddress!,
+          to: prospect.contact_email!.trim(),
+          subject,
+          text: body,
+        })
+      } catch (error) {
+        liveDeliveryError = error instanceof Error ? error.message : 'Prospect email delivery failed'
+      }
+    }
+
     await update(
       input.supabase.from('campaign_drafts').insert({
         id: draftId,
@@ -848,25 +901,41 @@ export async function resolveHumanApproval(
         venture_id: null,
         channel: draft.channel,
         content: draft.content,
-        status: draft.status,
+        status: liveDelivery ? 'published' : draft.status,
         metadata: {
           ...draft.metadata,
-          provider: draft.provider,
+          provider: liveDelivery?.provider ?? draft.provider,
           autonomy_action_id: action.id,
+          from: fromAddress ?? '',
+          delivery_status: liveDelivery ? 'sent' : 'draft',
+          provider_message_id: liveDelivery?.messageId ?? null,
+          delivery_error: liveDeliveryError,
         },
         created_at: nowIso,
         updated_at: nowIso,
       })
     )
 
+    const sentActivityType = action.action_type === 'send_follow_up' ? 'follow_up_marked_sent' : 'marked_sent'
+    const sentActivityDetail =
+      action.action_type === 'send_follow_up'
+        ? `${outreachKind} sent via ${liveDelivery?.provider ?? 'draft'}`
+        : `Outbound sent via ${liveDelivery?.provider ?? 'draft'}`
+
     await update(
       input.supabase
         .from('prospects')
         .update({
-          status: action.action_type === 'send_follow_up' ? 'follow_up' : 'approved_to_send',
-          pipeline_status: 'draft_created',
-          draft_provider: 'gmail',
-          draft_external_id: draftId,
+          status: liveDelivery
+            ? action.action_type === 'send_follow_up'
+              ? 'follow_up'
+              : 'sent'
+            : action.action_type === 'send_follow_up'
+              ? 'follow_up'
+              : 'approved_to_send',
+          pipeline_status: liveDelivery ? 'sent' : 'draft_created',
+          draft_provider: liveDelivery?.provider ?? 'gmail',
+          draft_external_id: liveDelivery?.messageId ?? draftId,
           draft_created_at: nowIso,
           metadata: appendProspectActivity(
             appendProspectActivity(prospect.metadata, {
@@ -876,10 +945,10 @@ export async function resolveHumanApproval(
               detail: action.action_type === 'send_follow_up' ? 'First follow-up approved' : 'Outreach approved',
             }),
             {
-              type: 'gmail_draft_created',
-              actor: 'system',
+              type: liveDelivery ? sentActivityType : 'gmail_draft_created',
+              actor: liveDelivery ? 'operator' : 'system',
               at: nowIso,
-              detail: `Gmail draft ${draftId} created`,
+              detail: liveDelivery ? sentActivityDetail : `Gmail draft ${draftId} created`,
             }
           ),
           updated_at: nowIso,
@@ -900,9 +969,15 @@ export async function resolveHumanApproval(
         buildProspectActivityInsert({
           prospectId,
           userId: input.userId,
-          type: 'gmail_draft_created',
-          detail: `Gmail draft ${draftId} created`,
-          metadata: { outreach_kind: outreachKind, follow_up_version: followUpVersion },
+          type: liveDelivery ? sentActivityType : 'gmail_draft_created',
+          detail: liveDelivery ? sentActivityDetail : `Gmail draft ${draftId} created`,
+          metadata: {
+            outreach_kind: outreachKind,
+            follow_up_version: followUpVersion,
+            provider: liveDelivery?.provider ?? 'gmail',
+            message_id: liveDelivery?.messageId ?? null,
+            delivery_error: liveDeliveryError,
+          },
           nowIso,
         }),
       ])
@@ -934,13 +1009,15 @@ export async function resolveHumanApproval(
       }
     }
 
-    executed = false
+    executed = Boolean(liveDelivery)
     actionStatus = 'completed'
     output = {
-      executed: false,
+      executed: Boolean(liveDelivery),
       handler: action.action_type,
       draft_id: draftId,
-      provider: 'gmail',
+      provider: liveDelivery?.provider ?? 'gmail',
+      message_id: liveDelivery?.messageId ?? null,
+      delivery_error: liveDeliveryError,
     }
   }
 

@@ -263,6 +263,86 @@ describe('resolveHumanApproval', () => {
     )
   })
 
+  it('envoie vraiment l’outreach quand un provider email serveur est disponible', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [{ id: 'app-live-1', user_id: 'u1', action_id: 'act-live-1', status: 'pending' }],
+      autonomy_actions: [
+        {
+          id: 'act-live-1',
+          user_id: 'u1',
+          action_type: 'send_outreach',
+          status: 'blocked',
+          input: {
+            prospect_id: 'prospect-live-1',
+            company_name: 'Live Studio',
+            contact_name: 'Nina',
+            outreach_subject: 'Live Studio — audit rapide',
+            outreach_body: 'Bonjour Nina, voici une piste concrète.',
+          },
+        },
+      ],
+      prospects: [
+        {
+          id: 'prospect-live-1',
+          user_id: 'u1',
+          company_name: 'Live Studio',
+          source: 'linkedin',
+          band: 'hot',
+          contact_email: 'nina@live.test',
+          status: 'awaiting_approval',
+          metadata: { activity: [] },
+        },
+      ],
+      user_settings: [{ user_id: 'u1', prospect_outreach_email: 'hello@kenomi.eu' }],
+    })
+
+    const result = await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-live-1',
+      decision: 'approved',
+      prospectEmailSender: async () => ({
+        provider: 'smtp',
+        messageId: '<msg-live-1@example.com>',
+      }),
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+    })
+
+    expect(result).toMatchObject({
+      actionType: 'send_outreach',
+      status: 'approved',
+      executed: true,
+    })
+    expect(fakeSupabase.tables.campaign_drafts[0]).toMatchObject({
+      status: 'published',
+      metadata: expect.objectContaining({
+        provider: 'smtp',
+        delivery_status: 'sent',
+        provider_message_id: '<msg-live-1@example.com>',
+      }),
+    })
+    expect(fakeSupabase.tables.prospects[0]).toMatchObject({
+      status: 'sent',
+      pipeline_status: 'sent',
+      draft_provider: 'smtp',
+      draft_external_id: '<msg-live-1@example.com>',
+    })
+    expect(fakeSupabase.tables.prospect_activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'approval_approved' }),
+        expect.objectContaining({ type: 'marked_sent' }),
+      ])
+    )
+    expect(fakeSupabase.tables.autonomy_actions[0]).toMatchObject({
+      status: 'completed',
+      output: expect.objectContaining({
+        executed: true,
+        provider: 'smtp',
+        message_id: '<msg-live-1@example.com>',
+      }),
+    })
+  })
+
   it('rejette une approval pending et annule action associée', async () => {
     const supabase = createFakeSupabase({
       human_approvals: [
