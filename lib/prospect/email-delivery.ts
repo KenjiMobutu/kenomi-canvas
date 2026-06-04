@@ -1,4 +1,4 @@
-import type { Transporter } from 'nodemailer'
+import nodemailer, { type Transporter } from 'nodemailer'
 
 export type ProspectEmailProvider = 'resend' | 'smtp' | 'sendgrid' | 'postmark' | 'mailgun'
 
@@ -95,8 +95,7 @@ async function defaultSmtpSendMail(input: {
   pass: string
   message: ProspectEmailMessage
 }): Promise<{ messageId?: string | null }> {
-  const mod = await import('nodemailer')
-  const transporter: Transporter = mod.createTransport({
+  const transporter: Transporter = nodemailer.createTransport({
     host: input.host,
     port: input.port,
     secure: input.secure,
