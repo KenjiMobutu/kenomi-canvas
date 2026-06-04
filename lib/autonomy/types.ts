@@ -2,6 +2,7 @@ export type AutonomyRiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
 export type AutonomyActionType =
   | 'run_agent'
+  | 'follow_up_scan'
   | 'create_landing'
   | 'create_checkout'
   | 'deploy'

@@ -28,25 +28,49 @@ export function canHermesAutoExecute(input: HermesAutoExecutionInput): boolean {
   return evaluateHermesAutoExecution(input).ok
 }
 
-function isAllowlistedHermesAction(input: HermesAutoExecutionInput): boolean {
-  if (input.actionType !== 'run_agent') return false
-  if (input.recommendationKind === 'run_follow_up_scan') return true
-  if (input.recommendationKind === 'run_prospect' || input.recommendationKind === 'run_devops') {
-    return true
+function resolveHermesExecutionBucket(
+  input: HermesAutoExecutionInput
+): 'follow_up_scan' | 'prospect' | 'devops' | null {
+  if (input.actionType === 'follow_up_scan') {
+    return input.recommendationKind === 'run_follow_up_scan' ? 'follow_up_scan' : null
   }
-  return input.agentId === 'prospect' || input.agentId === 'devops'
+
+  if (input.actionType !== 'run_agent') return null
+
+  if (input.recommendationKind === 'run_follow_up_scan') {
+    return input.agentId ? null : 'follow_up_scan'
+  }
+
+  if (input.recommendationKind === 'run_prospect') {
+    return input.agentId === 'prospect' ? 'prospect' : null
+  }
+
+  if (input.recommendationKind === 'run_devops') {
+    return input.agentId === 'devops' ? 'devops' : null
+  }
+
+  if (input.agentId === 'prospect') return 'prospect'
+  if (input.agentId === 'devops') return 'devops'
+
+  return null
+}
+
+function isAllowlistedHermesAction(input: HermesAutoExecutionInput): boolean {
+  return resolveHermesExecutionBucket(input) !== null
 }
 
 function actionCapReached(input: HermesAutoExecutionInput): boolean {
   if (!input.caps || !input.usage) return false
+  const bucket = resolveHermesExecutionBucket(input)
+  if (!bucket) return false
 
-  if (input.recommendationKind === 'run_follow_up_scan') {
+  if (bucket === 'follow_up_scan') {
     return input.usage.followUpScansToday >= input.caps.maxAutoFollowUpScansPerDay
   }
-  if (input.recommendationKind === 'run_prospect' || input.agentId === 'prospect') {
+  if (bucket === 'prospect') {
     return input.usage.prospectRunsToday >= input.caps.maxAutoProspectRunsPerDay
   }
-  if (input.recommendationKind === 'run_devops' || input.agentId === 'devops') {
+  if (bucket === 'devops') {
     return input.usage.devopsRunsToday >= input.caps.maxAutoDevopsRunsPerDay
   }
   return false

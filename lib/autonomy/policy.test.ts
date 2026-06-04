@@ -6,6 +6,7 @@ import {
   requiresApproval,
 } from './policy'
 import type { AutonomyAction } from './types'
+import { mapTelegramActionToOperatorExecution } from '../hermes-operator/telegram-actions'
 
 function action(overrides: Partial<AutonomyAction>): AutonomyAction {
   return {
@@ -202,6 +203,93 @@ describe('canHermesAutoExecute', () => {
       canHermesAutoExecute({
         mode: 'recommend',
         actionType: 'run_agent',
+        riskLevel: 'medium',
+        recommendationKind: 'run_follow_up_scan',
+      })
+    ).toBe(false)
+  })
+
+  it('requires explicit follow-up-scan provenance for follow_up_scan actions', () => {
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: 'follow_up_scan',
+        riskLevel: 'low',
+      })
+    ).toBe(false)
+
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: 'follow_up_scan',
+        riskLevel: 'low',
+        recommendationKind: 'run_follow_up_scan',
+      })
+    ).toBe(true)
+  })
+
+  it('requires recommendation kind and agent id to agree for mapped run_agent work', () => {
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        recommendationKind: 'run_prospect',
+        agentId: 'devops',
+      })
+    ).toBe(false)
+
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: 'run_agent',
+        riskLevel: 'low',
+        recommendationKind: 'run_devops',
+        agentId: 'prospect',
+      })
+    ).toBe(false)
+  })
+
+  it('keeps telegram low-risk mappings inside the same allowlist', () => {
+    const runProspect = mapTelegramActionToOperatorExecution('run_prospect')
+    const scanFollowups = mapTelegramActionToOperatorExecution('scan_followups')
+
+    expect(runProspect).toBeTruthy()
+    expect(scanFollowups).toBeTruthy()
+    expect(runProspect?.actionType).toBe('run_agent')
+    expect(scanFollowups?.actionType).toBe('follow_up_scan')
+
+    if (!runProspect || runProspect.actionType !== 'run_agent') {
+      throw new Error('run_prospect should map to run_agent')
+    }
+
+    if (!scanFollowups || scanFollowups.actionType !== 'follow_up_scan') {
+      throw new Error('scan_followups should map to follow_up_scan')
+    }
+
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: runProspect.actionType,
+        riskLevel: 'low',
+        recommendationKind: 'run_prospect',
+        agentId: runProspect.payload.agentId,
+      })
+    ).toBe(true)
+
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: scanFollowups.actionType,
+        riskLevel: 'low',
+        recommendationKind: 'run_follow_up_scan',
+      })
+    ).toBe(true)
+
+    expect(
+      canHermesAutoExecute({
+        mode: 'act',
+        actionType: scanFollowups.actionType,
         riskLevel: 'medium',
         recommendationKind: 'run_follow_up_scan',
       })
