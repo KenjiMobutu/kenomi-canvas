@@ -14,8 +14,19 @@ Kenomi Canvas considère toutes les surfaces admin et studio comme privées par 
 - Actions agents et automations — loggées dans `agent_events`.
 - Actions autonomes risquées — passent par `autonomy_actions` et `human_approvals` avant tout appel Stripe, Coolify, publication marketing ou augmentation de budget.
 - Notifications opérateur — n'exécutent jamais directement d'écritures sensibles; elles recommandent ou enqueue uniquement du low-risk tant que le mode runtime ne permet pas davantage.
+- Console Hermes Telegram — exige un secret machine-to-machine distinct, une allowlist de `chat_id`, et n'autorise en V1 que lecture + actions low-risk (`prospect`, `devops`, `follow_up_scan`).
 - Mode arrêt — `AUTONOMY_ENABLED=false` bloque l'orchestration autonome ; `AUTONOMY_DRY_RUN=true` neutralise les effets externes approuvés.
 - Export RGPD — `GET /api/studio/privacy/export` retourne les données sanitisées (pas de secrets en clair).
+
+## Telegram Hermes Secrets
+
+- `TELEGRAM_BOT_TOKEN` : secret du bot Telegram. Jamais commité, jamais loggé brut.
+- `TELEGRAM_WEBHOOK_SECRET` : secret du webhook entrant côté bot. Rotation si fuite.
+- `TELEGRAM_OPERATOR_SHARED_SECRET` : secret machine-to-machine entre le bot et l'app. Doit être différent des secrets scheduler/worker.
+- `TELEGRAM_ALLOWED_CHAT_ID` : allowlist explicite du chat autorisé. Toute autre origine doit être refusée sans fuite d'état business.
+- `TELEGRAM_OPERATOR_APP_BASE_URL` : base URL du control-plane Hermes. Doit pointer vers l'app publique correcte.
+
+Le bot et l'app doivent journaliser seulement des flags ou des ids redacts, jamais les secrets eux-mêmes.
 
 ## Privacy Controls
 

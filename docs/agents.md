@@ -48,3 +48,16 @@ Un agent est débloqué uniquement si la sortie de l'étape précédente est pr�
 - Incident autonomie : `docs/runbooks/autonomy-incident.md`
 - Webhook Stripe : `docs/runbooks/stripe-webhook.md`
 - Déploiement Coolify : `docs/runbooks/coolify-deploy.md`
+- Console Hermes Telegram : `docs/runbooks/telegram-hermes-operator.md`
+
+## Hermes Remote Console
+
+Hermes peut aussi être utilisé comme console opérateur distante via Telegram.
+
+- canal unique V1 : Telegram
+- identité unique : `Hermes`
+- lectures distantes : `brief`, `revenue`, `alerts`, `approvals`, `prospects`
+- actions low-risk autorisées : `run prospect`, `run devops`, `scan followups`
+- toute commande distante est auditée dans `operator_remote_commands`
+
+Telegram ne remplace pas le Studio. Il agit comme surface de commande et de notification distante au-dessus des mêmes garde-fous Hermes.
