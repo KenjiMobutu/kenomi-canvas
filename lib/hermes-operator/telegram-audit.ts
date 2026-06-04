@@ -1,8 +1,10 @@
+import type { TelegramCommandKind } from '@/lib/hermes-operator/telegram-types'
+
 export function buildTelegramAuditInsert(input: {
   userId: string
   remoteActor: string
   rawText: string
-  intentKind: string
+  intentKind: TelegramCommandKind
   executed: boolean
   blockedReason?: string | null
   responseSummary?: string
