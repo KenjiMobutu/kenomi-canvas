@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dispatchOperatorNotifications } from '@/lib/hermes-operator/notifications'
 
 function createFakeSupabase(seed?: Record<string, Record<string, unknown>[]>) {
@@ -36,6 +36,11 @@ function createFakeSupabase(seed?: Record<string, Record<string, unknown>[]>) {
 }
 
 describe('dispatchOperatorNotifications', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
   it('marks studio alerts as sent', async () => {
     const supabase = createFakeSupabase({
       business_alerts: [
@@ -82,7 +87,7 @@ describe('dispatchOperatorNotifications', () => {
       ],
     })
 
-    expect(result).toEqual({ sent: 2 })
+    expect(result).toEqual({ sent: 2, telegramSent: 0 })
     expect(supabase.tables.business_alerts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ dedupe_key: 'cash:reddit', status: 'sent' }),
@@ -120,7 +125,61 @@ describe('dispatchOperatorNotifications', () => {
       ],
     })
 
-    expect(result).toEqual({ sent: 0 })
+    expect(result).toEqual({ sent: 0, telegramSent: 0 })
     expect(supabase.tables.business_alerts[0]).toMatchObject({ status: 'open' })
+  })
+
+  it('dispatches telegram notifications when webhook mode and telegram settings are enabled', async () => {
+    vi.stubEnv('TELEGRAM_OPERATOR_NOTIFY_URL', 'https://bot.example.test/notify')
+    vi.stubEnv('TELEGRAM_OPERATOR_SHARED_SECRET', 'telegram-secret')
+
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 202 })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const supabase = createFakeSupabase({
+      business_alerts: [
+        {
+          id: 'alert-1',
+          user_id: 'user-1',
+          dedupe_key: 'cash:telegram',
+          status: 'open',
+          channel: 'studio',
+        },
+      ],
+    })
+
+    const result = await dispatchOperatorNotifications({
+      supabase: supabase as never,
+      userId: 'user-1',
+      settings: {
+        notificationMode: 'webhook',
+        telegramEnabled: true,
+        telegramNotificationsEnabled: true,
+        telegramBotLabel: 'Hermes',
+      },
+      alerts: [
+        {
+          severity: 'warn',
+          category: 'cash_blocker',
+          dedupeKey: 'cash:telegram',
+          headline: 'Cash stuck',
+          detail: 'Replies but no wins.',
+          channel: 'studio',
+          payload: { source: 'reddit' },
+        },
+      ],
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://bot.example.test/notify',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer telegram-secret',
+          'content-type': 'application/json',
+        }),
+      })
+    )
+    expect(result).toEqual({ sent: 1, telegramSent: 1 })
   })
 })

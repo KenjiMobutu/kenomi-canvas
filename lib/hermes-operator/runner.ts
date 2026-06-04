@@ -331,13 +331,7 @@ function buildJobFromRecommendation(input: {
     }
   }
 
-  const requestedAgentId = readString(payload.agentId)
-  const mappedAgentId =
-    input.recommendation.kind === 'run_prospect'
-      ? 'prospect'
-      : input.recommendation.kind === 'run_devops'
-        ? 'devops'
-        : requestedAgentId
+  const mappedAgentId = resolveRecommendationAgentId(input.recommendation)
 
   if (!mappedAgentId || !SAFE_OPERATOR_AGENT_IDS.has(mappedAgentId)) return null
 
@@ -370,6 +364,15 @@ function buildJobFromRecommendation(input: {
     created_at: input.nowIso,
     updated_at: input.nowIso,
   }
+}
+
+function resolveRecommendationAgentId(
+  recommendation: Pick<PersistedOperatorRecommendation, 'kind' | 'payload'>
+): string | null {
+  const requestedAgentId = readString(recommendation.payload.agentId)
+  if (recommendation.kind === 'run_prospect') return 'prospect'
+  if (recommendation.kind === 'run_devops') return 'devops'
+  return requestedAgentId
 }
 
 async function autoEnqueueRecommendations(input: {
@@ -416,7 +419,7 @@ async function autoEnqueueRecommendations(input: {
         actionType: recommendation.actionType,
         riskLevel: recommendation.riskLevel,
         recommendationKind: recommendation.kind,
-        agentId: readString(recommendation.payload.agentId),
+        agentId: resolveRecommendationAgentId(recommendation),
         caps: {
           maxAutoActionsPerDay: input.settings.maxAutoActionsPerDay,
           maxAutoProspectRunsPerDay: input.settings.maxAutoProspectRunsPerDay,
@@ -615,6 +618,7 @@ export async function runHermesOperatorTick(input: {
       supabase: input.supabase,
       userId: input.userId,
       alerts: allAlerts,
+      settings: operatorSettings,
       now,
     })
 

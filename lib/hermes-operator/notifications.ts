@@ -1,4 +1,5 @@
 import type { HermesOperatorAlert } from '@/lib/hermes-operator/engine'
+import type { HermesOperatorSettings } from '@/lib/hermes-operator/settings'
 
 interface QueryResult<T> {
   data: T | null
@@ -18,10 +19,15 @@ export async function dispatchOperatorNotifications(input: {
   supabase: HermesNotificationSupabase
   userId: string
   alerts: HermesOperatorAlert[]
+  settings?: Pick<
+    HermesOperatorSettings,
+    'notificationMode' | 'telegramEnabled' | 'telegramNotificationsEnabled' | 'telegramBotLabel'
+  >
   now?: Date
 }) {
   const nowIso = (input.now ?? new Date()).toISOString()
   let sent = 0
+  let telegramSent = 0
 
   for (const alert of input.alerts) {
     if (alert.channel !== 'studio') continue
@@ -39,5 +45,41 @@ export async function dispatchOperatorNotifications(input: {
     sent += 1
   }
 
-  return { sent }
+  if (
+    input.settings?.notificationMode === 'webhook' &&
+    input.settings.telegramEnabled &&
+    input.settings.telegramNotificationsEnabled &&
+    input.alerts.length > 0
+  ) {
+    const url = process.env.TELEGRAM_OPERATOR_NOTIFY_URL
+    const secret = process.env.TELEGRAM_OPERATOR_SHARED_SECRET
+    if (url && secret) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${secret}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: input.userId,
+          bot_label: input.settings.telegramBotLabel,
+          alerts: input.alerts.map((alert) => ({
+            severity: alert.severity,
+            category: alert.category,
+            headline: alert.headline,
+            detail: alert.detail,
+            dedupe_key: alert.dedupeKey,
+            payload: alert.payload,
+          })),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Telegram notify failed: ${response.status}`)
+      }
+      telegramSent = input.alerts.length
+    }
+  }
+
+  return { sent, telegramSent }
 }
