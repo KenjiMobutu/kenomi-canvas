@@ -100,4 +100,54 @@ describe('telegram bot service', () => {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
     }
   })
+
+  it('accepts app-side notify webhook and forwards alerts to the allowed chat', async () => {
+    const sendTelegramCommandToApp = vi.fn()
+    const sendTelegramMessage = vi.fn().mockResolvedValue({ ok: true })
+    const server = createTelegramHermesBotServer({
+      config: {
+        port: 0,
+        botToken: 'telegram-bot-token',
+        webhookSecret: '',
+        sharedSecret: 'operator-shared-secret',
+        appBaseUrl: 'https://lab.kenomi.eu',
+        allowedChatId: '42',
+      },
+      sendTelegramCommandToApp,
+      sendTelegramMessage,
+    })
+
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('Server did not bind')
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${address.port}/telegram/webhook/notify`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer operator-shared-secret',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          bot_label: 'Hermes',
+          alerts: [
+            {
+              severity: 'warn',
+              headline: 'Cash blocked by approvals',
+            },
+          ],
+        }),
+      })
+
+      expect(res.status).toBe(202)
+      expect(sendTelegramCommandToApp).not.toHaveBeenCalled()
+      expect(sendTelegramMessage).toHaveBeenCalledWith({
+        botToken: 'telegram-bot-token',
+        chatId: '42',
+        text: 'Hermes alerts\n- [WARN] Cash blocked by approvals',
+      })
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    }
+  })
 })
