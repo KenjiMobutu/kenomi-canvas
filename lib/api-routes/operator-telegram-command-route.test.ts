@@ -75,6 +75,7 @@ function makeSupabase() {
       orderField: null as string | null,
       ascending: true,
       inserted: null as Record<string, unknown> | null,
+      updated: null as Record<string, unknown> | null,
     }
 
     const resolveRows = () => {
@@ -113,8 +114,14 @@ function makeSupabase() {
         state.inserted = row
         return builder
       },
+      update: (payload: Record<string, unknown>) => {
+        const rows = resolveRows()
+        rows.forEach((row) => Object.assign(row, payload))
+        state.updated = rows[0] ?? null
+        return builder
+      },
       maybeSingle: async () => ({
-        data: resolveRows()[0] ?? state.inserted ?? null,
+        data: resolveRows()[0] ?? state.updated ?? state.inserted ?? null,
         error: null,
       }),
       then: (onfulfilled?: (value: { data: Record<string, unknown>[]; error: null }) => unknown) =>
@@ -222,5 +229,31 @@ describe('operator telegram command route', () => {
       blocked_reason: null,
       deep_link: '/studio/prospects',
     })
+  })
+
+  it('bootstraps the first allowed telegram chat when none is configured yet', async () => {
+    vi.stubEnv('TELEGRAM_OPERATOR_SHARED_SECRET', 'telegram-shared-secret')
+    const supabase = makeSupabase()
+    supabase.tables.user_operator_settings[0].telegram_allowed_chat_id = ''
+    mockedSupabaseAdmin.from.mockImplementation(supabase.from)
+
+    const res = await POST(
+      new Request('http://localhost/api/operator/telegram/command', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer telegram-shared-secret',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ chat_id: '4242', text: '/brief' }),
+      }) as never
+    )
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      intent: 'read_brief',
+      executed: false,
+    })
+    expect(supabase.tables.user_operator_settings[0].telegram_allowed_chat_id).toBe('4242')
   })
 })

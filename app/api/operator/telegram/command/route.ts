@@ -42,6 +42,7 @@ type TelegramRouteSupabase = {
     eq(field: string, value: unknown): any
     order(field: string, options?: { ascending?: boolean }): any
     limit(count: number): any
+    update(row: Record<string, unknown>): any
     insert(row: Record<string, unknown>): any
     maybeSingle(): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
     then<TResult1 = { data: Record<string, unknown>[]; error: null }, TResult2 = never>(
@@ -57,7 +58,7 @@ async function resolveTelegramOperator(input: {
   supabase: TelegramRouteSupabase
   chatId: string
 }) {
-  const result = await input.supabase
+  const exactResult = await input.supabase
     .from('user_operator_settings')
     .select(
       'user_id, operator_mode, max_auto_actions_per_day, max_auto_prospect_runs_per_day, max_auto_follow_up_scans_per_day, max_auto_devops_runs_per_day, telegram_enabled, telegram_allowed_chat_id'
@@ -66,8 +67,37 @@ async function resolveTelegramOperator(input: {
     .eq('telegram_allowed_chat_id', input.chatId)
     .maybeSingle()
 
-  if (result.error) throw new Error(result.error.message)
-  return result.data
+  if (exactResult.error) throw new Error(exactResult.error.message)
+  if (exactResult.data?.user_id) return exactResult.data
+
+  const bootstrapResult = await input.supabase
+    .from('user_operator_settings')
+    .select(
+      'user_id, operator_mode, max_auto_actions_per_day, max_auto_prospect_runs_per_day, max_auto_follow_up_scans_per_day, max_auto_devops_runs_per_day, telegram_enabled, telegram_allowed_chat_id'
+    )
+    .eq('telegram_enabled', true)
+    .eq('telegram_allowed_chat_id', '')
+    .maybeSingle()
+
+  if (bootstrapResult.error) throw new Error(bootstrapResult.error.message)
+  if (!bootstrapResult.data?.user_id) return null
+
+  const claimedResult = await input.supabase
+    .from('user_operator_settings')
+    .update({
+      telegram_allowed_chat_id: input.chatId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', bootstrapResult.data.user_id)
+    .maybeSingle()
+
+  if (claimedResult.error) throw new Error(claimedResult.error.message)
+
+  return {
+    ...bootstrapResult.data,
+    telegram_allowed_chat_id: input.chatId,
+    ...(claimedResult.data ?? {}),
+  }
 }
 
 async function insertTelegramAudit(input: {
