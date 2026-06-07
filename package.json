@@ -21,6 +21,8 @@
     "smoke:revenue-truth": "node scripts/smoke-revenue-truth.mjs",
     "smoke:revenue-cadence": "node scripts/smoke-revenue-cadence.mjs",
     "revenue:autopilot": "node scripts/revenue-autopilot-cron.mjs",
+    "autonomy:scheduler": "node scripts/autonomy-scheduler-cron.mjs",
+    "autonomy:worker": "node scripts/autonomy-worker-cron.mjs",
     "ops:readiness": "node scripts/ops-readiness.mjs",
     "ops:coherence": "node scripts/audit-studio-coherence.mjs && node scripts/audit-business-data.mjs",
     "supabase:validate": "node scripts/validate-supabase-remote.mjs",
