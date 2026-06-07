@@ -107,6 +107,10 @@ describe('studio prospects read/write split', () => {
       warm: 1,
       cold: 0,
       contactable: 0,
+      laneContactable: 0,
+      laneAwaitingApproval: 0,
+      laneFollowUpDue: 0,
+      laneHotReplies: 0,
       missingContact: 1,
       activeQueue: 0,
       readyToContact: 1,
@@ -133,6 +137,7 @@ describe('studio prospects read/write split', () => {
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.prospects).toHaveLength(1)
+    expect(body.filters.activeLane).toBe('300eur-diagnostic')
   })
 
   it('POST /api/studio/prospects/refresh triggers follow-up processing explicitly', async () => {

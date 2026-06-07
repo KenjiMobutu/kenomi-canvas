@@ -181,6 +181,10 @@ describe('summarizeProspects', () => {
       warm: 1,
       cold: 0,
       contactable: 1,
+      laneContactable: 0,
+      laneAwaitingApproval: 0,
+      laneFollowUpDue: 0,
+      laneHotReplies: 0,
       missingContact: 1,
       activeQueue: 1,
       readyToContact: 1,
@@ -194,6 +198,81 @@ describe('summarizeProspects', () => {
       lost: 0,
       followUpDue: 0,
     })
+  })
+
+  it('computes lane-oriented queue counts for contactable prospects', () => {
+    const summary = summarizeProspects(
+      [
+        {
+          id: 'prospect-1',
+          band: 'warm',
+          status: 'ready_to_contact',
+          contact_status: 'contactable',
+          contact_email: 'a@example.com',
+          missing_contact_fields: [],
+          next_followup_at: null,
+          pipeline_status: 'draft_created',
+          approval_status: 'awaiting_approval',
+          outreach_action_id: 'action-1',
+          outreach_approval_id: 'approval-1',
+          draft_provider: null,
+          draft_external_id: null,
+          operator_notes: '',
+          next_action: '',
+          last_activity_at: null,
+          tags: [],
+          activity: [],
+          summary: null,
+          pain_points: [],
+          cta: null,
+          follow_up_count: 0,
+          last_outreach_kind: 'initial',
+          last_follow_up_generated_at: null,
+          follow_up_version: 0,
+          message_family: 'linkedin_initial',
+          message_key: 'linkedin_initial_default',
+          segment: 'freelancers-small-agencies',
+          offer_variant: '300eur-diagnostic',
+        },
+        {
+          id: 'prospect-2',
+          band: 'hot',
+          status: 'sent',
+          contact_status: 'contactable',
+          contact_email: 'b@example.com',
+          missing_contact_fields: [],
+          next_followup_at: null,
+          pipeline_status: 'follow_up_due',
+          approval_status: 'approved_to_send',
+          outreach_action_id: 'action-2',
+          outreach_approval_id: 'approval-2',
+          draft_provider: null,
+          draft_external_id: null,
+          operator_notes: '',
+          next_action: '',
+          last_activity_at: null,
+          tags: [],
+          activity: [],
+          summary: null,
+          pain_points: [],
+          cta: null,
+          follow_up_count: 1,
+          last_outreach_kind: 'follow_up_1',
+          last_follow_up_generated_at: null,
+          follow_up_version: 1,
+          message_family: 'linkedin_initial',
+          message_key: 'linkedin_initial_default',
+          segment: 'freelancers-small-agencies',
+          offer_variant: '300eur-diagnostic',
+        },
+      ] as never[],
+      new Date('2026-05-25T10:00:00.000Z').getTime()
+    )
+
+    expect(summary.laneContactable).toBe(2)
+    expect(summary.laneAwaitingApproval).toBe(1)
+    expect(summary.laneFollowUpDue).toBe(1)
+    expect(summary.laneHotReplies).toBe(0)
   })
 
   it('maps a gmail-backed approved prospect to draft_created', () => {

@@ -1,4 +1,5 @@
 import type { HermesOperatorContextSnapshot } from '@/lib/hermes-operator/types'
+import { DIAGNOSTIC_CASH_LANE } from '@/lib/revenue/diagnostic-cash-lane'
 
 export type HermesOperatorRunDelta = {
   replied: number
@@ -31,23 +32,23 @@ function titleOrFallback(value: string | undefined, fallback: string) {
 function buildQueueFocus(context: HermesOperatorContextSnapshot) {
   if (context.prospects.pendingApprovals > 0) {
     return {
-      blocker: `${context.prospects.pendingApprovals} approvals are blocking outbound`,
-      nextAction: `Clear ${context.prospects.pendingApprovals} approvals in Prospects`,
-      topOpportunity: `${context.prospects.pendingApprovals} approval-gated drafts can move now`,
+      blocker: `${context.prospects.pendingApprovals} approvals are blocking the ${DIAGNOSTIC_CASH_LANE.offer.title} outbound lane`,
+      nextAction: `Clear ${context.prospects.pendingApprovals} approvals in Prospects for ${DIAGNOSTIC_CASH_LANE.offer.title}`,
+      topOpportunity: `${context.prospects.pendingApprovals} approval-gated diagnostic drafts can move now`,
     }
   }
   if (context.prospects.followUpsDue > 0) {
     return {
-      blocker: `${context.prospects.followUpsDue} follow-ups are due`,
-      nextAction: `Run follow-up queue on ${context.prospects.followUpsDue} prospects`,
-      topOpportunity: `${context.prospects.followUpsDue} due follow-ups are ready to push`,
+      blocker: `${context.prospects.followUpsDue} follow-ups are due in the ${DIAGNOSTIC_CASH_LANE.offer.title} lane`,
+      nextAction: `Run follow-up queue on ${context.prospects.followUpsDue} diagnostic prospects`,
+      topOpportunity: `${context.prospects.followUpsDue} due diagnostic follow-ups are ready to push`,
     }
   }
   if (context.prospects.hotLeads > 0) {
     return {
       blocker: null,
-      nextAction: `Run prospect on ${context.prospects.hotLeads} hot leads`,
-      topOpportunity: `${context.prospects.hotLeads} hot leads are ready for outreach`,
+      nextAction: `Run prospect on ${context.prospects.hotLeads} hot diagnostic leads`,
+      topOpportunity: `${context.prospects.hotLeads} hot leads are ready for the diagnostic offer`,
     }
   }
   if (context.automation.failedJobs > 0 || context.infrastructure.status !== 'ok') {
@@ -133,7 +134,7 @@ export function buildHermesOperatorBrief(input: {
   return {
     userId: input.userId,
     runId: input.runId,
-    summary: `${bestOffer} leads cash. Block cash: ${topBlocker}. Push: ${topOpportunity}. Stop: ${stopThisWeek}.`,
+    summary: `${DIAGNOSTIC_CASH_LANE.offer.title}: ${bestOffer} leads cash. Block cash: ${topBlocker}. Push: ${topOpportunity}. Stop: ${stopThisWeek}.`,
     cashDelta7d: Number(input.context.revenue.outcomes.delta7d.cashEur.toFixed(2)),
     topBlocker,
     topOpportunity,

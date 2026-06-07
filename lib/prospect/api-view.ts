@@ -1,5 +1,6 @@
 import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
 import { asProspectPipelineStatus, derivePipelineStatus, normalizeProspectTags } from '@/lib/prospect/crm-fields'
+import { isDiagnosticLaneContactableProspect } from '@/lib/revenue/diagnostic-cash-lane'
 import { deriveMessageMetadata } from '@/lib/revenue/message-truth'
 import { isValidEmail } from '@/lib/validation'
 import type {
@@ -50,6 +51,10 @@ export interface ProspectSummaryView {
   warm: number
   cold: number
   contactable: number
+  laneContactable: number
+  laneAwaitingApproval: number
+  laneFollowUpDue: number
+  laneHotReplies: number
   missingContact: number
   activeQueue: number
   readyToContact: number
@@ -239,6 +244,12 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       if (row.band === 'warm') acc.warm += 1
       if (row.band === 'cold') acc.cold += 1
       if (row.contact_status === 'contactable') acc.contactable += 1
+      const inDiagnosticLane = isDiagnosticLaneContactableProspect({
+        segment: typeof row.segment === 'string' ? row.segment : null,
+        offer_variant: typeof row.offer_variant === 'string' ? row.offer_variant : null,
+        contact_email: typeof row.contact_email === 'string' ? row.contact_email : null,
+      })
+      if (inDiagnosticLane) acc.laneContactable += 1
       if (row.contact_status === 'missing_contact') acc.missingContact += 1
       if (row.contact_status === 'contactable' && !['won', 'lost'].includes(row.pipeline_status)) {
         acc.activeQueue += 1
@@ -249,15 +260,18 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       }
       if (row.contact_status === 'contactable' && row.approval_status === 'awaiting_approval') {
         acc.awaitingApproval += 1
+        if (inDiagnosticLane) acc.laneAwaitingApproval += 1
       }
       if (row.approval_status === 'approved_to_send') acc.approvedToSend += 1
       if (row.pipeline_status === 'draft_created') acc.draftCreated += 1
       if (row.pipeline_status === 'sent') acc.sent += 1
       if (row.pipeline_status === 'replied') acc.replied += 1
+      if (inDiagnosticLane && row.pipeline_status === 'replied') acc.laneHotReplies += 1
       if (row.pipeline_status === 'won') acc.won += 1
       if (row.pipeline_status === 'lost') acc.lost += 1
       if (row.contact_status === 'contactable' && row.pipeline_status === 'follow_up_due') {
         acc.followUpDue += 1
+        if (inDiagnosticLane) acc.laneFollowUpDue += 1
       }
       return acc
     },
@@ -266,6 +280,10 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       warm: 0,
       cold: 0,
       contactable: 0,
+      laneContactable: 0,
+      laneAwaitingApproval: 0,
+      laneFollowUpDue: 0,
+      laneHotReplies: 0,
       missingContact: 0,
       activeQueue: 0,
       readyToContact: 0,

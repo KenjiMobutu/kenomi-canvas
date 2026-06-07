@@ -30,6 +30,7 @@ import {
 } from '@/lib/studio/revenue-links'
 import { shouldEmphasizeRevenueLoopAction, sortRevenueLoopsByFocus } from '@/lib/studio/revenue-focus'
 import { buildWeeklyReviewHref } from '@/lib/studio/weekly-review-links'
+import { buildDiagnosticCashLaneSummary } from '@/lib/studio/diagnostic-cash-lane-view'
 import type { HermesOperatorView } from '@/lib/studio/hermes-operator-view'
 
 type RevenueAuditEvent = {
@@ -344,6 +345,8 @@ type WeeklyRevenueReviewSnapshot = {
     weekEnd: string
     label: string
   }
+  paidCount: number
+  paidCashEur: number
   bestSource: WeeklyRevenueReviewInsight
   bestSegment: WeeklyRevenueReviewInsight
   bestOffer: WeeklyRevenueReviewInsight
@@ -1558,6 +1561,20 @@ export default function RevenuePage() {
               gap: 12,
             }}
           >
+            <TruthCard
+              label="Active playbook"
+              title={
+                buildDiagnosticCashLaneSummary({
+                  laneContactable: 0,
+                  laneAwaitingApproval: 0,
+                  laneFollowUpDue: 0,
+                  paidCount: weeklyReview.paidCount,
+                  paidCashEur: weeklyReview.paidCashEur,
+                }).title
+              }
+              detail="Freelancers / Small Agencies · book diagnostic call · 300EUR entry offer."
+              tone={C.blue}
+            />
             <TruthCard
               label="Best source"
               title={weeklyReview.bestSource.title}
