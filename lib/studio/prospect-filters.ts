@@ -2,6 +2,7 @@ export type ProspectFilters = {
   statusFilter: string
   sourceFilter: string
   bandFilter: string
+  contactFilter: string
   tagFilter: string
   searchFilter: string
 }
@@ -12,6 +13,7 @@ export function readProspectFiltersFromSearch(search: string): ProspectFilters {
     statusFilter: params.get('status')?.trim() || 'all',
     sourceFilter: params.get('source')?.trim() || 'all',
     bandFilter: params.get('band')?.trim() || 'all',
+    contactFilter: params.get('contact')?.trim() || 'all',
     tagFilter: params.get('tag')?.trim() || '',
     searchFilter: params.get('q')?.trim() || '',
   }

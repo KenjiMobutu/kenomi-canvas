@@ -19,6 +19,11 @@ const approvalResolutionSchema = z.object({
   decision: z.enum(['approved', 'rejected']),
 })
 
+const approvalBatchResolutionSchema = z.object({
+  approvalIds: z.array(z.string().min(1)).min(1).max(20),
+  decision: z.enum(['approved', 'rejected']),
+})
+
 const operatorActionSchema = z.object({
   type: z.enum(['retry_job', 'cancel_job']),
   jobId: z.string().min(1),
@@ -95,20 +100,70 @@ export async function PATCH(request: Request) {
   const { user, supabase, response } = await requireAllowedUser(cookieStore)
   if (response) return response
 
-  const parsed = approvalResolutionSchema.safeParse(await request.json().catch(() => null))
-  if (!parsed.success) {
+  const body = await request.json().catch(() => null)
+  const parsedSingle = approvalResolutionSchema.safeParse(body)
+  const parsedBatch = parsedSingle.success ? null : approvalBatchResolutionSchema.safeParse(body)
+  if (!parsedSingle.success && !parsedBatch?.success) {
     return NextResponse.json({ error: 'Payload approval invalide' }, { status: 400 })
   }
 
   try {
-    const result = await resolveHumanApproval({
-      supabase: supabase as unknown as ApprovalExecutorSupabase,
-      userId: user!.id,
-      approvalId: parsed.data.approvalId,
-      decision: parsed.data.decision,
-    })
+    if (parsedSingle.success) {
+      const result = await resolveHumanApproval({
+        supabase: supabase as unknown as ApprovalExecutorSupabase,
+        userId: user!.id,
+        approvalId: parsedSingle.data.approvalId,
+        decision: parsedSingle.data.decision,
+      })
 
-    return NextResponse.json({ ok: true, result })
+      return NextResponse.json({ ok: true, result })
+    }
+
+    if (!parsedBatch || !parsedBatch.success) {
+      return NextResponse.json({ error: 'Payload approval invalide' }, { status: 400 })
+    }
+
+    const { data: batchData } = parsedBatch
+
+    const results = [] as Array<
+      | { ok: true; approvalId: string; result: Awaited<ReturnType<typeof resolveHumanApproval>> }
+      | { ok: false; approvalId: string; error: string; status: number }
+    >
+
+    for (const approvalId of batchData.approvalIds) {
+      try {
+        const result = await resolveHumanApproval({
+          supabase: supabase as unknown as ApprovalExecutorSupabase,
+          userId: user!.id,
+          approvalId,
+          decision: batchData.decision,
+        })
+        results.push({ ok: true, approvalId, result })
+      } catch (error) {
+        if (error instanceof ApprovalExecutionError) {
+          results.push({
+            ok: false,
+            approvalId,
+            error: error.message,
+            status: error.status,
+          })
+          continue
+        }
+        throw error
+      }
+    }
+
+    const failedCount = results.filter((row) => !row.ok).length
+    return NextResponse.json(
+      {
+        ok: failedCount === 0,
+        processed: results.length,
+        succeeded: results.length - failedCount,
+        failed: failedCount,
+        results,
+      },
+      { status: failedCount === 0 ? 200 : 207 }
+    )
   } catch (error) {
     if (error instanceof ApprovalExecutionError) {
       return NextResponse.json({ error: error.message }, { status: error.status })

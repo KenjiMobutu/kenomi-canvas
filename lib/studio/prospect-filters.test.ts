@@ -11,12 +11,13 @@ describe('readProspectFiltersFromSearch', () => {
   it('reads supported prospect filters from the URL query string', () => {
     expect(
       readProspectFiltersFromSearch(
-        '?status=follow_up_due&source=reddit&band=warm&tag=phase2&q=acme'
+        '?status=follow_up_due&source=reddit&band=warm&contact=contactable&tag=phase2&q=acme'
       )
     ).toEqual({
       statusFilter: 'follow_up_due',
       sourceFilter: 'reddit',
       bandFilter: 'warm',
+      contactFilter: 'contactable',
       tagFilter: 'phase2',
       searchFilter: 'acme',
     })
@@ -27,6 +28,7 @@ describe('readProspectFiltersFromSearch', () => {
       statusFilter: 'all',
       sourceFilter: 'all',
       bandFilter: 'all',
+      contactFilter: 'all',
       tagFilter: '',
       searchFilter: '',
     })

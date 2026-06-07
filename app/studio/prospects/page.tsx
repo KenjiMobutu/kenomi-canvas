@@ -320,6 +320,7 @@ export default function ProspectPage() {
     setStatusFilter(next.statusFilter)
     setSourceFilter(next.sourceFilter)
     setBandFilter(next.bandFilter)
+    setContactFilter(next.contactFilter)
     setTagFilter(next.tagFilter)
     setSearchFilter(next.searchFilter)
   }, [])
@@ -462,6 +463,20 @@ export default function ProspectPage() {
         .slice(0, 8),
     [prospects]
   )
+  const sendableApprovalIds = useMemo(
+    () =>
+      prospects
+        .filter(
+          (prospect) =>
+            prospect.contact_status === 'contactable' &&
+            prospect.approval_status === 'awaiting_approval' &&
+            typeof prospect.outreach_approval_id === 'string' &&
+            prospect.outreach_approval_id.length > 0
+        )
+        .slice(0, 20)
+        .map((prospect) => prospect.outreach_approval_id!) as string[],
+    [prospects]
+  )
   const recentJobs = useMemo(() => jobs.slice(0, 6), [jobs])
   const sources = settings?.prospect_sources?.length
     ? settings.prospect_sources
@@ -502,6 +517,35 @@ export default function ProspectPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Approval resolution failed')
       toast.success(decision === 'approved' ? 'Draft approved' : 'Draft rejected')
+      await load()
+    } catch (resolveError) {
+      const message = resolveError instanceof Error ? resolveError.message : String(resolveError)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setApprovalPendingKey(null)
+    }
+  }
+
+  async function resolveApprovalBatch(approvalIds: string[], decision: 'approved' | 'rejected') {
+    if (!approvalIds.length) return
+
+    const key = `batch:${decision}`
+    setApprovalPendingKey(key)
+    setError(null)
+    try {
+      const res = await fetch('/api/studio/autonomy/jobs', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ approvalIds, decision }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Batch approval resolution failed')
+      if (json.ok === false) {
+        toast.error(`${json.failed} approval(s) failed, ${json.succeeded} sent`)
+      } else {
+        toast.success(`${json.succeeded} draft(s) approved`)
+      }
       await load()
     } catch (resolveError) {
       const message = resolveError instanceof Error ? resolveError.message : String(resolveError)
@@ -670,6 +714,7 @@ export default function ProspectPage() {
       <Chip label={`${summary.missingContact} missing`} tone="warm" />
       <Chip label={`${summary.hot} hot`} tone="hot" />
       <Chip label={`${summary.awaitingApproval} awaiting`} tone="warm" />
+      <Chip label={`${sendableApprovalIds.length} sendable`} tone="cold" />
       <Chip label={`${summary.approvedToSend} approved`} tone="hot" />
       <Chip label={`${summary.draftCreated} drafted`} tone="cold" />
       <Chip label={`${summary.followUpDue} due`} tone="warm" />
@@ -701,6 +746,39 @@ export default function ProspectPage() {
       >
         <RefreshCw size={13} />
         Refresh
+      </button>
+      <button
+        type="button"
+        onClick={() => void resolveApprovalBatch(sendableApprovalIds, 'approved')}
+        disabled={approvalPendingKey !== null || sendableApprovalIds.length === 0}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          minHeight: 34,
+          padding: '7px 12px',
+          borderRadius: 8,
+          border: `1px solid ${cyan}35`,
+          background:
+            approvalPendingKey === 'batch:approved' || sendableApprovalIds.length === 0
+              ? surface2
+              : `${cyan}14`,
+          color:
+            approvalPendingKey === 'batch:approved' || sendableApprovalIds.length === 0
+              ? muted2
+              : cyan,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          letterSpacing: '.12em',
+          textTransform: 'uppercase',
+          cursor:
+            approvalPendingKey !== null || sendableApprovalIds.length === 0 ? 'wait' : 'pointer',
+        }}
+      >
+        <Check size={13} />
+        {approvalPendingKey === 'batch:approved'
+          ? 'Approving...'
+          : `Approve sendable (${sendableApprovalIds.length})`}
       </button>
       <button
         type="button"
