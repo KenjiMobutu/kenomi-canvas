@@ -64,6 +64,7 @@ describe('buildHermesOperatorContext', () => {
           id: 'p1',
           user_id: 'user-1',
           company_name: 'Acme Studio',
+          contact_email: 'lea@acme.test',
           source: 'linkedin',
           band: 'warm',
           offer_id: 'offer-a',
@@ -77,6 +78,7 @@ describe('buildHermesOperatorContext', () => {
           id: 'p2',
           user_id: 'user-1',
           company_name: 'Acme Finance',
+          contact_email: 'ops@acme-finance.test',
           source: 'reddit',
           band: 'hot',
           offer_id: 'offer-a',
@@ -243,6 +245,7 @@ describe('buildHermesOperatorContext', () => {
     expect(snapshot.revenue.conversions.bestOffer?.offerName).toBe('Outbound Sprint')
     expect(snapshot.prospects.pendingApprovals).toBe(1)
     expect(snapshot.prospects.followUpsDue).toBe(1)
+    expect(snapshot.prospects.hotLeads).toBe(1)
     expect(snapshot.automation.autonomyStatus).toBe('active')
     expect(snapshot.automation.queuedJobs).toBe(1)
     expect(snapshot.automation.failedJobs).toBe(1)

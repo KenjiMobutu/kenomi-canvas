@@ -654,6 +654,9 @@ export async function runHermesOperatorTick(input: {
       brief: {
         summary: brief.summary,
         nextBestAction: brief.nextBestAction,
+        topBlocker: brief.topBlocker,
+        topOpportunity: brief.topOpportunity,
+        mainLeak: brief.mainLeak,
       },
       execution: {
         enqueuedJobsCount: enqueueResult.enqueuedJobsCount,

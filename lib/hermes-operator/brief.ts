@@ -28,7 +28,45 @@ function titleOrFallback(value: string | undefined, fallback: string) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
 }
 
+function buildQueueFocus(context: HermesOperatorContextSnapshot) {
+  if (context.prospects.pendingApprovals > 0) {
+    return {
+      blocker: `${context.prospects.pendingApprovals} approvals are blocking outbound`,
+      nextAction: `Clear ${context.prospects.pendingApprovals} approvals in Prospects`,
+      topOpportunity: `${context.prospects.pendingApprovals} approval-gated drafts can move now`,
+    }
+  }
+  if (context.prospects.followUpsDue > 0) {
+    return {
+      blocker: `${context.prospects.followUpsDue} follow-ups are due`,
+      nextAction: `Run follow-up queue on ${context.prospects.followUpsDue} prospects`,
+      topOpportunity: `${context.prospects.followUpsDue} due follow-ups are ready to push`,
+    }
+  }
+  if (context.prospects.hotLeads > 0) {
+    return {
+      blocker: null,
+      nextAction: `Run prospect on ${context.prospects.hotLeads} hot leads`,
+      topOpportunity: `${context.prospects.hotLeads} hot leads are ready for outreach`,
+    }
+  }
+  if (context.automation.failedJobs > 0 || context.infrastructure.status !== 'ok') {
+    return {
+      blocker: `${context.automation.failedJobs} operator failures need cleanup`,
+      nextAction: 'Run devops diagnostics now',
+      topOpportunity: titleOrFallback(context.infrastructure.operatorNextStep, 'Recover operator throughput'),
+    }
+  }
+  return {
+    blocker: null,
+    nextAction: null,
+    topOpportunity: null,
+  }
+}
+
 function buildTopBlocker(context: HermesOperatorContextSnapshot, delta: HermesOperatorRunDelta | null) {
+  const queueFocus = buildQueueFocus(context)
+  if (queueFocus.blocker) return queueFocus.blocker
   const repliesNoCash = context.revenue.conversions.messageFamilyRepliesNoCash
   if (repliesNoCash) {
     return `${repliesNoCash.messageFamily} replies without cash (${repliesNoCash.replied} replies · ${repliesNoCash.paidCount} paid)`
@@ -43,6 +81,8 @@ function buildTopBlocker(context: HermesOperatorContextSnapshot, delta: HermesOp
 }
 
 function buildTopOpportunity(context: HermesOperatorContextSnapshot) {
+  const queueFocus = buildQueueFocus(context)
+  if (queueFocus.topOpportunity) return queueFocus.topOpportunity
   const bestSegment = context.revenue.conversions.bestSegmentToPay
   if (bestSegment) {
     return `${bestSegment.source}/${bestSegment.band} is collecting cash fastest`
@@ -78,18 +118,22 @@ export function buildHermesOperatorBrief(input: {
     input.context.revenue.weeklyReview.bestSource.source ??
     titleOrFallback(input.context.revenue.weeklyReview.bestSource.title, 'No best source yet')
   const bestSegment = buildBestSegment(input.context)
+  const queueFocus = buildQueueFocus(input.context)
   const topBlocker = buildTopBlocker(input.context, input.runDelta ?? null)
   const topOpportunity = buildTopOpportunity(input.context)
   const mainLeak = `${input.context.revenue.weeklyReview.mainLeak.title} · ${input.context.revenue.weeklyReview.mainLeak.detail}`
-  const nextBestAction = titleOrFallback(
-    input.context.revenue.weeklyReview.nextExperiment.title,
-    'Review the next commercial experiment.'
+  const stopThisWeek = titleOrFallback(
+    input.context.revenue.weeklyReview.messageFamilyToStop.title,
+    'No weak message family flagged yet'
   )
+  const nextBestAction =
+    queueFocus.nextAction ??
+    titleOrFallback(input.context.revenue.weeklyReview.nextExperiment.title, 'Review the next commercial experiment.')
 
   return {
     userId: input.userId,
     runId: input.runId,
-    summary: `${bestOffer} is the current cash leader; ${bestSource} is the strongest source. Main blocker: ${topBlocker}.`,
+    summary: `${bestOffer} leads cash. Block cash: ${topBlocker}. Push: ${topOpportunity}. Stop: ${stopThisWeek}.`,
     cashDelta7d: Number(input.context.revenue.outcomes.delta7d.cashEur.toFixed(2)),
     topBlocker,
     topOpportunity,

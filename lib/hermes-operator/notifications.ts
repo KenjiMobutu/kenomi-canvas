@@ -26,6 +26,9 @@ export async function dispatchOperatorNotifications(input: {
   brief?: {
     summary: string
     nextBestAction: string
+    topBlocker?: string
+    topOpportunity?: string
+    mainLeak?: string
   }
   execution?: {
     enqueuedJobsCount: number
@@ -77,7 +80,7 @@ export async function dispatchOperatorNotifications(input: {
         body: JSON.stringify({
           user_id: input.userId,
           bot_label: input.settings.telegramBotLabel,
-          alerts: input.alerts.map((alert) => ({
+          alerts: input.alerts.slice(0, 1).map((alert) => ({
             severity: alert.severity,
             category: alert.category,
             headline: alert.headline,
@@ -89,6 +92,9 @@ export async function dispatchOperatorNotifications(input: {
             ? {
                 summary: input.brief.summary,
                 next_best_action: input.brief.nextBestAction,
+                top_blocker: input.brief.topBlocker ?? null,
+                top_opportunity: input.brief.topOpportunity ?? null,
+                main_leak: input.brief.mainLeak ?? null,
               }
             : null,
           execution: input.execution

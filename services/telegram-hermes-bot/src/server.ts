@@ -13,6 +13,9 @@ interface TelegramNotifyAlert {
 interface TelegramNotifyBrief {
   summary?: string
   next_best_action?: string
+  top_blocker?: string | null
+  top_opportunity?: string | null
+  main_leak?: string | null
 }
 
 interface TelegramNotifyExecution {
@@ -67,6 +70,15 @@ export function createTelegramHermesBotServer(input?: {
         if (typeof brief?.summary === 'string' && brief.summary.length > 0) {
           lines.push(brief.summary)
         }
+        if (typeof brief?.top_blocker === 'string' && brief.top_blocker.length > 0) {
+          lines.push(`Blocker: ${brief.top_blocker}`)
+        }
+        if (typeof brief?.top_opportunity === 'string' && brief.top_opportunity.length > 0) {
+          lines.push(`Push: ${brief.top_opportunity}`)
+        }
+        if (typeof brief?.main_leak === 'string' && brief.main_leak.length > 0) {
+          lines.push(`Leak: ${brief.main_leak}`)
+        }
         if (typeof brief?.next_best_action === 'string' && brief.next_best_action.length > 0) {
           lines.push(`Next: ${brief.next_best_action}`)
         }
@@ -84,7 +96,7 @@ export function createTelegramHermesBotServer(input?: {
         }
         if (alerts.length > 0) {
           lines.push(
-            ...alerts.slice(0, 5).map((alert) => {
+            ...alerts.slice(0, 1).map((alert) => {
               const severity = typeof alert?.severity === 'string' ? alert.severity.toUpperCase() : 'INFO'
               const headline = typeof alert?.headline === 'string' ? alert.headline : 'Alert'
               return `- [${severity}] ${headline}`

@@ -22,6 +22,7 @@ import {
   isSyntheticProspectRow,
   isSyntheticVentureRow,
 } from '@/lib/revenue/synthetic-data'
+import { isValidEmail } from '@/lib/validation'
 
 interface QueryResult<T> {
   data: T | null
@@ -48,6 +49,7 @@ type OfferRow = {
 type ProspectRow = {
   id: string
   company_name?: string | null
+  contact_email?: string | null
   source?: string | null
   band?: string | null
   offer_id?: string | null
@@ -119,6 +121,11 @@ function isDue(dateValue: string | null | undefined, now: Date) {
   return new Date(dateValue).getTime() <= now.getTime()
 }
 
+function hasValidContactEmail(prospect: ProspectRow) {
+  const contactEmail = typeof prospect.contact_email === 'string' ? prospect.contact_email.trim() : ''
+  return contactEmail.length > 0 && isValidEmail(contactEmail)
+}
+
 function countWhere<T>(rows: T[], predicate: (row: T) => boolean) {
   return rows.reduce((count, row) => count + (predicate(row) ? 1 : 0), 0)
 }
@@ -168,7 +175,7 @@ export async function buildHermesOperatorContext(input: {
         input.supabase
           .from('prospects')
           .select(
-            'id, company_name, source, band, offer_id, offer_variant, outreach_angle, pipeline_status, created_at, next_followup_at, metadata'
+            'id, company_name, contact_email, source, band, offer_id, offer_variant, outreach_angle, pipeline_status, created_at, next_followup_at, metadata'
           )
           .eq('user_id', input.userId)
           .order('updated_at', { ascending: false })
@@ -358,16 +365,25 @@ export async function buildHermesOperatorContext(input: {
       total: filteredProspects.length,
       awaitingApproval: countWhere(
         filteredProspects,
-        (prospect) => (prospect.pipeline_status ?? '').trim() === 'awaiting_approval'
+        (prospect) =>
+          (prospect.pipeline_status ?? '').trim() === 'awaiting_approval' && hasValidContactEmail(prospect)
       ),
-      pendingApprovals: countWhere(approvals, (approval) => approval.status === 'pending'),
+      pendingApprovals: countWhere(
+        filteredProspects,
+        (prospect) =>
+          (prospect.pipeline_status ?? '').trim() === 'awaiting_approval' && hasValidContactEmail(prospect)
+      ),
       followUpsDue: countWhere(
         filteredProspects,
         (prospect) =>
+          hasValidContactEmail(prospect) &&
           isDue(prospect.next_followup_at, now) &&
           !['won', 'lost'].includes((prospect.pipeline_status ?? '').trim())
       ),
-      hotLeads: countWhere(filteredProspects, (prospect) => (prospect.band ?? '').trim() === 'hot'),
+      hotLeads: countWhere(
+        filteredProspects,
+        (prospect) => (prospect.band ?? '').trim() === 'hot' && hasValidContactEmail(prospect)
+      ),
     },
     automation: {
       autonomyStatus: control?.status === 'paused' ? 'paused' : 'active',

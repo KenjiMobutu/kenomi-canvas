@@ -180,7 +180,7 @@ export async function POST(request: Request) {
     const [briefResult, alertsResult] = await Promise.all([
       supabase
         .from('hermes_operator_briefs')
-        .select('summary, next_best_action, created_at')
+        .select('summary, top_blocker, main_leak, next_best_action, created_at')
         .eq('user_id', operator.user_id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -200,6 +200,8 @@ export async function POST(request: Request) {
     const response = buildTelegramBriefResponse({
       brief: {
         headline: String(briefResult.data?.summary ?? 'No Hermes brief yet'),
+        topBlocker: String(briefResult.data?.top_blocker ?? ''),
+        mainLeak: String(briefResult.data?.main_leak ?? ''),
         nextAction: {
           title: String(briefResult.data?.next_best_action ?? 'Open Studio and run Hermes'),
         },

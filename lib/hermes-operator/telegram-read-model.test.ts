@@ -7,6 +7,8 @@ describe('telegram read model', () => {
     const result = buildTelegramBriefResponse({
       brief: {
         headline: 'Cash is blocked by approvals',
+        topBlocker: '2 approvals are blocking outbound',
+        mainLeak: 'Meeting to close · pricing friction',
         nextAction: { title: 'Clear approvals' },
       },
       alerts: [],
@@ -14,6 +16,10 @@ describe('telegram read model', () => {
 
     expect(result.summary).toContain('Cash is blocked by approvals')
     expect(result.summary).toContain('Clear approvals')
+    expect(result.lines).toEqual([
+      '- Blocker: 2 approvals are blocking outbound',
+      '- Leak: Meeting to close · pricing friction',
+    ])
   })
 
   it('formats a summary without requiring lines', () => {

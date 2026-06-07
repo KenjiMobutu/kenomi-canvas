@@ -132,6 +132,9 @@ describe('telegram bot service', () => {
           bot_label: 'Hermes',
           brief: {
             summary: 'LinkedIn is the strongest source.',
+            top_blocker: '2 approvals are blocking outbound',
+            top_opportunity: '2 approval-gated drafts can move now',
+            main_leak: 'Meeting to close · pricing friction',
             next_best_action: 'Run prospect on warm leads',
           },
           execution: {
@@ -156,6 +159,9 @@ describe('telegram bot service', () => {
         text: [
           'Hermes update',
           'LinkedIn is the strongest source.',
+          'Blocker: 2 approvals are blocking outbound',
+          'Push: 2 approval-gated drafts can move now',
+          'Leak: Meeting to close · pricing friction',
           'Next: Run prospect on warm leads',
           'Executed: 2 job(s)',
           'Blocked: 1 action(s) (action_cap_reached)',

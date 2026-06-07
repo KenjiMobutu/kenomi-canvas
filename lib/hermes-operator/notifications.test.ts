@@ -171,6 +171,9 @@ describe('dispatchOperatorNotifications', () => {
       brief: {
         summary: 'LinkedIn is the strongest source.',
         nextBestAction: 'Fix close friction on linkedin/warm',
+        topBlocker: '2 approvals are blocking outbound',
+        topOpportunity: '2 approval-gated drafts can move now',
+        mainLeak: 'Meeting to close · pricing friction',
       },
       execution: {
         enqueuedJobsCount: 1,
@@ -208,6 +211,9 @@ describe('dispatchOperatorNotifications', () => {
           brief: {
             summary: 'LinkedIn is the strongest source.',
             next_best_action: 'Fix close friction on linkedin/warm',
+            top_blocker: '2 approvals are blocking outbound',
+            top_opportunity: '2 approval-gated drafts can move now',
+            main_leak: 'Meeting to close · pricing friction',
           },
           execution: {
             enqueued_jobs_count: 1,
@@ -242,6 +248,9 @@ describe('dispatchOperatorNotifications', () => {
       brief: {
         summary: 'LinkedIn is the strongest source.',
         nextBestAction: 'Run prospect on warm leads',
+        topBlocker: '2 approvals are blocking outbound',
+        topOpportunity: '2 approval-gated drafts can move now',
+        mainLeak: 'Meeting to close · pricing friction',
       },
       execution: {
         enqueuedJobsCount: 2,

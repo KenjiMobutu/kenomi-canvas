@@ -1,6 +1,8 @@
 type TelegramBriefResponseInput = {
   brief: {
     headline: string
+    topBlocker?: string
+    mainLeak?: string
     nextAction: {
       title: string
     }
@@ -20,7 +22,11 @@ export function buildTelegramBriefResponse(input: TelegramBriefResponseInput) {
   return {
     kind: 'read_brief' as const,
     summary: `${input.brief.headline}. Next: ${input.brief.nextAction.title}.`,
-    lines: input.alerts.slice(0, 2).map((alert) => `- ${alert.headline}`),
+    lines: [
+      ...(input.brief.topBlocker ? [`- Blocker: ${input.brief.topBlocker}`] : []),
+      ...(input.brief.mainLeak ? [`- Leak: ${input.brief.mainLeak}`] : []),
+      ...input.alerts.slice(0, 1).map((alert) => `- ${alert.headline}`),
+    ],
   }
 }
 
