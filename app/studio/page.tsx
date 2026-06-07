@@ -15,6 +15,7 @@ import {
 } from '@/lib/studio/prospect-filters'
 import { getStudioCommandPaletteItems, STUDIO_PRIMARY_NAV } from '@/lib/studio/studio-nav'
 import { buildRevenueHref } from '@/lib/studio/revenue-links'
+import { buildDiagnosticCashLaneSummary } from '@/lib/studio/diagnostic-cash-lane-view'
 import type { HermesOperatorBriefRecord } from '@/lib/hermes-operator/brief'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -2211,7 +2212,13 @@ function buildNextActionHref(brief: HermesBriefPayload | null) {
   return '/studio/automations'
 }
 
-function DailyHermesBriefPanel({ brief }: { brief: HermesBriefPayload | null }) {
+function DailyHermesBriefPanel({
+  brief,
+  playbook,
+}: {
+  brief: HermesBriefPayload | null
+  playbook: ReturnType<typeof buildDiagnosticCashLaneSummary>
+}) {
   const bestSegmentParts = parseSourceBand(brief?.bestSegment)
   const bestSegmentHref = bestSegmentParts
     ? buildSegmentPushHref(bestSegmentParts)
@@ -2322,6 +2329,35 @@ function DailyHermesBriefPanel({ brief }: { brief: HermesBriefPayload | null }) 
           {brief
             ? `${brief.topOpportunity} · blocker: ${brief.topBlocker}`
             : 'The brief should tell you what to repeat, what leaks, and what to do next.'}
+        </div>
+      </div>
+
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 10,
+          border: `1px solid ${line}`,
+          background: surface2,
+          display: 'grid',
+          gap: 4,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: accent,
+            textTransform: 'uppercase',
+            letterSpacing: '.12em',
+          }}
+        >
+          Active playbook
+        </div>
+        <strong style={{ color: text, fontSize: 13, lineHeight: 1.35, fontWeight: 700 }}>
+          {playbook.title} · {playbook.subtitle}
+        </strong>
+        <div style={{ color: muted, fontSize: 12, lineHeight: 1.5 }}>
+          {playbook.primaryMetric} · {playbook.blockers}
         </div>
       </div>
 
@@ -4562,6 +4598,13 @@ export default function CockpitPage() {
   )
 
   const ckVars = theme === 'dark' ? CK_DARK : CK_LIGHT
+  const diagnosticLane = buildDiagnosticCashLaneSummary({
+    laneContactable: prospectCash?.summary.contactable ?? 0,
+    laneAwaitingApproval: prospectCash?.summary.awaitingApproval ?? 0,
+    laneFollowUpDue: prospectCash?.summary.followUpDue ?? 0,
+    paidCount: revenueConversions?.overview.paidCount ?? 0,
+    paidCashEur: revenueConversions?.overview.paidCashEur ?? 0,
+  })
 
   return (
     <div
@@ -4600,7 +4643,7 @@ export default function CockpitPage() {
           style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, minHeight: 0 }}
         >
           {isMobile && <RevenueFirstStrip snapshot={revenueSnapshot} />}
-          <DailyHermesBriefPanel brief={hermesBrief} />
+          <DailyHermesBriefPanel brief={hermesBrief} playbook={diagnosticLane} />
           <CashMovementPanel
             outcomes={cashOutcomes}
             snapshot={revenueSnapshot}
