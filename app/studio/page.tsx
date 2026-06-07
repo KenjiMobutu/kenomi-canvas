@@ -177,6 +177,10 @@ type CashOutcomeSnapshot = {
 }
 
 type RevenueConversionsSnapshot = {
+  overview: {
+    paidCount: number
+    paidCashEur: number
+  }
   bestOffer: { offerId: string | null; closeRate: number } | null
   bestAngle: { offerId: string | null; angle: string; closeRate: number } | null
   segmentRepliesNoPay: {
@@ -193,6 +197,7 @@ type ProspectCashPayload = {
   prospects: ProspectCashRow[]
   summary: {
     total: number
+    contactable: number
     awaitingApproval: number
     approvedToSend: number
     draftCreated: number

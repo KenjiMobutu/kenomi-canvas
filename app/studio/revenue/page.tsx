@@ -345,6 +345,8 @@ type WeeklyRevenueReviewSnapshot = {
     weekEnd: string
     label: string
   }
+  paidCount: number
+  paidCashEur: number
   bestSource: WeeklyRevenueReviewInsight
   bestSegment: WeeklyRevenueReviewInsight
   bestOffer: WeeklyRevenueReviewInsight

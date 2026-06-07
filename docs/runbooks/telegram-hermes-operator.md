@@ -36,6 +36,21 @@
 3. Trigger one Hermes run with at least one alert.
 4. Confirm the bot receives the notify payload.
 
+## Diagnostic cash lane
+
+Active commercial lane:
+
+- offer: `300EUR diagnostic`
+- target: `freelancers / small agencies`
+- CTA: `book diagnostic call`
+
+Daily operator order:
+
+1. clear visible approvals
+2. clear due follow-ups
+3. act on hot replies
+4. refresh prospecting only after queue debt is handled
+
 ## Failure modes
 
 - unauthorized chat id
