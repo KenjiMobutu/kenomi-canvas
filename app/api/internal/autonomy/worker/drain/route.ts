@@ -24,6 +24,10 @@ function isWorkerAuthorized(request: NextRequest): boolean {
   return request.headers.get('x-autonomy-worker-token') === secret
 }
 
+function resolveHermesTickMode(value: unknown): 'observe' | 'recommend' | 'act' | undefined {
+  return value === 'observe' || value === 'recommend' || value === 'act' ? value : undefined
+}
+
 export async function POST(request: NextRequest) {
   if (!isWorkerAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized worker' }, { status: 401 })
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
       runHermesOperatorTick({
         supabase: supabase as Parameters<typeof runHermesOperatorTick>[0]['supabase'],
         userId,
-        mode: mode === 'recommend' || mode === 'act' ? mode : 'observe',
+        mode: resolveHermesTickMode(mode),
         payload,
         now,
       }),
