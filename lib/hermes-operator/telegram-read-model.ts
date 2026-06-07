@@ -1,3 +1,5 @@
+import { DIAGNOSTIC_CASH_LANE } from '@/lib/revenue/diagnostic-cash-lane'
+
 type TelegramBriefResponseInput = {
   brief: {
     headline: string
@@ -21,7 +23,7 @@ type TelegramRevenueResponseInput = {
 export function buildTelegramBriefResponse(input: TelegramBriefResponseInput) {
   return {
     kind: 'read_brief' as const,
-    summary: `${input.brief.headline}. Next: ${input.brief.nextAction.title}.`,
+    summary: `${DIAGNOSTIC_CASH_LANE.offer.title}: ${input.brief.headline}. Next: ${input.brief.nextAction.title}.`,
     lines: [
       ...(input.brief.topBlocker ? [`- Blocker: ${input.brief.topBlocker}`] : []),
       ...(input.brief.mainLeak ? [`- Leak: ${input.brief.mainLeak}`] : []),

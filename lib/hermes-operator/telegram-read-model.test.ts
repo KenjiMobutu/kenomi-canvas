@@ -14,6 +14,7 @@ describe('telegram read model', () => {
       alerts: [],
     })
 
+    expect(result.summary).toContain('300EUR Diagnostic')
     expect(result.summary).toContain('Cash is blocked by approvals')
     expect(result.summary).toContain('Clear approvals')
     expect(result.lines).toEqual([
