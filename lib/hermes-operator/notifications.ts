@@ -23,6 +23,15 @@ export async function dispatchOperatorNotifications(input: {
     HermesOperatorSettings,
     'notificationMode' | 'telegramEnabled' | 'telegramNotificationsEnabled' | 'telegramBotLabel'
   >
+  brief?: {
+    summary: string
+    nextBestAction: string
+  }
+  execution?: {
+    enqueuedJobsCount: number
+    blockedByPolicyCount: number
+    topBlockedReason: string | null
+  }
   now?: Date
 }) {
   const nowIso = (input.now ?? new Date()).toISOString()
@@ -48,12 +57,17 @@ export async function dispatchOperatorNotifications(input: {
   if (
     input.settings?.notificationMode === 'webhook' &&
     input.settings.telegramEnabled &&
-    input.settings.telegramNotificationsEnabled &&
-    input.alerts.length > 0
+    input.settings.telegramNotificationsEnabled
   ) {
     const url = process.env.TELEGRAM_OPERATOR_NOTIFY_URL
     const secret = process.env.TELEGRAM_OPERATOR_SHARED_SECRET
-    if (url && secret) {
+    const hasTelegramUpdate =
+      input.alerts.length > 0 ||
+      Boolean(input.brief) ||
+      Number(input.execution?.enqueuedJobsCount ?? 0) > 0 ||
+      Number(input.execution?.blockedByPolicyCount ?? 0) > 0
+
+    if (url && secret && hasTelegramUpdate) {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -71,13 +85,26 @@ export async function dispatchOperatorNotifications(input: {
             dedupe_key: alert.dedupeKey,
             payload: alert.payload,
           })),
+          brief: input.brief
+            ? {
+                summary: input.brief.summary,
+                next_best_action: input.brief.nextBestAction,
+              }
+            : null,
+          execution: input.execution
+            ? {
+                enqueued_jobs_count: input.execution.enqueuedJobsCount,
+                blocked_by_policy_count: input.execution.blockedByPolicyCount,
+                top_blocked_reason: input.execution.topBlockedReason,
+              }
+            : null,
         }),
       })
 
       if (!response.ok) {
         throw new Error(`Telegram notify failed: ${response.status}`)
       }
-      telegramSent = input.alerts.length
+      telegramSent = Math.max(input.alerts.length, 1)
     }
   }
 

@@ -10,6 +10,17 @@ interface TelegramNotifyAlert {
   headline?: string
 }
 
+interface TelegramNotifyBrief {
+  summary?: string
+  next_best_action?: string
+}
+
+interface TelegramNotifyExecution {
+  enqueued_jobs_count?: number
+  blocked_by_policy_count?: number
+  top_blocked_reason?: string | null
+}
+
 export function createTelegramHermesBotServer(input?: {
   config?: ReturnType<typeof loadTelegramHermesBotConfig>
   sendTelegramCommandToApp?: typeof sendTelegramCommandToApp
@@ -38,19 +49,50 @@ export function createTelegramHermesBotServer(input?: {
       const rawBody = Buffer.concat(chunks).toString('utf8')
       const payload = rawBody.length > 0 ? JSON.parse(rawBody) : {}
       const alerts: TelegramNotifyAlert[] = Array.isArray(payload?.alerts) ? payload.alerts : []
+      const brief: TelegramNotifyBrief | null =
+        payload?.brief && typeof payload.brief === 'object' && !Array.isArray(payload.brief)
+          ? payload.brief
+          : null
+      const execution: TelegramNotifyExecution | null =
+        payload?.execution && typeof payload.execution === 'object' && !Array.isArray(payload.execution)
+          ? payload.execution
+          : null
       const botLabel = typeof payload?.bot_label === 'string' && payload.bot_label.length > 0
         ? payload.bot_label
         : 'Hermes'
 
-      if (alerts.length > 0 && config.allowedChatId) {
-        const text = [
-          `${botLabel} alerts`,
-          ...alerts.slice(0, 5).map((alert) => {
-            const severity = typeof alert?.severity === 'string' ? alert.severity.toUpperCase() : 'INFO'
-            const headline = typeof alert?.headline === 'string' ? alert.headline : 'Alert'
-            return `- [${severity}] ${headline}`
-          }),
-        ].join('\n')
+      if ((alerts.length > 0 || brief || execution) && config.allowedChatId) {
+        const lines = [`${botLabel} update`]
+
+        if (typeof brief?.summary === 'string' && brief.summary.length > 0) {
+          lines.push(brief.summary)
+        }
+        if (typeof brief?.next_best_action === 'string' && brief.next_best_action.length > 0) {
+          lines.push(`Next: ${brief.next_best_action}`)
+        }
+        if (Number(execution?.enqueued_jobs_count ?? 0) > 0) {
+          lines.push(`Executed: ${Number(execution?.enqueued_jobs_count ?? 0)} job(s)`)
+        }
+        if (Number(execution?.blocked_by_policy_count ?? 0) > 0) {
+          const blockedReason =
+            typeof execution?.top_blocked_reason === 'string' && execution.top_blocked_reason.length > 0
+              ? execution.top_blocked_reason
+              : 'policy'
+          lines.push(
+            `Blocked: ${Number(execution?.blocked_by_policy_count ?? 0)} action(s) (${blockedReason})`
+          )
+        }
+        if (alerts.length > 0) {
+          lines.push(
+            ...alerts.slice(0, 5).map((alert) => {
+              const severity = typeof alert?.severity === 'string' ? alert.severity.toUpperCase() : 'INFO'
+              const headline = typeof alert?.headline === 'string' ? alert.headline : 'Alert'
+              return `- [${severity}] ${headline}`
+            })
+          )
+        }
+
+        const text = lines.join('\n')
 
         await sendMessage({
           botToken: config.botToken,
@@ -60,7 +102,14 @@ export function createTelegramHermesBotServer(input?: {
       }
 
       res.writeHead(202, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ ok: true, accepted: alerts.length }))
+      res.end(
+        JSON.stringify({
+          ok: true,
+          accepted: alerts.length,
+          hasBrief: Boolean(brief),
+          hasExecution: Boolean(execution),
+        })
+      )
       return
     }
 

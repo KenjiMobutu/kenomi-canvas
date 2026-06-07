@@ -17,6 +17,21 @@ const telegramNotifySchema = z.object({
       })
     )
     .max(10),
+  brief: z
+    .object({
+      summary: z.string().trim().min(1),
+      next_best_action: z.string().trim().min(1),
+    })
+    .nullable()
+    .optional(),
+  execution: z
+    .object({
+      enqueued_jobs_count: z.number().int().nonnegative(),
+      blocked_by_policy_count: z.number().int().nonnegative(),
+      top_blocked_reason: z.string().trim().min(1).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 })
 
 export async function POST(request: Request) {
@@ -32,5 +47,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     accepted: parsed.data.alerts.length,
+    has_brief: Boolean(parsed.data.brief),
+    has_execution: Boolean(parsed.data.execution),
   })
 }

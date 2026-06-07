@@ -168,6 +168,15 @@ describe('dispatchOperatorNotifications', () => {
           payload: { source: 'reddit' },
         },
       ],
+      brief: {
+        summary: 'LinkedIn is the strongest source.',
+        nextBestAction: 'Fix close friction on linkedin/warm',
+      },
+      execution: {
+        enqueuedJobsCount: 1,
+        blockedByPolicyCount: 0,
+        topBlockedReason: null,
+      },
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -180,6 +189,68 @@ describe('dispatchOperatorNotifications', () => {
         }),
       })
     )
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://bot.example.test/notify',
+      expect.objectContaining({
+        body: JSON.stringify({
+          user_id: 'user-1',
+          bot_label: 'Hermes',
+          alerts: [
+            {
+              severity: 'warn',
+              category: 'cash_blocker',
+              headline: 'Cash stuck',
+              detail: 'Replies but no wins.',
+              dedupe_key: 'cash:telegram',
+              payload: { source: 'reddit' },
+            },
+          ],
+          brief: {
+            summary: 'LinkedIn is the strongest source.',
+            next_best_action: 'Fix close friction on linkedin/warm',
+          },
+          execution: {
+            enqueued_jobs_count: 1,
+            blocked_by_policy_count: 0,
+            top_blocked_reason: null,
+          },
+        }),
+      })
+    )
     expect(result).toEqual({ sent: 1, telegramSent: 1 })
+  })
+
+  it('dispatches execution-only telegram notifications when jobs were launched', async () => {
+    vi.stubEnv('TELEGRAM_OPERATOR_NOTIFY_URL', 'https://bot.example.test/notify')
+    vi.stubEnv('TELEGRAM_OPERATOR_SHARED_SECRET', 'telegram-secret')
+
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 202 })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const supabase = createFakeSupabase()
+
+    const result = await dispatchOperatorNotifications({
+      supabase: supabase as never,
+      userId: 'user-1',
+      settings: {
+        notificationMode: 'webhook',
+        telegramEnabled: true,
+        telegramNotificationsEnabled: true,
+        telegramBotLabel: 'Hermes',
+      },
+      alerts: [],
+      brief: {
+        summary: 'LinkedIn is the strongest source.',
+        nextBestAction: 'Run prospect on warm leads',
+      },
+      execution: {
+        enqueuedJobsCount: 2,
+        blockedByPolicyCount: 1,
+        topBlockedReason: 'action_cap_reached',
+      },
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ sent: 0, telegramSent: 1 })
   })
 })

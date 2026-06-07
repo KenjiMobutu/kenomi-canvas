@@ -130,6 +130,15 @@ describe('telegram bot service', () => {
         },
         body: JSON.stringify({
           bot_label: 'Hermes',
+          brief: {
+            summary: 'LinkedIn is the strongest source.',
+            next_best_action: 'Run prospect on warm leads',
+          },
+          execution: {
+            enqueued_jobs_count: 2,
+            blocked_by_policy_count: 1,
+            top_blocked_reason: 'action_cap_reached',
+          },
           alerts: [
             {
               severity: 'warn',
@@ -144,7 +153,14 @@ describe('telegram bot service', () => {
       expect(sendTelegramMessage).toHaveBeenCalledWith({
         botToken: 'telegram-bot-token',
         chatId: '42',
-        text: 'Hermes alerts\n- [WARN] Cash blocked by approvals',
+        text: [
+          'Hermes update',
+          'LinkedIn is the strongest source.',
+          'Next: Run prospect on warm leads',
+          'Executed: 2 job(s)',
+          'Blocked: 1 action(s) (action_cap_reached)',
+          '- [WARN] Cash blocked by approvals',
+        ].join('\n'),
       })
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))

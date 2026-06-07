@@ -614,14 +614,6 @@ export async function runHermesOperatorTick(input: {
       now,
     })
 
-    await dispatchOperatorNotifications({
-      supabase: input.supabase,
-      userId: input.userId,
-      alerts: allAlerts,
-      settings: operatorSettings,
-      now,
-    })
-
     const brief = buildHermesOperatorBrief({
       userId: input.userId,
       runId,
@@ -642,6 +634,27 @@ export async function runHermesOperatorTick(input: {
       main_leak: brief.mainLeak,
       next_best_action: brief.nextBestAction,
       created_at: brief.createdAt,
+    })
+
+    const topBlockedReasonEntry = Object.entries(enqueueResult.blockedByPolicyReasonCounts).sort(
+      (left, right) => Number(right[1] ?? 0) - Number(left[1] ?? 0)
+    )[0]
+
+    await dispatchOperatorNotifications({
+      supabase: input.supabase,
+      userId: input.userId,
+      alerts: allAlerts,
+      settings: operatorSettings,
+      brief: {
+        summary: brief.summary,
+        nextBestAction: brief.nextBestAction,
+      },
+      execution: {
+        enqueuedJobsCount: enqueueResult.enqueuedJobsCount,
+        blockedByPolicyCount: enqueueResult.blockedByPolicyCount,
+        topBlockedReason: topBlockedReasonEntry?.[0] ?? null,
+      },
+      now,
     })
 
     return {
