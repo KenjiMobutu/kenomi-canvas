@@ -23,6 +23,9 @@ export type WeeklyRevenueReview = {
   messageFamilyToStop: WeeklyReviewInsight
   topObjection: WeeklyReviewInsight
   highestValueObjection: WeeklyReviewInsight
+  cashReality: WeeklyReviewInsight & {
+    verdict: 'real_cash' | 'thin_cash' | 'no_cash_truth'
+  }
   mainLeak: WeeklyReviewInsight & {
     stageKey: 'contact_to_reply' | 'reply_to_qualified' | 'qualified_to_meeting' | 'meeting_to_close'
   }
@@ -146,7 +149,28 @@ export function buildWeeklyRevenueReview(input: {
         title: formatReason(input.conversions.messageFamilyTopObjection.topObjection ?? undefined),
         detail: `${input.conversions.messageFamilyTopObjection.messageFamily} blocks ${input.conversions.messageFamilyTopObjection.paidCashEur}€ cash path`,
       }
-    : topObjection
+      : topObjection
+
+  const paidCount = Number(input.conversions.overview.paidCount ?? 0)
+  const paidCashEur = Number(input.conversions.overview.paidCashEur ?? 0)
+  const cashReality: WeeklyRevenueReview['cashReality'] =
+    paidCount <= 0
+      ? {
+          verdict: 'no_cash_truth',
+          title: 'No paid truth yet',
+          detail: 'No paid cash has been attributed this week. Do not overfit offers or message families yet.',
+        }
+      : paidCount === 1
+        ? {
+            verdict: 'thin_cash',
+            title: 'Thin paid signal',
+            detail: `${paidCount} paid row · ${paidCashEur}€ collected. Keep decisions conservative until more paid truth lands.`,
+          }
+        : {
+            verdict: 'real_cash',
+            title: 'Paid cash signal is live',
+            detail: `${paidCount} paid rows · ${paidCashEur}€ collected. Weekly decisions can lean on paid truth.`,
+          }
 
   const bestMessageFamily =
     input.conversions.bestMessageFamily
@@ -220,7 +244,15 @@ export function buildWeeklyRevenueReview(input: {
   }
 
   let nextExperiment: WeeklyRevenueReview['nextExperiment']
-  if (input.conversions.segmentRepliesNoPay && input.conversions.segmentRepliesNoPay.replied > 0) {
+  if (paidCount <= 0 && input.conversions.bestSegmentToReply) {
+    nextExperiment = {
+      focus: 'segment',
+      title: `Get first paid proof on ${input.conversions.bestSegmentToReply.source}/${input.conversions.bestSegmentToReply.band}`,
+      detail: `Drive one segment to first paid cash before changing the offer stack.`,
+      source: input.conversions.bestSegmentToReply.source,
+      band: input.conversions.bestSegmentToReply.band,
+    }
+  } else if (input.conversions.segmentRepliesNoPay && input.conversions.segmentRepliesNoPay.replied > 0) {
     nextExperiment = {
       focus: 'segment',
       title: `Fix close friction on ${input.conversions.segmentRepliesNoPay.source}/${input.conversions.segmentRepliesNoPay.band}`,
@@ -270,6 +302,7 @@ export function buildWeeklyRevenueReview(input: {
     messageFamilyToStop,
     topObjection,
     highestValueObjection,
+    cashReality,
     mainLeak,
     nextExperiment,
   }

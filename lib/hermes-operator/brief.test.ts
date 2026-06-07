@@ -212,6 +212,7 @@ const baseContext: HermesOperatorContextSnapshot = {
       messageFamilyToStop: { title: 'founder-pain', detail: '4 replies but 0 paid' },
       topObjection: { title: 'budget', detail: 'founder-pain · 3 occurrences this week' },
       highestValueObjection: { title: 'budget', detail: 'founder-pain blocks 0€ cash path' },
+      cashReality: { verdict: 'thin_cash', title: 'Thin paid signal', detail: '1 paid row · 1800€ collected. Keep decisions conservative until more paid truth lands.' },
       mainLeak: { stageKey: 'meeting_to_close', title: 'Meeting → close', detail: '1 prospects lost here · 2 meetings · 1 paid' },
       nextExperiment: { focus: 'message_family', title: 'Tighten family founder-pain', detail: 'This family replies but does not convert to paid cash yet.' },
     },

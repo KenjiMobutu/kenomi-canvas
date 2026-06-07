@@ -112,6 +112,7 @@ describe('revenue insights route', () => {
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.insights.bestOffer.title).toBe('Outbound Sprint')
+    expect(body.insights.cashReality.title).toBe('No paid truth yet')
     expect(body.lastReview?.id).toBe('review-1')
     expect(body.lastReview?.summary.recommendation.bestSource.title).toBe('linkedin')
   })
@@ -144,6 +145,8 @@ describe('revenue insights route', () => {
       supabase: makeSupabase({
         recommendation: {
           bestOffer: { title: 'bootstrap offer', detail: 'bootstrap offer truth' },
+          bestSource: { title: 'smoke', detail: 'bootstrap source' },
+          nextExperiment: { title: 'Bootstrap experiment', detail: 'bootstrap next step' },
         },
       }),
       response: null,

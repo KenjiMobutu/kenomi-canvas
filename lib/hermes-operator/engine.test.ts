@@ -84,6 +84,7 @@ const fakeContext: HermesOperatorContextSnapshot = {
       messageFamilyToStop: { title: 'No family to stop yet', detail: 'Wait for clearer message-family cash underperformance before cutting one.' },
       topObjection: { title: 'No objection truth yet', detail: 'Classify replies to surface the main buying objection.' },
       highestValueObjection: { title: 'No objection truth yet', detail: 'Classify replies to surface the main buying objection.' },
+      cashReality: { verdict: 'no_cash_truth', title: 'No paid truth yet', detail: 'No paid cash has been attributed this week. Do not overfit offers or message families yet.' },
       mainLeak: { stageKey: 'meeting_to_close', title: 'Meeting → close', detail: '1 prospects lost here · 1 meetings · 0 won' },
       nextExperiment: {
         focus: 'segment',

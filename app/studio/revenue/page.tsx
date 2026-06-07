@@ -354,6 +354,9 @@ type WeeklyRevenueReviewSnapshot = {
   messageFamilyToStop: WeeklyRevenueReviewInsight
   topObjection: WeeklyRevenueReviewInsight
   highestValueObjection: WeeklyRevenueReviewInsight
+  cashReality: WeeklyRevenueReviewInsight & {
+    verdict: 'real_cash' | 'thin_cash' | 'no_cash_truth'
+  }
   mainLeak: WeeklyRevenueReviewInsight & {
     stageKey: string
   }
@@ -1585,6 +1588,18 @@ export default function RevenuePage() {
               ctaLabel="Open revenue"
             />
             <TruthCard
+              label="Cash reality"
+              title={weeklyReview.cashReality.title}
+              detail={weeklyReview.cashReality.detail}
+              tone={
+                weeklyReview.cashReality.verdict === 'real_cash'
+                  ? C.good
+                  : weeklyReview.cashReality.verdict === 'thin_cash'
+                    ? C.warn
+                    : C.bad
+              }
+            />
+            <TruthCard
               label="Best offer by cash"
               title={weeklyReview.bestOfferByCash.title}
               detail={weeklyReview.bestOfferByCash.detail}
@@ -1676,7 +1691,10 @@ export default function RevenuePage() {
                 Hermes recommendation
               </div>
               <div style={{ color: C.text, fontSize: 14, fontWeight: 700 }}>
-                Double down: {weeklyReview.bestOfferByCash.title}
+                Double down:{' '}
+                {weeklyReview.cashReality.verdict === 'no_cash_truth'
+                  ? 'No paid winner yet'
+                  : weeklyReview.bestOfferByCash.title}
               </div>
               <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>
                 Stop: {weeklyReview.messageFamilyToStop.title}

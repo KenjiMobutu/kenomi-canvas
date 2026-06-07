@@ -62,6 +62,20 @@ type SavedWeeklyReviewSummary = {
   operatorDecision: OperatorDecision | null
 }
 
+function isSyntheticWeeklyReview(value: unknown) {
+  if (hasSyntheticBusinessMarker(value)) return true
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const row = value as Record<string, unknown>
+  const bestOfferTitle = String((row.bestOffer as Record<string, unknown> | undefined)?.title ?? '')
+  const bestSourceTitle = String((row.bestSource as Record<string, unknown> | undefined)?.title ?? '')
+  const nextExperimentTitle = String((row.nextExperiment as Record<string, unknown> | undefined)?.title ?? '')
+  return (
+    bestOfferTitle.toLowerCase().includes('bootstrap') ||
+    bestSourceTitle.toLowerCase() === 'smoke' ||
+    nextExperimentTitle.toLowerCase().includes('bootstrap')
+  )
+}
+
 async function readTable<T>(
   query: PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 ): Promise<T[]> {
@@ -149,15 +163,17 @@ function normalizeSavedWeeklyReviewSummary(
     | undefined
 
   if (raw && typeof raw === 'object' && 'recommendation' in raw) {
+    const recommendation = isSyntheticWeeklyReview(raw.recommendation) ? fallback : raw.recommendation ?? fallback
+    const confirmedReview = isSyntheticWeeklyReview(raw.confirmedReview) ? null : raw.confirmedReview ?? null
     return {
-      recommendation: raw.recommendation ?? fallback,
-      confirmedReview: raw.confirmedReview ?? null,
+      recommendation,
+      confirmedReview,
       operatorDecision: raw.operatorDecision ?? null,
     }
   }
 
   return {
-    recommendation: (raw as WeeklyRevenueReview | null) ?? fallback,
+    recommendation: isSyntheticWeeklyReview(raw) ? fallback : (raw as WeeklyRevenueReview | null) ?? fallback,
     confirmedReview: null,
     operatorDecision: null,
   }

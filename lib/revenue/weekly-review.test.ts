@@ -387,11 +387,36 @@ describe('buildWeeklyRevenueReview', () => {
       title: 'budget block',
     })
     expect(review.highestValueObjection.detail).toContain('cash path')
+    expect(review.cashReality).toMatchObject({
+      verdict: 'thin_cash',
+      title: 'Thin paid signal',
+    })
     expect(review.mainLeak).toMatchObject({
       stageKey: 'contact_to_reply',
     })
     expect(review.nextExperiment).toMatchObject({
       title: 'Fix close friction on reddit/hot',
+      focus: 'segment',
+    })
+  })
+
+  it('forces the next experiment toward first paid proof when there is no paid truth yet', () => {
+    const snapshot = makeSnapshot()
+    snapshot.overview.paidCount = 0
+    snapshot.overview.paidCashEur = 0
+    snapshot.bestSegmentToPay = null
+
+    const review = buildWeeklyRevenueReview({
+      conversions: snapshot,
+      nowIso: '2026-05-28T12:00:00.000Z',
+    })
+
+    expect(review.cashReality).toMatchObject({
+      verdict: 'no_cash_truth',
+      title: 'No paid truth yet',
+    })
+    expect(review.nextExperiment).toMatchObject({
+      title: 'Get first paid proof on reddit/hot',
       focus: 'segment',
     })
   })

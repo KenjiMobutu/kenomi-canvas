@@ -115,6 +115,7 @@ const baseContext: HermesOperatorContextSnapshot = {
       messageFamilyToStop: { title: 'No family to stop yet', detail: 'Wait for clearer message-family cash underperformance before cutting one.' },
       topObjection: { title: 'budget', detail: '3 occurrences' },
       highestValueObjection: { title: 'budget', detail: '3 occurrences' },
+      cashReality: { verdict: 'thin_cash', title: 'Thin paid signal', detail: '1 paid row · 1200€ collected. Keep decisions conservative until more paid truth lands.' },
       mainLeak: { stageKey: 'meeting_to_close', title: 'Meeting → close', detail: '1 lost between meeting and cash' },
       nextExperiment: { focus: 'segment', title: 'Tighten reddit/warm close', detail: 'Replies exist but cash is stalled.', source: 'reddit', band: 'warm' },
     },
