@@ -23,6 +23,7 @@ import {
   type ProspectConversationEventRow,
 } from '@/lib/revenue/objections'
 import { deriveMessageMetadata } from '@/lib/revenue/message-truth'
+import { DIAGNOSTIC_CASH_LANE } from '@/lib/revenue/diagnostic-cash-lane'
 import {
   buildProspectStageActivity,
   buildProspectStagePatch,
@@ -299,6 +300,15 @@ export async function GET(request: Request) {
     {
       ok: errors.length === 0,
       prospects: filteredProspects,
+      filters: {
+        activeLane: DIAGNOSTIC_CASH_LANE.offer.slug,
+        status: statusFilter ?? 'all',
+        band: bandFilter ?? 'all',
+        source: sourceFilter ?? 'all',
+        contact: contactFilter ?? 'all',
+        tag: tagFilter,
+        q: search,
+      },
       settings: settings.data ?? null,
       summary: {
         total: filteredProspects.length,

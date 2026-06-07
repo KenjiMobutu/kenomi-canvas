@@ -92,6 +92,10 @@ type ProspectSummary = {
   warm: number
   cold: number
   contactable: number
+  laneContactable: number
+  laneAwaitingApproval: number
+  laneFollowUpDue: number
+  laneHotReplies: number
   missingContact: number
   activeQueue: number
   readyToContact: number
@@ -109,6 +113,9 @@ type ProspectSummary = {
 type ProspectApiPayload = {
   ok: boolean
   prospects: ProspectRow[]
+  filters?: {
+    activeLane?: string
+  }
   settings: ProspectSettings | null
   summary: ProspectSummary
   conversation?: {
@@ -433,6 +440,10 @@ export default function ProspectPage() {
     warm: 0,
     cold: 0,
     contactable: 0,
+    laneContactable: 0,
+    laneAwaitingApproval: 0,
+    laneFollowUpDue: 0,
+    laneHotReplies: 0,
     missingContact: 0,
     activeQueue: 0,
     readyToContact: 0,
@@ -711,6 +722,8 @@ export default function ProspectPage() {
       <Chip label={`${summary.total} leads`} tone="cold" />
       <Chip label={`${summary.activeQueue} active`} tone="hot" />
       <Chip label={`${summary.contactable} contactable`} tone="cold" />
+      <Chip label={`${summary.laneAwaitingApproval} lane awaiting`} tone="warm" />
+      <Chip label={`${summary.laneFollowUpDue} lane due`} tone="warm" />
       <Chip label={`${summary.missingContact} missing`} tone="warm" />
       <Chip label={`${summary.hot} hot`} tone="hot" />
       <Chip label={`${summary.awaitingApproval} awaiting`} tone="warm" />
@@ -811,7 +824,7 @@ export default function ProspectPage() {
     <CkShell
       breadcrumb="Studio / Prospects"
       title="Prospect Command"
-      subtitle="Acquisition loop, scoring, outreach drafts, and CRM state"
+      subtitle="300EUR diagnostic queue for contactable freelancers / small agencies"
       actions={headerActions}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -856,11 +869,13 @@ export default function ProspectPage() {
                   { label: 'Total', value: summary.total, color: text },
                   { label: 'Hot', value: summary.hot, color: rose },
                   { label: 'Active', value: summary.activeQueue, color: emerald },
+                  { label: 'Lane', value: summary.laneContactable, color: cyan },
                   { label: 'Contactable', value: summary.contactable, color: cyan },
                   { label: 'Missing', value: summary.missingContact, color: amber },
                   { label: 'Due', value: summary.dueFollowups, color: amber },
                   { label: 'Ready', value: summary.readyToContact, color: emerald },
-                  { label: 'Awaiting', value: summary.awaitingApproval, color: amber },
+                  { label: 'Awaiting', value: summary.laneAwaitingApproval, color: amber },
+                  { label: 'Lane due', value: summary.laneFollowUpDue, color: amber },
                   { label: 'Drafted', value: summary.draftCreated, color: cyan },
                   { label: 'Won', value: summary.won, color: emerald },
                   { label: 'Lost', value: summary.lost, color: rose },
