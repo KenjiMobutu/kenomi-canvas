@@ -196,6 +196,9 @@ export function buildProspectViews(input: {
       metadata,
     })
     const contact = deriveContactState(row)
+    if (contact.contactStatus === 'missing_contact' && pipelineStatus === 'follow_up_due') {
+      pipelineStatus = 'sent'
+    }
 
     return {
       ...row,
@@ -241,15 +244,21 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
         acc.activeQueue += 1
       }
       if (status === 'ready_to_contact') acc.readyToContact += 1
-      if (nextFollowupAt && new Date(nextFollowupAt).getTime() <= nowMs) acc.dueFollowups += 1
-      if (row.approval_status === 'awaiting_approval') acc.awaitingApproval += 1
+      if (row.contact_status === 'contactable' && nextFollowupAt && new Date(nextFollowupAt).getTime() <= nowMs) {
+        acc.dueFollowups += 1
+      }
+      if (row.contact_status === 'contactable' && row.approval_status === 'awaiting_approval') {
+        acc.awaitingApproval += 1
+      }
       if (row.approval_status === 'approved_to_send') acc.approvedToSend += 1
       if (row.pipeline_status === 'draft_created') acc.draftCreated += 1
       if (row.pipeline_status === 'sent') acc.sent += 1
       if (row.pipeline_status === 'replied') acc.replied += 1
       if (row.pipeline_status === 'won') acc.won += 1
       if (row.pipeline_status === 'lost') acc.lost += 1
-      if (row.pipeline_status === 'follow_up_due') acc.followUpDue += 1
+      if (row.contact_status === 'contactable' && row.pipeline_status === 'follow_up_due') {
+        acc.followUpDue += 1
+      }
       return acc
     },
     {

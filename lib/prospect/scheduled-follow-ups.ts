@@ -15,6 +15,7 @@ import {
 } from '@/lib/prospect/follow-up'
 import { buildGmailDraftPayload } from '@/lib/prospect/gmail-draft'
 import type { ProspectOutreachKind } from '@/lib/prospect/types'
+import { isValidEmail } from '@/lib/validation'
 
 interface QueryBuilder {
   select(columns?: string): QueryBuilder
@@ -219,6 +220,8 @@ export async function processDueProspectFollowUps(input: {
 
   for (const row of rows) {
     if (!shouldGenerateFollowUp({ ...row, nowIso: input.nowIso })) continue
+    const contactEmail = typeof row.contact_email === 'string' ? row.contact_email.trim() : ''
+    if (!contactEmail || !isValidEmail(contactEmail)) continue
 
     const metadata =
       row.metadata && typeof row.metadata === 'object'

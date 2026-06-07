@@ -87,6 +87,29 @@ describe('buildProspectViews', () => {
     expect(view.operator_notes).toBe('Waiting for reply')
     expect(view.activity).toHaveLength(1)
   })
+
+  it('keeps missing-contact prospects out of the due follow-up queue', () => {
+    const [view] = buildProspectViews({
+      prospects: [
+        {
+          id: 'prospect-1',
+          company_name: 'Acme',
+          source: 'linkedin',
+          band: 'warm',
+          score: 71,
+          pipeline_status: 'follow_up_due',
+          next_followup_at: '2026-05-25T10:00:00.000Z',
+          metadata: {},
+        },
+      ],
+      actions: [],
+      approvals: [],
+      nowIso: '2026-05-26T12:00:00.000Z',
+    })
+
+    expect(view.contact_status).toBe('missing_contact')
+    expect(view.pipeline_status).toBe('sent')
+  })
 })
 
 describe('summarizeProspects', () => {
@@ -161,8 +184,8 @@ describe('summarizeProspects', () => {
       missingContact: 1,
       activeQueue: 1,
       readyToContact: 1,
-      dueFollowups: 1,
-      awaitingApproval: 1,
+      dueFollowups: 0,
+      awaitingApproval: 0,
       approvedToSend: 1,
       draftCreated: 1,
       sent: 0,
@@ -289,6 +312,47 @@ describe('summarizeProspects', () => {
       activeQueue: 1,
       followUpDue: 1,
       won: 1,
+    })
+  })
+
+  it('does not count missing-contact follow-up dues in the active queue', () => {
+    const summary = summarizeProspects([
+      {
+        id: 'prospect-1',
+        band: 'warm',
+        status: 'follow_up',
+        contact_status: 'missing_contact',
+        missing_contact_fields: ['contact_email'],
+        pipeline_status: 'follow_up_due',
+        approval_status: 'no_approval',
+        outreach_action_id: null,
+        outreach_approval_id: null,
+        draft_provider: 'gmail',
+        draft_external_id: 'draft-1',
+        operator_notes: '',
+        next_action: '',
+        last_activity_at: null,
+        next_followup_at: '2026-05-25T08:00:00.000Z',
+        tags: [],
+        activity: [],
+        summary: null,
+        pain_points: [],
+        cta: null,
+        follow_up_count: 1,
+        last_outreach_kind: 'follow_up_2',
+        last_follow_up_generated_at: null,
+        follow_up_version: 1,
+        message_family: 'unknown_follow_up',
+        message_key: 'unknown_follow_up_default',
+      },
+    ])
+
+    expect(summary).toMatchObject({
+      contactable: 0,
+      missingContact: 1,
+      activeQueue: 0,
+      dueFollowups: 0,
+      followUpDue: 0,
     })
   })
 })
