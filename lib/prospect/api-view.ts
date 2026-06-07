@@ -1,6 +1,7 @@
 import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
 import { asProspectPipelineStatus, derivePipelineStatus, normalizeProspectTags } from '@/lib/prospect/crm-fields'
 import { deriveMessageMetadata } from '@/lib/revenue/message-truth'
+import { isValidEmail } from '@/lib/validation'
 import type {
   ProspectActivityEvent,
   ProspectActivityRow,
@@ -48,6 +49,9 @@ export interface ProspectSummaryView {
   hot: number
   warm: number
   cold: number
+  contactable: number
+  missingContact: number
+  activeQueue: number
   readyToContact: number
   dueFollowups: number
   awaitingApproval: number
@@ -61,6 +65,7 @@ export interface ProspectSummaryView {
 }
 
 export interface ProspectRecordView extends ProspectRecordRow {
+  contact_email?: string | null
   offer_id?: string | null
   offer_variant?: string | null
   outreach_angle?: string | null
@@ -88,6 +93,18 @@ export interface ProspectRecordView extends ProspectRecordRow {
   follow_up_version: number
   message_family: string
   message_key: string
+  contact_status: 'contactable' | 'missing_contact'
+  missing_contact_fields: string[]
+}
+
+function deriveContactState(row: ProspectRecordRow) {
+  const missing: string[] = []
+  const contactEmail = typeof row.contact_email === 'string' ? row.contact_email.trim() : ''
+  if (!contactEmail || !isValidEmail(contactEmail)) missing.push('contact_email')
+  return {
+    contactStatus: missing.length === 0 ? ('contactable' as const) : ('missing_contact' as const),
+    missingContactFields: missing,
+  }
 }
 
 function pickActionForProspect(
@@ -178,6 +195,7 @@ export function buildProspectViews(input: {
       source: typeof row.source === 'string' ? row.source : null,
       metadata,
     })
+    const contact = deriveContactState(row)
 
     return {
       ...row,
@@ -202,6 +220,8 @@ export function buildProspectViews(input: {
       follow_up_version: followUpVersion,
       message_family: message.messageFamily,
       message_key: message.messageKey,
+      contact_status: contact.contactStatus,
+      missing_contact_fields: contact.missingContactFields,
     }
   })
 }
@@ -215,6 +235,11 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       if (row.band === 'hot') acc.hot += 1
       if (row.band === 'warm') acc.warm += 1
       if (row.band === 'cold') acc.cold += 1
+      if (row.contact_status === 'contactable') acc.contactable += 1
+      if (row.contact_status === 'missing_contact') acc.missingContact += 1
+      if (row.contact_status === 'contactable' && !['won', 'lost'].includes(row.pipeline_status)) {
+        acc.activeQueue += 1
+      }
       if (status === 'ready_to_contact') acc.readyToContact += 1
       if (nextFollowupAt && new Date(nextFollowupAt).getTime() <= nowMs) acc.dueFollowups += 1
       if (row.approval_status === 'awaiting_approval') acc.awaitingApproval += 1
@@ -231,6 +256,9 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       hot: 0,
       warm: 0,
       cold: 0,
+      contactable: 0,
+      missingContact: 0,
+      activeQueue: 0,
       readyToContact: 0,
       dueFollowups: 0,
       awaitingApproval: 0,

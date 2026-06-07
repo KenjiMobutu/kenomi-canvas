@@ -46,6 +46,8 @@ type ProspectRow = {
   outreach_angle?: string | null
   message_family?: string
   message_key?: string
+  contact_status?: 'contactable' | 'missing_contact'
+  missing_contact_fields?: string[]
   last_contacted_at: string | null
   next_followup_at: string | null
   metadata: Record<string, unknown> | null
@@ -89,6 +91,9 @@ type ProspectSummary = {
   hot: number
   warm: number
   cold: number
+  contactable: number
+  missingContact: number
+  activeQueue: number
   readyToContact: number
   dueFollowups: number
   awaitingApproval: number
@@ -277,6 +282,7 @@ export default function ProspectPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [bandFilter, setBandFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
+  const [contactFilter, setContactFilter] = useState('all')
   const [tagFilter, setTagFilter] = useState('')
   const [searchFilter, setSearchFilter] = useState('')
   const [crmDrafts, setCrmDrafts] = useState<
@@ -326,6 +332,7 @@ export default function ProspectPage() {
       if (statusFilter !== 'all') prospectsUrl.searchParams.set('status', statusFilter)
       if (bandFilter !== 'all') prospectsUrl.searchParams.set('band', bandFilter)
       if (sourceFilter !== 'all') prospectsUrl.searchParams.set('source', sourceFilter)
+      if (contactFilter !== 'all') prospectsUrl.searchParams.set('contact', contactFilter)
       if (tagFilter.trim()) prospectsUrl.searchParams.set('tag', tagFilter.trim().toLowerCase())
       if (searchFilter.trim()) prospectsUrl.searchParams.set('q', searchFilter.trim())
 
@@ -409,7 +416,7 @@ export default function ProspectPage() {
       setError(nextError)
       setLoading(false)
     }
-  }, [bandFilter, searchFilter, sourceFilter, statusFilter, tagFilter])
+  }, [bandFilter, contactFilter, searchFilter, sourceFilter, statusFilter, tagFilter])
 
   useEffect(() => {
     if (!user) return
@@ -424,6 +431,9 @@ export default function ProspectPage() {
     hot: 0,
     warm: 0,
     cold: 0,
+    contactable: 0,
+    missingContact: 0,
+    activeQueue: 0,
     readyToContact: 0,
     dueFollowups: 0,
     awaitingApproval: 0,
@@ -440,7 +450,18 @@ export default function ProspectPage() {
     blockers: [] as Array<{ type: string; label: string; count: number }>,
   }
 
-  const topProspects = useMemo(() => prospects.slice(0, 8), [prospects])
+  const topProspects = useMemo(
+    () =>
+      [...prospects]
+        .sort((left, right) => {
+          const leftActive = left.contact_status === 'contactable' && !['won', 'lost'].includes(left.pipeline_status)
+          const rightActive =
+            right.contact_status === 'contactable' && !['won', 'lost'].includes(right.pipeline_status)
+          return Number(rightActive) - Number(leftActive)
+        })
+        .slice(0, 8),
+    [prospects]
+  )
   const recentJobs = useMemo(() => jobs.slice(0, 6), [jobs])
   const sources = settings?.prospect_sources?.length
     ? settings.prospect_sources
@@ -644,6 +665,9 @@ export default function ProspectPage() {
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       <Chip label={`${summary.total} leads`} tone="cold" />
+      <Chip label={`${summary.activeQueue} active`} tone="hot" />
+      <Chip label={`${summary.contactable} contactable`} tone="cold" />
+      <Chip label={`${summary.missingContact} missing`} tone="warm" />
       <Chip label={`${summary.hot} hot`} tone="hot" />
       <Chip label={`${summary.awaitingApproval} awaiting`} tone="warm" />
       <Chip label={`${summary.approvedToSend} approved`} tone="hot" />
@@ -746,13 +770,16 @@ export default function ProspectPage() {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
+                  gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, 1fr)',
                   gap: 10,
                 }}
               >
                 {[
                   { label: 'Total', value: summary.total, color: text },
                   { label: 'Hot', value: summary.hot, color: rose },
+                  { label: 'Active', value: summary.activeQueue, color: emerald },
+                  { label: 'Contactable', value: summary.contactable, color: cyan },
+                  { label: 'Missing', value: summary.missingContact, color: amber },
                   { label: 'Due', value: summary.dueFollowups, color: amber },
                   { label: 'Ready', value: summary.readyToContact, color: emerald },
                   { label: 'Awaiting', value: summary.awaitingApproval, color: amber },
@@ -1019,7 +1046,7 @@ export default function ProspectPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, minmax(0, 1fr))',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(6, minmax(0, 1fr))',
                 gap: 10,
               }}
             >
@@ -1099,6 +1126,30 @@ export default function ProspectPage() {
                   onChange={(event) => setSourceFilter(event.target.value)}
                 >
                   {['all', ...sources].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: muted2,
+                    letterSpacing: '.14em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Contact
+                </span>
+                <select
+                  className="ck-input"
+                  value={contactFilter}
+                  onChange={(event) => setContactFilter(event.target.value)}
+                >
+                  {['all', 'contactable', 'missing_contact'].map((value) => (
                     <option key={value} value={value}>
                       {value}
                     </option>
@@ -1255,6 +1306,14 @@ export default function ProspectPage() {
 
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <Chip label={`status ${prospect.status}`} tone={bandTone(prospect.band)} />
+                      <Chip
+                        label={
+                          prospect.contact_status === 'contactable'
+                            ? 'contactable'
+                            : `missing ${prospect.missing_contact_fields?.join('+') ?? 'contact'}`
+                        }
+                        tone={prospect.contact_status === 'contactable' ? 'cold' : 'warm'}
+                      />
                       <Chip label={`pipeline ${prospect.pipeline_status}`} tone="cold" />
                       <Chip
                         label={approvalLabel(prospect.approval_status)}

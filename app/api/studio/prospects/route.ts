@@ -183,6 +183,7 @@ export async function GET(request: Request) {
   const statusFilter = url.searchParams.get('status')
   const bandFilter = url.searchParams.get('band')
   const sourceFilter = url.searchParams.get('source')
+  const contactFilter = url.searchParams.get('contact')
   const tagFilter = url.searchParams.get('tag')?.trim().toLowerCase() ?? ''
   const search = url.searchParams.get('q')?.trim().toLowerCase() ?? ''
 
@@ -264,6 +265,8 @@ export async function GET(request: Request) {
       if (statusFilter && prospect.pipeline_status !== statusFilter) return false
       if (bandFilter && prospect.band !== bandFilter) return false
       if (sourceFilter && prospect.source !== sourceFilter) return false
+      if (contactFilter === 'contactable' && prospect.contact_status !== 'contactable') return false
+      if (contactFilter === 'missing_contact' && prospect.contact_status !== 'missing_contact') return false
       if (tagFilter && !prospect.tags.includes(tagFilter)) return false
       if (search) {
         const haystack = [

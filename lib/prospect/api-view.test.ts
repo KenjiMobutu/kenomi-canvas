@@ -35,6 +35,8 @@ describe('buildProspectViews', () => {
     expect(prospects[0]).toMatchObject({
       pipeline_status: 'awaiting_approval',
       approval_status: 'awaiting_approval',
+      contact_status: 'missing_contact',
+      missing_contact_fields: ['contact_email'],
       outreach_action_id: 'action-1',
       outreach_approval_id: 'approval-1',
       summary: 'Need faster lead qualification.',
@@ -50,6 +52,7 @@ describe('buildProspectViews', () => {
           id: 'prospect-1',
           company_name: 'Acme',
           source: 'linkedin',
+          contact_email: 'lea@acme.test',
           band: 'warm',
           score: 71,
           pipeline_status: 'sent',
@@ -79,6 +82,7 @@ describe('buildProspectViews', () => {
     })
 
     expect(view.pipeline_status).toBe('follow_up_due')
+    expect(view.contact_status).toBe('contactable')
     expect(view.tags).toEqual(['saas'])
     expect(view.operator_notes).toBe('Waiting for reply')
     expect(view.activity).toHaveLength(1)
@@ -93,6 +97,8 @@ describe('summarizeProspects', () => {
           id: 'prospect-1',
           band: 'hot',
           status: 'ready_to_contact',
+          contact_status: 'missing_contact',
+          missing_contact_fields: ['contact_email'],
           next_followup_at: '2026-05-24T08:00:00.000Z',
           pipeline_status: 'awaiting_approval',
           approval_status: 'awaiting_approval',
@@ -119,6 +125,8 @@ describe('summarizeProspects', () => {
           id: 'prospect-2',
           band: 'warm',
           status: 'follow_up',
+          contact_status: 'contactable',
+          missing_contact_fields: [],
           next_followup_at: '2026-05-26T08:00:00.000Z',
           pipeline_status: 'draft_created',
           approval_status: 'approved_to_send',
@@ -149,6 +157,9 @@ describe('summarizeProspects', () => {
       hot: 1,
       warm: 1,
       cold: 0,
+      contactable: 1,
+      missingContact: 1,
+      activeQueue: 1,
       readyToContact: 1,
       dueFollowups: 1,
       awaitingApproval: 1,
@@ -171,6 +182,7 @@ describe('summarizeProspects', () => {
           draft_provider: 'gmail',
           draft_external_id: 'draft-1',
           metadata: { activity: [] },
+          contact_email: 'lea@beta.test',
         },
       ],
       actions: [],
@@ -195,6 +207,7 @@ describe('summarizeProspects', () => {
           draft_external_id: 'draft-2',
           last_outreach_kind: 'follow_up_2',
           metadata: { activity: [] },
+          contact_email: 'lea@beta.test',
         },
       ],
       actions: [],
@@ -216,6 +229,8 @@ describe('summarizeProspects', () => {
           id: 'prospect-1',
           band: 'warm',
           status: 'sent',
+          contact_status: 'contactable',
+          missing_contact_fields: [],
           pipeline_status: 'follow_up_due',
           approval_status: 'approved_to_send',
           outreach_action_id: 'action-1',
@@ -241,6 +256,8 @@ describe('summarizeProspects', () => {
           id: 'prospect-2',
           band: 'hot',
           status: 'won',
+          contact_status: 'missing_contact',
+          missing_contact_fields: ['contact_email'],
           pipeline_status: 'won',
           approval_status: 'no_approval',
           outreach_action_id: null,
@@ -267,6 +284,9 @@ describe('summarizeProspects', () => {
     )
 
     expect(summary).toMatchObject({
+      contactable: 1,
+      missingContact: 1,
+      activeQueue: 1,
       followUpDue: 1,
       won: 1,
     })
