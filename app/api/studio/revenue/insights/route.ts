@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { requireAllowedUser } from '@/lib/auth-server'
 import { apiError } from '@/lib/api-response'
 import { buildConversionTruthSnapshot } from '@/lib/revenue/conversion-truth'
+import { hasSyntheticBusinessMarker } from '@/lib/revenue/synthetic-data'
 import { buildWeeklyRevenueReview, type WeeklyRevenueReview } from '@/lib/revenue/weekly-review'
 
 type OfferRow = {
@@ -12,6 +13,7 @@ type OfferRow = {
 
 type ProspectRow = {
   id: string
+  company_name?: string | null
   source?: string | null
   band?: string | null
   offer_id?: string | null
@@ -19,6 +21,7 @@ type ProspectRow = {
   outreach_angle?: string | null
   pipeline_status?: string | null
   created_at?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 type ProspectActivityRow = {
@@ -77,7 +80,9 @@ async function buildGeneratedReview(supabase: any, userId: string) {
     readTable<ProspectRow>(
       supabase
         .from('prospects')
-        .select('id, source, band, offer_id, offer_variant, outreach_angle, pipeline_status, created_at')
+        .select(
+          'id, company_name, source, band, offer_id, offer_variant, outreach_angle, pipeline_status, created_at, metadata'
+        )
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(500)
@@ -125,6 +130,14 @@ function normalizeSavedWeeklyReviewSummary(
   input: unknown,
   fallback: WeeklyRevenueReview
 ): SavedWeeklyReviewSummary {
+  if (hasSyntheticBusinessMarker(input)) {
+    return {
+      recommendation: fallback,
+      confirmedReview: null,
+      operatorDecision: null,
+    }
+  }
+
   const raw = input as
     | {
         recommendation?: WeeklyRevenueReview

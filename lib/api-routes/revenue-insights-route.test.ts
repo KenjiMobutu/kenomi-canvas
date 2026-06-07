@@ -15,7 +15,7 @@ vi.mock('@/lib/auth-server', () => ({
 
 import { GET, POST } from '@/app/api/studio/revenue/insights/route'
 
-function makeSupabase() {
+function makeSupabase(summaryJson: Record<string, unknown> = { bestSource: { title: 'linkedin' } }) {
   const tables: Record<string, unknown> = {
     offers: [{ id: 'offer-a', name: 'Outbound Sprint' }],
     prospects: [
@@ -43,7 +43,7 @@ function makeSupabase() {
         week_start: '2026-05-26',
         week_end: '2026-06-01',
         status: 'saved',
-        summary_json: { bestSource: { title: 'linkedin' } },
+        summary_json: summaryJson,
         created_at: '2026-05-28T12:00:00.000Z',
       },
     ],
@@ -136,5 +136,24 @@ describe('revenue insights route', () => {
     expect(body.review.status).toBe('saved')
     expect(body.review.summary.recommendation.bestOffer.title).toBe('Outbound Sprint')
     expect(body.review.summary.operatorDecision.doubleDown).toBe('LinkedIn warm segment')
+  })
+
+  it('drops synthetic saved weekly review summaries from the operator view', async () => {
+    mockedRequireAllowedUser.mockResolvedValueOnce({
+      user: { id: 'user-1' },
+      supabase: makeSupabase({
+        recommendation: {
+          bestOffer: { title: 'bootstrap offer', detail: 'bootstrap offer truth' },
+        },
+      }),
+      response: null,
+    })
+
+    const response = await GET()
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.lastReview?.summary.recommendation.bestOffer.title).toBe('Outbound Sprint')
+    expect(body.lastReview?.summary.confirmedReview).toBeNull()
   })
 })

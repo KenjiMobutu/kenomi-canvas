@@ -15,6 +15,13 @@ import { buildWeeklyRevenueReview } from '@/lib/revenue/weekly-review'
 import { buildCashOutcomeSnapshot } from '@/lib/studio/cash-outcomes'
 import type { HermesOperatorContextSnapshot } from '@/lib/hermes-operator/types'
 import { filterRowsByVentureIds } from '@/lib/revenue/ownership'
+import {
+  hasSyntheticBusinessMarker,
+  isSyntheticOfferRow,
+  isSyntheticPaymentAttributionRow,
+  isSyntheticProspectRow,
+  isSyntheticVentureRow,
+} from '@/lib/revenue/synthetic-data'
 
 interface QueryResult<T> {
   data: T | null
@@ -40,6 +47,7 @@ type OfferRow = {
 
 type ProspectRow = {
   id: string
+  company_name?: string | null
   source?: string | null
   band?: string | null
   offer_id?: string | null
@@ -160,7 +168,7 @@ export async function buildHermesOperatorContext(input: {
         input.supabase
           .from('prospects')
           .select(
-            'id, source, band, offer_id, offer_variant, outreach_angle, pipeline_status, created_at, next_followup_at, metadata'
+            'id, company_name, source, band, offer_id, offer_variant, outreach_angle, pipeline_status, created_at, next_followup_at, metadata'
           )
           .eq('user_id', input.userId)
           .order('updated_at', { ascending: false })
@@ -278,29 +286,57 @@ export async function buildHermesOperatorContext(input: {
       ),
     ])
 
+  const syntheticOfferIds = new Set(offers.filter((offer) => isSyntheticOfferRow(offer)).map((offer) => offer.id))
+  const filteredProspects = prospects.filter(
+    (prospect) =>
+      !isSyntheticProspectRow(prospect) &&
+      !(prospect.offer_id && syntheticOfferIds.has(prospect.offer_id))
+  )
+  const excludedProspectIds = new Set(
+    prospects.filter((prospect) => !filteredProspects.includes(prospect)).map((prospect) => prospect.id)
+  )
+  const filteredActivities = activities.filter(
+    (activity) => !activity.prospect_id || !excludedProspectIds.has(activity.prospect_id)
+  )
+  const filteredConversationEvents = conversationEvents.filter(
+    (event) => !event.prospect_id || !excludedProspectIds.has(event.prospect_id)
+  )
+  const filteredPaymentAttributions = paymentAttributions.filter(
+    (row) =>
+      !isSyntheticPaymentAttributionRow(row) &&
+      !syntheticOfferIds.has(row.offer_id?.trim() ?? '') &&
+      !excludedProspectIds.has(row.prospect_id?.trim() ?? '')
+  )
+  const filteredVentures = ventures.filter((venture) => !isSyntheticVentureRow(venture))
+  const filteredVentureIds = filteredVentures.map((venture) => venture.id)
+
   const conversions: ConversionTruthSnapshot = buildConversionTruthSnapshot({
     offers,
-    prospects,
-    activities,
-    conversationEvents,
-    paymentAttributions,
+    prospects: filteredProspects,
+    activities: filteredActivities,
+    conversationEvents: filteredConversationEvents,
+    paymentAttributions: filteredPaymentAttributions,
   })
-  const ownedPayments = filterRowsByVentureIds(payments, ventureIds)
-  const ownedLandingPages = filterRowsByVentureIds(landingPages, ventureIds)
-  const ownedDecisions = filterRowsByVentureIds(decisions, ventureIds)
+  const ownedPayments = filterRowsByVentureIds(payments, filteredVentureIds).filter(
+    (payment) => !hasSyntheticBusinessMarker(payment.checkout_url)
+  )
+  const ownedLandingPages = filterRowsByVentureIds(landingPages, filteredVentureIds)
+  const ownedDecisions = filterRowsByVentureIds(decisions, filteredVentureIds).filter(
+    (decision) => !hasSyntheticBusinessMarker(decision.reason)
+  )
   const weeklyReview = buildWeeklyRevenueReview({
     conversions,
     nowIso: now.toISOString(),
   })
   const outcomes = buildCashOutcomeSnapshot({
-    activities,
+    activities: filteredActivities,
     payments: ownedPayments,
-    prospects,
+    prospects: filteredProspects,
     nowIso: now.toISOString(),
   })
   const loopSnapshot = buildRevenueLoopSnapshot({
-    pipelines,
-    ventures,
+    pipelines: pipelines.filter((pipeline) => !pipeline.venture_id || filteredVentureIds.includes(pipeline.venture_id)),
+    ventures: filteredVentures,
     landingPages: ownedLandingPages,
     payments: ownedPayments,
     campaignDrafts,
@@ -319,19 +355,19 @@ export async function buildHermesOperatorContext(input: {
       loop: loopSnapshot.summary,
     },
     prospects: {
-      total: prospects.length,
+      total: filteredProspects.length,
       awaitingApproval: countWhere(
-        prospects,
+        filteredProspects,
         (prospect) => (prospect.pipeline_status ?? '').trim() === 'awaiting_approval'
       ),
       pendingApprovals: countWhere(approvals, (approval) => approval.status === 'pending'),
       followUpsDue: countWhere(
-        prospects,
+        filteredProspects,
         (prospect) =>
           isDue(prospect.next_followup_at, now) &&
           !['won', 'lost'].includes((prospect.pipeline_status ?? '').trim())
       ),
-      hotLeads: countWhere(prospects, (prospect) => (prospect.band ?? '').trim() === 'hot'),
+      hotLeads: countWhere(filteredProspects, (prospect) => (prospect.band ?? '').trim() === 'hot'),
     },
     automation: {
       autonomyStatus: control?.status === 'paused' ? 'paused' : 'active',

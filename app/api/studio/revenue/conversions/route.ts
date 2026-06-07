@@ -28,7 +28,9 @@ export async function GET() {
       readTable(
         supabase
           .from('prospects')
-          .select('id, source, band, offer_id, offer_variant, outreach_angle, pipeline_status, created_at, metadata')
+          .select(
+            'id, company_name, source, band, offer_id, offer_variant, outreach_angle, pipeline_status, created_at, metadata'
+          )
           .eq('user_id', userId)
           .order('updated_at', { ascending: false })
           .limit(500)

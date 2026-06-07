@@ -1,5 +1,10 @@
 import { averageDaysFromMs, averageHoursFromMs, percentage } from '@/lib/revenue/funnel-metrics'
 import { buildMessageTruthSnapshot, type MessageTruthRow } from '@/lib/revenue/message-truth'
+import {
+  isSyntheticOfferRow,
+  isSyntheticPaymentAttributionRow,
+  isSyntheticProspectRow,
+} from '@/lib/revenue/synthetic-data'
 
 type OfferRow = {
   id: string
@@ -8,6 +13,7 @@ type OfferRow = {
 
 type ProspectRow = {
   id: string
+  company_name?: string | null
   source?: string | null
   band?: string | null
   offer_id?: string | null
@@ -280,8 +286,33 @@ export function buildConversionTruthSnapshot(input: {
   conversationEvents: ConversationEventRow[]
   paymentAttributions?: PaymentAttributionRow[]
 }): ConversionTruthSnapshot {
+  const syntheticOfferIds = new Set(
+    input.offers.filter((offer) => isSyntheticOfferRow(offer)).map((offer) => offer.id)
+  )
+  const prospects = input.prospects.filter(
+    (prospect) =>
+      !isSyntheticProspectRow(prospect) &&
+      !(prospect.offer_id && syntheticOfferIds.has(prospect.offer_id))
+  )
+  const excludedProspectIds = new Set(
+    input.prospects.filter((prospect) => !prospects.includes(prospect)).map((prospect) => prospect.id)
+  )
+  const offers = input.offers.filter((offer) => !syntheticOfferIds.has(offer.id))
+  const activities = input.activities.filter(
+    (activity) => !activity.prospect_id || !excludedProspectIds.has(activity.prospect_id)
+  )
+  const conversationEvents = input.conversationEvents.filter(
+    (event) => !event.prospect_id || !excludedProspectIds.has(event.prospect_id)
+  )
+  const paymentAttributions = (input.paymentAttributions ?? []).filter(
+    (row) =>
+      !isSyntheticPaymentAttributionRow(row) &&
+      !syntheticOfferIds.has(row.offer_id?.trim() ?? '') &&
+      !excludedProspectIds.has(row.prospect_id?.trim() ?? '')
+  )
+
   const offerNames = new Map(
-    input.offers.map((offer) => [offer.id, normalize(offer.name, 'Unassigned offer')])
+    offers.map((offer) => [offer.id, normalize(offer.name, 'Unassigned offer')])
   )
 
   const firstSentAt = new Map<string, number>()
@@ -292,7 +323,7 @@ export function buildConversionTruthSnapshot(input: {
   const paidCashByProspect = new Map<string, number>()
   const attributionCountByProspect = new Map<string, number>()
 
-  for (const activity of input.activities) {
+  for (const activity of activities) {
     const prospectId = activity.prospect_id?.trim()
     const createdAt = toTimestamp(activity.created_at)
     if (!prospectId || !Number.isFinite(createdAt)) continue
@@ -320,7 +351,7 @@ export function buildConversionTruthSnapshot(input: {
   const latestConversationType = new Map<string, string>()
   const objectionCounts = new Map<string, number>()
   const lostReasonCounts = new Map<string, number>()
-  for (const event of input.conversationEvents) {
+  for (const event of conversationEvents) {
     const prospectId = event.prospect_id?.trim()
     const eventType = event.event_type?.trim()
     const createdAt = toTimestamp(event.created_at)
@@ -339,12 +370,19 @@ export function buildConversionTruthSnapshot(input: {
       lostReasonCounts.set(eventType, (lostReasonCounts.get(eventType) ?? 0) + 1)
     }
     const currentType = latestConversationType.get(prospectId)
-    if (!currentType || (createdAt >= toTimestamp(input.conversationEvents.find((row) => row.prospect_id === prospectId && row.event_type === currentType)?.created_at))) {
+    if (
+      !currentType ||
+      (createdAt >=
+        toTimestamp(
+          conversationEvents.find((row) => row.prospect_id === prospectId && row.event_type === currentType)
+            ?.created_at
+        ))
+    ) {
       latestConversationType.set(prospectId, eventType)
     }
   }
 
-  for (const row of input.paymentAttributions ?? []) {
+  for (const row of paymentAttributions) {
     const prospectId = row.prospect_id?.trim()
     const createdAt = toTimestamp(row.attributed_at ?? row.created_at)
     if (!prospectId) continue
@@ -399,7 +437,7 @@ export function buildConversionTruthSnapshot(input: {
   const leadToReplyMs: number[] = []
   const replyToCloseMs: number[] = []
 
-  for (const prospect of input.prospects) {
+  for (const prospect of prospects) {
     const prospectId = prospect.id
     const offerId = prospect.offer_id?.trim() || null
     const offerName = offerId ? (offerNames.get(offerId) ?? 'Assigned offer') : 'Unassigned offer'
@@ -635,15 +673,15 @@ export function buildConversionTruthSnapshot(input: {
     : null
 
   const messageTruth = buildMessageTruthSnapshot({
-    prospects: input.prospects.map((prospect) => ({
+    prospects: prospects.map((prospect) => ({
       id: prospect.id,
       source: prospect.source,
       outreach_angle: prospect.outreach_angle,
       last_outreach_kind: (prospect.metadata?.last_outreach_kind as string | undefined) ?? null,
       metadata: prospect.metadata as Record<string, unknown> | null | undefined,
     })),
-    conversationEvents: input.conversationEvents,
-    paymentAttributions: input.paymentAttributions ?? [],
+    conversationEvents,
+    paymentAttributions,
   })
 
   const bestOffer = [...offerBreakdown].sort(sortByBusinessValue)[0] ?? null

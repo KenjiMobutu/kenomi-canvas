@@ -169,4 +169,75 @@ describe('conversion truth snapshot', () => {
       paidRate: 50,
     })
   })
+
+  it('excludes smoke and bootstrap rows from conversion truth', () => {
+    const snapshot = buildConversionTruthSnapshot({
+      offers: [
+        { id: 'offer-a', name: 'Outbound Sprint' },
+        { id: 'offer-smoke', name: 'bootstrap offer' },
+      ],
+      prospects: [
+        {
+          id: 'real-1',
+          company_name: 'Acme Studio',
+          offer_id: 'offer-a',
+          outreach_angle: 'speed',
+          source: 'linkedin',
+          band: 'warm',
+          pipeline_status: 'won',
+          created_at: '2026-05-20T10:00:00.000Z',
+          metadata: { model: 'hermes3:8b', model_family: 'hermes' },
+        },
+        {
+          id: 'smoke-1',
+          company_name: 'Smoke Prospect Co abc',
+          offer_id: 'offer-smoke',
+          offer_variant: 'smoke-variant',
+          outreach_angle: 'smoke-angle',
+          source: 'linkedin',
+          band: 'warm',
+          pipeline_status: 'won',
+          created_at: '2026-05-21T10:00:00.000Z',
+          metadata: { tags: ['smoke', 'phase2'] },
+        },
+      ],
+      activities: [
+        { prospect_id: 'real-1', type: 'marked_sent', created_at: '2026-05-20T11:00:00.000Z' },
+        { prospect_id: 'real-1', type: 'marked_replied', created_at: '2026-05-20T12:00:00.000Z' },
+        { prospect_id: 'real-1', type: 'marked_won', created_at: '2026-05-21T12:00:00.000Z' },
+        { prospect_id: 'smoke-1', type: 'marked_sent', created_at: '2026-05-21T11:00:00.000Z' },
+      ],
+      conversationEvents: [
+        { prospect_id: 'real-1', event_type: 'closed_won', created_at: '2026-05-21T12:00:00.000Z' },
+        { prospect_id: 'smoke-1', event_type: 'closed_won', created_at: '2026-05-22T12:00:00.000Z' },
+      ],
+      paymentAttributions: [
+        {
+          prospect_id: 'real-1',
+          offer_id: 'offer-a',
+          source: 'linkedin',
+          band: 'warm',
+          outreach_angle: 'speed',
+          amount_eur: 1800,
+          payment_status: 'paid',
+        },
+        {
+          prospect_id: 'smoke-1',
+          offer_id: 'offer-smoke',
+          source: 'smoke',
+          band: 'warm',
+          outreach_angle: 'smoke-angle',
+          offer_variant: 'smoke-variant',
+          amount_eur: 9999,
+          payment_status: 'paid',
+        },
+      ],
+    })
+
+    expect(snapshot.overview.contacted).toBe(1)
+    expect(snapshot.overview.paidCashEur).toBe(1800)
+    expect(snapshot.bestOffer?.offerName).toBe('Outbound Sprint')
+    expect(snapshot.offerBreakdown).toHaveLength(1)
+    expect(snapshot.messageFamilyBreakdown).toHaveLength(1)
+  })
 })

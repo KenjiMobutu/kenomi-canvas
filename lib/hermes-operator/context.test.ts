@@ -63,6 +63,7 @@ describe('buildHermesOperatorContext', () => {
         {
           id: 'p1',
           user_id: 'user-1',
+          company_name: 'Acme Studio',
           source: 'linkedin',
           band: 'warm',
           offer_id: 'offer-a',
@@ -75,6 +76,7 @@ describe('buildHermesOperatorContext', () => {
         {
           id: 'p2',
           user_id: 'user-1',
+          company_name: 'Acme Finance',
           source: 'reddit',
           band: 'hot',
           offer_id: 'offer-a',
@@ -84,6 +86,20 @@ describe('buildHermesOperatorContext', () => {
           next_followup_at: '2026-05-28T08:45:00.000Z',
           metadata: { model: 'hermes3:8b', model_family: 'hermes' },
         },
+        {
+          id: 'smoke-1',
+          user_id: 'user-1',
+          company_name: 'Smoke Prospect Co abc',
+          source: 'linkedin',
+          band: 'warm',
+          offer_id: 'offer-a',
+          offer_variant: 'smoke-variant',
+          outreach_angle: 'smoke-angle',
+          pipeline_status: 'won',
+          created_at: '2026-05-28T08:40:00.000Z',
+          next_followup_at: '2026-05-28T08:50:00.000Z',
+          metadata: { tags: ['smoke', 'phase2'] },
+        },
       ],
       prospect_activities: [
         { prospect_id: 'p1', type: 'marked_sent', created_at: '2026-05-28T08:10:00.000Z' },
@@ -92,6 +108,7 @@ describe('buildHermesOperatorContext', () => {
       ],
       prospect_conversation_events: [
         { prospect_id: 'p1', event_type: 'closed_won', created_at: '2026-05-28T10:10:00.000Z' },
+        { prospect_id: 'smoke-1', event_type: 'closed_won', created_at: '2026-05-28T10:15:00.000Z' },
       ],
       autonomy_controls: [
         {
@@ -162,6 +179,12 @@ describe('buildHermesOperatorContext', () => {
           name: 'Outbound Sprint Venture',
           created_at: '2026-05-28T08:00:00.000Z',
         },
+        {
+          id: 'venture-smoke',
+          user_id: 'user-1',
+          name: 'Bootstrap venture',
+          created_at: '2026-05-28T08:10:00.000Z',
+        },
       ],
       landing_pages: [
         { venture_id: 'venture-1', statut: 'published', health_status: 'healthy' },
@@ -185,6 +208,16 @@ describe('buildHermesOperatorContext', () => {
           collected_amount_eur: 999,
           created_at: '2026-05-28T10:25:00.000Z',
           updated_at: '2026-05-28T10:25:00.000Z',
+        },
+        {
+          id: 'payment-smoke',
+          venture_id: 'venture-smoke',
+          status: 'completed',
+          amount_eur: 9999,
+          collected_amount_eur: 9999,
+          checkout_url: 'https://checkout.stripe.test/smoke',
+          created_at: '2026-05-28T10:26:00.000Z',
+          updated_at: '2026-05-28T10:26:00.000Z',
         },
       ],
       decisions: [
@@ -218,5 +251,6 @@ describe('buildHermesOperatorContext', () => {
     expect(snapshot.revenue.weeklyReview.bestOffer.title).toBe('Outbound Sprint')
     expect(snapshot.revenue.outcomes.last7d.cashEur).toBe(1200)
     expect(snapshot.revenue.loop.revenueEur).toBe(1200)
+    expect(snapshot.prospects.total).toBe(2)
   })
 })
