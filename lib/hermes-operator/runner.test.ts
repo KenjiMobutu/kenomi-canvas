@@ -585,4 +585,43 @@ describe('runHermesOperatorTick', () => {
       'execution_hermes_fallback'
     )
   })
+
+  it('inherits operator settings mode when no explicit mode is passed to the tick', async () => {
+    const supabase = createFakeSupabase({
+      user_operator_settings: [
+        {
+          user_id: 'user-1',
+          operator_mode: 'recommend',
+          notify_in_studio: true,
+          notification_mode: 'studio_only',
+          max_auto_actions_per_day: 6,
+          max_auto_prospect_runs_per_day: 3,
+          max_auto_follow_up_scans_per_day: 2,
+          max_auto_devops_runs_per_day: 1,
+        },
+      ],
+    })
+
+    await runHermesOperatorTick({
+      supabase: supabase as never,
+      userId: 'user-1',
+      now: new Date('2026-05-28T09:00:00.000Z'),
+      buildContext: async () => fakeContext,
+      runEngine: async ({ mode }) => ({
+        summary: `mode=${mode}`,
+        recommendations: [],
+        alerts: [],
+        provider: 'hermes',
+        model: 'hermes3:8b',
+        fallbackTriggered: false,
+      }),
+    })
+
+    expect(supabase.tables.hermes_operator_runs[0]).toMatchObject({
+      user_id: 'user-1',
+      mode: 'recommend',
+      status: 'completed',
+      summary: 'mode=recommend',
+    })
+  })
 })

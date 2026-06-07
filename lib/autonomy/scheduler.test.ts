@@ -266,6 +266,35 @@ describe('runBusinessScheduler', () => {
     })
   })
 
+  it('n’injecte pas observe par défaut dans un job Hermes schedulé', async () => {
+    const supabase = createFakeSupabase([
+      createSchedule({
+        id: 'sched-hermes-default',
+        schedule_key: 'hermes_operator',
+        label: 'Hermes Operator',
+        interval_minutes: 60,
+        payload: {},
+      }),
+    ])
+
+    await runBusinessScheduler({
+      supabase,
+      now: new Date('2026-05-27T09:00:00.000Z'),
+      limit: 10,
+    })
+
+    expect(supabase.tables.autonomy_jobs[0]).toMatchObject({
+      kind: 'hermes_operator_tick',
+      user_id: 'user-1',
+      payload: {
+        scheduleId: 'sched-hermes-default',
+        scheduleKey: 'hermes_operator',
+        scheduled: true,
+      },
+    })
+    expect(supabase.tables.autonomy_jobs[0].payload).not.toHaveProperty('mode')
+  })
+
   it('ignore les schedules quand le contrôle global utilisateur est en pause', async () => {
     const supabase = createFakeSupabase(
       [

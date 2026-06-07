@@ -81,6 +81,10 @@ function readMode(value: unknown): HermesOperatorMode {
   return normalizeOperatorMode(typeof value === 'string' ? value : null)
 }
 
+function readOptionalMode(value: unknown): HermesOperatorMode | null {
+  return typeof value === 'string' ? normalizeOperatorMode(value) : null
+}
+
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
@@ -518,7 +522,8 @@ export async function runHermesOperatorTick(input: {
   const now = input.now ?? new Date()
   const nowIso = now.toISOString()
   const runId = randomUUID()
-  const mode = input.mode ?? readMode(input.payload?.mode)
+  const explicitMode = input.mode ?? readOptionalMode(input.payload?.mode)
+  let mode: HermesOperatorMode = explicitMode ?? 'observe'
   const buildContext = input.buildContext ?? buildHermesOperatorContext
   const runEngine = input.runEngine ?? runHermesOperatorEngine
   let contextSnapshot: HermesOperatorContextSnapshot | null = null
@@ -526,6 +531,7 @@ export async function runHermesOperatorTick(input: {
   try {
     const previousRun = await loadPreviousRun(input.supabase, input.userId)
     const operatorSettings = await loadOperatorSettings(input.supabase, input.userId)
+    mode = explicitMode ?? operatorSettings.operatorMode
     contextSnapshot = await buildContext({
       supabase: input.supabase,
       userId: input.userId,

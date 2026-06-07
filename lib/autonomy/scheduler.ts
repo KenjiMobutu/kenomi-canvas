@@ -223,6 +223,8 @@ function buildScheduleJob(input: {
   }
 
   if (input.schedule.schedule_key === 'hermes_operator') {
+    const hermesMode = typeof payload.mode === 'string' ? payload.mode : null
+
     return {
       user_id: input.schedule.user_id,
       venture_id: null,
@@ -232,7 +234,7 @@ function buildScheduleJob(input: {
       next_run_at: input.nowIso,
       payload: {
         ...payload,
-        mode: typeof payload.mode === 'string' ? payload.mode : 'observe',
+        ...(hermesMode ? { mode: hermesMode } : {}),
         scheduleId: input.schedule.id,
         scheduleKey: input.schedule.schedule_key,
         scheduled: true,
