@@ -3,6 +3,7 @@ import { getMemoryConfig } from './config'
 import { embedText } from './embeddings'
 import { createQdrantClient } from './qdrant-client'
 import type { ProspectMemoryKind, ProspectMemoryPoint, ProspectMemorySearchResult } from './types'
+import { hasSyntheticBusinessMarker } from '@/lib/revenue/synthetic-data'
 
 type BuildProspectMemoryPointInput = {
   userId: string
@@ -116,6 +117,10 @@ function toSearchResults(raw: unknown): ProspectMemorySearchResult[] {
   })
 }
 
+function isSyntheticProspectMemoryResult(row: ProspectMemorySearchResult): boolean {
+  return hasSyntheticBusinessMarker(row.text) || hasSyntheticBusinessMarker(row.payload)
+}
+
 export async function writeProspectMemory(
   input: BuildProspectMemoryPointInput,
   deps: {
@@ -180,7 +185,7 @@ export async function retrieveProspectMemories(
     })
 
     const response = await client.search(vector, { namespace: 'prospects', user_id: input.userId }, input.limit)
-    return toSearchResults(response)
+    return toSearchResults(response).filter((row) => !isSyntheticProspectMemoryResult(row))
   } catch {
     return []
   }

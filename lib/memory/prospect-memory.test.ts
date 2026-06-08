@@ -116,4 +116,58 @@ describe('retrieveProspectMemories', () => {
 
     expect(memories).toEqual([])
   })
+
+  it('drops synthetic smoke/bootstrap memories from retrieval results', async () => {
+    const search = vi.fn().mockResolvedValue({
+      result: [
+        {
+          id: 'smoke-1',
+          score: 0.99,
+          payload: {
+            text: 'Smoke Prospect Co · prospect_created · warm lead from linkedin.',
+            company_name: 'Smoke Prospect Co',
+            tags: ['smoke', 'phase2'],
+          },
+        },
+        {
+          id: 'real-1',
+          score: 0.87,
+          payload: {
+            text: 'Acme Studio · prospect_created · warm lead from linkedin.',
+            company_name: 'Acme Studio',
+            tags: ['client'],
+          },
+        },
+      ],
+    })
+
+    const memories = await retrieveProspectMemories(
+      {
+        userId: 'u1',
+        query: 'diagnostic freelancers agencies',
+        limit: 4,
+      },
+      {
+        env: {
+          QDRANT_URL: 'http://qdrant',
+          QDRANT_COLLECTION_PROSPECTS: 'prospects',
+          EMBEDDING_MODEL: 'nomic-embed-text:latest',
+          OLLAMA_BASE_URL: 'http://ollama:11434',
+        } as unknown as NodeJS.ProcessEnv,
+        embedTextImpl: vi.fn().mockResolvedValue([0.1, 0.2]),
+        createQdrantClientImpl: () =>
+          ({
+            upsert: vi.fn(),
+            search,
+          }) as never,
+      }
+    )
+
+    expect(memories).toEqual([
+      expect.objectContaining({
+        id: 'real-1',
+        text: 'Acme Studio · prospect_created · warm lead from linkedin.',
+      }),
+    ])
+  })
 })
