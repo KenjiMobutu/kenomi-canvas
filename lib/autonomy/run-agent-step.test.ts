@@ -343,6 +343,39 @@ describe('runAgentStep', () => {
     expect(capturedTimeout).toBe(90_000)
   })
 
+  it('refuses to materialize synthetic smoke prospect outputs', async () => {
+    const supabase = createFakeSupabase()
+
+    await expect(
+      runAgentStep({
+        supabase,
+        userId: 'user-1',
+        agentId: 'prospect',
+        llm: async (): Promise<LLMResponse> => ({
+          content: JSON.stringify({
+            company_name: 'Smoke Prospect Co xyz',
+            source: 'linkedin',
+            contact_name: 'Léa Martin',
+            score: 82,
+            band: 'warm',
+            summary: 'Synthetic smoke lead',
+            pain_points: ['manual triage'],
+            outreach_subject: 'Smoke subject',
+            outreach_body: 'Smoke body',
+            cta: 'Reply to continue',
+          }),
+          provider: 'ollama',
+          model: 'qwen3:4b',
+          fallback_triggered: false,
+        }),
+        now: () => new Date('2026-05-26T10:00:00.000Z'),
+      })
+    ).rejects.toThrow('Synthetic prospect output refused')
+
+    expect(supabase.tables.prospects).toHaveLength(0)
+    expect(supabase.tables.autonomy_actions).toHaveLength(0)
+  })
+
   it('runs the DevOps agent from grounded diagnostics context and persists a snapshot', async () => {
     const supabase = createFakeSupabase({
       agent_events: [

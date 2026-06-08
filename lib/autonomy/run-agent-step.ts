@@ -38,6 +38,7 @@ import {
   collectFreeScoutSignals,
   type ScoutSourceCollection,
 } from '@/lib/scout/free-sources'
+import { hasSyntheticBusinessMarker } from '@/lib/revenue/synthetic-data'
 import { appendScoutSignals } from '@/lib/scout/signal-log'
 import {
   collectInfraDiagnostics,
@@ -872,6 +873,9 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
 
     if (agentId === 'prospect' && parsedOutput && 'company_name' in parsedOutput) {
       const prospect = parsedOutput as ProspectOutput
+      if (hasSyntheticBusinessMarker(prospect)) {
+        throw new RunAgentStepError('Synthetic prospect output refused', 422)
+      }
       const inputCompanyName =
         typeof input.structuredInput?.companyName === 'string' &&
         input.structuredInput.companyName.trim().length > 0
