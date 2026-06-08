@@ -283,4 +283,58 @@ describe('llmChat', () => {
       expect.objectContaining({ method: 'POST' })
     )
   })
+
+  it('retries Ollama with an available local model when the requested model is missing', async () => {
+    vi.stubEnv('OLLAMA_BASE_URL', 'http://192.168.0.14:11434')
+    const { llmChat } = await loadLlmClient()
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: async () => '{"error":"model \\"qwen3:8b\\" not found"}',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          models: [{ name: 'qwen3:4b' }, { name: 'hermes3:8b' }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: { content: 'Recovered with qwen3:4b.' },
+          prompt_eval_count: 14,
+          eval_count: 6,
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await llmChat([{ role: 'user', content: 'Find a prospect.' }], {
+      model: 'qwen3:8b',
+    })
+
+    expect(result).toMatchObject({
+      content: 'Recovered with qwen3:4b.',
+      provider: 'ollama',
+      model: 'qwen3:4b',
+      fallback_triggered: true,
+      usage: { prompt_tokens: 14, completion_tokens: 6, total_tokens: 20 },
+    })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://192.168.0.14:11434/api/tags',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://192.168.0.14:11434/api/chat',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"model":"qwen3:4b"'),
+      })
+    )
+  })
 })

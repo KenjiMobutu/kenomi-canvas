@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { CkShell } from '@/components/CkShell'
 import { useAuth } from '@/lib/auth-context'
 import { useIsMobile } from '@/lib/studio-utils'
+import { getProspectDeliveryStatusLabel } from '@/lib/studio/prospect-delivery-status'
 import { readProspectFiltersFromSearch } from '@/lib/studio/prospect-filters'
 import {
   surface,
@@ -489,6 +490,7 @@ export default function ProspectPage() {
     [prospects]
   )
   const recentJobs = useMemo(() => jobs.slice(0, 6), [jobs])
+  const deliveryStatus = getProspectDeliveryStatusLabel(secretStatus)
   const sources = settings?.prospect_sources?.length
     ? settings.prospect_sources
     : ['linkedin', 'malt', 'upwork']
@@ -1015,14 +1017,17 @@ export default function ProspectPage() {
                       style={{
                         fontFamily: 'var(--font-mono)',
                         fontSize: 9.5,
-                        color: secretStatus?.email_delivery.configured ? emerald : amber,
+                        color:
+                          deliveryStatus.tone === 'ready'
+                            ? emerald
+                            : deliveryStatus.tone === 'warning'
+                              ? amber
+                              : muted2,
                         letterSpacing: '.08em',
                         lineHeight: 1.4,
                       }}
                     >
-                      {secretStatus?.email_delivery.configured
-                        ? `delivery ready · ${secretStatus.email_delivery.provider}`
-                        : 'identity only · no server-side delivery provider'}
+                      {deliveryStatus.text}
                     </div>
                     <div
                       style={{

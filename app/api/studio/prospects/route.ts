@@ -24,6 +24,7 @@ import {
 } from '@/lib/revenue/objections'
 import { deriveMessageMetadata } from '@/lib/revenue/message-truth'
 import { DIAGNOSTIC_CASH_LANE } from '@/lib/revenue/diagnostic-cash-lane'
+import { isSyntheticProspectRow } from '@/lib/revenue/synthetic-data'
 import {
   buildProspectStageActivity,
   buildProspectStagePatch,
@@ -263,6 +264,7 @@ export async function GET(request: Request) {
   })
   const filteredProspects = enrichedProspects
     .filter((prospect) => {
+      if (isSyntheticProspectRow(prospect)) return false
       if (statusFilter && prospect.pipeline_status !== statusFilter) return false
       if (bandFilter && prospect.band !== bandFilter) return false
       if (sourceFilter && prospect.source !== sourceFilter) return false

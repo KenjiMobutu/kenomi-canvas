@@ -89,6 +89,87 @@ function ollamaTagsUrl(baseUrl: string): string {
   return trimmed.endsWith('/api/tags') ? trimmed : `${trimmed}/api/tags`
 }
 
+function isMissingOllamaModelError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('Ollama HTTP 404') && message.toLowerCase().includes('not found')
+}
+
+function pickAvailableOllamaModel(requestedModel: string, availableModels: string[]): string | null {
+  const unique = Array.from(new Set(availableModels.filter((model) => model.trim().length > 0)))
+  if (unique.length === 0) return null
+
+  const requestedFamily = requestedModel.split(':')[0]?.trim().toLowerCase() ?? ''
+  const preferredCandidates = [
+    `${requestedFamily}:14b`,
+    `${requestedFamily}:8b`,
+    `${requestedFamily}:4b`,
+    'qwen3:14b',
+    'qwen3:8b',
+    'qwen3:4b',
+    'hermes3:8b',
+    'hermes3:latest',
+  ].filter((candidate) => candidate !== requestedModel)
+
+  for (const candidate of preferredCandidates) {
+    if (unique.includes(candidate)) return candidate
+  }
+
+  return unique.find((model) => model !== requestedModel) ?? null
+}
+
+async function readAvailableOllamaModels(baseUrl = OLLAMA_BASE_URL): Promise<string[]> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 5000)
+
+  try {
+    const res = await fetch(ollamaTagsUrl(baseUrl), {
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      throw new Error(`Ollama tags HTTP ${res.status}: ${await res.text()}`)
+    }
+
+    const data = (await res.json()) as { models?: Array<{ name?: string | null }> }
+    return Array.isArray(data.models)
+      ? data.models
+          .map((entry) => (typeof entry?.name === 'string' ? entry.name : ''))
+          .filter((name) => name.length > 0)
+      : []
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function callOllamaResilient(
+  messages: LLMMessage[],
+  config: LLMConfig
+): Promise<{ content: string; usage?: LLMUsage; model: string; fallbackTriggered: boolean }> {
+  const requestedModel = config.model ?? OLLAMA_DEFAULT_MODEL
+
+  try {
+    const result = await callOllama(messages, config)
+    return {
+      ...result,
+      model: requestedModel,
+      fallbackTriggered: false,
+    }
+  } catch (error) {
+    if (!isMissingOllamaModelError(error)) throw error
+
+    const availableModels = await readAvailableOllamaModels()
+    const fallbackModel = pickAvailableOllamaModel(requestedModel, availableModels)
+    if (!fallbackModel) throw error
+
+    const result = await callOllama(messages, { ...config, model: fallbackModel })
+    return {
+      ...result,
+      model: fallbackModel,
+      fallbackTriggered: true,
+    }
+  }
+}
+
 async function callOllama(
   messages: LLMMessage[],
   config: LLMConfig
@@ -269,14 +350,23 @@ export async function llmChat(
   const useHermesAgent = modelFamily === 'hermes' && Boolean(HERMES_AGENT_BASE_URL)
 
   try {
-    const result = useHermesAgent
-      ? await callHermesAgent(messages, config)
-      : await callOllama(messages, config)
+    if (useHermesAgent) {
+      const result = await callHermesAgent(messages, config)
+      return {
+        content: result.content,
+        provider: 'hermes' as const,
+        model,
+        fallback_triggered: false,
+        usage: result.usage,
+      }
+    }
+
+    const result = await callOllamaResilient(messages, config)
     return {
       content: result.content,
-      provider: useHermesAgent ? 'hermes' : 'ollama',
-      model,
-      fallback_triggered: false,
+      provider: 'ollama' as const,
+      model: result.model,
+      fallback_triggered: result.fallbackTriggered,
       usage: result.usage,
     }
   } catch (primaryError) {
@@ -293,14 +383,14 @@ export async function llmChat(
 
     if (useHermesAgent) {
       try {
-        const ollamaResult = await callOllama(messages, {
+        const ollamaResult = await callOllamaResilient(messages, {
           ...config,
           model: OLLAMA_DEFAULT_MODEL,
         })
         return {
           content: ollamaResult.content,
           provider: 'ollama',
-          model: OLLAMA_DEFAULT_MODEL,
+          model: ollamaResult.model,
           fallback_triggered: true,
           usage: ollamaResult.usage,
         }

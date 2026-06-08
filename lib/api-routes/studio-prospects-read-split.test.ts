@@ -140,6 +140,72 @@ describe('studio prospects read/write split', () => {
     expect(body.filters.activeLane).toBe('300eur-diagnostic')
   })
 
+  it('GET /api/studio/prospects hides synthetic smoke prospects from the operator queue', async () => {
+    mockedBuildProspectViews.mockReturnValue([
+      {
+        id: 'prospect-real',
+        company_name: 'Real Studio Co',
+        band: 'warm',
+        source: 'linkedin',
+        tags: ['client'],
+        metadata: {},
+        pipeline_status: 'new',
+        approval_status: 'none',
+        contact_status: 'contactable',
+        contact_email: 'ops@realstudio.test',
+        missing_contact_fields: [],
+        message_family: 'linkedin_initial',
+        message_key: 'linkedin_initial_default',
+      },
+      {
+        id: 'prospect-smoke',
+        company_name: 'Smoke Prospect Co',
+        band: 'warm',
+        source: 'reddit',
+        tags: ['smoke', 'phase2'],
+        metadata: { tags: ['smoke', 'phase2'] },
+        pipeline_status: 'won',
+        approval_status: 'approved_to_send',
+        contact_status: 'missing_contact',
+        missing_contact_fields: ['contact_email'],
+        message_family: 'reddit_initial',
+        message_key: 'reddit_initial_default',
+      },
+    ])
+    mockedSummarizeProspects.mockImplementation((rows) => ({
+      hot: 0,
+      warm: rows.length,
+      cold: 0,
+      contactable: rows.filter((row: { contact_status: string }) => row.contact_status === 'contactable').length,
+      laneContactable: 0,
+      laneAwaitingApproval: 0,
+      laneFollowUpDue: 0,
+      laneHotReplies: 0,
+      missingContact: rows.filter((row: { contact_status: string }) => row.contact_status === 'missing_contact').length,
+      activeQueue: rows.length,
+      readyToContact: rows.length,
+      dueFollowups: 0,
+      awaitingApproval: 0,
+      approvedToSend: 0,
+      draftCreated: 0,
+      sent: 0,
+      replied: 0,
+      won: rows.filter((row: { pipeline_status: string }) => row.pipeline_status === 'won').length,
+      lost: 0,
+      followUpDue: 0,
+    }))
+
+    const response = await GET_PROSPECTS(
+      new Request('http://localhost/api/studio/prospects') as never
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.prospects).toHaveLength(1)
+    expect(body.prospects[0].id).toBe('prospect-real')
+    expect(body.summary.total).toBe(1)
+  })
+
   it('POST /api/studio/prospects/refresh triggers follow-up processing explicitly', async () => {
     mockedProcessDueProspectFollowUps.mockResolvedValue(3)
 
