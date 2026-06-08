@@ -241,4 +241,71 @@ describe('findGroundedGithubProspect', () => {
       source_url: 'https://github.com/agency42',
     })
   })
+
+  it('extracts a public email from the profile website when the GitHub profile email is missing', async () => {
+    const responses = new Map<string, { status: number; body: unknown; contentType?: string }>([
+      [
+        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=10',
+        {
+          status: 200,
+          body: {
+            items: [{ url: 'https://api.github.com/users/agency42' }],
+          },
+        },
+      ],
+      [
+        'https://api.github.com/users/agency42',
+        {
+          status: 200,
+          body: {
+            login: 'agency42',
+            name: 'Agency/42',
+            email: null,
+            bio: 'ai innovation studio',
+            blog: 'https://agency42.co',
+            html_url: 'https://github.com/agency42',
+            followers: 11,
+            public_repos: 10,
+          },
+        },
+      ],
+      [
+        'https://agency42.co/',
+        {
+          status: 200,
+          body: '<html><body><a href=\"/contact\">Contact</a></body></html>',
+          contentType: 'text/html',
+        },
+      ],
+      [
+        'https://agency42.co/contact',
+        {
+          status: 200,
+          body: '<html><body><a href=\"mailto:hello@agency42.co\">hello@agency42.co</a></body></html>',
+          contentType: 'text/html',
+        },
+      ],
+    ])
+
+    const result = await findGroundedGithubProspect({
+      query: '300EUR diagnostic freelancers small agencies',
+      fetchImpl: async (url) => {
+        const response = responses.get(url)
+        return new Response(
+          typeof response?.body === 'string' ? response.body : JSON.stringify(response?.body ?? {}),
+          {
+            status: response?.status ?? 404,
+            headers: { 'Content-Type': response?.contentType ?? 'application/json' },
+          }
+        )
+      },
+    })
+
+    expect(result).not.toBeNull()
+    expect(result).toMatchObject({
+      company_name: 'Agency/42',
+      contact_email: 'hello@agency42.co',
+      source_url: 'https://github.com/agency42',
+    })
+  })
 })

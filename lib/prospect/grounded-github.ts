@@ -1,6 +1,7 @@
 import { buildProspectOutreach } from './build-outreach'
 import { scoreProspect } from './score-prospect'
 import type { ProspectOutput } from '@/lib/agent-output-schemas'
+import { isAllowedWebhookUrl, isValidEmail } from '@/lib/security'
 
 type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -33,6 +34,8 @@ interface GithubUserProfile {
   hireable?: boolean | null
 }
 
+const EMAIL_PATTERN = /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi
+
 const SEARCH_QUERIES = [
   'agency studio in:bio repos:>2 followers:>1',
   'freelance consultant in:bio repos:>2 followers:>1',
@@ -59,7 +62,8 @@ function record(value: unknown): Record<string, unknown> {
 
 function isPublicBusinessEmail(email: string): boolean {
   if (!email.includes('@')) return false
-  return !email.endsWith('@users.noreply.github.com')
+  if (!isValidEmail(email)) return false
+  return !email.toLowerCase().endsWith('@users.noreply.github.com')
 }
 
 function normalizeKey(value: string): string {
@@ -149,11 +153,75 @@ function buildSearchUrl(query: string): string {
   return url.toString()
 }
 
-function asGroundedProspect(
+function extractPublicEmailFromHtml(html: string): string | null {
+  const matches = html.matchAll(EMAIL_PATTERN)
+  for (const match of matches) {
+    const email = typeof match[1] === 'string' ? match[1].trim() : ''
+    if (email && isPublicBusinessEmail(email)) return email
+  }
+  return null
+}
+
+function normalizeWebsiteUrl(value: string): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value.startsWith('http') ? value : `https://${value}`)
+    if (!isAllowedWebhookUrl(url.toString())) return null
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+function buildWebsiteCandidates(rawUrl: string): string[] {
+  const normalized = normalizeWebsiteUrl(rawUrl)
+  if (!normalized) return []
+  const root = new URL(normalized)
+  const home = new URL('/', root).toString()
+  const contact = new URL('/contact', root).toString()
+  const contactUs = new URL('/contact-us', root).toString()
+  return [...new Set([home, contact, contactUs])]
+}
+
+async function resolveProfileEmail(
   profile: GithubUserProfile,
+  fetchImpl: FetchImpl,
+  token?: string
+): Promise<string | null> {
+  const directEmail = text(profile.email)
+  if (directEmail && isPublicBusinessEmail(directEmail)) return directEmail
+
+  const websiteUrls = buildWebsiteCandidates(text(profile.blog))
+  for (const url of websiteUrls) {
+    try {
+      const response = await fetchImpl(url, {
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'User-Agent': 'kenomi-prospect/1.0',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        signal: AbortSignal.timeout(5000),
+      })
+      if (!response.ok) continue
+      const html = await response.text()
+      const websiteEmail = extractPublicEmailFromHtml(html)
+      if (websiteEmail) return websiteEmail
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+async function asGroundedProspect(
+  profile: GithubUserProfile,
+  fetchImpl: FetchImpl,
+  token: string,
   exclude?: GroundedProspectExclude
-): GroundedProspectOutput | null {
-  const contactEmail = text(profile.email)
+): Promise<GroundedProspectOutput | null> {
+  const contactEmail = await resolveProfileEmail(profile, fetchImpl, token)
   const sourceUrl = text(profile.html_url)
   const companyName = normalizeCompanyName(profile)
   if (!companyName || !contactEmail || !sourceUrl || !isPublicBusinessEmail(contactEmail)) return null
@@ -242,7 +310,7 @@ export async function findGroundedGithubProspect(input: {
         if (isGithubRequestError(error)) continue
         throw error
       }
-      const candidate = asGroundedProspect(profile, input.exclude)
+      const candidate = await asGroundedProspect(profile, fetchImpl, token, input.exclude)
       if (candidate) return candidate
     }
   }
