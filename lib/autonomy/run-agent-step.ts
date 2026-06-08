@@ -29,6 +29,10 @@ import { buildProspectOutreach } from '@/lib/prospect/build-outreach'
 import type { ProspectSource } from '@/lib/prospect/types'
 import type { ProspectOutput } from '@/lib/agent-output-schemas'
 import { deriveProspectApprovalState } from '@/lib/prospect/approval-state'
+import {
+  findGroundedGithubProspect,
+  type GroundedProspectOutput,
+} from '@/lib/prospect/grounded-github'
 import { getModelFamily } from '@/lib/model-families'
 import { materializeBuilderOutput } from '@/lib/venture-materializer'
 import { buildCampaignDrafts, type MarketingOutputShape } from '@/lib/marketing/campaign-drafts'
@@ -100,6 +104,7 @@ export interface RunAgentStepInput {
   appendDevopsDiagnosticRun?: typeof appendDevopsDiagnosticRun
   writeProspectMemory?: typeof writeProspectMemory
   retrieveProspectMemories?: typeof retrieveProspectMemories
+  findGroundedProspect?: (input: { query: string }) => Promise<GroundedProspectOutput | null>
   now?: () => Date
 }
 
@@ -111,6 +116,19 @@ export interface RunAgentStepResult {
   agentRunId: string | null
   parsedOutput: AgentOutput | null
   pipeline?: Record<string, unknown>
+}
+
+function hasExplicitProspectIdentity(structuredInput?: Record<string, unknown>): boolean {
+  return Boolean(
+    (typeof structuredInput?.companyName === 'string' && structuredInput.companyName.trim().length > 0) ||
+      (typeof structuredInput?.contactEmail === 'string' && structuredInput.contactEmail.trim().length > 0)
+  )
+}
+
+function shouldUseGroundedProspect(input: RunAgentStepInput): boolean {
+  if (input.agentId !== 'prospect') return false
+  if (hasExplicitProspectIdentity(input.structuredInput)) return false
+  return Boolean(input.findGroundedProspect) || !input.llm
 }
 
 const PROSPECT_SOURCES: ProspectSource[] = ['linkedin', 'malt', 'upwork', 'indeed', 'reddit', 'other']
@@ -722,20 +740,44 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       }
     }
 
-    const llmResult = await (input.llm ?? llmChat)([{ role: 'user', content: userPrompt }], {
-      model,
-      system: systemPrompt,
-      temperature: cfg?.temperature ?? 0.7,
-      max_tokens: cfg?.max_tokens ?? 512,
-      timeout_ms: getAgentLlmTimeoutMs(agentId),
-    })
+    let content = ''
+    let usedModel = model
+    let usage: LLMResponse['usage']
+    let costUsd: number | null = null
+    let provider: 'hermes' | 'ollama' | 'claude' | 'github' = 'ollama'
+    let fallbackTriggered = false
+    let parsedOutput: AgentOutput | null = null
 
-    let content = llmResult.content
+    if (shouldUseGroundedProspect(input)) {
+      const groundedProspect = await (input.findGroundedProspect ?? ((args) => findGroundedGithubProspect(args)))({
+        query: userPrompt,
+      })
+      if (!groundedProspect) {
+        throw new RunAgentStepError('No grounded prospect with verified public email found', 404)
+      }
+      content = JSON.stringify(groundedProspect)
+      usedModel = 'grounded/github-user-search'
+      provider = 'github'
+      parsedOutput = groundedProspect
+    } else {
+      const llmResult = await (input.llm ?? llmChat)([{ role: 'user', content: userPrompt }], {
+        model,
+        system: systemPrompt,
+        temperature: cfg?.temperature ?? 0.7,
+        max_tokens: cfg?.max_tokens ?? 512,
+        timeout_ms: getAgentLlmTimeoutMs(agentId),
+      })
+
+      content = llmResult.content
+      usedModel = llmResult.model
+      usage = llmResult.usage
+      provider = llmResult.provider
+      fallbackTriggered = llmResult.fallback_triggered
+      costUsd = usage ? computeCostUsd(usedModel, usage) : null
+      parsedOutput = parseOutputSafely(agentId, content)
+    }
+
     const durationMs = Math.max(0, now().getTime() - startMs)
-    const usedModel = llmResult.model
-    const usage = llmResult.usage
-    const costUsd = usage ? computeCostUsd(usedModel, usage) : null
-    let parsedOutput = parseOutputSafely(agentId, content)
 
     if (agentId === 'devops' && !parsedOutput) {
       try {
@@ -752,6 +794,11 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         if (repairedParsed) {
           content = repairedResult.content
           parsedOutput = repairedParsed
+          usedModel = repairedResult.model
+          provider = repairedResult.provider
+          fallbackTriggered = repairedResult.fallback_triggered
+          usage = repairedResult.usage
+          costUsd = usage ? computeCostUsd(usedModel, usage) : null
         }
       } catch {
         // Best effort only; keep the original malformed content for auditability.
@@ -772,14 +819,15 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           completion_tokens: usage?.completion_tokens ?? null,
           total_tokens: usage?.total_tokens ?? null,
           cost_usd: costUsd,
+          provider,
         })
         .select('id')
     )
 
     agentRunsTotal.inc({
       agent_id: agentId,
-      provider: llmResult.provider,
-      fallback: llmResult.fallback_triggered ? 'true' : 'false',
+      provider,
+      fallback: fallbackTriggered ? 'true' : 'false',
     })
     if (costUsd !== null && costUsd > 0) {
       agentRunCostUsdTotal.inc({ agent_id: agentId, model: usedModel }, costUsd)
@@ -792,7 +840,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       metadata: {
         model: usedModel,
         duration_ms: durationMs,
-        fallback_triggered: llmResult.fallback_triggered,
+        fallback_triggered: fallbackTriggered,
       },
     })
 
@@ -965,7 +1013,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
               cta: prospect.cta,
               model: usedModel,
               model_family: getModelFamily(usedModel),
-              provider: llmResult.provider,
+              provider,
               sources: prospectContext.settings?.prospect_sources ?? [],
               outreach_email: prospectContext.settings?.prospect_outreach_email ?? '',
               crm_provider: prospectContext.settings?.prospect_crm_provider ?? 'supabase',
@@ -999,7 +1047,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
               cta: prospect.cta,
               model: usedModel,
               model_family: getModelFamily(usedModel),
-              provider: llmResult.provider,
+              provider,
               sources: prospectContext.settings?.prospect_sources ?? [],
               outreach_email: prospectContext.settings?.prospect_outreach_email ?? '',
               crm_provider: prospectContext.settings?.prospect_crm_provider ?? 'supabase',

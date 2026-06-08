@@ -430,6 +430,65 @@ describe('runAgentStep', () => {
     expect(supabase.tables.prospects).toHaveLength(0)
   })
 
+  it('materializes a grounded prospect candidate without calling the LLM', async () => {
+    const supabase = createFakeSupabase({
+      user_settings: [
+        {
+          user_id: 'user-1',
+          prospect_sources: ['other'],
+          prospect_outreach_email: 'hello@kenomi.eu',
+          prospect_crm_provider: 'supabase',
+        },
+      ],
+    })
+    let llmCalled = false
+
+    const result = await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'prospect',
+      llm: async (): Promise<LLMResponse> => {
+        llmCalled = true
+        return {
+          content: '{}',
+          provider: 'ollama',
+          model: 'qwen3:4b',
+          fallback_triggered: false,
+        }
+      },
+      findGroundedProspect: async () => ({
+        company_name: 'Freshwork Studio',
+        source: 'other',
+        contact_name: 'Freshwork Studio',
+        contact_role: 'Web Development Agency',
+        contact_email: 'gonzalo@freshworkstudio.com',
+        source_url: 'https://github.com/freshworkstudio',
+        score: 70,
+        band: 'warm',
+        summary: 'Freshwork Studio exposes a public GitHub contact and runs a web agency.',
+        pain_points: ['manual lead follow-up steals delivery time', 'sales admin competes with client work'],
+        outreach_subject: 'Freshwork Studio — a faster way to handle lead follow-up',
+        outreach_body: 'Hi Freshwork Studio,\n\nI found you via GitHub and saw a public contact path.',
+        cta: 'Reply if this is worth a quick follow-up.',
+      }),
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+    })
+
+    expect(result.ok).toBe(true)
+    expect(llmCalled).toBe(false)
+    expect(result.parsedOutput).toMatchObject({
+      company_name: 'Freshwork Studio',
+      contact_email: 'gonzalo@freshworkstudio.com',
+    })
+    expect(supabase.tables.prospects).toHaveLength(1)
+    expect(supabase.tables.prospects[0]).toMatchObject({
+      company_name: 'Freshwork Studio',
+      contact_email: 'gonzalo@freshworkstudio.com',
+      source: 'other',
+      source_url: 'https://github.com/freshworkstudio',
+    })
+  })
+
   it('runs the DevOps agent from grounded diagnostics context and persists a snapshot', async () => {
     const supabase = createFakeSupabase({
       agent_events: [
