@@ -489,6 +489,66 @@ describe('runAgentStep', () => {
     })
   })
 
+  it('passes existing prospect identities to grounded prospect selection', async () => {
+    const supabase = createFakeSupabase({
+      prospects: [
+        {
+          id: 'prospect-1',
+          user_id: 'user-1',
+          company_name: 'AE Studio',
+          contact_email: 'humanagency@ae.studio',
+          source_url: 'https://github.com/agencyenterprise',
+        },
+      ],
+    })
+
+    let groundedInput:
+      | {
+          query: string
+          exclude?: {
+            emails?: string[]
+            sourceUrls?: string[]
+            companyNames?: string[]
+          }
+        }
+      | undefined
+
+    await runAgentStep({
+      supabase,
+      userId: 'user-1',
+      agentId: 'prospect',
+      findGroundedProspect: async (input) => {
+        groundedInput = input
+        return {
+          company_name: 'Freshwork Studio',
+          source: 'other',
+          contact_name: 'Freshwork Studio',
+          contact_role: 'Web Development Agency',
+          contact_email: 'gonzalo@freshworkstudio.com',
+          source_url: 'https://github.com/freshworkstudio',
+          score: 72,
+          band: 'warm',
+          summary: 'Freshwork Studio exposes a public GitHub contact and runs a web development agency.',
+          pain_points: ['manual lead follow-up steals delivery time', 'sales admin competes with client work'],
+          outreach_subject: 'Freshwork Studio — a faster way to handle lead follow-up',
+          outreach_body: 'Hi Freshwork Studio.',
+          cta: 'Reply if this is worth a quick follow-up.',
+        }
+      },
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+    })
+
+    expect(groundedInput).toEqual(
+      expect.objectContaining({
+        exclude: {
+          emails: ['humanagency@ae.studio'],
+          sourceUrls: ['https://github.com/agencyenterprise'],
+          companyNames: ['AE Studio'],
+        },
+      })
+    )
+  })
+
   it('runs the DevOps agent from grounded diagnostics context and persists a snapshot', async () => {
     const supabase = createFakeSupabase({
       agent_events: [

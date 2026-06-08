@@ -10,6 +10,12 @@ export interface GroundedProspectOutput extends ProspectOutput {
   source_url: string
 }
 
+interface GroundedProspectExclude {
+  emails?: string[]
+  sourceUrls?: string[]
+  companyNames?: string[]
+}
+
 interface GithubSearchUser {
   url: string
 }
@@ -48,6 +54,10 @@ function record(value: unknown): Record<string, unknown> {
 function isPublicBusinessEmail(email: string): boolean {
   if (!email.includes('@')) return false
   return !email.endsWith('@users.noreply.github.com')
+}
+
+function normalizeKey(value: string): string {
+  return value.trim().toLowerCase()
 }
 
 function normalizeCompanyName(profile: GithubUserProfile): string {
@@ -133,11 +143,26 @@ function buildSearchUrl(query: string): string {
   return url.toString()
 }
 
-function asGroundedProspect(profile: GithubUserProfile): GroundedProspectOutput | null {
+function asGroundedProspect(
+  profile: GithubUserProfile,
+  exclude?: GroundedProspectExclude
+): GroundedProspectOutput | null {
   const contactEmail = text(profile.email)
   const sourceUrl = text(profile.html_url)
   const companyName = normalizeCompanyName(profile)
   if (!companyName || !contactEmail || !sourceUrl || !isPublicBusinessEmail(contactEmail)) return null
+
+  const excludedEmails = new Set((exclude?.emails ?? []).map(normalizeKey))
+  const excludedSourceUrls = new Set((exclude?.sourceUrls ?? []).map(normalizeKey))
+  const excludedCompanyNames = new Set((exclude?.companyNames ?? []).map(normalizeKey))
+
+  if (
+    excludedEmails.has(normalizeKey(contactEmail)) ||
+    excludedSourceUrls.has(normalizeKey(sourceUrl)) ||
+    excludedCompanyNames.has(normalizeKey(companyName))
+  ) {
+    return null
+  }
 
   const painPoints = painPointsForProfile(profile)
   const scoring = scoreProspect({
@@ -186,6 +211,7 @@ export async function findGroundedGithubProspect(input: {
   query: string
   fetchImpl?: FetchImpl
   githubToken?: string
+  exclude?: GroundedProspectExclude
 }): Promise<GroundedProspectOutput | null> {
   const fetchImpl = input.fetchImpl ?? globalThis.fetch?.bind(globalThis)
   if (!fetchImpl) return null
@@ -210,7 +236,7 @@ export async function findGroundedGithubProspect(input: {
         if (isGithubRequestError(error)) continue
         throw error
       }
-      const candidate = asGroundedProspect(profile)
+      const candidate = asGroundedProspect(profile, input.exclude)
       if (candidate) return candidate
     }
   }

@@ -104,7 +104,14 @@ export interface RunAgentStepInput {
   appendDevopsDiagnosticRun?: typeof appendDevopsDiagnosticRun
   writeProspectMemory?: typeof writeProspectMemory
   retrieveProspectMemories?: typeof retrieveProspectMemories
-  findGroundedProspect?: (input: { query: string }) => Promise<GroundedProspectOutput | null>
+  findGroundedProspect?: (input: {
+    query: string
+    exclude?: {
+      emails?: string[]
+      sourceUrls?: string[]
+      companyNames?: string[]
+    }
+  }) => Promise<GroundedProspectOutput | null>
   now?: () => Date
 }
 
@@ -208,6 +215,34 @@ async function selectRows<T>(query: QueryBuilder): Promise<T[]> {
   const { data, error } = await query
   if (error) throw new RunAgentStepError(error.message, 500)
   return Array.isArray(data) ? (data as T[]) : []
+}
+
+interface ExistingProspectIdentityRow {
+  company_name?: string | null
+  contact_email?: string | null
+  source_url?: string | null
+}
+
+async function getExistingProspectIdentities(
+  supabase: RunAgentStepSupabase,
+  userId: string
+): Promise<{ emails: string[]; sourceUrls: string[]; companyNames: string[] }> {
+  const rows = await selectRows<ExistingProspectIdentityRow>(
+    supabase
+      .from('prospects')
+      .select('company_name, contact_email, source_url')
+      .eq('user_id', userId)
+      .limit(200)
+  )
+
+  const uniq = (values: Array<string | null | undefined>) =>
+    [...new Set(values.map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean))]
+
+  return {
+    emails: uniq(rows.map((row) => row.contact_email)),
+    sourceUrls: uniq(rows.map((row) => row.source_url)),
+    companyNames: uniq(rows.map((row) => row.company_name)),
+  }
 }
 
 async function syncAgentRunStats(input: {
@@ -749,8 +784,10 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     let parsedOutput: AgentOutput | null = null
 
     if (shouldUseGroundedProspect(input)) {
+      const existingProspectIdentities = await getExistingProspectIdentities(supabase, userId)
       const groundedProspect = await (input.findGroundedProspect ?? ((args) => findGroundedGithubProspect(args)))({
         query: userPrompt,
+        exclude: existingProspectIdentities,
       })
       if (!groundedProspect) {
         throw new RunAgentStepError('No grounded prospect with verified public email found', 404)

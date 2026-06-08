@@ -97,4 +97,65 @@ describe('findGroundedGithubProspect', () => {
 
     expect(result).toBeNull()
   })
+
+  it('skips already-contacted identities and returns the next grounded candidate', async () => {
+    const responses = new Map<string, unknown>([
+      [
+        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=5',
+        {
+          items: [
+            { url: 'https://api.github.com/users/agencyenterprise' },
+            { url: 'https://api.github.com/users/freshworkstudio' },
+          ],
+        },
+      ],
+      [
+        'https://api.github.com/users/agencyenterprise',
+        {
+          login: 'agencyenterprise',
+          name: 'AE Studio',
+          email: 'humanagency@ae.studio',
+          bio: 'Building products to increase human agency',
+          html_url: 'https://github.com/agencyenterprise',
+          followers: 9,
+          public_repos: 6,
+        },
+      ],
+      [
+        'https://api.github.com/users/freshworkstudio',
+        {
+          login: 'freshworkstudio',
+          name: 'Freshwork Studio',
+          email: 'gonzalo@freshworkstudio.com',
+          bio: 'Web Development Agency',
+          html_url: 'https://github.com/freshworkstudio',
+          blog: 'https://freshworkstudio.com',
+          followers: 12,
+          public_repos: 8,
+          hireable: true,
+        },
+      ],
+    ])
+
+    const result = await findGroundedGithubProspect({
+      query: '300EUR diagnostic freelancers small agencies',
+      exclude: {
+        emails: ['humanagency@ae.studio'],
+        sourceUrls: ['https://github.com/agencyenterprise'],
+        companyNames: ['AE Studio'],
+      },
+      fetchImpl: async (url) =>
+        new Response(JSON.stringify(responses.get(url) ?? {}), {
+          status: responses.has(url) ? 200 : 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    })
+
+    expect(result).not.toBeNull()
+    expect(result).toMatchObject({
+      company_name: 'Freshwork Studio',
+      contact_email: 'gonzalo@freshworkstudio.com',
+      source_url: 'https://github.com/freshworkstudio',
+    })
+  })
 })
