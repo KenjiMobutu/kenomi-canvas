@@ -4,6 +4,10 @@ export const DIAGNOSTIC_CASH_LANE = {
     title: '300EUR Diagnostic',
     priceEur: 300,
   },
+  landing: {
+    slug: 'diagnostic-300',
+    path: '/diagnostic-300',
+  },
   segment: {
     slug: 'freelancers-small-agencies',
     title: 'Freelancers / Small Agencies',
@@ -17,6 +21,16 @@ export const DIAGNOSTIC_CASH_LANE = {
     title: 'Diagnostic call outbound v1',
   },
 } as const
+
+export function getDiagnosticCashLaneUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const rawOrigin = env.APP_ORIGIN?.trim() || env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://lab.kenomi.eu'
+
+  try {
+    return new URL(DIAGNOSTIC_CASH_LANE.landing.path, rawOrigin).toString()
+  } catch {
+    return `https://lab.kenomi.eu${DIAGNOSTIC_CASH_LANE.landing.path}`
+  }
+}
 
 type ProspectLike = {
   source?: string | null

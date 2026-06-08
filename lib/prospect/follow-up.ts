@@ -1,4 +1,5 @@
 import type { ProspectOutreachKind, ProspectPipelineStatus } from '@/lib/prospect/types'
+import { DIAGNOSTIC_CASH_LANE, getDiagnosticCashLaneUrl } from '@/lib/revenue/diagnostic-cash-lane'
 
 const FOLLOW_UP_KIND_BY_COUNT: Record<number, ProspectOutreachKind | null> = {
   0: 'follow_up_1',
@@ -95,12 +96,13 @@ export function buildProspectFollowUpDraft(input: {
   kind: ProspectOutreachKind
 }) {
   const firstName = input.contactName?.trim()?.split(/\s+/)[0] ?? 'there'
+  const laneUrl = getDiagnosticCashLaneUrl()
   const reminder =
     input.kind === 'follow_up_1'
-      ? `Quick follow-up on ${input.companyName}`
+      ? `${DIAGNOSTIC_CASH_LANE.offer.title} for ${input.companyName}`
       : input.kind === 'follow_up_2'
-        ? `Following up again on ${input.companyName}`
-        : `Last follow-up for ${input.companyName}`
+        ? `Following up on the ${DIAGNOSTIC_CASH_LANE.offer.title.toLowerCase()} for ${input.companyName}`
+        : `Last note on the ${DIAGNOSTIC_CASH_LANE.offer.title.toLowerCase()} for ${input.companyName}`
   const summary = input.summary?.trim() || `the ${input.companyName} opportunity`
   const painPoint = input.painPoints?.find(Boolean)?.trim() ?? 'this workflow'
   const note = input.operatorNotes?.trim()
@@ -114,18 +116,22 @@ export function buildProspectFollowUpDraft(input: {
     `Hi ${firstName},`,
     '',
     input.kind === 'follow_up_3'
-      ? `Closing the loop on ${summary}.`
+      ? `Closing the loop on the ${DIAGNOSTIC_CASH_LANE.offer.title.toLowerCase()} for ${summary}.`
       : `Following up on my earlier note about ${summary}.`,
     `The main angle is still ${painPoint}.`,
-    note ? `Operator note: ${note}.` : 'If useful, I can send a concrete next step and a short implementation outline.',
+    `The offer is a fixed-scope ${DIAGNOSTIC_CASH_LANE.offer.title} for ${DIAGNOSTIC_CASH_LANE.segment.title.toLowerCase()}.`,
+    'It includes one short diagnostic call and a written action plan within 48h.',
+    note ? `Operator note: ${note}.` : 'If useful, the exact scope is ready now.',
     '',
-    'Would a quick reply make sense this week?',
+    `Exact scope: ${laneUrl}`,
+    '',
+    'Does this justify a quick go/no-go this week?',
   ]
 
   return {
     subject,
     body: lines.join('\n'),
-    cta: 'Would a quick reply make sense this week?',
+    cta: `Review the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`,
   }
 }
 

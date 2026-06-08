@@ -43,6 +43,7 @@ import {
   type ScoutSourceCollection,
 } from '@/lib/scout/free-sources'
 import { hasSyntheticBusinessMarker } from '@/lib/revenue/synthetic-data'
+import { DIAGNOSTIC_CASH_LANE } from '@/lib/revenue/diagnostic-cash-lane'
 import { appendScoutSignals } from '@/lib/scout/signal-log'
 import {
   collectInfraDiagnostics,
@@ -1002,12 +1003,17 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         typeof input.structuredInput?.offerVariant === 'string' &&
         input.structuredInput.offerVariant.trim().length > 0
           ? input.structuredInput.offerVariant.trim()
-          : 'prospect_run'
+          : DIAGNOSTIC_CASH_LANE.offer.slug
+      const inputSegment =
+        typeof input.structuredInput?.segment === 'string' &&
+        input.structuredInput.segment.trim().length > 0
+          ? input.structuredInput.segment.trim()
+          : DIAGNOSTIC_CASH_LANE.segment.slug
       const inputOutreachAngle =
         typeof input.structuredInput?.outreachAngle === 'string' &&
         input.structuredInput.outreachAngle.trim().length > 0
           ? input.structuredInput.outreachAngle.trim()
-          : inputFocus
+          : DIAGNOSTIC_CASH_LANE.messageFamily.slug
       const generatedDraft = buildProspectOutreach({
         companyName: inputCompanyName,
         contactName: inputContactName,
@@ -1036,18 +1042,19 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
                   ? 'follow_up'
                   : 'nurture',
             band: prospect.band,
-            outreach_subject: prospect.outreach_subject,
-            outreach_body: prospect.outreach_body,
+            outreach_subject: generatedDraft.subject,
+            outreach_body: generatedDraft.body,
             crm_record_id: null,
             last_contacted_at: null,
             next_followup_at: prospectFollowUpAt(now(), prospect.band),
             offer_id: null,
+            segment: inputSegment,
             offer_variant: inputOfferVariant,
             outreach_angle: inputOutreachAngle,
             metadata: {
               summary: prospect.summary,
               pain_points: prospect.pain_points,
-              cta: prospect.cta,
+              cta: generatedDraft.cta,
               model: usedModel,
               model_family: getModelFamily(usedModel),
               provider,
@@ -1081,7 +1088,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
             metadata: {
               summary: prospect.summary,
               pain_points: prospect.pain_points,
-              cta: prospect.cta,
+              cta: generatedDraft.cta,
               model: usedModel,
               model_family: getModelFamily(usedModel),
               provider,

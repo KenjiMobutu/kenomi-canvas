@@ -174,7 +174,6 @@ export async function createPublicCheckoutSession(
 
   const expectedAmountEur = payment.price_amount / 100
   const insertPayment = await input.supabase.from('payments').insert({
-    user_id: venture.user_id,
     venture_id: venture.id,
     stripe_session_id: session.id,
     stripe_payment_intent_id: getPaymentIntentId(session.payment_intent),

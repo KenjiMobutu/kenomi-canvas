@@ -7,6 +7,7 @@ import {
   scheduleNextFollowUpAt,
   shouldGenerateFollowUp,
 } from './follow-up'
+import { DIAGNOSTIC_CASH_LANE } from '@/lib/revenue/diagnostic-cash-lane'
 
 describe('follow-up sequencing', () => {
   it('maps counts to the next follow-up kind', () => {
@@ -93,6 +94,8 @@ describe('buildProspectFollowUpDraft', () => {
     expect(draft.subject).toContain('Re:')
     expect(draft.body).toContain('Hi Léa,')
     expect(draft.body).toContain('manual triage')
-    expect(draft.cta).toBe('Would a quick reply make sense this week?')
+    expect(draft.body).toContain(DIAGNOSTIC_CASH_LANE.offer.title)
+    expect(draft.body).toContain('https://lab.kenomi.eu/diagnostic-300')
+    expect(draft.cta).toBe('Review the 300EUR Diagnostic: https://lab.kenomi.eu/diagnostic-300')
   })
 })
