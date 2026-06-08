@@ -5,7 +5,7 @@ describe('findGroundedGithubProspect', () => {
   it('returns the first grounded GitHub prospect with a public business email', async () => {
     const responses = new Map<string, unknown>([
       [
-        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=5',
+        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=10',
         {
           items: [{ url: 'https://api.github.com/users/freshworkstudio' }],
         },
@@ -52,7 +52,7 @@ describe('findGroundedGithubProspect', () => {
   it('ignores noreply and missing-email profiles', async () => {
     const responses = new Map<string, unknown>([
       [
-        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=5',
+        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=10',
         {
           items: [
             { url: 'https://api.github.com/users/nope1' },
@@ -101,7 +101,7 @@ describe('findGroundedGithubProspect', () => {
   it('skips already-contacted identities and returns the next grounded candidate', async () => {
     const responses = new Map<string, unknown>([
       [
-        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=5',
+        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=10',
         {
           items: [
             { url: 'https://api.github.com/users/agencyenterprise' },
@@ -156,6 +156,89 @@ describe('findGroundedGithubProspect', () => {
       company_name: 'Freshwork Studio',
       contact_email: 'gonzalo@freshworkstudio.com',
       source_url: 'https://github.com/freshworkstudio',
+    })
+  })
+
+  it('keeps scanning later search results after excluded and invalid candidates', async () => {
+    const responses = new Map<string, unknown>([
+      [
+        'https://api.github.com/search/users?q=agency+studio+in%3Abio+repos%3A%3E2+followers%3A%3E1&per_page=10',
+        {
+          items: [
+            { url: 'https://api.github.com/users/agencyenterprise' },
+            { url: 'https://api.github.com/users/freshworkstudio' },
+            { url: 'https://api.github.com/users/invalid3' },
+            { url: 'https://api.github.com/users/agency42' },
+          ],
+        },
+      ],
+      [
+        'https://api.github.com/users/agencyenterprise',
+        {
+          login: 'agencyenterprise',
+          name: 'AE Studio',
+          email: 'humanagency@ae.studio',
+          bio: 'Building products to increase human agency',
+          html_url: 'https://github.com/agencyenterprise',
+          followers: 9,
+          public_repos: 6,
+        },
+      ],
+      [
+        'https://api.github.com/users/freshworkstudio',
+        {
+          login: 'freshworkstudio',
+          name: 'Freshwork Studio',
+          email: 'gonzalo@freshworkstudio.com',
+          bio: 'Web Development Agency',
+          html_url: 'https://github.com/freshworkstudio',
+          followers: 12,
+          public_repos: 8,
+        },
+      ],
+      [
+        'https://api.github.com/users/invalid3',
+        {
+          login: 'invalid3',
+          name: 'Invalid Studio',
+          email: null,
+          bio: 'Creative agency',
+          html_url: 'https://github.com/invalid3',
+          followers: 5,
+          public_repos: 4,
+        },
+      ],
+      [
+        'https://api.github.com/users/agency42',
+        {
+          login: 'agency42',
+          name: 'Agency/42',
+          email: 'hello@agency42.co',
+          bio: 'ai innovation studio',
+          html_url: 'https://github.com/agency42',
+          followers: 11,
+          public_repos: 10,
+        },
+      ],
+    ])
+
+    const result = await findGroundedGithubProspect({
+      query: '300EUR diagnostic freelancers small agencies',
+      exclude: {
+        emails: ['humanagency@ae.studio', 'gonzalo@freshworkstudio.com'],
+      },
+      fetchImpl: async (url) =>
+        new Response(JSON.stringify(responses.get(url) ?? {}), {
+          status: responses.has(url) ? 200 : 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    })
+
+    expect(result).not.toBeNull()
+    expect(result).toMatchObject({
+      company_name: 'Agency/42',
+      contact_email: 'hello@agency42.co',
+      source_url: 'https://github.com/agency42',
     })
   })
 })

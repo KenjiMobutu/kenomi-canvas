@@ -37,7 +37,13 @@ const SEARCH_QUERIES = [
   'agency studio in:bio repos:>2 followers:>1',
   'freelance consultant in:bio repos:>2 followers:>1',
   'consultant automation in:bio repos:>2 followers:>1',
+  'web agency in:bio repos:>2 followers:>1',
+  'design studio in:bio repos:>2 followers:>1',
+  'product studio in:bio repos:>2 followers:>1',
 ] as const
+
+const SEARCH_RESULTS_PER_QUERY = 10
+const PROFILE_SCAN_LIMIT = 8
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -139,7 +145,7 @@ function isGithubRequestError(error: unknown): boolean {
 function buildSearchUrl(query: string): string {
   const url = new URL('https://api.github.com/search/users')
   url.searchParams.set('q', query)
-  url.searchParams.set('per_page', '5')
+  url.searchParams.set('per_page', String(SEARCH_RESULTS_PER_QUERY))
   return url.toString()
 }
 
@@ -228,7 +234,7 @@ export async function findGroundedGithubProspect(input: {
     }
     const items = Array.isArray(search.items) ? (search.items as GithubSearchUser[]) : []
 
-    for (const item of items.slice(0, 3)) {
+    for (const item of items.slice(0, PROFILE_SCAN_LIMIT)) {
       let profile: GithubUserProfile
       try {
         profile = (await fetchGithubJson(fetchImpl, item.url, token)) as GithubUserProfile
