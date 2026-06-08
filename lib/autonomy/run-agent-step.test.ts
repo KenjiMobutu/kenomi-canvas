@@ -269,6 +269,7 @@ describe('runAgentStep', () => {
           company_name: 'Acme Studio',
           source: 'linkedin',
           contact_name: 'Marie',
+          contact_email: 'marie@acme.test',
           score: 82,
           band: 'warm',
           summary: 'Needs better follow-up visibility',
@@ -323,6 +324,7 @@ describe('runAgentStep', () => {
             company_name: 'Acme Studio',
             source: 'linkedin',
             contact_name: 'Marie',
+            contact_email: 'marie@acme.test',
             score: 82,
             band: 'warm',
             summary: 'Needs better follow-up visibility',
@@ -374,6 +376,58 @@ describe('runAgentStep', () => {
 
     expect(supabase.tables.prospects).toHaveLength(0)
     expect(supabase.tables.autonomy_actions).toHaveLength(0)
+  })
+
+  it('fails Prospect runs that do not return strict JSON', async () => {
+    const supabase = createFakeSupabase()
+
+    await expect(
+      runAgentStep({
+        supabase,
+        userId: 'user-1',
+        agentId: 'prospect',
+        llm: async (): Promise<LLMResponse> => ({
+          content: 'I found a promising company but I cannot format JSON right now.',
+          provider: 'ollama',
+          model: 'qwen3:4b',
+          fallback_triggered: false,
+        }),
+        now: () => new Date('2026-05-26T10:00:00.000Z'),
+      })
+    ).rejects.toThrow('Prospect output invalid JSON')
+
+    expect(supabase.tables.prospects).toHaveLength(0)
+  })
+
+  it('fails Prospect runs that do not provide a verified contact email', async () => {
+    const supabase = createFakeSupabase()
+
+    await expect(
+      runAgentStep({
+        supabase,
+        userId: 'user-1',
+        agentId: 'prospect',
+        llm: async (): Promise<LLMResponse> => ({
+          content: JSON.stringify({
+            company_name: 'Acme Studio',
+            source: 'linkedin',
+            score: 82,
+            band: 'warm',
+            summary: 'Needs better follow-up visibility',
+            pain_points: ['manual triage'],
+            outreach_subject: 'Acme Studio — qualifier plus vite',
+            outreach_body: 'Bonjour, proposition concise.',
+            cta: 'Reply to continue',
+          }),
+          provider: 'ollama',
+          model: 'qwen3:4b',
+          fallback_triggered: false,
+        }),
+        now: () => new Date('2026-05-26T10:00:00.000Z'),
+      })
+    ).rejects.toThrow('Prospect output missing verified contact email')
+
+    expect(supabase.tables.prospects).toHaveLength(0)
   })
 
   it('runs the DevOps agent from grounded diagnostics context and persists a snapshot', async () => {
@@ -1162,6 +1216,7 @@ describe('runAgentStep', () => {
         company_name: 'Acme Studio',
         source: 'upwork',
         contact_name: 'Marie Dupont',
+        contact_email: 'marie@acme.test',
         score: 88,
         band: 'hot',
         summary: 'L équipe a besoin d un accompagnement rapide pour prioriser les demandes entrantes.',
@@ -1196,6 +1251,7 @@ describe('runAgentStep', () => {
       score: 88,
       band: 'hot',
       status: 'ready_to_contact',
+      contact_email: 'marie@acme.test',
       outreach_subject: 'Acme Studio — une piste pour prioriser vos leads chauds',
     })
     expect(supabase.tables.prospects[0].metadata).toMatchObject({
@@ -1240,6 +1296,7 @@ describe('runAgentStep', () => {
         content: JSON.stringify({
           company_name: 'Dormant Co',
           source: 'reddit',
+          contact_email: 'ops@dormant.test',
           score: 41,
           band: 'cold',
           summary: 'Weak buying signal.',
@@ -1280,6 +1337,7 @@ describe('runAgentStep', () => {
         content: JSON.stringify({
           company_name: 'Acme Studio',
           source: 'linkedin',
+          contact_email: 'hello@acme.test',
           score: 91,
           band: 'hot',
           summary: 'Urgent qualification issue.',

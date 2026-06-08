@@ -831,6 +831,10 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       }
     }
 
+    if (agentId === 'prospect' && !parsedOutput) {
+      throw new RunAgentStepError('Prospect output invalid JSON', 422)
+    }
+
     if (agentId === 'scout') {
       const parsed = parsePipelineIdea(content)
       if (pipeline && pipeline.status === 'pending_validation') {
@@ -890,12 +894,20 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
         typeof input.structuredInput?.contactRole === 'string' &&
         input.structuredInput.contactRole.trim().length > 0
           ? input.structuredInput.contactRole.trim()
-          : null
+          : (typeof prospect.contact_role === 'string' ? prospect.contact_role.trim() : null)
       const inputContactEmail =
         typeof input.structuredInput?.contactEmail === 'string' &&
         input.structuredInput.contactEmail.trim().length > 0
           ? input.structuredInput.contactEmail.trim()
+          : (typeof prospect.contact_email === 'string' ? prospect.contact_email.trim() : null)
+      const inputSourceUrl =
+        typeof prospect.source_url === 'string' && prospect.source_url.trim().length > 0
+          ? prospect.source_url.trim()
           : null
+
+      if (!inputContactEmail) {
+        throw new RunAgentStepError('Prospect output missing verified contact email', 422)
+      }
       const inputSource = normalizeProspectSource(input.structuredInput?.source, prospect.source)
       const inputFocus =
         typeof input.structuredInput?.focus === 'string' && input.structuredInput.focus.trim().length > 0
@@ -926,7 +938,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           .insert({
             user_id: userId,
             source: inputSource,
-            source_url: null,
+            source_url: inputSourceUrl,
             company_name: inputCompanyName,
             contact_name: inputContactName,
             contact_email: inputContactEmail,
