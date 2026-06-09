@@ -93,6 +93,7 @@ export function buildProspectFollowUpDraft(input: {
   summary?: string | null
   painPoints?: string[]
   previousSubject?: string | null
+  outreachAngle?: string | null
   operatorNotes?: string | null
   kind: ProspectOutreachKind
 }) {
@@ -107,31 +108,56 @@ export function buildProspectFollowUpDraft(input: {
   const summary = input.summary?.trim() || `the ${input.companyName} opportunity`
   const painPoint = input.painPoints?.find(Boolean)?.trim() ?? 'this workflow'
   const subjectPainPoint = summarizePainPointForSubject(painPoint)
+  const isTeardownMotion =
+    typeof input.outreachAngle === 'string' &&
+    (input.outreachAngle.includes('v3-teardown') ||
+      input.outreachAngle.includes('v4-personal') ||
+      input.outreachAngle.includes('v5-hyper-personal') ||
+      input.outreachAngle.includes('v6-direct-value'))
   const subject =
-    input.kind === 'follow_up_1'
-      ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${subjectPainPoint}`
-      : `${reminder} — ${subjectPainPoint}`
+    isTeardownMotion && input.kind === 'follow_up_1'
+      ? `${input.companyName} — did any of the teardown points land?`
+      : input.kind === 'follow_up_1'
+        ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${subjectPainPoint}`
+        : `${reminder} — ${subjectPainPoint}`
 
-  const lines = [
-    `Hi ${firstName},`,
-    '',
-    input.kind === 'follow_up_3'
-      ? `Closing the loop on the ${DIAGNOSTIC_CASH_LANE.offer.title.toLowerCase()} for ${summary}.`
-      : `Following up on my earlier note about ${summary}.`,
-    `The main angle is still ${painPoint}.`,
-    `The offer is a fixed-scope ${DIAGNOSTIC_CASH_LANE.offer.title} for ${DIAGNOSTIC_CASH_LANE.segment.title.toLowerCase()}.`,
-    'It includes one short diagnostic call and a written action plan within 48h.',
-    'If useful, the exact scope is ready now.',
-    '',
-    `Exact scope: ${laneUrl}`,
-    '',
-    'Does this justify a quick go/no-go this week?',
-  ]
+  const lines = isTeardownMotion
+    ? [
+        `Hi ${firstName},`,
+        '',
+        input.kind === 'follow_up_3'
+          ? `Closing the loop on the teardown I sent for ${summary}.`
+          : `Quick follow-up on the teardown I sent for ${summary}.`,
+        `The main leak still looks like ${painPoint}.`,
+        input.kind === 'follow_up_1'
+          ? 'If even one of those points felt real, reply yes and I will send the next 3 fixes I would test first.'
+          : `If useful, the paid next step is still the ${DIAGNOSTIC_CASH_LANE.offer.title}.`,
+        input.kind === 'follow_up_1'
+          ? `If you would rather jump straight to the paid pass, the scope is here: ${laneUrl}`
+          : `Scope: ${laneUrl}`,
+      ]
+    : [
+        `Hi ${firstName},`,
+        '',
+        input.kind === 'follow_up_3'
+          ? `Closing the loop on the ${DIAGNOSTIC_CASH_LANE.offer.title.toLowerCase()} for ${summary}.`
+          : `Following up on my earlier note about ${summary}.`,
+        `The main angle is still ${painPoint}.`,
+        `The offer is a fixed-scope ${DIAGNOSTIC_CASH_LANE.offer.title} for ${DIAGNOSTIC_CASH_LANE.segment.title.toLowerCase()}.`,
+        'It includes one short diagnostic call and a written action plan within 48h.',
+        'If useful, the exact scope is ready now.',
+        '',
+        `Exact scope: ${laneUrl}`,
+        '',
+        'Does this justify a quick go/no-go this week?',
+      ]
 
   return {
     subject,
     body: lines.join('\n'),
-    cta: `Review the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`,
+    cta: isTeardownMotion
+      ? `Reply yes for the next 3 fixes or review the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`
+      : `Review the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`,
   }
 }
 

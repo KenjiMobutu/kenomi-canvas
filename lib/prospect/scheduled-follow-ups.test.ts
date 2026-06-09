@@ -9,6 +9,7 @@ vi.mock('@/lib/memory/prospect-memory', () => ({
 import { processDueProspectFollowUps, type ProspectScheduleSupabase } from './scheduled-follow-ups'
 
 function makeSupabase() {
+  let idCounter = 0
   const tables: Record<string, Record<string, unknown>[]> = {
     prospects: [
       {
@@ -74,7 +75,10 @@ function makeSupabase() {
         return builder
       },
       insert: (payload: Record<string, unknown> | Record<string, unknown>[]) => {
-        const rows = Array.isArray(payload) ? payload : [payload]
+        const rows = (Array.isArray(payload) ? payload : [payload]).map((row) => ({
+          id: row.id ?? `${table}-${++idCounter}`,
+          ...row,
+        }))
         tables[table].push(...rows)
         return builder
       },
@@ -124,5 +128,44 @@ describe('processDueProspectFollowUps', () => {
       pipeline_status: 'sent',
       next_followup_at: '2026-05-25T10:00:00.000Z',
     })
+  })
+
+  it('generates teardown-style follow-up copy for v6 prospects', async () => {
+    const supabase = makeSupabase()
+    supabase.tables.prospects[0] = {
+      id: 'prospect-v6',
+      user_id: 'user-1',
+      company_name: 'Hello Studio',
+      contact_name: 'Hugo Jansen',
+      contact_email: 'hugo@hellostudio.nl',
+      outreach_angle: 'diagnostic-call-outbound-v6-direct-value',
+      outreach_subject: 'Hugo, I wrote this 3-point teardown for Hello Studio',
+      outreach_body: 'Body',
+      pipeline_status: 'sent',
+      next_followup_at: '2026-05-25T10:00:00.000Z',
+      follow_up_count: 0,
+      follow_up_version: 0,
+      last_outreach_kind: 'initial',
+      operator_notes: '',
+      metadata: { summary: 'contact path leak', pain_points: ['slower lead response'] },
+      tags: ['warm'],
+    }
+
+    const result = await processDueProspectFollowUps({
+      supabase: supabase as unknown as ProspectScheduleSupabase,
+      userId: 'user-1',
+      nowIso: '2026-05-26T10:00:00.000Z',
+    })
+
+    expect(result).toEqual({ processed: 1 })
+    expect(supabase.tables.prospects[0]).toMatchObject({
+      pipeline_status: 'awaiting_approval',
+    })
+    expect(String(supabase.tables.prospects[0].outreach_subject)).toContain(
+      'did any of the teardown points land?'
+    )
+    expect(String(supabase.tables.prospects[0].outreach_body)).toContain(
+      'Quick follow-up on the teardown I sent'
+    )
   })
 })

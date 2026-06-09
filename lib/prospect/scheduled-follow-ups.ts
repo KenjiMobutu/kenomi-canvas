@@ -43,6 +43,7 @@ export interface ProspectFollowUpRow {
   source?: string | null
   band?: string | null
   tags?: string[] | null
+  outreach_angle?: string | null
   contact_name?: string | null
   contact_email?: string | null
   outreach_subject?: string | null
@@ -250,6 +251,7 @@ export async function processDueProspectFollowUps(input: {
         ? metadata.pain_points.filter((value): value is string => typeof value === 'string')
         : [],
       previousSubject: row.outreach_subject ?? null,
+      outreachAngle: row.outreach_angle ?? null,
       operatorNotes: [row.operator_notes ?? '', memoryContext].filter(Boolean).join('\n\n') || null,
       kind,
     })

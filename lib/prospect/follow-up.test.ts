@@ -99,6 +99,22 @@ describe('buildProspectFollowUpDraft', () => {
     expect(draft.cta).toBe('Review the 300EUR Diagnostic: https://lab.kenomi.eu/diagnostic-300')
   })
 
+  it('keeps teardown motions in teardown language for the first follow-up', () => {
+    const draft = buildProspectFollowUpDraft({
+      companyName: 'Acme Studio',
+      contactName: 'Léa Martin',
+      summary: 'reply-to-paid drag',
+      painPoints: ['reply-to-paid drag'],
+      outreachAngle: 'diagnostic-call-outbound-v6-direct-value',
+      kind: 'follow_up_1',
+    })
+
+    expect(draft.subject).toBe('Acme Studio — did any of the teardown points land?')
+    expect(draft.body).toContain('Quick follow-up on the teardown I sent')
+    expect(draft.body).toContain('reply yes and I will send the next 3 fixes')
+    expect(draft.cta).toContain('Reply yes for the next 3 fixes')
+  })
+
   it('never leaks operator memory into the follow-up body', () => {
     const draft = buildProspectFollowUpDraft({
       companyName: 'Acme Studio',
