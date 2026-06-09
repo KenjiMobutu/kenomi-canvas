@@ -492,8 +492,9 @@ describe('runAgentStep', () => {
     expect(supabase.tables.prospects[0].metadata).toMatchObject({
       lane_segment: 'freelancers-small-agencies',
     })
-    expect(String(supabase.tables.prospects[0].outreach_subject)).toContain('300EUR Diagnostic')
+    expect(String(supabase.tables.prospects[0].outreach_subject)).toContain('3-point teardown')
     expect(String(supabase.tables.prospects[0].outreach_body)).toContain('https://lab.kenomi.eu/diagnostic-300')
+    expect(String(supabase.tables.prospects[0].outreach_body)).toContain('Rather than tease a teardown, here it is directly:')
   })
 
   it('passes existing prospect identities to grounded prospect selection', async () => {
@@ -1380,11 +1381,11 @@ describe('runAgentStep', () => {
       offer_variant: '300eur-diagnostic',
       outreach_angle: 'diagnostic-call-outbound-v1',
       contact_email: 'marie@acme.test',
-      outreach_subject: 'Acme Studio — 300EUR Diagnostic for follow-up drag',
+      outreach_subject: 'Marie, I wrote this 3-point teardown for Acme Studio',
     })
     expect(supabase.tables.prospects[0].metadata).toMatchObject({
       lane_segment: 'freelancers-small-agencies',
-      cta: 'Book the 300EUR Diagnostic: https://lab.kenomi.eu/diagnostic-300',
+      cta: 'Reply yes for the next 3 fixes or book the 300EUR Diagnostic: https://lab.kenomi.eu/diagnostic-300',
       model: 'qwen3:8b',
       model_family: 'qwen',
       provider: 'ollama',

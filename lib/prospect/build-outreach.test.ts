@@ -16,7 +16,8 @@ describe('buildProspectOutreach', () => {
 
     expect(draft.subject).toContain('Acme Studio')
     expect(draft.body).toContain('Lina')
-    expect(draft.body).toContain('follow-up')
+    expect(draft.body).toContain('Rather than tease a teardown')
+    expect(draft.body).toContain('reply yes')
     expect(draft.cta).toBeTruthy()
   })
 
@@ -31,12 +32,16 @@ describe('buildProspectOutreach', () => {
       focus: 'prospect',
     })
 
-    expect(draft.subject).toContain(DIAGNOSTIC_CASH_LANE.offer.title)
-    expect(draft.subject).toContain('lead follow-up drag')
+    expect(draft.subject).toContain('3-point teardown')
+    expect(draft.subject).toContain('Acme Studio')
     expect(draft.body).toContain(DIAGNOSTIC_CASH_LANE.offer.title)
     expect(draft.body).toContain('48h')
+    expect(draft.body).toContain('Rather than tease a teardown, here it is directly:')
+    expect(draft.body).toContain('1.')
+    expect(draft.body).toContain('2.')
+    expect(draft.body).toContain('3.')
     expect(draft.body).toContain('https://lab.kenomi.eu/diagnostic-300')
-    expect(draft.cta).toContain('https://lab.kenomi.eu/diagnostic-300')
+    expect(draft.cta).toContain('Reply yes')
   })
 
   it('compresses verbose pain points into shorter subject phrases', () => {

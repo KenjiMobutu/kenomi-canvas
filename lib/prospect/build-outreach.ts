@@ -32,38 +32,71 @@ export function summarizePainPointForSubject(painPoint: string): string {
   return painPoint.trim()
 }
 
+function buildTeardownPoints(input: {
+  companyName: string
+  painPoint: string
+  focus: ProspectOutreachInput['focus']
+}) {
+  const subjectPainPoint = summarizePainPointForSubject(input.painPoint)
+
+  if (input.focus === 'reply') {
+    return [
+      `Your first-response path likely loses momentum because ${subjectPainPoint} is still treated like an internal ops problem rather than a conversion step.`,
+      `The handoff between interest and human follow-up looks heavier than it needs to be, which usually leaks intent before a real conversation starts.`,
+      `A tighter reply path with one clearer next step would likely convert more of the demand you already create into live sales conversations.`,
+    ]
+  }
+
+  if (input.focus === 'crm') {
+    return [
+      `${input.companyName} likely has enough signal already, but ${subjectPainPoint} still forces too much manual judgment before a lead gets a clear next step.`,
+      `The current qualification path probably asks the team to interpret interest manually instead of routing obvious opportunities fast.`,
+      `A simpler cash-first queue would usually recover more pipeline without adding another CRM ritual.`,
+    ]
+  }
+
+  return [
+    `${input.companyName} likely leaks intent because ${subjectPainPoint} still sits between interest and a concrete next step.`,
+    `The current path probably makes a qualified lead work too hard to move from curiosity to conversation.`,
+    `A shorter response layer tied to one immediate outcome would usually convert more existing demand into pipeline.`,
+  ]
+}
+
 export function buildProspectOutreach(input: ProspectOutreachInput): ProspectOutreachDraft {
-  const opener = input.contactName ? `Hi ${input.contactName},` : `Hi ${input.companyName},`
+  const firstName = input.contactName?.trim()?.split(/\s+/)[0] ?? null
+  const opener = firstName ? `Hi ${firstName},` : `Hi ${input.companyName},`
   const painPoint = firstPainPoint(input.painPoints)
   const subjectPainPoint = summarizePainPointForSubject(painPoint)
   const laneUrl = getDiagnosticCashLaneUrl()
-  const subject =
-    input.band === 'hot'
-      ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for follow-up drag`
-      : `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${subjectPainPoint}`
+  const subject = firstName
+    ? `${firstName}, I wrote this 3-point teardown for ${input.companyName}`
+    : `${input.companyName} — 3-point teardown for ${subjectPainPoint}`
+  const teardown = buildTeardownPoints({
+    companyName: input.companyName,
+    painPoint,
+    focus: input.focus,
+  })
 
   const body = [
     opener,
     '',
-    `I found ${input.companyName} via ${input.source} and picked up a likely sales leak: ${painPoint}.`,
-    `I run a fixed-scope ${DIAGNOSTIC_CASH_LANE.offer.title} for ${DIAGNOSTIC_CASH_LANE.segment.title.toLowerCase()}.`,
-    'It is built to tighten lead-response flow, follow-up discipline, and the path from reply to paid without adding process overhead.',
+    `I found ${input.companyName} via ${input.source} and picked up a likely leak around ${painPoint}.`,
     '',
-    'What is included:',
-    '- one short diagnostic call',
-    '- a written action plan within 48h',
-    '- the next fixes that should move cash first',
+    'Rather than tease a teardown, here it is directly:',
+    `1. ${teardown[0]}`,
+    `2. ${teardown[1]}`,
+    `3. ${teardown[2]}`,
     '',
-    `Exact scope: ${laneUrl}`,
+    `If this maps to what you are seeing, the paid next step is a fixed-scope ${DIAGNOSTIC_CASH_LANE.offer.title}.`,
+    'It includes one short diagnostic call and a written action plan within 48h.',
+    `Scope: ${laneUrl}`,
     '',
-    input.band === 'hot'
-      ? `If the timing is right, you can book the ${DIAGNOSTIC_CASH_LANE.offer.title.toLowerCase()} directly or reply and I will point to the right angle.`
-      : `If this maps to what you are seeing, you can book the ${DIAGNOSTIC_CASH_LANE.offer.title.toLowerCase()} directly or reply and I will tell you if the fit is real.`,
+    'If useful, reply yes and I will send the next 3 fixes I would test first.',
   ].join('\n')
 
   return {
     subject,
     body,
-    cta: `Book the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`,
+    cta: `Reply yes for the next 3 fixes or book the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`,
   }
 }
