@@ -75,6 +75,7 @@ async function withImapSession<T>(
     run(command: string): Promise<string>
   }) => Promise<T>
 ) {
+  let buffer = ''
   const options: TlsConnectionOptions = {
     host: config.host,
     port: config.port,
@@ -83,58 +84,49 @@ async function withImapSession<T>(
 
   const socket = await new Promise<TLSSocket>((resolve, reject) => {
     const client = tlsConnect(options, () => resolve(client))
+    client.setEncoding('utf8')
+    client.on('data', (chunk: string) => {
+      buffer += chunk
+    })
     client.once('error', reject)
   })
 
-  socket.setEncoding('utf8')
-
-  let buffer = ''
-  const waitForTagged = (tag: string) =>
+  const waitForMatch = (matcher: RegExp) =>
     new Promise<string>((resolve, reject) => {
-      const onData = (chunk: string) => {
-        buffer += chunk
-        const regex = new RegExp(`\\r?\\n${tag} (OK|NO|BAD)[^\\r\\n]*`, 'i')
-        if (regex.test(buffer)) {
-          cleanup()
+      const startedAt = Date.now()
+      const timer = setInterval(() => {
+        if (matcher.test(buffer)) {
+          clearInterval(timer)
           const output = buffer
           buffer = ''
-          if (new RegExp(`\\r?\\n${tag} OK`, 'i').test(output)) {
-            resolve(output)
-          } else {
-            reject(new Error(output.trim()))
-          }
+          resolve(output)
+          return
         }
-      }
-      const onError = (error: Error) => {
-        cleanup()
+
+        if (Date.now() - startedAt > 15000) {
+          clearInterval(timer)
+          reject(new Error(`IMAP timeout waiting for ${matcher}`))
+        }
+      }, 25)
+
+      socket.once('error', (error) => {
+        clearInterval(timer)
         reject(error)
-      }
-      const cleanup = () => {
-        socket.off('data', onData)
-        socket.off('error', onError)
-      }
-      socket.on('data', onData)
-      socket.on('error', onError)
+      })
     })
 
   const run = async (command: string) => {
     const tag = `A${Math.random().toString(36).slice(2, 8).toUpperCase()}`
     socket.write(`${tag} ${command}\r\n`)
-    return waitForTagged(tag)
+    const output = await waitForMatch(new RegExp(`(^|\\r?\\n)${tag} (OK|NO|BAD)[^\\r\\n]*`, 'i'))
+    if (!new RegExp(`(^|\\r?\\n)${tag} OK`, 'i').test(output)) {
+      throw new Error(output.trim())
+    }
+    return output
   }
 
   // drain server greeting
-  await new Promise<void>((resolve) => {
-    const onData = (chunk: string) => {
-      buffer += chunk
-      if (/\* OK/i.test(buffer)) {
-        socket.off('data', onData)
-        buffer = ''
-        resolve()
-      }
-    }
-    socket.on('data', onData)
-  })
+  await waitForMatch(/\* OK/i)
 
   try {
     await run(`LOGIN ${JSON.stringify(config.username)} ${JSON.stringify(config.password)}`)
