@@ -15,6 +15,10 @@ vi.mock('@/lib/nurture/n8n', () => ({
   notifyNurtureSignup: vi.fn().mockResolvedValue({ ok: true }),
 }))
 
+vi.mock('@/lib/prospect/hand-raise', () => ({
+  recordProspectHandRaise: vi.fn().mockResolvedValue({ updated: true }),
+}))
+
 vi.mock('@/lib/venture-events', async () => {
   const actual =
     await vi.importActual<typeof import('@/lib/venture-events')>('@/lib/venture-events')
@@ -27,10 +31,12 @@ vi.mock('@/lib/venture-events', async () => {
 import { POST } from '@/app/api/waitlist/route'
 import { db } from '@/lib/db'
 import { notifyNurtureSignup } from '@/lib/nurture/n8n'
+import { recordProspectHandRaise } from '@/lib/prospect/hand-raise'
 
 const mockedFindFirst = vi.mocked(db.venture.findFirst)
 const mockedUpsert = vi.mocked(db.waitlist.upsert)
 const mockedNotifyNurtureSignup = vi.mocked(notifyNurtureSignup)
+const mockedRecordProspectHandRaise = vi.mocked(recordProspectHandRaise)
 
 function makeJsonRequest(body: unknown, headers: Record<string, string> = {}): Request {
   return new Request('http://localhost/api/waitlist', {
@@ -50,9 +56,11 @@ describe('POST /api/waitlist', () => {
     mockedFindFirst.mockReset()
     mockedUpsert.mockReset()
     mockedNotifyNurtureSignup.mockReset()
+    mockedRecordProspectHandRaise.mockReset()
     mockedFindFirst.mockResolvedValue({ id: 'v-1' } as never)
     mockedUpsert.mockResolvedValue({} as never)
     mockedNotifyNurtureSignup.mockResolvedValue({ ok: true })
+    mockedRecordProspectHandRaise.mockResolvedValue({ updated: true } as never)
   })
 
   it('400 si email manquant', async () => {
@@ -95,12 +103,43 @@ describe('POST /api/waitlist', () => {
         slug: 'my-venture',
         ventureId: 'v-1',
         email: 'jean@kenomi.eu',
+        prospect_id: '',
+        outreach_angle: '',
         source: 'waitlist',
         utm_source: 'linkedin',
         utm_medium: '',
         utm_campaign: 'launch',
         utm_content: '',
       },
+    })
+    expect(mockedRecordProspectHandRaise).not.toHaveBeenCalled()
+  })
+
+  it('records a tracked hand raise for a known prospect', async () => {
+    const res = await POST(
+      makeJsonRequest({
+        slug: 'my-venture',
+        email: 'jwerpehowski@mangos.agency',
+        prospect_id: 'prospect-hot',
+        outreach_angle: 'diagnostic-call-outbound-v7-hot-personal',
+        utm_source: 'outbound_followup',
+        utm_medium: 'email',
+        utm_campaign: 'diagnostic-call-outbound-v7-hot-personal',
+      }) as never
+    )
+
+    expect(res.status).toBe(302)
+    expect(mockedRecordProspectHandRaise).toHaveBeenCalledWith({
+      supabase: {},
+      prospectId: 'prospect-hot',
+      email: 'jwerpehowski@mangos.agency',
+      outreachAngle: 'diagnostic-call-outbound-v7-hot-personal',
+    })
+    expect(mockedNotifyNurtureSignup).toHaveBeenCalledWith({
+      payload: expect.objectContaining({
+        prospect_id: 'prospect-hot',
+        outreach_angle: 'diagnostic-call-outbound-v7-hot-personal',
+      }),
     })
   })
 

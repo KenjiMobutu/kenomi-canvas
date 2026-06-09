@@ -7,6 +7,7 @@ import { logError } from '@/lib/logger'
 import { notifyNurtureSignup } from '@/lib/nurture/n8n'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
+import { recordProspectHandRaise } from '@/lib/prospect/hand-raise'
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest) {
 
   try {
     let slug: string, email: string
+    let prospect_id = ''
+    let outreach_angle = ''
     let utm_source = ''
     let utm_medium = ''
     let utm_campaign = ''
@@ -33,6 +36,8 @@ export async function POST(req: NextRequest) {
       const form = await req.formData()
       slug = (form.get('slug') as string) ?? ''
       email = (form.get('email') as string) ?? ''
+      prospect_id = String(form.get('prospect_id') ?? '')
+      outreach_angle = String(form.get('outreach_angle') ?? '')
       utm_source = String(form.get('utm_source') ?? '')
       utm_medium = String(form.get('utm_medium') ?? '')
       utm_campaign = String(form.get('utm_campaign') ?? '')
@@ -41,6 +46,8 @@ export async function POST(req: NextRequest) {
       const body = await req.json()
       slug = body.slug ?? ''
       email = body.email ?? ''
+      prospect_id = body.prospect_id ?? ''
+      outreach_angle = body.outreach_angle ?? ''
       utm_source = body.utm_source ?? ''
       utm_medium = body.utm_medium ?? ''
       utm_campaign = body.utm_campaign ?? ''
@@ -70,6 +77,8 @@ export async function POST(req: NextRequest) {
       eventType: 'waitlist_signup',
       source: 'waitlist',
       metadata: {
+        prospect_id,
+        outreach_angle,
         email_domain: email.split('@')[1] ?? '',
         utm_source,
         utm_medium,
@@ -83,6 +92,8 @@ export async function POST(req: NextRequest) {
       eventType: 'high_intent_lead',
       source: 'waitlist',
       metadata: {
+        prospect_id,
+        outreach_angle,
         email_domain: email.split('@')[1] ?? '',
         utm_source,
         utm_medium,
@@ -97,6 +108,8 @@ export async function POST(req: NextRequest) {
         slug,
         ventureId: venture?.id ?? null,
         email,
+        prospect_id,
+        outreach_angle,
         source: 'waitlist',
         utm_source,
         utm_medium,
@@ -104,6 +117,15 @@ export async function POST(req: NextRequest) {
         utm_content,
       },
     }).catch(() => undefined)
+
+    if (prospect_id) {
+      await recordProspectHandRaise({
+        supabase: supabaseAdmin,
+        prospectId: prospect_id,
+        email,
+        outreachAngle: outreach_angle || null,
+      }).catch(() => undefined)
+    }
 
     const rawOrigin = process.env.APP_ORIGIN ?? 'https://lab.kenomi.eu'
     let BASE: string

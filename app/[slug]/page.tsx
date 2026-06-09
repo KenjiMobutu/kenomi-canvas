@@ -114,6 +114,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
   const showPaymentSuccess = payment === 'success'
   const showPaymentCancel = payment === 'cancelled'
   const showCheckoutError = checkout === 'error'
+  const isTrackedVisitor = trackedProspectId.length > 0 || trackedEmail.length > 0
   const primaryCtaLabel =
     primaryCta.kind === 'checkout' ? 'Pay 300EUR and book the diagnostic' : primaryCta.label
 
@@ -164,7 +165,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
           }`}
         >
           {showWaitlistSuccess &&
-            'Inscription confirmée ! Vous serez notifié en priorité au lancement.'}
+            (isTrackedVisitor
+              ? 'Request received. The 3 fixes will be sent to your email.'
+              : 'Inscription confirmée ! Vous serez notifié en priorité au lancement.')}
           {showPaymentSuccess && 'Paiement reçu ! Bienvenue — vous recevrez vos accès par email.'}
           {showPaymentCancel && 'Paiement annulé. Revenez quand vous voulez.'}
           {showCheckoutError && 'Checkout indisponible pour le moment. Rejoignez la waitlist.'}
@@ -475,19 +478,29 @@ export default async function LandingPage({ params, searchParams }: Props) {
       <section id="waitlist" className="mx-auto max-w-xl px-6 py-20 text-center">
         {showWaitlistSuccess ? (
           <div className="rounded-xl border border-emerald-900 bg-emerald-950/30 p-8">
-            <h2 className="text-2xl font-semibold text-emerald-200">Vous êtes sur la liste</h2>
+            <h2 className="text-2xl font-semibold text-emerald-200">
+              {isTrackedVisitor ? 'The request is in' : 'Vous êtes sur la liste'}
+            </h2>
             <p className="mt-3 text-neutral-300">
-              On vous contacte dès que {data.nom} est disponible.
+              {isTrackedVisitor
+                ? 'The fastest next step is now to send the 3 fixes directly by email.'
+                : `On vous contacte dès que ${data.nom} est disponible.`}
             </p>
           </div>
         ) : (
           <>
-            <h2 className="text-3xl font-semibold text-white">Recevoir le lancement</h2>
+            <h2 className="text-3xl font-semibold text-white">
+              {isTrackedVisitor ? 'Prefer the 3 fixes first?' : 'Recevoir le lancement'}
+            </h2>
             <p className="mt-4 text-base leading-7 text-neutral-300">
-              If you do not want to buy now, leave an email and get the follow-up later.
+              {isTrackedVisitor
+                ? 'Skip checkout for now. Leave the email and get the 3 fixes directly instead.'
+                : 'If you do not want to buy now, leave an email and get the follow-up later.'}
             </p>
             <form action="/api/waitlist" method="POST" className="mx-auto mt-8 flex max-w-md gap-3">
               <input type="hidden" name="slug" value={slug} />
+              <input type="hidden" name="prospect_id" value={trackedProspectId} />
+              <input type="hidden" name="outreach_angle" value={trackedOutreachAngle} />
               <input type="hidden" name="utm_source" value={utm_source ?? ''} />
               <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
               <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
@@ -496,6 +509,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
                 type="email"
                 name="email"
                 placeholder="votre@email.com"
+                defaultValue={trackedEmail}
                 required
                 className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-white placeholder-neutral-500 focus:border-emerald-500 focus:outline-none"
               />
@@ -503,7 +517,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
                 type="submit"
                 className="whitespace-nowrap rounded-lg bg-white px-6 py-3 font-semibold text-neutral-950 transition-colors hover:bg-neutral-200"
               >
-                S&apos;inscrire
+                {isTrackedVisitor ? 'Send the 3 fixes' : 'S&apos;inscrire'}
               </button>
             </form>
           </>
