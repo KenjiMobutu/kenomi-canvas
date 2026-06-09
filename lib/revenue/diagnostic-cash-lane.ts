@@ -32,6 +32,33 @@ export function getDiagnosticCashLaneUrl(env: NodeJS.ProcessEnv = process.env): 
   }
 }
 
+export function getTrackedDiagnosticCashLaneUrl(input: {
+  prospectId?: string | null
+  email?: string | null
+  outreachAngle?: string | null
+  utmSource?: string | null
+  utmMedium?: string | null
+  utmCampaign?: string | null
+  utmContent?: string | null
+  env?: NodeJS.ProcessEnv
+}) {
+  const url = new URL(getDiagnosticCashLaneUrl(input.env))
+  const setIfPresent = (key: string, value: string | null | undefined) => {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      url.searchParams.set(key, value.trim())
+    }
+  }
+
+  setIfPresent('prospect_id', input.prospectId)
+  setIfPresent('email', input.email)
+  setIfPresent('outreach_angle', input.outreachAngle)
+  setIfPresent('utm_source', input.utmSource)
+  setIfPresent('utm_medium', input.utmMedium)
+  setIfPresent('utm_campaign', input.utmCampaign)
+  setIfPresent('utm_content', input.utmContent)
+  return url.toString()
+}
+
 type ProspectLike = {
   source?: string | null
   segment?: string | null

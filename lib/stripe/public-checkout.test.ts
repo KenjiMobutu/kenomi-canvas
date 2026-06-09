@@ -54,6 +54,16 @@ describe('createPublicCheckoutSession', () => {
   it('crée une session Stripe neuve depuis une landing publique et trace le checkout', async () => {
     const supabase = createFakeSupabase({
       ventures: [{ id: 'venture-1', user_id: 'user-1', slug: 'notefast', statut: 'actif' }],
+      prospects: [
+        {
+          id: 'prospect-1',
+          user_id: 'user-1',
+          source: 'other',
+          band: 'warm',
+          offer_variant: '300eur-diagnostic',
+          outreach_angle: 'diagnostic-call-outbound-v6-direct-value',
+        },
+      ],
       venture_pipeline: [
         {
           id: 'pipeline-1',
@@ -82,6 +92,7 @@ describe('createPublicCheckoutSession', () => {
       slug: 'notefast',
       origin: 'https://lab.kenomi.eu',
       customerEmail: 'buyer@test.local',
+      prospectId: 'prospect-1',
       attribution: {
         utm_source: 'linkedin',
         utm_medium: 'social',
@@ -107,6 +118,8 @@ describe('createPublicCheckoutSession', () => {
           source: 'public_landing',
           slug: 'notefast',
           pipeline_id: 'pipeline-1',
+          prospect_id: 'prospect-1',
+          outreach_angle: 'diagnostic-call-outbound-v6-direct-value',
           utm_source: 'linkedin',
           utm_medium: 'social',
           utm_campaign: 'audit-may',
@@ -131,7 +144,11 @@ describe('createPublicCheckoutSession', () => {
       amount_eur: 19.99,
       payment_status: 'pending',
       attribution_status: 'unknown',
-      source: 'linkedin',
+      prospect_id: 'prospect-1',
+      offer_variant: '300eur-diagnostic',
+      outreach_angle: 'diagnostic-call-outbound-v6-direct-value',
+      source: 'other',
+      band: 'warm',
     })
     expect(supabase.tables.venture_events[0]).toMatchObject({
       user_id: 'user-1',
@@ -140,6 +157,8 @@ describe('createPublicCheckoutSession', () => {
       source: 'public_landing',
       value: 1999,
       metadata: expect.objectContaining({
+        prospect_id: 'prospect-1',
+        outreach_angle: 'diagnostic-call-outbound-v6-direct-value',
         utm_source: 'linkedin',
         utm_medium: 'social',
         utm_campaign: 'audit-may',
@@ -154,6 +173,8 @@ describe('createPublicCheckoutSession', () => {
       value: 1999,
       metadata: expect.objectContaining({
         customer_email: 'buyer@test.local',
+        prospect_id: 'prospect-1',
+        outreach_angle: 'diagnostic-call-outbound-v6-direct-value',
         utm_source: 'linkedin',
       }),
     })

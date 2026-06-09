@@ -1,5 +1,9 @@
 import type { ProspectOutreachDraft, ProspectOutreachInput } from './types'
-import { DIAGNOSTIC_CASH_LANE, getDiagnosticCashLaneUrl } from '@/lib/revenue/diagnostic-cash-lane'
+import {
+  DIAGNOSTIC_CASH_LANE,
+  getDiagnosticCashLaneUrl,
+  getTrackedDiagnosticCashLaneUrl,
+} from '@/lib/revenue/diagnostic-cash-lane'
 
 function firstPainPoint(painPoints: string[]): string {
   return painPoints.find((painPoint) => painPoint.trim().length > 0) ?? 'lead follow-up delays'
@@ -67,7 +71,18 @@ export function buildProspectOutreach(input: ProspectOutreachInput): ProspectOut
   const opener = firstName ? `Hi ${firstName},` : `Hi ${input.companyName},`
   const painPoint = firstPainPoint(input.painPoints)
   const subjectPainPoint = summarizePainPointForSubject(painPoint)
-  const laneUrl = getDiagnosticCashLaneUrl()
+  const laneUrl =
+    input.prospectId || input.contactEmail || input.outreachAngle
+      ? getTrackedDiagnosticCashLaneUrl({
+          prospectId: input.prospectId,
+          email: input.contactEmail,
+          outreachAngle: input.outreachAngle,
+          utmSource: 'outbound_email',
+          utmMedium: 'email',
+          utmCampaign: input.outreachAngle ?? DIAGNOSTIC_CASH_LANE.messageFamily.slug,
+          utmContent: input.prospectId ?? null,
+        })
+      : getDiagnosticCashLaneUrl()
   const subject = firstName
     ? `${firstName}, I wrote this 3-point teardown for ${input.companyName}`
     : `${input.companyName} — 3-point teardown for ${subjectPainPoint}`

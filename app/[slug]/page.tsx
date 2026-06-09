@@ -16,6 +16,9 @@ interface Props {
     waitlist?: string
     payment?: string
     checkout?: string
+    email?: string
+    prospect_id?: string
+    outreach_angle?: string
     utm_source?: string
     utm_medium?: string
     utm_campaign?: string
@@ -35,7 +38,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function LandingPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { waitlist, payment, checkout, utm_source, utm_medium, utm_campaign, utm_content } =
+  const {
+    waitlist,
+    payment,
+    checkout,
+    email,
+    prospect_id,
+    outreach_angle,
+    utm_source,
+    utm_medium,
+    utm_campaign,
+    utm_content,
+  } =
     await searchParams
   const data = await getLandingPage(slug)
   if (!data) notFound()
@@ -45,13 +59,16 @@ export default async function LandingPage({ params, searchParams }: Props) {
     slug,
     eventType: 'page_view',
     source: 'landing',
-    metadata: {
-      path: `/${slug}`,
-      referrer: headerStore.get('referer') ?? '',
-      user_agent: headerStore.get('user-agent') ?? '',
-      utm_source: utm_source ?? '',
-      utm_medium: utm_medium ?? '',
-      utm_campaign: utm_campaign ?? '',
+      metadata: {
+        path: `/${slug}`,
+        referrer: headerStore.get('referer') ?? '',
+        user_agent: headerStore.get('user-agent') ?? '',
+        prospect_id: prospect_id ?? '',
+        outreach_angle: outreach_angle ?? '',
+        email: email ?? '',
+        utm_source: utm_source ?? '',
+        utm_medium: utm_medium ?? '',
+        utm_campaign: utm_campaign ?? '',
       utm_content: utm_content ?? '',
     },
   })
@@ -87,6 +104,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
       metadata: {
         path: `/${slug}`,
         reason: showPaymentCancel ? 'payment_cancelled' : 'checkout_error',
+        prospect_id: prospect_id ?? '',
+        outreach_angle: outreach_angle ?? '',
+        email: email ?? '',
         utm_source: utm_source ?? '',
         utm_medium: utm_medium ?? '',
         utm_campaign: utm_campaign ?? '',
@@ -100,6 +120,8 @@ export default async function LandingPage({ params, searchParams }: Props) {
         slug,
         ventureId: data.venture_id,
         email: null,
+        prospect_id: prospect_id ?? '',
+        outreach_angle: outreach_angle ?? '',
         source: 'landing',
         utm_source: utm_source ?? '',
         utm_medium: utm_medium ?? '',
@@ -152,6 +174,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
               {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
                 <form action={primaryCta.href} method="POST" className="inline-flex">
                   <input type="hidden" name="slug" value={slug} />
+                  <input type="hidden" name="email" value={email ?? ''} />
+                  <input type="hidden" name="prospect_id" value={prospect_id ?? ''} />
+                  <input type="hidden" name="outreach_angle" value={outreach_angle ?? ''} />
                   <input type="hidden" name="utm_source" value={utm_source ?? ''} />
                   <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
                   <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
@@ -399,6 +424,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
               {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
                 <form action={primaryCta.href} method="POST" className="inline-flex">
                   <input type="hidden" name="slug" value={slug} />
+                  <input type="hidden" name="email" value={email ?? ''} />
+                  <input type="hidden" name="prospect_id" value={prospect_id ?? ''} />
+                  <input type="hidden" name="outreach_angle" value={outreach_angle ?? ''} />
                   <input type="hidden" name="utm_source" value={utm_source ?? ''} />
                   <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
                   <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />

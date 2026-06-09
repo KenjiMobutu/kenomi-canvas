@@ -245,7 +245,9 @@ export async function processDueProspectFollowUps(input: {
     )
     const draft = buildProspectFollowUpDraft({
       companyName: row.company_name,
+      prospectId: row.id,
       contactName: row.contact_name ?? null,
+      contactEmail: row.contact_email ?? null,
       summary: typeof metadata.summary === 'string' ? metadata.summary : null,
       painPoints: Array.isArray(metadata.pain_points)
         ? metadata.pain_points.filter((value): value is string => typeof value === 'string')

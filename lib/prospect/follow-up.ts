@@ -1,5 +1,9 @@
 import type { ProspectOutreachKind, ProspectPipelineStatus } from '@/lib/prospect/types'
-import { DIAGNOSTIC_CASH_LANE, getDiagnosticCashLaneUrl } from '@/lib/revenue/diagnostic-cash-lane'
+import {
+  DIAGNOSTIC_CASH_LANE,
+  getDiagnosticCashLaneUrl,
+  getTrackedDiagnosticCashLaneUrl,
+} from '@/lib/revenue/diagnostic-cash-lane'
 import { summarizePainPointForSubject } from './build-outreach'
 
 const FOLLOW_UP_KIND_BY_COUNT: Record<number, ProspectOutreachKind | null> = {
@@ -88,8 +92,10 @@ export function shouldGenerateFollowUp(input: ProspectFollowUpStateLike & { nowI
 }
 
 export function buildProspectFollowUpDraft(input: {
+  prospectId?: string | null
   companyName: string
   contactName?: string | null
+  contactEmail?: string | null
   summary?: string | null
   painPoints?: string[]
   previousSubject?: string | null
@@ -98,7 +104,18 @@ export function buildProspectFollowUpDraft(input: {
   kind: ProspectOutreachKind
 }) {
   const firstName = input.contactName?.trim()?.split(/\s+/)[0] ?? 'there'
-  const laneUrl = getDiagnosticCashLaneUrl()
+  const laneUrl =
+    input.prospectId || input.contactEmail || input.outreachAngle
+      ? getTrackedDiagnosticCashLaneUrl({
+          prospectId: input.prospectId,
+          email: input.contactEmail,
+          outreachAngle: input.outreachAngle,
+          utmSource: 'outbound_followup',
+          utmMedium: 'email',
+          utmCampaign: input.outreachAngle ?? DIAGNOSTIC_CASH_LANE.messageFamily.slug,
+          utmContent: input.prospectId ?? null,
+        })
+      : getDiagnosticCashLaneUrl()
   const reminder =
     input.kind === 'follow_up_1'
       ? `${DIAGNOSTIC_CASH_LANE.offer.title} for ${input.companyName}`

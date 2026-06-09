@@ -1017,11 +1017,13 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       const generatedDraft = buildProspectOutreach({
         companyName: inputCompanyName,
         contactName: inputContactName,
+        contactEmail: inputContactEmail,
         source: inputSource,
         score: prospect.score,
         band: prospect.band,
         painPoints: prospect.pain_points,
         focus: inputFocus === 'crm' || inputFocus === 'reply' ? inputFocus : 'prospect',
+        outreachAngle: inputOutreachAngle,
       })
       const prospectInsert = await single<{ id?: string }>(
         supabase
@@ -1082,21 +1084,36 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
       )
 
       if (prospectInsert?.id) {
+        const trackedDraft = buildProspectOutreach({
+          prospectId: prospectInsert.id,
+          companyName: inputCompanyName,
+          contactName: inputContactName,
+          contactEmail: inputContactEmail,
+          source: inputSource,
+          score: prospect.score,
+          band: prospect.band,
+          painPoints: prospect.pain_points,
+          focus: inputFocus === 'crm' || inputFocus === 'reply' ? inputFocus : 'prospect',
+          outreachAngle: inputOutreachAngle,
+        })
+
         await supabase
           .from('prospects')
           .update({
+            outreach_subject: trackedDraft.subject,
+            outreach_body: trackedDraft.body,
             metadata: {
               lane_segment: inputSegment,
               summary: prospect.summary,
               pain_points: prospect.pain_points,
-              cta: generatedDraft.cta,
+              cta: trackedDraft.cta,
               model: usedModel,
               model_family: getModelFamily(usedModel),
               provider,
               sources: prospectContext.settings?.prospect_sources ?? [],
               outreach_email: prospectContext.settings?.prospect_outreach_email ?? '',
               crm_provider: prospectContext.settings?.prospect_crm_provider ?? 'supabase',
-              generated_draft: generatedDraft,
+              generated_draft: trackedDraft,
               memory_record: buildProspectMemoryRecord({
                 id: prospectInsert.id,
                 companyName: inputCompanyName,

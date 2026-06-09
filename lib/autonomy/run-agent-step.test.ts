@@ -1385,7 +1385,9 @@ describe('runAgentStep', () => {
     })
     expect(supabase.tables.prospects[0].metadata).toMatchObject({
       lane_segment: 'freelancers-small-agencies',
-      cta: 'Reply yes for the next 3 fixes or book the 300EUR Diagnostic: https://lab.kenomi.eu/diagnostic-300',
+      cta: expect.stringContaining(
+        'https://lab.kenomi.eu/diagnostic-300?prospect_id=prospects-1&email=marie%40acme.test'
+      ),
       model: 'qwen3:8b',
       model_family: 'qwen',
       provider: 'ollama',

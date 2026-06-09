@@ -77,11 +77,14 @@ export interface ProspectScoreResult {
 export interface ProspectOutreachInput {
   companyName: string
   contactName?: string | null
+  contactEmail?: string | null
+  prospectId?: string | null
   source: ProspectSource
   score: number
   band: ProspectBand
   painPoints: string[]
   focus: ProspectFocus
+  outreachAngle?: string | null
 }
 
 export interface ProspectOutreachDraft {

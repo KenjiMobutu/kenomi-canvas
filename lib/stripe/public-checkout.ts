@@ -37,6 +37,15 @@ interface VentureRow {
   slug: string
 }
 
+interface ProspectRow {
+  id: string
+  user_id: string
+  source?: string | null
+  band?: string | null
+  offer_variant?: string | null
+  outreach_angle?: string | null
+}
+
 interface PipelineRow {
   id: string
   payment_output: string | null
@@ -53,6 +62,8 @@ export interface CreatePublicCheckoutSessionInput {
   origin: string
   envStripeSecretKey?: string | null
   customerEmail?: string | null
+  prospectId?: string | null
+  outreachAngle?: string | null
   attribution?: {
     utm_source?: string | null
     utm_medium?: string | null
@@ -100,6 +111,12 @@ function cleanAttribution(
     return cleaned ? [[key, cleaned] as const] : []
   })
   return Object.fromEntries(entries)
+}
+
+async function maybeSingle<T>(query: QueryBuilder): Promise<T | null> {
+  const { data, error } = await query.maybeSingle()
+  if (error) throw new Error(error.message)
+  return data as T | null
 }
 
 export async function createPublicCheckoutSession(
@@ -154,6 +171,20 @@ export async function createPublicCheckoutSession(
   const urls = publicCheckoutUrls(input.origin, input.slug)
   const stripe = input.stripeClientFactory(stripeSecretKey)
   const attribution = cleanAttribution(input.attribution)
+  const prospectId = stringOrNull(input.prospectId)
+  const prospect = prospectId
+    ? await maybeSingle<ProspectRow>(
+        input.supabase
+          .from('prospects')
+          .select('id, user_id, source, band, offer_variant, outreach_angle')
+          .eq('id', prospectId)
+          .eq('user_id', venture.user_id)
+      )
+    : null
+  const outreachAngle =
+    stringOrNull(input.outreachAngle) ??
+    stringOrNull(prospect?.outreach_angle) ??
+    null
   const session = await stripe.checkout.sessions.create(
     buildCheckoutSessionParams({
       payment,
@@ -165,6 +196,8 @@ export async function createPublicCheckoutSession(
         source: 'public_landing',
         slug: input.slug,
         pipeline_id: pipeline.id,
+        ...(prospectId ? { prospect_id: prospectId } : {}),
+        ...(outreachAngle ? { outreach_angle: outreachAngle } : {}),
         ...attribution,
       },
     })
@@ -207,7 +240,11 @@ export async function createPublicCheckoutSession(
       payment_status: 'pending',
       attribution_status: 'unknown',
       confidence_score: 0,
-      source: attribution.utm_source ?? 'public_landing',
+      prospect_id: prospectId,
+      offer_variant: stringOrNull(prospect?.offer_variant),
+      outreach_angle: outreachAngle,
+      source: stringOrNull(prospect?.source) ?? attribution.utm_source ?? 'public_landing',
+      band: stringOrNull(prospect?.band),
       attributed_at: nowIso,
     },
   })
@@ -219,12 +256,14 @@ export async function createPublicCheckoutSession(
     source: 'public_landing',
     value: payment.price_amount,
     metadata: {
-      stripe_session_id: session.id,
-      checkout_url: session.url,
-      pipeline_id: pipeline.id,
-      slug: input.slug,
-      ...attribution,
-    },
+        stripe_session_id: session.id,
+        checkout_url: session.url,
+        pipeline_id: pipeline.id,
+        slug: input.slug,
+        prospect_id: prospectId,
+        outreach_angle: outreachAngle,
+        ...attribution,
+      },
     occurred_at: nowIso,
   })
   if (insertEvent.error) throw new Error(insertEvent.error.message)
@@ -236,12 +275,14 @@ export async function createPublicCheckoutSession(
     source: 'public_landing',
     value: payment.price_amount,
     metadata: {
-      stripe_session_id: session.id,
-      slug: input.slug,
-      pipeline_id: pipeline.id,
-      customer_email: input.customerEmail ?? session.customer_details?.email ?? null,
-      ...attribution,
-    },
+        stripe_session_id: session.id,
+        slug: input.slug,
+        pipeline_id: pipeline.id,
+        prospect_id: prospectId,
+        outreach_angle: outreachAngle,
+        customer_email: input.customerEmail ?? session.customer_details?.email ?? null,
+        ...attribution,
+      },
     occurred_at: nowIso,
   })
   if (insertHighIntent.error) throw new Error(insertHighIntent.error.message)

@@ -5,19 +5,24 @@ import { DIAGNOSTIC_CASH_LANE } from '@/lib/revenue/diagnostic-cash-lane'
 describe('buildProspectOutreach', () => {
   it('drafts a personalized outreach note from prospect context', () => {
     const draft = buildProspectOutreach({
+      prospectId: 'prospect-1',
       companyName: 'Acme Studio',
       contactName: 'Lina',
+      contactEmail: 'lina@acme.test',
       source: 'upwork',
       score: 88,
       band: 'hot',
       painPoints: ['slow follow-up', 'leads going cold'],
       focus: 'prospect',
+      outreachAngle: 'diagnostic-call-outbound-v6-direct-value',
     })
 
     expect(draft.subject).toContain('Acme Studio')
     expect(draft.body).toContain('Lina')
     expect(draft.body).toContain('Rather than tease a teardown')
     expect(draft.body).toContain('reply yes')
+    expect(draft.body).toContain('prospect_id=prospect-1')
+    expect(draft.body).toContain('email=lina%40acme.test')
     expect(draft.cta).toBeTruthy()
   })
 

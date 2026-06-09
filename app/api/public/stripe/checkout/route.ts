@@ -13,6 +13,8 @@ import {
 const checkoutSchema = z.object({
   slug: z.string().min(1),
   email: z.string().optional().nullable(),
+  prospect_id: z.string().uuid().optional().nullable(),
+  outreach_angle: z.string().optional().nullable(),
   utm_source: z.string().optional().nullable(),
   utm_medium: z.string().optional().nullable(),
   utm_campaign: z.string().optional().nullable(),
@@ -30,6 +32,8 @@ async function parseRequest(req: NextRequest) {
     return {
       slug: String(form.get('slug') ?? ''),
       email: form.get('email') ? String(form.get('email')) : null,
+      prospect_id: form.get('prospect_id') ? String(form.get('prospect_id')) : null,
+      outreach_angle: form.get('outreach_angle') ? String(form.get('outreach_angle')) : null,
       utm_source: form.get('utm_source') ? String(form.get('utm_source')) : null,
       utm_medium: form.get('utm_medium') ? String(form.get('utm_medium')) : null,
       utm_campaign: form.get('utm_campaign') ? String(form.get('utm_campaign')) : null,
@@ -57,6 +61,8 @@ export async function POST(req: NextRequest) {
 
   const slug = parsed.data.slug.trim().toLowerCase()
   const email = parsed.data.email?.trim() || null
+  const prospectId = parsed.data.prospect_id?.trim() || null
+  const outreachAngle = parsed.data.outreach_angle?.trim() || null
   const isFormRequest = Boolean(parsed.data.formRequest)
   const attribution = {
     utm_source: parsed.data.utm_source?.trim() || null,
@@ -81,6 +87,8 @@ export async function POST(req: NextRequest) {
       origin: appOrigin(req),
       envStripeSecretKey: getOptionalStripeSecretKey(),
       customerEmail: email,
+      prospectId,
+      outreachAngle,
       attribution,
     })
 

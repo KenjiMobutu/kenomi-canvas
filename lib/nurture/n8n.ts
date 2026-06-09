@@ -7,6 +7,8 @@ export async function notifyNurtureSignup(input: {
     slug: string
     ventureId: string | null
     email?: string | null
+    prospect_id?: string | null
+    outreach_angle?: string | null
     source: string
     utm_source?: string | null
     utm_medium?: string | null
