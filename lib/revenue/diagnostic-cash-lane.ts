@@ -37,12 +37,28 @@ type ProspectLike = {
   segment?: string | null
   offer_variant?: string | null
   contact_email?: string | null
+  outreach_angle?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export function getDiagnosticLaneSegment(input: ProspectLike): string | null {
+  if (typeof input.segment === 'string' && input.segment.trim().length > 0) {
+    return input.segment.trim()
+  }
+
+  const metadata =
+    input.metadata && typeof input.metadata === 'object'
+      ? (input.metadata as Record<string, unknown>)
+      : null
+  const laneSegment = metadata?.lane_segment
+  return typeof laneSegment === 'string' && laneSegment.trim().length > 0 ? laneSegment.trim() : null
 }
 
 export function isDiagnosticLaneProspect(input: ProspectLike): boolean {
   return (
-    input.segment === DIAGNOSTIC_CASH_LANE.segment.slug &&
-    input.offer_variant === DIAGNOSTIC_CASH_LANE.offer.slug
+    getDiagnosticLaneSegment(input) === DIAGNOSTIC_CASH_LANE.segment.slug &&
+    input.offer_variant === DIAGNOSTIC_CASH_LANE.offer.slug &&
+    input.outreach_angle === DIAGNOSTIC_CASH_LANE.messageFamily.slug
   )
 }
 

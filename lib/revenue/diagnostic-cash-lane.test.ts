@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DIAGNOSTIC_CASH_LANE,
+  getDiagnosticLaneSegment,
   isDiagnosticLaneContactableProspect,
   isDiagnosticLaneProspect,
 } from '@/lib/revenue/diagnostic-cash-lane'
@@ -18,8 +19,9 @@ describe('diagnostic cash lane', () => {
       isDiagnosticLaneContactableProspect({
         source: 'reddit',
         contact_email: 'founder@example.com',
-        segment: 'freelancers-small-agencies',
         offer_variant: '300eur-diagnostic',
+        outreach_angle: 'diagnostic-call-outbound-v1',
+        metadata: { lane_segment: 'freelancers-small-agencies' },
       })
     ).toBe(true)
   })
@@ -29,8 +31,9 @@ describe('diagnostic cash lane', () => {
       isDiagnosticLaneContactableProspect({
         source: 'reddit',
         contact_email: null,
-        segment: 'freelancers-small-agencies',
         offer_variant: '300eur-diagnostic',
+        outreach_angle: 'diagnostic-call-outbound-v1',
+        metadata: { lane_segment: 'freelancers-small-agencies' },
       })
     ).toBe(false)
   })
@@ -38,16 +41,28 @@ describe('diagnostic cash lane', () => {
   it('matches lane prospects conservatively', () => {
     expect(
       isDiagnosticLaneProspect({
-        segment: 'freelancers-small-agencies',
         offer_variant: '300eur-diagnostic',
+        outreach_angle: 'diagnostic-call-outbound-v1',
+        metadata: { lane_segment: 'freelancers-small-agencies' },
       })
     ).toBe(true)
 
     expect(
       isDiagnosticLaneProspect({
-        segment: 'ecommerce',
         offer_variant: 'other-offer',
+        outreach_angle: 'diagnostic-call-outbound-v1',
+        metadata: { lane_segment: 'ecommerce' },
       })
     ).toBe(false)
+  })
+
+  it('falls back to metadata when the segment column is absent', () => {
+    expect(
+      getDiagnosticLaneSegment({
+        offer_variant: '300eur-diagnostic',
+        outreach_angle: 'diagnostic-call-outbound-v1',
+        metadata: { lane_segment: 'freelancers-small-agencies' },
+      })
+    ).toBe('freelancers-small-agencies')
   })
 })

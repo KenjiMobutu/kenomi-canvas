@@ -231,8 +231,9 @@ describe('summarizeProspects', () => {
           follow_up_version: 0,
           message_family: 'linkedin_initial',
           message_key: 'linkedin_initial_default',
-          segment: 'freelancers-small-agencies',
           offer_variant: '300eur-diagnostic',
+          outreach_angle: 'diagnostic-call-outbound-v1',
+          metadata: { lane_segment: 'freelancers-small-agencies' },
         },
         {
           id: 'prospect-2',
@@ -262,8 +263,9 @@ describe('summarizeProspects', () => {
           follow_up_version: 1,
           message_family: 'linkedin_initial',
           message_key: 'linkedin_initial_default',
-          segment: 'freelancers-small-agencies',
           offer_variant: '300eur-diagnostic',
+          outreach_angle: 'diagnostic-call-outbound-v1',
+          metadata: { lane_segment: 'freelancers-small-agencies' },
         },
       ] as never[],
       new Date('2026-05-25T10:00:00.000Z').getTime()

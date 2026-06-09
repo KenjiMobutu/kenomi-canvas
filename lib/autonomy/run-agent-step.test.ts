@@ -486,9 +486,11 @@ describe('runAgentStep', () => {
       contact_email: 'gonzalo@freshworkstudio.com',
       source: 'other',
       source_url: 'https://github.com/freshworkstudio',
-      segment: 'freelancers-small-agencies',
       offer_variant: '300eur-diagnostic',
       outreach_angle: 'diagnostic-call-outbound-v1',
+    })
+    expect(supabase.tables.prospects[0].metadata).toMatchObject({
+      lane_segment: 'freelancers-small-agencies',
     })
     expect(String(supabase.tables.prospects[0].outreach_subject)).toContain('300EUR Diagnostic')
     expect(String(supabase.tables.prospects[0].outreach_body)).toContain('https://lab.kenomi.eu/diagnostic-300')
@@ -1375,13 +1377,13 @@ describe('runAgentStep', () => {
       score: 88,
       band: 'hot',
       status: 'ready_to_contact',
-      segment: 'freelancers-small-agencies',
       offer_variant: '300eur-diagnostic',
       outreach_angle: 'diagnostic-call-outbound-v1',
       contact_email: 'marie@acme.test',
       outreach_subject: 'Acme Studio — 300EUR Diagnostic for follow-up drag',
     })
     expect(supabase.tables.prospects[0].metadata).toMatchObject({
+      lane_segment: 'freelancers-small-agencies',
       cta: 'Book the 300EUR Diagnostic: https://lab.kenomi.eu/diagnostic-300',
       model: 'qwen3:8b',
       model_family: 'qwen',

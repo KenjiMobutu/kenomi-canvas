@@ -1048,10 +1048,10 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
             last_contacted_at: null,
             next_followup_at: prospectFollowUpAt(now(), prospect.band),
             offer_id: null,
-            segment: inputSegment,
             offer_variant: inputOfferVariant,
             outreach_angle: inputOutreachAngle,
             metadata: {
+              lane_segment: inputSegment,
               summary: prospect.summary,
               pain_points: prospect.pain_points,
               cta: generatedDraft.cta,
@@ -1086,6 +1086,7 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
           .from('prospects')
           .update({
             metadata: {
+              lane_segment: inputSegment,
               summary: prospect.summary,
               pain_points: prospect.pain_points,
               cta: generatedDraft.cta,

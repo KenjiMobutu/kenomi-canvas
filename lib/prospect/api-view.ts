@@ -245,9 +245,13 @@ export function summarizeProspects(rows: ProspectRecordView[], nowMs = Date.now(
       if (row.band === 'cold') acc.cold += 1
       if (row.contact_status === 'contactable') acc.contactable += 1
       const inDiagnosticLane = isDiagnosticLaneContactableProspect({
-        segment: typeof row.segment === 'string' ? row.segment : null,
         offer_variant: typeof row.offer_variant === 'string' ? row.offer_variant : null,
+        outreach_angle: typeof row.outreach_angle === 'string' ? row.outreach_angle : null,
         contact_email: typeof row.contact_email === 'string' ? row.contact_email : null,
+        metadata:
+          row.metadata && typeof row.metadata === 'object'
+            ? (row.metadata as Record<string, unknown>)
+            : null,
       })
       if (inDiagnosticLane) acc.laneContactable += 1
       if (row.contact_status === 'missing_contact') acc.missingContact += 1
