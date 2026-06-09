@@ -196,4 +196,71 @@ describe('createPublicCheckoutSession', () => {
       })
     ).rejects.toThrow('payment_configuration_missing')
   })
+
+  it("retombe sur le prospect trouvé par email quand l'id tracké ne matche rien", async () => {
+    const supabase = createFakeSupabase({
+      ventures: [{ id: 'venture-1', user_id: 'user-1', slug: 'notefast', statut: 'actif' }],
+      prospects: [
+        {
+          id: 'prospect-real',
+          user_id: 'user-1',
+          contact_email: 'buyer@test.local',
+          source: 'other',
+          band: 'hot',
+          offer_variant: '300eur-diagnostic',
+          outreach_angle: 'diagnostic-call-outbound-v7-permission-ask',
+        },
+      ],
+      venture_pipeline: [
+        {
+          id: 'pipeline-1',
+          venture_id: 'venture-1',
+          user_id: 'user-1',
+          status: 'approved',
+          payment_output: paymentOutput,
+        },
+      ],
+      user_settings: [{ user_id: 'user-1', stripe_secret_key: 'sk_test_settings' }],
+      payments: [],
+      payment_attributions: [],
+      venture_events: [],
+    })
+    const stripeCreate = vi.fn(async () => ({
+      id: 'cs_test_public_fallback',
+      url: 'https://checkout.stripe.test/public-fallback',
+      mode: 'subscription' as const,
+      payment_intent: null,
+      customer_details: { email: 'buyer@test.local' },
+    }))
+
+    await createPublicCheckoutSession({
+      supabase,
+      stripeClientFactory: () => ({ checkout: { sessions: { create: stripeCreate } } }),
+      slug: 'notefast',
+      origin: 'https://lab.kenomi.eu',
+      customerEmail: 'buyer@test.local',
+      prospectId: 'prospect-missing',
+      now: () => new Date('2026-05-19T21:40:00.000Z'),
+    })
+
+    expect(stripeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          prospect_id: 'prospect-real',
+          outreach_angle: 'diagnostic-call-outbound-v7-permission-ask',
+        }),
+      })
+    )
+    expect(supabase.tables.payment_attributions[0]).toMatchObject({
+      prospect_id: 'prospect-real',
+      outreach_angle: 'diagnostic-call-outbound-v7-permission-ask',
+      source: 'other',
+      band: 'hot',
+    })
+    expect(supabase.tables.venture_events[0]).toMatchObject({
+      metadata: expect.objectContaining({
+        prospect_id: 'prospect-real',
+      }),
+    })
+  })
 })

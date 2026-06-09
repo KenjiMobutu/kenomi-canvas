@@ -40,6 +40,7 @@ interface VentureRow {
 interface ProspectRow {
   id: string
   user_id: string
+  contact_email?: string | null
   source?: string | null
   band?: string | null
   offer_variant?: string | null
@@ -119,6 +120,38 @@ async function maybeSingle<T>(query: QueryBuilder): Promise<T | null> {
   return data as T | null
 }
 
+async function resolveCheckoutProspect(input: {
+  supabase: PublicCheckoutSupabase
+  userId: string
+  prospectId: string | null
+  customerEmail: string | null
+}): Promise<ProspectRow | null> {
+  const selectColumns = 'id, user_id, contact_email, source, band, offer_variant, outreach_angle'
+
+  if (input.prospectId) {
+    const prospect = await maybeSingle<ProspectRow>(
+      input.supabase
+        .from('prospects')
+        .select(selectColumns)
+        .eq('id', input.prospectId)
+        .eq('user_id', input.userId)
+    )
+    if (prospect?.id) return prospect
+  }
+
+  if (!input.customerEmail) return null
+
+  return maybeSingle<ProspectRow>(
+    input.supabase
+      .from('prospects')
+      .select(selectColumns)
+      .eq('user_id', input.userId)
+      .eq('contact_email', input.customerEmail)
+      .order('created_at', { ascending: false })
+      .limit(1)
+  )
+}
+
 export async function createPublicCheckoutSession(
   input: CreatePublicCheckoutSessionInput
 ): Promise<CreatePublicCheckoutSessionResult> {
@@ -172,15 +205,14 @@ export async function createPublicCheckoutSession(
   const stripe = input.stripeClientFactory(stripeSecretKey)
   const attribution = cleanAttribution(input.attribution)
   const prospectId = stringOrNull(input.prospectId)
-  const prospect = prospectId
-    ? await maybeSingle<ProspectRow>(
-        input.supabase
-          .from('prospects')
-          .select('id, user_id, source, band, offer_variant, outreach_angle')
-          .eq('id', prospectId)
-          .eq('user_id', venture.user_id)
-      )
-    : null
+  const customerEmail = stringOrNull(input.customerEmail)
+  const prospect = await resolveCheckoutProspect({
+    supabase: input.supabase,
+    userId: venture.user_id,
+    prospectId,
+    customerEmail,
+  })
+  const attributedProspectId = stringOrNull(prospect?.id) ?? prospectId
   const outreachAngle =
     stringOrNull(input.outreachAngle) ??
     stringOrNull(prospect?.outreach_angle) ??
@@ -196,7 +228,7 @@ export async function createPublicCheckoutSession(
         source: 'public_landing',
         slug: input.slug,
         pipeline_id: pipeline.id,
-        ...(prospectId ? { prospect_id: prospectId } : {}),
+        ...(attributedProspectId ? { prospect_id: attributedProspectId } : {}),
         ...(outreachAngle ? { outreach_angle: outreachAngle } : {}),
         ...attribution,
       },
@@ -240,7 +272,7 @@ export async function createPublicCheckoutSession(
       payment_status: 'pending',
       attribution_status: 'unknown',
       confidence_score: 0,
-      prospect_id: prospectId,
+      prospect_id: attributedProspectId,
       offer_variant: stringOrNull(prospect?.offer_variant),
       outreach_angle: outreachAngle,
       source: stringOrNull(prospect?.source) ?? attribution.utm_source ?? 'public_landing',
@@ -260,7 +292,7 @@ export async function createPublicCheckoutSession(
         checkout_url: session.url,
         pipeline_id: pipeline.id,
         slug: input.slug,
-        prospect_id: prospectId,
+        prospect_id: attributedProspectId,
         outreach_angle: outreachAngle,
         ...attribution,
       },
@@ -278,9 +310,9 @@ export async function createPublicCheckoutSession(
         stripe_session_id: session.id,
         slug: input.slug,
         pipeline_id: pipeline.id,
-        prospect_id: prospectId,
+        prospect_id: attributedProspectId,
         outreach_angle: outreachAngle,
-        customer_email: input.customerEmail ?? session.customer_details?.email ?? null,
+        customer_email: customerEmail ?? session.customer_details?.email ?? null,
         ...attribution,
       },
     occurred_at: nowIso,
