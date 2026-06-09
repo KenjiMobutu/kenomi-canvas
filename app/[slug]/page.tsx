@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib/venture-events'
 import { selectPublicLandingCta } from '@/lib/public-landing-cta'
 import { notifyNurtureSignup } from '@/lib/nurture/n8n'
+import { resolvePublicLandingTracking } from '@/lib/public-landing-tracking'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +54,16 @@ export default async function LandingPage({ params, searchParams }: Props) {
     await searchParams
   const data = await getLandingPage(slug)
   if (!data) notFound()
+  const tracking = await resolvePublicLandingTracking({
+    supabase: supabaseAdmin,
+    ventureId: data.venture_id,
+    prospectId: prospect_id ?? null,
+    email: email ?? null,
+    outreachAngle: outreach_angle ?? null,
+  })
+  const trackedProspectId = tracking.prospectId ?? ''
+  const trackedEmail = tracking.email ?? ''
+  const trackedOutreachAngle = tracking.outreachAngle ?? ''
 
   const headerStore = await headers()
   await recordVentureEventBySlugSafely(supabaseAdmin as unknown as VentureEventSupabase, {
@@ -63,9 +74,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
         path: `/${slug}`,
         referrer: headerStore.get('referer') ?? '',
         user_agent: headerStore.get('user-agent') ?? '',
-        prospect_id: prospect_id ?? '',
-        outreach_angle: outreach_angle ?? '',
-        email: email ?? '',
+        prospect_id: trackedProspectId,
+        outreach_angle: trackedOutreachAngle,
+        email: trackedEmail,
         utm_source: utm_source ?? '',
         utm_medium: utm_medium ?? '',
         utm_campaign: utm_campaign ?? '',
@@ -104,9 +115,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
       metadata: {
         path: `/${slug}`,
         reason: showPaymentCancel ? 'payment_cancelled' : 'checkout_error',
-        prospect_id: prospect_id ?? '',
-        outreach_angle: outreach_angle ?? '',
-        email: email ?? '',
+        prospect_id: trackedProspectId,
+        outreach_angle: trackedOutreachAngle,
+        email: trackedEmail,
         utm_source: utm_source ?? '',
         utm_medium: utm_medium ?? '',
         utm_campaign: utm_campaign ?? '',
@@ -120,8 +131,8 @@ export default async function LandingPage({ params, searchParams }: Props) {
         slug,
         ventureId: data.venture_id,
         email: null,
-        prospect_id: prospect_id ?? '',
-        outreach_angle: outreach_angle ?? '',
+        prospect_id: trackedProspectId,
+        outreach_angle: trackedOutreachAngle,
         source: 'landing',
         utm_source: utm_source ?? '',
         utm_medium: utm_medium ?? '',
@@ -174,9 +185,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
               {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
                 <form action={primaryCta.href} method="POST" className="inline-flex">
                   <input type="hidden" name="slug" value={slug} />
-                  <input type="hidden" name="email" value={email ?? ''} />
-                  <input type="hidden" name="prospect_id" value={prospect_id ?? ''} />
-                  <input type="hidden" name="outreach_angle" value={outreach_angle ?? ''} />
+                  <input type="hidden" name="email" value={trackedEmail} />
+                  <input type="hidden" name="prospect_id" value={trackedProspectId} />
+                  <input type="hidden" name="outreach_angle" value={trackedOutreachAngle} />
                   <input type="hidden" name="utm_source" value={utm_source ?? ''} />
                   <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
                   <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
@@ -424,9 +435,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
               {primaryCta.kind === 'checkout' && !showWaitlistSuccess ? (
                 <form action={primaryCta.href} method="POST" className="inline-flex">
                   <input type="hidden" name="slug" value={slug} />
-                  <input type="hidden" name="email" value={email ?? ''} />
-                  <input type="hidden" name="prospect_id" value={prospect_id ?? ''} />
-                  <input type="hidden" name="outreach_angle" value={outreach_angle ?? ''} />
+                  <input type="hidden" name="email" value={trackedEmail} />
+                  <input type="hidden" name="prospect_id" value={trackedProspectId} />
+                  <input type="hidden" name="outreach_angle" value={trackedOutreachAngle} />
                   <input type="hidden" name="utm_source" value={utm_source ?? ''} />
                   <input type="hidden" name="utm_medium" value={utm_medium ?? ''} />
                   <input type="hidden" name="utm_campaign" value={utm_campaign ?? ''} />
