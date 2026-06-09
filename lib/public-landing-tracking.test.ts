@@ -18,6 +18,11 @@ function createFakeSupabase(seed: Record<string, Record<string, unknown>[]>) {
           rows = rows.slice(0, count)
           return builder
         },
+        then: (
+          resolve?: ((value: { data: Record<string, unknown>[]; error: null }) => unknown) | null,
+          reject?: ((reason: unknown) => unknown) | null
+        ) =>
+          Promise.resolve({ data: rows, error: null }).then(resolve ?? undefined, reject ?? undefined),
         maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
       }
       return builder
@@ -80,6 +85,35 @@ describe('resolvePublicLandingTracking', () => {
       prospectId: 'prospect-real',
       email: 'buyer@test.local',
       outreachAngle: 'diagnostic-call-outbound-v7-permission-ask',
+    })
+  })
+
+  it('recovers a rot13-obfuscated tracked email and outreach angle', async () => {
+    const supabase = createFakeSupabase({
+      ventures: [{ id: 'venture-1', user_id: 'user-1' }],
+      prospects: [
+        {
+          id: 'prospect-hot',
+          user_id: 'user-1',
+          contact_email: 'jwerpehowski@mangos.agency',
+          outreach_angle: 'diagnostic-call-outbound-v7-hot-personal',
+          created_at: '2026-06-09T13:16:00.000Z',
+        },
+      ],
+    })
+
+    await expect(
+      resolvePublicLandingTracking({
+        supabase,
+        ventureId: 'venture-1',
+        prospectId: 'c108a1ba-31a6-7aa0-2b68-ed68b86ea0a7',
+        email: 'wjfecfubjfxv@mangos.agency',
+        outreachAngle: 'qvntabfgvp-pnyy-bhgobhaq-i7-ubg-crefbany',
+      })
+    ).resolves.toEqual({
+      prospectId: 'prospect-hot',
+      email: 'jwerpehowski@mangos.agency',
+      outreachAngle: 'diagnostic-call-outbound-v7-hot-personal',
     })
   })
 })
