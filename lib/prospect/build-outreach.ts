@@ -5,14 +5,42 @@ function firstPainPoint(painPoints: string[]): string {
   return painPoints.find((painPoint) => painPoint.trim().length > 0) ?? 'lead follow-up delays'
 }
 
+export function summarizePainPointForSubject(painPoint: string): string {
+  const normalized = painPoint.trim().toLowerCase()
+  if (!normalized) return 'slower lead response'
+
+  if (normalized.includes('follow-up') || normalized.includes('follow up')) {
+    if (normalized.includes('delivery')) return 'lead follow-up drag'
+    if (normalized.includes('response')) return 'slower lead response'
+    if (normalized.includes('discipline')) return 'follow-up drift'
+    return 'lead follow-up drag'
+  }
+
+  if (
+    normalized.includes('lead qualification') ||
+    normalized.includes('lead triage') ||
+    normalized.includes('manual triage')
+  ) {
+    return 'manual lead qualification'
+  }
+
+  if (normalized.includes('response time')) return 'slower lead response'
+  if (normalized.includes('reply')) return 'reply-to-paid drag'
+  if (normalized.includes('sales admin')) return 'sales admin overhead'
+  if (normalized.includes('new business')) return 'new-business drag'
+
+  return painPoint.trim()
+}
+
 export function buildProspectOutreach(input: ProspectOutreachInput): ProspectOutreachDraft {
   const opener = input.contactName ? `Hi ${input.contactName},` : `Hi ${input.companyName},`
   const painPoint = firstPainPoint(input.painPoints)
+  const subjectPainPoint = summarizePainPointForSubject(painPoint)
   const laneUrl = getDiagnosticCashLaneUrl()
   const subject =
     input.band === 'hot'
       ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for follow-up drag`
-      : `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} to tighten ${painPoint}`
+      : `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${subjectPainPoint}`
 
   const body = [
     opener,

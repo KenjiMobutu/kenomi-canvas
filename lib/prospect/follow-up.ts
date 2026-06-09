@@ -1,5 +1,6 @@
 import type { ProspectOutreachKind, ProspectPipelineStatus } from '@/lib/prospect/types'
 import { DIAGNOSTIC_CASH_LANE, getDiagnosticCashLaneUrl } from '@/lib/revenue/diagnostic-cash-lane'
+import { summarizePainPointForSubject } from './build-outreach'
 
 const FOLLOW_UP_KIND_BY_COUNT: Record<number, ProspectOutreachKind | null> = {
   0: 'follow_up_1',
@@ -105,12 +106,13 @@ export function buildProspectFollowUpDraft(input: {
         : `Last note on the ${DIAGNOSTIC_CASH_LANE.offer.title.toLowerCase()} for ${input.companyName}`
   const summary = input.summary?.trim() || `the ${input.companyName} opportunity`
   const painPoint = input.painPoints?.find(Boolean)?.trim() ?? 'this workflow'
+  const subjectPainPoint = summarizePainPointForSubject(painPoint)
   const note = input.operatorNotes?.trim()
 
   const subject =
     input.kind === 'follow_up_1'
-      ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${painPoint}`
-      : `${reminder} — ${painPoint}`
+      ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${subjectPainPoint}`
+      : `${reminder} — ${subjectPainPoint}`
 
   const lines = [
     `Hi ${firstName},`,
