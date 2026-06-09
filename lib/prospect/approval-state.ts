@@ -21,7 +21,8 @@ export function deriveProspectApprovalState(input: {
 } {
   if (
     !input.action ||
-    (input.action.action_type !== 'send_outreach' && input.action.action_type !== 'send_follow_up')
+    (input.action.action_type !== 'send_outreach' && input.action.action_type !== 'send_follow_up') ||
+    input.action.status !== 'blocked'
   ) {
     return { approvalStatus: 'no_approval', actionable: false }
   }

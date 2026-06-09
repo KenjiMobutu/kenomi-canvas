@@ -921,6 +921,20 @@ export async function resolveHumanApproval(
       action.action_type === 'send_follow_up'
         ? `${outreachKind} sent via ${liveDelivery?.provider ?? 'draft'}`
         : `Outbound sent via ${liveDelivery?.provider ?? 'draft'}`
+    const followUpPatch =
+      action.action_type === 'send_follow_up'
+        ? {
+            last_outreach_kind: outreachKind,
+            follow_up_count: getFollowUpRank(outreachKind),
+            follow_up_version: followUpVersion,
+            next_followup_at: scheduleNextFollowUpAt(new Date(nowIso), outreachKind),
+            last_contacted_at: nowIso,
+            last_activity_at: nowIso,
+          }
+        : {
+            last_contacted_at: nowIso,
+            last_activity_at: nowIso,
+          }
 
     await update(
       input.supabase
@@ -937,6 +951,7 @@ export async function resolveHumanApproval(
           draft_provider: liveDelivery?.provider ?? 'gmail',
           draft_external_id: liveDelivery?.messageId ?? draftId,
           draft_created_at: nowIso,
+          ...followUpPatch,
           metadata: appendProspectActivity(
             appendProspectActivity(prospect.metadata, {
               type: action.action_type === 'send_follow_up' ? 'follow_up_approved' : 'approval_approved',

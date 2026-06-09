@@ -16,7 +16,7 @@ describe('deriveProspectApprovalState', () => {
 
   it('returns approved_to_send when approval is approved', () => {
     const state = deriveProspectApprovalState({
-      action: { action_type: 'send_outreach', status: 'planned' },
+      action: { action_type: 'send_outreach', status: 'blocked' },
       approval: { status: 'approved' },
     })
 
@@ -42,6 +42,18 @@ describe('deriveProspectApprovalState', () => {
     const state = deriveProspectApprovalState({
       action: null,
       approval: null,
+    })
+
+    expect(state).toEqual({
+      approvalStatus: 'no_approval',
+      actionable: false,
+    })
+  })
+
+  it('ignores completed send actions even if an approval row still exists', () => {
+    const state = deriveProspectApprovalState({
+      action: { action_type: 'send_follow_up', status: 'completed' },
+      approval: { status: 'pending' },
     })
 
     expect(state).toEqual({

@@ -248,6 +248,11 @@ describe('resolveHumanApproval', () => {
     expect(fakeSupabase.tables.prospects[0]).toMatchObject({
       pipeline_status: 'draft_created',
       draft_provider: 'gmail',
+      follow_up_count: 1,
+      last_outreach_kind: 'follow_up_1',
+      follow_up_version: 1,
+      next_followup_at: '2026-05-31T10:00:00.000Z',
+      last_contacted_at: '2026-05-26T10:00:00.000Z',
     })
     expect(fakeSupabase.tables.prospects[0].metadata).toMatchObject({
       activity: [
