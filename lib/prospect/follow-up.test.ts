@@ -98,4 +98,20 @@ describe('buildProspectFollowUpDraft', () => {
     expect(draft.body).toContain('https://lab.kenomi.eu/diagnostic-300')
     expect(draft.cta).toBe('Review the 300EUR Diagnostic: https://lab.kenomi.eu/diagnostic-300')
   })
+
+  it('never leaks operator memory into the follow-up body', () => {
+    const draft = buildProspectFollowUpDraft({
+      companyName: 'Acme Studio',
+      summary: 'manual lead qualification',
+      painPoints: ['manual triage'],
+      operatorNotes:
+        'Relevant memory:\n1. Prospect A · prospect_created · warm lead from other. Summary: Internal memory.',
+      kind: 'follow_up_1',
+    })
+
+    expect(draft.body).not.toContain('Operator note:')
+    expect(draft.body).not.toContain('Relevant memory:')
+    expect(draft.body).not.toContain('Prospect A · prospect_created')
+    expect(draft.body).toContain('If useful, the exact scope is ready now.')
+  })
 })

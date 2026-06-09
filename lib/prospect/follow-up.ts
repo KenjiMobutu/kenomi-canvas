@@ -107,8 +107,6 @@ export function buildProspectFollowUpDraft(input: {
   const summary = input.summary?.trim() || `the ${input.companyName} opportunity`
   const painPoint = input.painPoints?.find(Boolean)?.trim() ?? 'this workflow'
   const subjectPainPoint = summarizePainPointForSubject(painPoint)
-  const note = input.operatorNotes?.trim()
-
   const subject =
     input.kind === 'follow_up_1'
       ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${subjectPainPoint}`
@@ -123,7 +121,7 @@ export function buildProspectFollowUpDraft(input: {
     `The main angle is still ${painPoint}.`,
     `The offer is a fixed-scope ${DIAGNOSTIC_CASH_LANE.offer.title} for ${DIAGNOSTIC_CASH_LANE.segment.title.toLowerCase()}.`,
     'It includes one short diagnostic call and a written action plan within 48h.',
-    note ? `Operator note: ${note}.` : 'If useful, the exact scope is ready now.',
+    'If useful, the exact scope is ready now.',
     '',
     `Exact scope: ${laneUrl}`,
     '',
