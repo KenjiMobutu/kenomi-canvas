@@ -8,6 +8,7 @@ import { recordVentureEventBySlugSafely, type VentureEventSupabase } from '@/lib
 import { selectPublicLandingCta } from '@/lib/public-landing-cta'
 import { notifyNurtureSignup } from '@/lib/nurture/n8n'
 import { resolvePublicLandingTracking } from '@/lib/public-landing-tracking'
+import { recordProspectClickIntent } from '@/lib/prospect/click-intent'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,6 +84,15 @@ export default async function LandingPage({ params, searchParams }: Props) {
       utm_content: utm_content ?? '',
     },
   })
+
+  if (trackedProspectId && (utm_medium ?? '') === 'email') {
+    await recordProspectClickIntent({
+      supabase: supabaseAdmin,
+      prospectId: trackedProspectId,
+      email: trackedEmail,
+      outreachAngle: trackedOutreachAngle,
+    }).catch(() => undefined)
+  }
 
   const { hero, features, faq, pricing, proof, objections, sections, audience } = data.copywriting
   const { data: checkoutPipelines } = await supabaseAdmin
