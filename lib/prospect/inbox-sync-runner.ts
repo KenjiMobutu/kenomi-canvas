@@ -1,11 +1,8 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { connect as tlsConnect, type ConnectionOptions as TlsConnectionOptions, TLSSocket } from 'node:tls'
 import { buildProspectActivityInsert } from './activity-log'
 import { buildInboxSyncMutations, type InboxMessageLike } from './inbox-sync-processor'
 import { parseImapSearchIds, parseMessageHeaders, resolveInboxSyncConfig } from './inbox-sync'
 import { buildProspectStageActivity, buildProspectStagePatch } from './stage-transition'
-
-const execFileAsync = promisify(execFile)
 
 interface ProspectInboxQuery {
   select(columns?: string): ProspectInboxQuery
@@ -29,6 +26,15 @@ export interface InboxTransport {
   markSeen(messageId: string): Promise<void>
 }
 
+export type InboxTransportFactory = (config: {
+  host: string
+  port: number
+  secure: boolean
+  username: string
+  password: string
+  mailbox: string
+}) => InboxTransport
+
 export interface InboxSyncResult {
   processed: number
   bounced: number
@@ -44,53 +50,163 @@ function appendOperatorNote(current: unknown, note: string) {
   return `${currentText} | ${note}`
 }
 
-async function curlImap(url: string, user: string, password: string, args: string[] = []) {
-  const { stdout } = await execFileAsync('curl', ['-fsS', '--url', url, '--user', `${user}:${password}`, ...args], {
-    maxBuffer: 2 * 1024 * 1024,
-  })
-  return stdout
+function extractFetchLiteral(raw: string): string {
+  const marker = raw.match(/\{(\d+)\}\r?\n/)
+  if (!marker) return raw
+  const full = marker[0]
+  const index = raw.indexOf(full)
+  if (index < 0) return raw
+  const start = index + full.length
+  const tail = raw.slice(start)
+  const end = tail.search(/\r?\n[A-Z0-9]+ (OK|NO|BAD)/)
+  return end >= 0 ? tail.slice(0, end) : tail
 }
 
-export function createCurlInboxTransport(input: {
+async function withImapSession<T>(
+  config: {
+    host: string
+    port: number
+    secure: boolean
+    username: string
+    password: string
+    mailbox: string
+  },
+  fn: (session: {
+    run(command: string): Promise<string>
+  }) => Promise<T>
+) {
+  const options: TlsConnectionOptions = {
+    host: config.host,
+    port: config.port,
+    rejectUnauthorized: false,
+  }
+
+  const socket = await new Promise<TLSSocket>((resolve, reject) => {
+    const client = tlsConnect(options, () => resolve(client))
+    client.once('error', reject)
+  })
+
+  socket.setEncoding('utf8')
+
+  let buffer = ''
+  const waitForTagged = (tag: string) =>
+    new Promise<string>((resolve, reject) => {
+      const onData = (chunk: string) => {
+        buffer += chunk
+        const regex = new RegExp(`\\r?\\n${tag} (OK|NO|BAD)[^\\r\\n]*`, 'i')
+        if (regex.test(buffer)) {
+          cleanup()
+          const output = buffer
+          buffer = ''
+          if (new RegExp(`\\r?\\n${tag} OK`, 'i').test(output)) {
+            resolve(output)
+          } else {
+            reject(new Error(output.trim()))
+          }
+        }
+      }
+      const onError = (error: Error) => {
+        cleanup()
+        reject(error)
+      }
+      const cleanup = () => {
+        socket.off('data', onData)
+        socket.off('error', onError)
+      }
+      socket.on('data', onData)
+      socket.on('error', onError)
+    })
+
+  const run = async (command: string) => {
+    const tag = `A${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+    socket.write(`${tag} ${command}\r\n`)
+    return waitForTagged(tag)
+  }
+
+  // drain server greeting
+  await new Promise<void>((resolve) => {
+    const onData = (chunk: string) => {
+      buffer += chunk
+      if (/\* OK/i.test(buffer)) {
+        socket.off('data', onData)
+        buffer = ''
+        resolve()
+      }
+    }
+    socket.on('data', onData)
+  })
+
+  try {
+    await run(`LOGIN ${JSON.stringify(config.username)} ${JSON.stringify(config.password)}`)
+    await run(`SELECT ${config.mailbox}`)
+    return await fn({ run })
+  } finally {
+    try {
+      await run('LOGOUT')
+    } catch {
+      // noop
+    }
+    socket.end()
+  }
+}
+
+export function createTlsInboxTransport(input: {
   host: string
+  port: number
+  secure: boolean
   username: string
   password: string
   mailbox?: string
 }): InboxTransport {
-  const mailbox = input.mailbox ?? 'INBOX'
-  const baseUrl = `imaps://${input.host}/${mailbox}`
-
   return {
     async listUnreadMessages(limit = 10) {
-      const searchRaw = await curlImap(baseUrl, input.username, input.password, ['-X', 'SEARCH UNSEEN'])
-      const ids = parseImapSearchIds(searchRaw).slice(0, limit)
-      const messages: InboxMessageLike[] = []
+      return withImapSession(
+        {
+          host: input.host,
+          port: input.port,
+          secure: input.secure,
+          username: input.username,
+          password: input.password,
+          mailbox: input.mailbox ?? 'INBOX',
+        },
+        async (session) => {
+          const searchRaw = await session.run('SEARCH UNSEEN')
+          const ids = parseImapSearchIds(searchRaw).slice(0, limit)
+          const messages: InboxMessageLike[] = []
 
-      for (const id of ids) {
-        const headerRaw = await curlImap(
-          `${baseUrl}/;MAILINDEX=${id}/;SECTION=HEADER.FIELDS%20(FROM%20TO%20SUBJECT%20DATE%20MESSAGE-ID%20IN-REPLY-TO%20REFERENCES)`,
-          input.username,
-          input.password
-        )
-        const bodyRaw = await curlImap(
-          `${baseUrl}/;MAILINDEX=${id}/;SECTION=TEXT`,
-          input.username,
-          input.password
-        )
-        const headers = parseMessageHeaders(headerRaw)
+          for (const id of ids) {
+            const headerRaw = await session.run(
+              `FETCH ${id} BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)]`
+            )
+            const bodyRaw = await session.run(`FETCH ${id} BODY.PEEK[TEXT]`)
+            const headers = parseMessageHeaders(extractFetchLiteral(headerRaw))
 
-        messages.push({
-          id,
-          from: headers.from ?? null,
-          subject: headers.subject ?? null,
-          body: bodyRaw,
-        })
-      }
+            messages.push({
+              id,
+              from: headers.from ?? null,
+              subject: headers.subject ?? null,
+              body: extractFetchLiteral(bodyRaw),
+            })
+          }
 
-      return messages
+          return messages
+        }
+      )
     },
     async markSeen(messageId: string) {
-      await curlImap(baseUrl, input.username, input.password, ['-X', `STORE ${messageId} +FLAGS (\\Seen)`])
+      await withImapSession(
+        {
+          host: input.host,
+          port: input.port,
+          secure: input.secure,
+          username: input.username,
+          password: input.password,
+          mailbox: input.mailbox ?? 'INBOX',
+        },
+        async (session) => {
+          await session.run(`STORE ${messageId} +FLAGS (\\Seen)`)
+        }
+      )
     },
   }
 }
@@ -101,6 +217,7 @@ export async function runInboxSync(input: {
   now?: Date
   env?: NodeJS.ProcessEnv
   transport?: InboxTransport
+  transportFactory?: InboxTransportFactory
   limit?: number
   markSeen?: boolean
 }): Promise<InboxSyncResult> {
@@ -110,8 +227,10 @@ export async function runInboxSync(input: {
   const transport =
     input.transport ??
     (config.enabled && config.host && config.username && config.password
-      ? createCurlInboxTransport({
+      ? (input.transportFactory ?? createTlsInboxTransport)({
           host: config.host,
+          port: config.port ?? 993,
+          secure: config.secure,
           username: config.username,
           password: config.password,
           mailbox: config.mailbox,

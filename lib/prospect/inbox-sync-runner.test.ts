@@ -168,4 +168,36 @@ describe('runInboxSync', () => {
     )
     expect(supabase.tables.prospect_activities).toHaveLength(3)
   })
+
+  it('can build its transport from env when none is injected', async () => {
+    const supabase = createFakeSupabase()
+    const seen: string[] = []
+
+    const result = await runInboxSync({
+      supabase: supabase as never,
+      userId: 'user-1',
+      now: new Date('2026-06-09T01:00:00.000Z'),
+      env: {
+        SMTP_HOST: 'smtp.hostinger.com',
+        SMTP_USER: 'kenji@kenomi.eu',
+        SMTP_PASS: 'secret',
+      } as unknown as NodeJS.ProcessEnv,
+      transportFactory: () => ({
+        listUnreadMessages: async () => [
+          {
+            id: 'm-reply',
+            from: 'Arthur <arthur@kingsize.co>',
+            subject: 'Re: Kingsize Branding Studio — 300EUR Diagnostic',
+            body: 'Interesting. Send me the exact scope.',
+          },
+        ],
+        markSeen: async (messageId: string) => {
+          seen.push(messageId)
+        },
+      }),
+    })
+
+    expect(result.replied).toBe(1)
+    expect(seen).toEqual(['m-reply'])
+  })
 })
