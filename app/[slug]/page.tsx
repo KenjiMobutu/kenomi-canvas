@@ -76,6 +76,8 @@ export default async function LandingPage({ params, searchParams }: Props) {
   const showPaymentSuccess = payment === 'success'
   const showPaymentCancel = payment === 'cancelled'
   const showCheckoutError = checkout === 'error'
+  const primaryCtaLabel =
+    primaryCta.kind === 'checkout' ? 'Pay 300EUR and book the diagnostic' : primaryCta.label
 
   if (showPaymentCancel || showCheckoutError) {
     await recordVentureEventBySlugSafely(supabaseAdmin as unknown as VentureEventSupabase, {
@@ -131,7 +133,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
           ← Kenomi
         </Link>
         <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-          Vente publique autonome
+          Revenue diagnostic
         </div>
       </nav>
 
@@ -139,7 +141,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
         <div className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] lg:items-start lg:py-20">
           <div className="max-w-3xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-900 bg-emerald-950/60 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-emerald-200">
-              Offre live
+              Fixed-scope diagnostic
             </div>
             <h1 className="max-w-3xl text-4xl font-semibold leading-tight md:text-6xl">
               {hero.headline}
@@ -158,7 +160,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
                     type="submit"
                     className="inline-flex min-w-[220px] items-center justify-center rounded-lg bg-emerald-500 px-6 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-emerald-400"
                   >
-                    {primaryCta.label}
+                    {primaryCtaLabel}
                   </button>
                 </form>
               ) : (
@@ -166,33 +168,33 @@ export default async function LandingPage({ params, searchParams }: Props) {
                   href={showWaitlistSuccess ? undefined : primaryCta.href}
                   className="inline-flex min-w-[220px] items-center justify-center rounded-lg bg-emerald-500 px-6 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-emerald-400"
                 >
-                  {showWaitlistSuccess ? 'Inscrit' : primaryCta.label}
+                  {showWaitlistSuccess ? 'Inscrit' : primaryCtaLabel}
                 </a>
               )}
               <a
                 href="#waitlist"
                 className="inline-flex min-w-[220px] items-center justify-center rounded-lg border border-neutral-800 px-6 py-3 text-base font-medium text-neutral-200 transition-colors hover:border-neutral-700 hover:bg-neutral-900"
               >
-                Recevoir le lancement
+                Not ready yet
               </a>
             </div>
 
             <dl className="mt-10 grid gap-6 sm:grid-cols-3">
               <div>
-                <dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">Acheteur</dt>
+                <dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">Best for</dt>
                 <dd className="mt-2 text-sm leading-6 text-neutral-200">
                   {audience?.for?.[0] ?? data.nom}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">Offre</dt>
+                <dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">Price</dt>
                 <dd className="mt-2 text-sm leading-6 text-neutral-200">
                   {pricing?.label ?? 'Offre sur demande'}
                 </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                  Raison d acheter
+                  Why now
                 </dt>
                 <dd className="mt-2 text-sm leading-6 text-neutral-200">
                   {proof?.bullets?.[0] ?? hero.subtitle}
@@ -212,7 +214,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
 
             {pricing?.included?.length ? (
               <div className="mt-6 border-t border-neutral-900 pt-6">
-                <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">Inclus</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                  What you get
+                </div>
                 <ul className="mt-4 space-y-3 text-sm text-neutral-200">
                   {pricing.included.map((item) => (
                     <li key={item} className="flex items-start gap-3">
@@ -226,7 +230,27 @@ export default async function LandingPage({ params, searchParams }: Props) {
 
             <div className="mt-6 border-t border-neutral-900 pt-6">
               <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                Pourquoi croire cette offre
+                After payment
+              </div>
+              <ul className="mt-4 space-y-3 text-sm text-neutral-200">
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400" />
+                  <span>You book the short diagnostic call</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400" />
+                  <span>We isolate the main leak between sent, reply, and paid</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400" />
+                  <span>You receive the written action plan within 48h</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="mt-6 border-t border-neutral-900 pt-6">
+              <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                Why this can be worth 300EUR
               </div>
               <p className="mt-3 text-sm leading-6 text-neutral-300">
                 {proof?.headline ?? hero.subtitle}
@@ -257,10 +281,10 @@ export default async function LandingPage({ params, searchParams }: Props) {
         <section className="border-b border-neutral-900">
           <div className="mx-auto max-w-6xl px-6 py-16">
             <div className="mb-10 max-w-2xl">
-              <h2 className="text-3xl font-semibold text-white">Ce que vous achetez réellement</h2>
+              <h2 className="text-3xl font-semibold text-white">What you are actually buying</h2>
               <p className="mt-4 text-base leading-7 text-neutral-300">
-                Une offre structurée pour réduire le délai entre un signal d achat et votre action
-                commerciale.
+                A short operator pass focused on one thing: reducing the delay between buying
+                intent and your commercial response.
               </p>
             </div>
             <div className="grid gap-6 md:grid-cols-3">
@@ -285,7 +309,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
         <section className="border-b border-neutral-900">
           <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-2">
             <div>
-              <h2 className="text-2xl font-semibold text-white">Pour qui</h2>
+              <h2 className="text-2xl font-semibold text-white">Who should buy this</h2>
               <ul className="mt-5 space-y-3 text-sm leading-6 text-neutral-300">
                 {(audience?.for ?? []).map((item) => (
                   <li key={item} className="flex items-start gap-3">
@@ -296,7 +320,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
               </ul>
             </div>
             <div>
-              <h2 className="text-2xl font-semibold text-white">Quand ne pas l acheter</h2>
+              <h2 className="text-2xl font-semibold text-white">Who should not buy this</h2>
               <ul className="mt-5 space-y-3 text-sm leading-6 text-neutral-300">
                 {(audience?.not_for ?? []).map((item) => (
                   <li key={item} className="flex items-start gap-3">
@@ -314,9 +338,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
         <section className="border-b border-neutral-900">
           <div className="mx-auto max-w-6xl px-6 py-16">
             <div className="max-w-3xl">
-              <h2 className="text-2xl font-semibold text-white">
-                Pourquoi cette offre est crédible
-              </h2>
+              <h2 className="text-2xl font-semibold text-white">Why this offer is credible</h2>
               <p className="mt-4 text-base leading-7 text-neutral-300">
                 {proof?.headline ?? hero.subtitle}
               </p>
@@ -339,9 +361,9 @@ export default async function LandingPage({ params, searchParams }: Props) {
         <section className="border-b border-neutral-900">
           <div className="mx-auto max-w-6xl px-6 py-16">
             <div className="max-w-2xl">
-              <h2 className="text-2xl font-semibold text-white">Objections traitées avant achat</h2>
+              <h2 className="text-2xl font-semibold text-white">Objections handled before checkout</h2>
               <p className="mt-4 text-base leading-7 text-neutral-300">
-                La page doit lever les doutes principaux avant de demander un paiement ou un email.
+                The goal here is to remove the obvious reasons not to buy before asking for money.
               </p>
             </div>
             <div className="mt-8 grid gap-6 md:grid-cols-2">
@@ -366,11 +388,11 @@ export default async function LandingPage({ params, searchParams }: Props) {
           <div className="rounded-xl border border-emerald-900 bg-emerald-950/30 p-8 lg:flex lg:items-center lg:justify-between">
             <div className="max-w-2xl">
               <h2 className="text-2xl font-semibold text-white">
-                Passez à l achat ou demandez le lancement
+                Buy now or stay out of the way
               </h2>
               <p className="mt-4 text-base leading-7 text-neutral-300">
-                La voie principale est le checkout public. Si vous n êtes pas prêt maintenant,
-                laissez votre email pour relance ciblée.
+                The primary path is checkout. If this is not urgent, leave an email and come back
+                later.
               </p>
             </div>
             <div className="mt-6 lg:mt-0">
@@ -385,7 +407,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
                     type="submit"
                     className="inline-flex min-w-[220px] items-center justify-center rounded-lg bg-emerald-400 px-6 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-emerald-300"
                   >
-                    {primaryCta.label}
+                    {primaryCtaLabel}
                   </button>
                 </form>
               ) : (
@@ -393,7 +415,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
                   href={showWaitlistSuccess ? undefined : primaryCta.href}
                   className="inline-flex min-w-[220px] items-center justify-center rounded-lg bg-emerald-400 px-6 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-emerald-300"
                 >
-                  {showWaitlistSuccess ? 'Inscrit' : primaryCta.label}
+                  {showWaitlistSuccess ? 'Inscrit' : primaryCtaLabel}
                 </a>
               )}
             </div>
@@ -413,8 +435,7 @@ export default async function LandingPage({ params, searchParams }: Props) {
           <>
             <h2 className="text-3xl font-semibold text-white">Recevoir le lancement</h2>
             <p className="mt-4 text-base leading-7 text-neutral-300">
-              Si vous n achetez pas maintenant, laissez un email pour la relance et les offres de
-              lancement.
+              If you do not want to buy now, leave an email and get the follow-up later.
             </p>
             <form action="/api/waitlist" method="POST" className="mx-auto mt-8 flex max-w-md gap-3">
               <input type="hidden" name="slug" value={slug} />
