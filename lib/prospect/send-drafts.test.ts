@@ -143,6 +143,9 @@ describe('sendProspectDrafts', () => {
       draft_provider: 'smtp',
       draft_external_id: '<smtp-1@kenomi.eu>',
       last_contacted_at: '2026-06-09T12:00:00.000Z',
+      next_followup_at: '2026-06-11T12:00:00.000Z',
+      last_outreach_kind: 'initial',
+      follow_up_count: 0,
     })
     expect(supabase.tables.prospect_activities).toEqual(
       expect.arrayContaining([
@@ -173,6 +176,59 @@ describe('sendProspectDrafts', () => {
       sent: 0,
       failed: 1,
       results: [{ ok: false, prospectId: 'prospect-1', error: 'Draft not found' }],
+    })
+  })
+
+  it('reschedules the next follow-up from the actual send time for follow-up drafts', async () => {
+    const supabase = createFakeSupabase({
+      user_settings: [{ user_id: 'u1', prospect_outreach_email: 'hello@kenomi.eu' }],
+      prospects: [
+        {
+          id: 'prospect-1',
+          user_id: 'u1',
+          company_name: 'Mangos',
+          contact_email: 'james@mangos.agency',
+          status: 'follow_up',
+          pipeline_status: 'draft_created',
+          follow_up_count: 1,
+          last_outreach_kind: 'follow_up_1',
+          metadata: { activity: [] },
+        },
+      ],
+      campaign_drafts: [
+        {
+          id: 'draft-1',
+          user_id: 'u1',
+          content: 'Follow-up body',
+          status: 'draft',
+          created_at: '2026-06-09T12:00:00.000Z',
+          metadata: {
+            title: 'Mangos — follow-up',
+            to: 'james@mangos.agency',
+            prospect_id: 'prospect-1',
+            outreach_kind: 'follow_up_1',
+          },
+        },
+      ],
+    })
+
+    const result = await sendProspectDrafts({
+      supabase,
+      userId: 'u1',
+      prospectIds: ['prospect-1'],
+      now: () => new Date('2026-06-09T12:00:00.000Z'),
+      prospectEmailSender: async () => ({ provider: 'smtp', messageId: '<smtp-2@kenomi.eu>' }),
+    })
+
+    expect(result.sent).toBe(1)
+    expect(supabase.tables.prospects[0]).toMatchObject({
+      status: 'follow_up',
+      pipeline_status: 'sent',
+      draft_provider: 'smtp',
+      draft_external_id: '<smtp-2@kenomi.eu>',
+      next_followup_at: '2026-06-14T12:00:00.000Z',
+      last_outreach_kind: 'follow_up_1',
+      follow_up_count: 1,
     })
   })
 })

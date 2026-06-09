@@ -1,5 +1,6 @@
 import { appendProspectActivity } from './activity'
 import { buildProspectActivityInsert } from './activity-log'
+import { getFollowUpRank, scheduleNextFollowUpAt } from './follow-up'
 import {
   resolveEmailDeliveryStatus,
   sendProspectEmail,
@@ -101,6 +102,11 @@ function asNonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
+function asOutreachKind(value: unknown): 'initial' | 'follow_up_1' | 'follow_up_2' | 'follow_up_3' {
+  if (value === 'follow_up_1' || value === 'follow_up_2' || value === 'follow_up_3') return value
+  return 'initial'
+}
+
 async function update(
   query: PromiseLike<{ error: { message: string } | null }>
 ): Promise<void> {
@@ -176,6 +182,9 @@ export async function sendProspectDrafts(
     const subject = asNonEmptyString(metadata.title)
     const to = asNonEmptyString(prospect.contact_email) ?? asNonEmptyString(metadata.to)
     const body = draft.content ?? ''
+    const outreachKind = asOutreachKind(metadata.outreach_kind)
+    const followUpCount = getFollowUpRank(outreachKind)
+    const nextFollowUpAt = scheduleNextFollowUpAt(new Date(nowIso), outreachKind)
 
     if (!subject || !to || !body.trim()) {
       results.push({ ok: false, prospectId, error: 'Draft missing subject, recipient, or body' })
@@ -215,13 +224,16 @@ export async function sendProspectDrafts(
         input.supabase
           .from('prospects')
           .update({
-            status: 'sent',
+            status: outreachKind === 'initial' ? 'sent' : 'follow_up',
             pipeline_status: 'sent',
             draft_provider: delivery.provider,
             draft_external_id: delivery.messageId ?? draft.id,
             draft_created_at: nowIso,
             last_contacted_at: nowIso,
             last_activity_at: nowIso,
+            next_followup_at: nextFollowUpAt,
+            last_outreach_kind: outreachKind,
+            follow_up_count: followUpCount,
             metadata: appendProspectActivity(prospect.metadata, {
               type: 'marked_sent',
               actor: 'operator',
