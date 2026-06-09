@@ -27,7 +27,10 @@ interface TableRow {
 
 type QueryResponse = { data: TableRow[]; error: null }
 
-function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
+function createFakeSupabase(
+  seed: Partial<Record<TableName, TableRow[]>>,
+  options?: { approveBeforeApprovalUpdate?: boolean }
+) {
   const tables: Record<TableName, TableRow[]> = {
     human_approvals: seed.human_approvals ?? [],
     autonomy_actions: seed.autonomy_actions ?? [],
@@ -69,12 +72,31 @@ function createFakeSupabase(seed: Partial<Record<TableName, TableRow[]>>) {
           return builder
         },
         single: async () => ({ data: tables[tableName].find(matches) ?? null, error: null }),
-        maybeSingle: async () => ({ data: tables[tableName].find(matches) ?? null, error: null }),
+        maybeSingle: async () => {
+          if (state.patch) {
+            if (tableName === 'human_approvals' && options?.approveBeforeApprovalUpdate) {
+              const approval = tables.human_approvals.find(matches)
+              if (approval) approval.status = 'approved'
+            }
+            const rows = tables[tableName].filter(matches)
+            rows.forEach((row) => Object.assign(row, state.patch))
+            return { data: rows[0] ?? null, error: null }
+          }
+          return { data: tables[tableName].find(matches) ?? null, error: null }
+        },
         then: <TResult1 = QueryResponse, TResult2 = never>(
           resolve?: ((value: QueryResponse) => TResult1 | PromiseLike<TResult1>) | null,
           reject?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
         ) => {
           const rows = tables[tableName].filter(matches)
+          if (
+            state.patch &&
+            tableName === 'human_approvals' &&
+            options?.approveBeforeApprovalUpdate
+          ) {
+            const approval = rows[0]
+            if (approval) approval.status = 'approved'
+          }
           if (state.patch) rows.forEach((row) => Object.assign(row, state.patch))
           const value = { data: rows, error: null }
           return Promise.resolve(value).then(resolve ?? undefined, reject ?? undefined)
@@ -270,7 +292,9 @@ describe('resolveHumanApproval', () => {
 
   it('envoie vraiment l’outreach quand un provider email serveur est disponible', async () => {
     const fakeSupabase = createFakeSupabase({
-      human_approvals: [{ id: 'app-live-1', user_id: 'u1', action_id: 'act-live-1', status: 'pending' }],
+      human_approvals: [
+        { id: 'app-live-1', user_id: 'u1', action_id: 'act-live-1', status: 'pending' },
+      ],
       autonomy_actions: [
         {
           id: 'act-live-1',
@@ -346,6 +370,89 @@ describe('resolveHumanApproval', () => {
         message_id: '<msg-live-1@example.com>',
       }),
     })
+  })
+
+  it('annule les approvals send_outreach bloquées plus anciennes pour le même prospect', async () => {
+    const fakeSupabase = createFakeSupabase({
+      human_approvals: [
+        { id: 'app-old-1', user_id: 'u1', action_id: 'act-old-1', status: 'pending' },
+        { id: 'app-new-1', user_id: 'u1', action_id: 'act-new-1', status: 'pending' },
+      ],
+      autonomy_actions: [
+        {
+          id: 'act-old-1',
+          user_id: 'u1',
+          action_type: 'send_outreach',
+          status: 'blocked',
+          input: {
+            prospect_id: 'prospect-live-2',
+            company_name: 'Queue Studio',
+            outreach_subject: 'Old draft',
+            outreach_body: 'Old body.',
+          },
+        },
+        {
+          id: 'act-new-1',
+          user_id: 'u1',
+          action_type: 'send_outreach',
+          status: 'blocked',
+          input: {
+            prospect_id: 'prospect-live-2',
+            company_name: 'Queue Studio',
+            outreach_subject: 'New draft',
+            outreach_body: 'New body.',
+          },
+        },
+      ],
+      prospects: [
+        {
+          id: 'prospect-live-2',
+          user_id: 'u1',
+          company_name: 'Queue Studio',
+          source: 'github',
+          band: 'warm',
+          contact_email: 'queue@studio.test',
+          status: 'awaiting_approval',
+          metadata: { activity: [] },
+        },
+      ],
+      user_settings: [{ user_id: 'u1', prospect_outreach_email: 'hello@kenomi.eu' }],
+    })
+
+    await resolveHumanApproval({
+      supabase: fakeSupabase as unknown as ApprovalExecutorSupabase,
+      userId: 'u1',
+      approvalId: 'app-new-1',
+      decision: 'approved',
+      prospectEmailSender: async () => ({
+        provider: 'smtp',
+        messageId: '<msg-live-2@example.com>',
+      }),
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+    })
+
+    expect(fakeSupabase.tables.autonomy_actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'act-new-1',
+          status: 'completed',
+        }),
+        expect.objectContaining({
+          id: 'act-old-1',
+          status: 'cancelled',
+          output: expect.objectContaining({
+            reason: 'superseded_by_sent_outreach',
+            superseded_by_action_id: 'act-new-1',
+          }),
+        }),
+      ])
+    )
+    expect(fakeSupabase.tables.human_approvals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'app-new-1', status: 'approved' }),
+        expect.objectContaining({ id: 'app-old-1', status: 'rejected' }),
+      ])
+    )
   })
 
   it('rejette une approval pending et annule action associée', async () => {
@@ -611,6 +718,61 @@ describe('resolveHumanApproval', () => {
         checkout_url: 'https://checkout.stripe.test/session',
       },
     })
+  })
+
+  it('ne déclenche pas Stripe si une autre requête a déjà traité l’approbation', async () => {
+    const supabase = createFakeSupabase(
+      {
+        human_approvals: [
+          { id: 'approval-1', user_id: 'user-1', action_id: 'action-1', status: 'pending' },
+        ],
+        autonomy_actions: [
+          {
+            id: 'action-1',
+            user_id: 'user-1',
+            venture_id: 'venture-1',
+            action_type: 'create_checkout',
+            status: 'blocked',
+            input: {
+              payment: {
+                product_name: 'InboxPulse',
+                price_amount: 2900,
+                price_currency: 'eur',
+                billing: 'monthly',
+                checkout_description: 'Scoring IA des leads email.',
+                trial_days: 7,
+              },
+              successUrl: 'https://kenomi.test/success',
+              cancelUrl: 'https://kenomi.test/cancel',
+            },
+          },
+        ],
+      },
+      { approveBeforeApprovalUpdate: true }
+    )
+
+    const stripeClient = {
+      checkout: {
+        sessions: {
+          create: vi.fn(),
+        },
+      },
+    }
+
+    await expect(
+      resolveHumanApproval({
+        supabase,
+        userId: 'user-1',
+        approvalId: 'approval-1',
+        decision: 'approved',
+        stripeClient,
+      })
+    ).rejects.toMatchObject({
+      message: 'Approval déjà traitée',
+      status: 409,
+    })
+    expect(stripeClient.checkout.sessions.create).not.toHaveBeenCalled()
+    expect(supabase.tables.payments).toEqual([])
   })
 
   it('utilise la clé Stripe stockée dans les settings pour exécuter create_checkout', async () => {

@@ -31,6 +31,7 @@ type QueryResponse = { data: unknown; error: { message: string } | null }
 interface QueryResult extends PromiseLike<QueryResponse> {}
 
 interface QueryFilterBuilder extends QueryResult {
+  select(columns?: string): QueryFilterBuilder
   eq(field: string, value: unknown): QueryFilterBuilder
   single(): PromiseLike<QueryResponse>
   maybeSingle(): PromiseLike<QueryResponse>
@@ -80,6 +81,14 @@ interface ProspectRow {
   last_outreach_kind?: string | null
   follow_up_version?: number | null
   metadata?: Record<string, unknown> | null
+}
+
+interface ProspectApprovalActionRow {
+  id: string
+  user_id: string
+  action_type: string
+  status: string
+  input?: Record<string, unknown> | null
 }
 
 interface VentureSpendRow {
@@ -143,9 +152,12 @@ export interface ResolveHumanApprovalInput {
   stripeClient?: CheckoutStripeClient
   stripeClientFactory?: StripeClientFactory
   marketingPublisher?: MarketingPublisher
-  prospectEmailSender?: (
-    input: { from: string; to: string; subject: string; text: string }
-  ) => Promise<ProspectEmailSendResult>
+  prospectEmailSender?: (input: {
+    from: string
+    to: string
+    subject: string
+    text: string
+  }) => Promise<ProspectEmailSendResult>
   writeProspectMemory?: typeof writeProspectMemory
   now?: () => Date
   config?: AutonomyConfig
@@ -184,6 +196,92 @@ async function maybeSingleRow<T>(query: QueryFilterBuilder): Promise<T | null> {
   const { data, error } = await query.maybeSingle()
   if (error) throw new ApprovalExecutionError(error.message, 500)
   return data as T | null
+}
+
+async function rejectSupersededProspectApprovals(input: {
+  supabase: ApprovalExecutorSupabase
+  userId: string
+  prospectId: string
+  currentActionId: string
+  nowIso: string
+}) {
+  const { data, error } = await input.supabase
+    .from('autonomy_actions')
+    .select('id, user_id, action_type, status, input')
+    .eq('user_id', input.userId)
+    .eq('action_type', 'send_outreach')
+
+  if (error) throw new ApprovalExecutionError(error.message, 500)
+
+  const siblingActions = ((data ?? []) as ProspectApprovalActionRow[]).filter((row) => {
+    const rowProspectId =
+      row.input && typeof row.input.prospect_id === 'string' ? row.input.prospect_id : null
+    return (
+      row.id !== input.currentActionId &&
+      row.status === 'blocked' &&
+      rowProspectId === input.prospectId
+    )
+  })
+
+  for (const siblingAction of siblingActions) {
+    await update(
+      input.supabase
+        .from('autonomy_actions')
+        .update({
+          status: 'cancelled',
+          output: {
+            approved: false,
+            superseded_by_action_id: input.currentActionId,
+            reason: 'superseded_by_sent_outreach',
+          },
+          updated_at: input.nowIso,
+        })
+        .eq('id', siblingAction.id)
+        .eq('user_id', input.userId)
+        .eq('status', 'blocked')
+    )
+
+    await update(
+      input.supabase
+        .from('human_approvals')
+        .update({
+          status: 'rejected',
+          approved_by: input.userId,
+          approved_at: input.nowIso,
+          updated_at: input.nowIso,
+        })
+        .eq('action_id', siblingAction.id)
+        .eq('user_id', input.userId)
+        .eq('status', 'pending')
+    )
+  }
+}
+
+async function claimPendingApproval(input: {
+  supabase: ApprovalExecutorSupabase
+  approvalId: string
+  userId: string
+  decision: ApprovalResolution
+  nowIso: string
+}): Promise<void> {
+  const claimed = await maybeSingleRow<HumanApprovalRow>(
+    input.supabase
+      .from('human_approvals')
+      .update({
+        status: input.decision,
+        approved_by: input.userId,
+        approved_at: input.nowIso,
+        updated_at: input.nowIso,
+      })
+      .eq('id', input.approvalId)
+      .eq('user_id', input.userId)
+      .eq('status', 'pending')
+      .select('id')
+  )
+
+  if (!claimed) {
+    throw new ApprovalExecutionError('Approval déjà traitée', 409)
+  }
 }
 
 async function executeStopVenture(input: {
@@ -540,6 +638,14 @@ export async function resolveHumanApproval(
     'Action autonome introuvable'
   )
 
+  await claimPendingApproval({
+    supabase: input.supabase,
+    approvalId: approval.id,
+    userId: input.userId,
+    decision: input.decision,
+    nowIso,
+  })
+
   if (input.decision === 'rejected') {
     if (isProspectApprovalAction(action.action_type)) {
       const prospectId =
@@ -601,19 +707,6 @@ export async function resolveHumanApproval(
 
     await update(
       input.supabase
-        .from('human_approvals')
-        .update({
-          status: 'rejected',
-          approved_by: input.userId,
-          approved_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq('id', approval.id)
-        .eq('user_id', input.userId)
-    )
-
-    await update(
-      input.supabase
         .from('autonomy_actions')
         .update({
           status: 'cancelled',
@@ -632,19 +725,6 @@ export async function resolveHumanApproval(
       executed: false,
     }
   }
-
-  await update(
-    input.supabase
-      .from('human_approvals')
-      .update({
-        status: 'approved',
-        approved_by: input.userId,
-        approved_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('id', approval.id)
-      .eq('user_id', input.userId)
-  )
 
   if (config.dryRun && isExternalAction(action.action_type)) {
     await update(
@@ -820,17 +900,20 @@ export async function resolveHumanApproval(
   }
 
   if (action.action_type === 'send_outreach' || action.action_type === 'send_follow_up') {
-    const prospectId = typeof action.input?.prospect_id === 'string' ? action.input.prospect_id : null
+    const prospectId =
+      typeof action.input?.prospect_id === 'string' ? action.input.prospect_id : null
     const companyName =
       typeof action.input?.company_name === 'string' ? action.input.company_name : 'Unknown company'
-    const contactName = typeof action.input?.contact_name === 'string' ? action.input.contact_name : null
+    const contactName =
+      typeof action.input?.contact_name === 'string' ? action.input.contact_name : null
     const subject =
       typeof action.input?.outreach_subject === 'string'
         ? action.input.outreach_subject
         : 'Outbound draft'
     const body = typeof action.input?.outreach_body === 'string' ? action.input.outreach_body : ''
     const outreachKind = asOutreachKind(action.input?.outreach_kind)
-    const followUpCount = typeof action.input?.follow_up_count === 'number' ? action.input.follow_up_count : 0
+    const followUpCount =
+      typeof action.input?.follow_up_count === 'number' ? action.input.follow_up_count : 0
     const followUpVersion =
       typeof action.input?.follow_up_version === 'number' ? action.input.follow_up_version : 0
 
@@ -867,7 +950,8 @@ export async function resolveHumanApproval(
 
     const providerStatus = resolveEmailDeliveryStatus()
     const fromAddress =
-      providerStatus.fromAddress ?? (await getUserProspectOutreachEmail({
+      providerStatus.fromAddress ??
+      (await getUserProspectOutreachEmail({
         supabase: input.supabase,
         userId: input.userId,
       }))
@@ -883,14 +967,17 @@ export async function resolveHumanApproval(
 
     if (canSendLive) {
       try {
-        liveDelivery = await (input.prospectEmailSender ?? ((message) => sendProspectEmail(message)))({
+        liveDelivery = await (
+          input.prospectEmailSender ?? ((message) => sendProspectEmail(message))
+        )({
           from: fromAddress!,
           to: prospect.contact_email!.trim(),
           subject,
           text: body,
         })
       } catch (error) {
-        liveDeliveryError = error instanceof Error ? error.message : 'Prospect email delivery failed'
+        liveDeliveryError =
+          error instanceof Error ? error.message : 'Prospect email delivery failed'
       }
     }
 
@@ -916,7 +1003,8 @@ export async function resolveHumanApproval(
       })
     )
 
-    const sentActivityType = action.action_type === 'send_follow_up' ? 'follow_up_marked_sent' : 'marked_sent'
+    const sentActivityType =
+      action.action_type === 'send_follow_up' ? 'follow_up_marked_sent' : 'marked_sent'
     const sentActivityDetail =
       action.action_type === 'send_follow_up'
         ? `${outreachKind} sent via ${liveDelivery?.provider ?? 'draft'}`
@@ -954,10 +1042,16 @@ export async function resolveHumanApproval(
           ...followUpPatch,
           metadata: appendProspectActivity(
             appendProspectActivity(prospect.metadata, {
-              type: action.action_type === 'send_follow_up' ? 'follow_up_approved' : 'approval_approved',
+              type:
+                action.action_type === 'send_follow_up'
+                  ? 'follow_up_approved'
+                  : 'approval_approved',
               actor: 'operator',
               at: nowIso,
-              detail: action.action_type === 'send_follow_up' ? 'First follow-up approved' : 'Outreach approved',
+              detail:
+                action.action_type === 'send_follow_up'
+                  ? 'First follow-up approved'
+                  : 'Outreach approved',
             }),
             {
               type: liveDelivery ? sentActivityType : 'gmail_draft_created',
@@ -976,8 +1070,12 @@ export async function resolveHumanApproval(
         buildProspectActivityInsert({
           prospectId,
           userId: input.userId,
-          type: action.action_type === 'send_follow_up' ? 'follow_up_approved' : 'approval_approved',
-          detail: action.action_type === 'send_follow_up' ? 'First follow-up approved' : 'Outreach approved',
+          type:
+            action.action_type === 'send_follow_up' ? 'follow_up_approved' : 'approval_approved',
+          detail:
+            action.action_type === 'send_follow_up'
+              ? 'First follow-up approved'
+              : 'Outreach approved',
           metadata: { outreach_kind: outreachKind, follow_up_version: followUpVersion },
           nowIso,
         }),
@@ -1022,6 +1120,14 @@ export async function resolveHumanApproval(
       } catch (error) {
         console.error('prospect memory write failed', error)
       }
+
+      await rejectSupersededProspectApprovals({
+        supabase: input.supabase,
+        userId: input.userId,
+        prospectId,
+        currentActionId: action.id,
+        nowIso,
+      })
     }
 
     executed = Boolean(liveDelivery)
