@@ -109,7 +109,7 @@ export function buildProspectFollowUpDraft(input: {
 
   const subject =
     input.kind === 'follow_up_1'
-      ? `Re: ${input.previousSubject?.trim() || reminder}`
+      ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${painPoint}`
       : `${reminder} — ${painPoint}`
 
   const lines = [

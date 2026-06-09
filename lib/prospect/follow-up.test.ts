@@ -91,7 +91,7 @@ describe('buildProspectFollowUpDraft', () => {
       kind: 'follow_up_1',
     })
 
-    expect(draft.subject).toContain('Re:')
+    expect(draft.subject).toBe('Acme Studio — 300EUR Diagnostic for manual triage')
     expect(draft.body).toContain('Hi Léa,')
     expect(draft.body).toContain('manual triage')
     expect(draft.body).toContain(DIAGNOSTIC_CASH_LANE.offer.title)
