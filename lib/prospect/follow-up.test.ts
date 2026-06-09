@@ -115,6 +115,23 @@ describe('buildProspectFollowUpDraft', () => {
     expect(draft.cta).toContain('Reply yes for the next 3 fixes')
   })
 
+  it('keeps permission-ask motions in permission language for the first follow-up', () => {
+    const draft = buildProspectFollowUpDraft({
+      companyName: 'Acme Studio',
+      contactName: 'Léa Martin',
+      summary: 'manual lead qualification',
+      painPoints: ['manual lead qualification'],
+      outreachAngle: 'diagnostic-call-outbound-v7-permission-ask',
+      kind: 'follow_up_1',
+    })
+
+    expect(draft.subject).toBe('Acme Studio — should I send the 3 points?')
+    expect(draft.body).toContain('Quick nudge on the note I sent')
+    expect(draft.body).toContain('If useful, reply yes and I will send the 3 points directly')
+    expect(draft.body).not.toContain('Scope: https://lab.kenomi.eu/diagnostic-300')
+    expect(draft.cta).toBe('Reply yes and I will send the 3 points directly.')
+  })
+
   it('never leaks operator memory into the follow-up body', () => {
     const draft = buildProspectFollowUpDraft({
       companyName: 'Acme Studio',

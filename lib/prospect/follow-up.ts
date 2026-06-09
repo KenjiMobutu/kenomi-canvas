@@ -131,14 +131,34 @@ export function buildProspectFollowUpDraft(input: {
       input.outreachAngle.includes('v4-personal') ||
       input.outreachAngle.includes('v5-hyper-personal') ||
       input.outreachAngle.includes('v6-direct-value'))
-  const subject =
-    isTeardownMotion && input.kind === 'follow_up_1'
+  const isPermissionAskMotion =
+    typeof input.outreachAngle === 'string' && input.outreachAngle.includes('v7-permission-ask')
+  const subject = isPermissionAskMotion
+    ? input.kind === 'follow_up_1'
+      ? `${input.companyName} — should I send the 3 points?`
+      : `${input.companyName} — last note on the 3 points`
+    : isTeardownMotion && input.kind === 'follow_up_1'
       ? `${input.companyName} — did any of the teardown points land?`
       : input.kind === 'follow_up_1'
         ? `${input.companyName} — ${DIAGNOSTIC_CASH_LANE.offer.title} for ${subjectPainPoint}`
         : `${reminder} — ${subjectPainPoint}`
 
-  const lines = isTeardownMotion
+  const lines = isPermissionAskMotion
+    ? [
+        `Hi ${firstName},`,
+        '',
+        input.kind === 'follow_up_3'
+          ? `Last note on the quick question I sent about ${summary}.`
+          : `Quick nudge on the note I sent about ${summary}.`,
+        `The likely leak still looks like ${painPoint}.`,
+        input.kind === 'follow_up_1'
+          ? 'If useful, reply yes and I will send the 3 points directly in the next email.'
+          : `If useful, the paid next step is still the ${DIAGNOSTIC_CASH_LANE.offer.title}.`,
+        input.kind === 'follow_up_1'
+          ? 'If not relevant, no need to reply.'
+          : `Scope: ${laneUrl}`,
+      ]
+    : isTeardownMotion
     ? [
         `Hi ${firstName},`,
         '',
@@ -172,7 +192,11 @@ export function buildProspectFollowUpDraft(input: {
   return {
     subject,
     body: lines.join('\n'),
-    cta: isTeardownMotion
+    cta: isPermissionAskMotion
+      ? input.kind === 'follow_up_1'
+        ? 'Reply yes and I will send the 3 points directly.'
+        : `Review the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`
+      : isTeardownMotion
       ? `Reply yes for the next 3 fixes or review the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`
       : `Review the ${DIAGNOSTIC_CASH_LANE.offer.title}: ${laneUrl}`,
   }
